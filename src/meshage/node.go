@@ -182,11 +182,16 @@ func (n *Node) Mesh() mesh {
 	defer n.meshLock.Unlock()
 
 	ret := make(mesh)
+
+	// add self to mesh (in case there is no actual mesh)
+	ret[n.name] = nil
+
 	for k, v := range n.effectiveNetwork {
 		ns := make([]string, len(v))
 		copy(ns, v)
 		ret[k] = ns
 	}
+
 	return ret
 }
 

@@ -418,7 +418,7 @@ func tabularHandler(w http.ResponseWriter, r *http.Request) {
 func consoleHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/console" {
 		// create a new console
-		cmd := exec.Command("bin/minimega", "-attach")
+		cmd := exec.Command(*f_console, "-attach")
 
 		tty, err := pty.Start(cmd)
 		if err != nil {

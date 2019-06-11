@@ -26,6 +26,9 @@ var (
 // BuildRootFS generates simple rootfs a from the stage 1 directory.
 func BuildRootFS(buildPath string, c vmconfig.Config) error {
 	targetName := strings.Split(filepath.Base(c.Path), ".")[0] + "_rootfs"
+	if *f_target != "" {
+		targetName = *f_target
+	}
 	log.Debugln("using target name:", targetName)
 
 	err := os.Mkdir(targetName, 0666)
@@ -56,6 +59,9 @@ func BuildRootFS(buildPath string, c vmconfig.Config) error {
 // BuildISO generates a bootable ISO from the stage 1 directory.
 func BuildISO(buildPath string, c vmconfig.Config) error {
 	targetName := strings.Split(filepath.Base(c.Path), ".")[0]
+	if *f_target != "" {
+		targetName = *f_target
+	}
 	log.Debugln("using target name:", targetName)
 
 	// Set up a temporary directory
@@ -172,6 +178,9 @@ func BuildISO(buildPath string, c vmconfig.Config) error {
 // image is the one found in /boot of the build directory.
 func BuildTargets(buildPath string, c vmconfig.Config) error {
 	targetName := strings.Split(filepath.Base(c.Path), ".")[0]
+	if *f_target != "" {
+		targetName = *f_target
+	}
 	log.Debugln("using target name:", targetName)
 
 	wd, err := os.Getwd()
@@ -221,6 +230,9 @@ func BuildTargets(buildPath string, c vmconfig.Config) error {
 // mkfs.ext3, cp, and extlinux.
 func Buildqcow2(buildPath string, c vmconfig.Config) error {
 	targetName := strings.Split(filepath.Base(c.Path), ".")[0]
+	if *f_target != "" {
+		targetName = *f_target
+	}
 	log.Debugln("using target name:", targetName)
 
 	err := nbd.Modprobe()

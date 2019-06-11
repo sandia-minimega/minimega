@@ -32,8 +32,9 @@ qos constraints include:
 Note: due to limitations of the underlying tool, "tc", you can only add rate or
 loss/delay to a VM. Enabling loss or delay will disable rate and vice versa.
 
-Note: qos applies only to "egress" traffic -- "ingress" traffic is not policed
-to the desired rate.
+Note: qos applies only to traffic received by the VM (which is "egress" traffic
+on the mega_tap interface on the host) -- traffic sent by the VM ("ingress" on
+the mega_tap interface on the host) is not policed to the desired rate.
 
 Examples:
 

@@ -1,7 +1,7 @@
 VNC recording and playback
 
 The minimega authors
-28 October 2016
+17 March 2019
 
 * Introduction
 
@@ -47,14 +47,9 @@ To stop recording, use the `stop` keyword:
 
 ** Keyboard/mouse
 
-Keyboard and mouse data is recorded in much the same way, with one caveat -
-keyboard and mouse data can only be recorded for connections made over the web
-interface. This means that you need to connect to a VM using the minimega web
-interface, and record keyboard/mouse data from the
-*same*node*running*the*web*service*.
-
-For example, to record keyboard/mouse data on node `foo`, VM `bar`, and save to
-`recording.kb` on node `foo`:
+Keyboard and mouse data is recorded in much the same way. For example, to
+record keyboard/mouse data on node `foo`, VM `bar`, and save to `recording.kb`
+on node `foo`:
 
 .mega vnc/vnc3.mm
 
@@ -68,7 +63,8 @@ The recorded file format uses the following schema:
 	<time delta>:KeyEvent,<press>,<key>
 
 The time delta is the time, in nanoseconds, between the previous record and
-this one.
+this one. Users may use a time duration (e.g. "5m3s") if generating these files
+manually.
 
 For pointer events, a button mask of 0 is no buttons, 1 is left mouse, 2 right,
 and 3 both left and right.
@@ -76,19 +72,24 @@ and 3 both left and right.
 For keyboard events, there is an event for a key press (press is `true` in the
 schema), and a key release. For code points not represented by ASCII, the key
 value is one of the codepoints defined in the minimega
-[[https://github.com/sandia-minimega/minimega/blob/master/src/vnc/keysymdef.go][keydef
-file]].
+[[https://github.com/sandia-minimega/minimega/blob/master/src/vnc/keysymdef.go][keydef file]].
 
 For example, the following shows several mouse movements, and someone typing
 `foo`:
 
-	178759303:PointerEvent,0,606,44 130044895:PointerEvent,1,606,44
-	97711488:PointerEvent,0,606,44 578412037:KeyEvent,true,f
-	8141459:KeyEvent,false,f 111708110:KeyEvent,true,o
-	10379962:KeyEvent,false,o 69607950:KeyEvent,true,o
-	102641640:KeyEvent,false,o 436817511:PointerEvent,0,606,43
-	54109:PointerEvent,0,606,41 4740247:PointerEvent,0,607,38
-	39063:PointerEvent,0,607,17
+    178759303:PointerEvent,0,606,44
+    130044895:PointerEvent,1,606,44
+    97711488:PointerEvent,0,606,44
+    578412037:KeyEvent,true,f
+    8141459:KeyEvent,false,f
+    111708110:KeyEvent,true,o
+    10379962:KeyEvent,false,o
+    69607950:KeyEvent,true,o
+    102641640:KeyEvent,false,o
+    436817511:PointerEvent,0,606,43
+    54109:PointerEvent,0,606,41
+    4740247:PointerEvent,0,607,38
+    39063:PointerEvent,0,607,17
 
 * Playback
 
@@ -129,11 +130,10 @@ by running `rfbplay` with debug logging.
 ** Keyboard/mouse
 
 minimega supports playing and interacting with recorded keyboard/mouse data to
-any running VM, not just the one it was recorded on. Unlike recording
-keyboard/mouse data, to playback data you do not need the web service running,
-as minimega uses a built-in VNC/RFB client to playback data. To playback data
-to a VM on a node other than the node you are issuing the command on, minimega
-must be able to directly connect to the VNC server of the VM on that node.
+any running VM, not just the one it was recorded on. minimega uses a built-in
+VNC/RFB client to playback data. To playback data to a VM on a node other than
+the node you are issuing the command on, minimega must be able to directly
+connect to the VNC server of the VM on that node.
 
 For example, to playback a recording to VM `bar`:
 
@@ -170,14 +170,52 @@ To inject the string `foo` string to VM `bar`:
 
 .mega vnc/vnc11.mm
 
-The inject API also supports the unique event `LoadFile`.  LoadFile will
-take an existing vnc keyboard/mouse recording and, if a playback is currently
-running, preempt the running playback and play the specified playback file to
+*** Comments
+
+Lines that begin with a "#" are treated as comments and skipped.
+
+*** Targetting multiple VMs
+
+The vnc playback APIs support targetting playbacks on multiple VMs at once
+using the same syntax as the `vm` APIs:
+
+    vnc pause foo,bar
+    vnc pause foo[1-10]
+    vnc pause all
+
+*** LoadFile event
+
+The playback file also supports a `LoadFile` event. LoadFile will take an
+existing vnc keyboard/mouse recording and, if a playback is currently running,
+preempt the running playback and play the specified playback file to
 completion. After the LoadFile playback completes, the previously running
-playback will resume and continue playing. If LoadFile is invoked with no
+playback will resume and continue playing. If LoadFile is injected with no
 playback currently running it will start a new vnc playback with the specified
 playback file.
 
 To inject the playback file `playback.kbr` to VM `foo`:
 
 .mega vnc/vnc12.mm
+
+*** WaitForIt event
+
+Another special event is the `WaitForIt` event. This event causes the playback
+to search the VM's screenshot for the template image and continue once the
+template image has been found. The event supports a timeout which will cause
+the playback to stop if exceeded.
+
+    1000:WaitForIt,10s,template.png
+
+You may also base64-encode the image and include it in place of the filename.
+This allows your VNC scripts to be self-contained.
+
+*** ClickIt event
+
+Similar to the `WaitForIt` event, the `ClickIt` event waits until a template
+image appears in the VM screenshot but has an additional action to click on the
+center of the template image in the screenshot.
+
+    1000:ClickIt,10s,template.png
+
+As with the `WaitForIt` event, you may base64-encode the image to use in place
+of the filename.

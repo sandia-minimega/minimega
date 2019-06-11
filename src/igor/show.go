@@ -7,6 +7,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	log "minilog"
 	"os"
@@ -61,6 +62,7 @@ Formatting:
 	-c: shows colors (default true, use -c=false to disable colors)
 	-t: show node status table (default true, use -t=false to disable)
 	-e: prints install errors for reservations (ignores other flags)
+	-json: prints reservation info as a JSON Object
 	`,
 }
 
@@ -68,6 +70,8 @@ var showOpts struct {
 	sortOwner bool
 	sortName  bool
 	reverse   bool
+
+	asJSON bool
 
 	filterOwner     string
 	filterName      string
@@ -90,6 +94,8 @@ func init() {
 	cmdShow.Flag.BoolVar(&showOpts.sortOwner, "o", false, "sort by owner")
 	cmdShow.Flag.BoolVar(&showOpts.sortName, "n", false, "sort by reservation name")
 	cmdShow.Flag.BoolVar(&showOpts.reverse, "r", false, "reverse order while sorting")
+
+	cmdShow.Flag.BoolVar(&showOpts.asJSON, "json", false, "print JSON-encoded reservation info")
 
 	cmdShow.Flag.StringVar(&showOpts.filterOwner, "owner", "", "filter by owner")
 	cmdShow.Flag.StringVar(&showOpts.filterGroup, "group", "", "filter by group")
@@ -191,6 +197,32 @@ func runShow(_ *Command, _ []string) {
 	// sort according to options
 	sortReservations(resarray)
 
+	// if printing as JSON, write out info and bail...
+	if showOpts.asJSON {
+		data, err := json.Marshal(struct {
+			Prefix                                      string
+			RangeStart, RangeEnd, RackWidth, RackHeight int
+			Available, Down                             []string
+			Reservations                                []*Reservation
+		}{
+			Prefix:       igor.Config.Prefix,
+			RangeStart:   igor.Config.Start,
+			RangeEnd:     igor.Config.End,
+			RackWidth:    igor.Config.Rackwidth,
+			RackHeight:   igor.Config.Rackheight,
+			Available:    unreservedNodes,
+			Down:         downNodes,
+			Reservations: resarray,
+		})
+		if err != nil {
+			log.Fatal("unable to marshal reservations: %v", err)
+		}
+
+		fmt.Printf("%s\n", data)
+		return
+	}
+
+	// ... if not printing as json
 	if showOpts.showTable {
 		p := tablePrinter{
 			filter:     isFiltered,

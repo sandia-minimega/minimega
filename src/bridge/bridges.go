@@ -86,6 +86,7 @@ func (b Bridges) newBridge(name string) error {
 		mirrors:  make(map[string]bool),
 		captures: make(map[int]capture),
 		nameChan: b.nameChan,
+		config:   make(map[string]string),
 	}
 
 	// Create the bridge
@@ -205,6 +206,7 @@ func (b Bridges) Info() []BridgeInfo {
 		info := BridgeInfo{
 			Name:     br.Name,
 			PreExist: br.preExist,
+			Config:   make(map[string]string),
 		}
 
 		// Populate trunks
@@ -238,6 +240,11 @@ func (b Bridges) Info() []BridgeInfo {
 		}
 		sort.Ints(info.VLANs)
 
+		// Populate config
+		for k, v := range br.config {
+			info.Config[k] = v
+		}
+
 		res = append(res, info)
 	}
 
@@ -257,6 +264,25 @@ func (b Bridges) Destroy() error {
 		delete(b.bridges, k)
 	}
 
+	return nil
+}
+
+// DestroyBridge destroys a bridge by name, removing all of the taps, etc.
+// associated with it.
+func (b Bridges) DestroyBridge(name string) error {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	br, ok := b.bridges[name]
+	if !ok {
+		return fmt.Errorf("bridge not found: %v", name)
+	}
+
+	if err := br.destroy(); err != nil {
+		return err
+	}
+
+	delete(b.bridges, name)
 	return nil
 }
 

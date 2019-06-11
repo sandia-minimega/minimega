@@ -1,0 +1,15 @@
+vm launch kvm vm-0
+vm start all
+
+# wait for the "No bootable device" found string
+shell bash -c "echo '0:WaitForIt,5s,iVBORw0KGgoAAAANSUhEUgAAAKoAAAAVCAIAAABZiOJ1AAAACXBIWXMAAAsTAAALEwEAmpwYAAAAB3RJTUUH4wMPDx03D0onJAAAARxJREFUaN7tmNEOgzAIRTvjR/YT/cw9NDGkLSBQdGb3vNlm9EKBoaUAAAAA4J/4HMdRSqm1tufu0UGzEDTCWb5uU5WRoXO5zfh1yGyd7jhJWq0KVRkZOvPuKff612YAWJhPqSm1yxXWrZikTBuXYJDbouujTbo7lWftn26XufqR/Rp9GR2Px1CpfjlwZw6aOsT4E8GgsEUrYKwGVZ5JudtlLskiMbReiuOsnR62vP83m6aRLWMmsMqwxkFtMHl/rFzCeZp/RgakQuP+y9PrnSOh6awN49WDY920dT8z+b+o4m9rUcvP6gyeGeC+e0HhdKtbVD77+MZg32iqnjWdhOmiSTz3yhB02SpDHRszYvi67xMAAAAAAAAAAJx8AVbCHzjRr7b6AAAAAElFTkSuQmCC' > /tmp/vnc_wait_for_it.kb"
+
+vnc play vm-0 /tmp/vnc_wait_for_it.kb
+.column name,type,filename vnc
+
+# we should have found the template image by this time so there should be no
+# active playbacks
+shell sleep 4s
+.column name,type,filename vnc
+
+shell rm /tmp/vnc_wait_for_it.kb

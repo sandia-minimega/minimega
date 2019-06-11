@@ -27,12 +27,37 @@ type Config struct {
 	Packages   []string // list of in order packages to include (although order shouldn't matter)
 	Overlays   []string // reverse order list of overlays
 	Postbuilds []string // post build commands
+
+	Constraints []string // constraints used when parsing file
 }
 
-// Read config returns a Config object with the config file parameters and
-// any parents. Config is invalid on any non-nil error.
-func ReadConfig(path string) (c Config, err error) {
+// matches tests whether c matches the constraints.
+func (c *Config) matches(constraints []string) bool {
+outer:
+	for _, v := range constraints {
+		for _, v2 := range c.Constraints {
+			if strings.HasPrefix(v, "!") && v[1:] == v2 {
+				// explicitly matched a ! rule -- return immediately
+				return false
+			} else if v == v2 {
+				// matched this constraint, check the next one
+				continue outer
+			}
+		}
+
+		// didn't match this constraint
+		return false
+	}
+
+	// must have matched all constraints
+	return true
+}
+
+// Read config returns a Config object with the config file parameters and any
+// parents. Config is invalid on any non-nil error.
+func ReadConfig(path string, constraints ...string) (c Config, err error) {
 	c.Path = path
+	c.Constraints = constraints
 	err = read(path, "", &c)
 	return
 }
@@ -59,27 +84,50 @@ func read(path, prev string, c *Config) error {
 
 	var s scanner.Scanner
 	s.Init(f)
-	tok := s.Scan()
-	for tok != scanner.EOF {
-		pos := s.Pos()
+	s.Filename = path
+	s.Mode ^= scanner.SkipComments // don't skip comments
+
+	var constraints []string
+
+	for tok := s.Scan(); tok != scanner.EOF; tok = s.Scan() {
+		if tok == scanner.Comment {
+			// look for +build tags
+			txt := s.TokenText()
+			if !strings.HasPrefix(txt, "// +build ") {
+				continue
+			}
+
+			if constraints != nil {
+				// that's odd, already have constraints
+			}
+			constraints = strings.Fields(txt)[2:]
+			continue
+		}
+
 		if tok != scanner.Ident {
-			err = fmt.Errorf("%s:%s malformed config: %s, expected identifier, got %s", path, pos, s.TokenText(), scanner.TokenString(tok))
-			return err
+			return fmt.Errorf("%v malformed config: %s, expected identifier, got %s", s.Pos(), s.TokenText(), scanner.TokenString(tok))
 		}
 		k := s.TokenText()
+
 		tok = s.Scan()
 		if tok != '=' {
-			err = fmt.Errorf("%s:%s malformed config: %s, expected '=', got %s", path, pos, s.TokenText(), scanner.TokenString(tok))
-			return err
+			return fmt.Errorf("%v malformed config: %s, expected '=', got %s", s.Pos(), s.TokenText(), scanner.TokenString(tok))
 		}
+
 		tok = s.Scan()
 		if tok != scanner.String && tok != scanner.RawString {
-			err = fmt.Errorf("%s:%s malformed config %s, expected string, got %s", path, pos, s.TokenText(), scanner.TokenString(tok))
-			return err
+			return fmt.Errorf("%v malformed config %s, expected string, got %s", s.Pos(), s.TokenText(), scanner.TokenString(tok))
 		}
 
 		v := strings.Trim(s.TokenText(), "\"`")
 		d := strings.Fields(v)
+
+		if !c.matches(constraints) {
+			log.Info("%v skipping %v, does not match constraints", s.Pos(), k)
+			constraints = nil
+			continue
+		}
+
 		switch k {
 		case "parents":
 			for _, i := range d {
@@ -107,10 +155,8 @@ func read(path, prev string, c *Config) error {
 		case "postbuild":
 			c.Postbuilds = append(c.Postbuilds, v)
 		default:
-			err = fmt.Errorf("invalid key %s", k)
-			return err
+			return fmt.Errorf("invalid key %s", k)
 		}
-		tok = s.Scan()
 	}
 	return nil
 }
