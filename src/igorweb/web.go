@@ -17,6 +17,7 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io/ioutil"
 	log "minilog"
 	"net/http"
 	"os"
@@ -56,12 +57,14 @@ var webP string // port
 var webF string // location of static folder
 var webS bool   // silent
 var webE string // path to igor executable
+var webD string // path to igor executable
 
 func init() {
 	flag.StringVar(&webP, "p", "8080", "port")
 	flag.StringVar(&webF, "f", "", "path to static resources")
 	flag.BoolVar(&webS, "s", false, "silence output")
 	flag.StringVar(&webE, "e", "igor", "path to igor executable")
+	flag.StringVar(&webD, "d", "", "path to default kernel/init pairs")
 }
 
 // object containing the response from web.go to client
@@ -75,6 +78,13 @@ type Response struct {
 	Extra interface{}
 }
 
+type kiPair struct {
+	Name   string
+	Kernel string
+	Initrd string
+	valid  bool
+}
+
 var (
 	igorLock      sync.Mutex
 	showCacheLock sync.RWMutex
@@ -83,6 +93,7 @@ var (
 
 // "run" igor show
 func show() *Show {
+	log.Debug("Running Show")
 	if showCache == nil || time.Now().Sub(showCache.LastUpdated) > 10*time.Second {
 		updateShow()
 	}
@@ -95,6 +106,7 @@ func show() *Show {
 
 // run "show" and update cache
 func updateShow() {
+	log.Debug("Running update Show")
 	showCacheLock.Lock()
 	defer showCacheLock.Unlock()
 
@@ -116,6 +128,8 @@ func updateShow() {
 	}
 
 	data.LastUpdated = time.Now()
+	data.Listimages = getDefaultImages()
+	data.Path = webD
 	showCache = data
 }
 
@@ -259,11 +273,72 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			panic(err)
 		}
+
 	} else {
 		// reject all other requests
 		http.Error(w, "404 not found.", http.StatusNotFound)
 	}
 
+}
+
+// Grabs a list of kernel inits to serve to reservation drop down
+func getDefaultImages() map[string]*kiPair {
+	log.Debugln("Getting Images")
+	imagelist := make(map[string]*kiPair)
+	if webD == "" {
+		return imagelist
+	}
+	files, err := ioutil.ReadDir(webD)
+	if err != nil {
+		log.Warn("Error with Default images Path : %v ", err.Error())
+		return imagelist
+	}
+
+	for _, file := range files {
+		fn := strings.Split(file.Name(), ".")
+		if len(fn) < 2 {
+			continue
+		}
+		k := ""
+		i := ""
+		iskernel := false
+		log.Debug("Found File: %v.%v", fn[0], fn[1])
+		if fn[1] == "kernel" {
+			iskernel = true
+			k = file.Name()
+		} else if fn[1] == "initrd" {
+			i = file.Name()
+		} else {
+			continue
+		}
+
+		if pair, ok := imagelist[fn[0]]; ok {
+			log.Debug("Searching for Pair %v", pair.Name)
+			if iskernel {
+				pair.Kernel = k
+				if pair.Initrd != "" && pair.Kernel != "" {
+					log.Debug("Found K/I Pair: %v", pair.Name)
+					pair.valid = true
+				}
+			} else {
+				pair.Initrd = i
+				if pair.Initrd != "" && pair.Kernel != "" {
+					log.Debug("Found K/I Pair: %v", pair.Name)
+					pair.valid = true
+				}
+			}
+		} else {
+			log.Debugln("Creating new Pair")
+			imagelist[fn[0]] = &kiPair{
+				Name:   fn[0],
+				Kernel: k,
+				Initrd: i,
+				valid:  false,
+			}
+		}
+	}
+	log.Debug("found %v pairs", len(imagelist))
+	return imagelist
 }
 
 // main web function

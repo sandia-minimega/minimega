@@ -85,6 +85,9 @@
         const RACKWIDTH = {{ .RackWidth }};
         const CLUSTER = {{ .Prefix }};
         const INITIALRESERVATIONS = {{ .ResTable }};
+        var IMAGES = [{{- range $name, $pair := .Listimages }}{name:{{ $name -}} },{{ end -}} {"name":"image"}];
+        IMAGES.pop();
+        const IMAGEPATH = {{ .Path }}
     </script>
 
     <script src="static/libs/jquery-3.3.1.min.js"></script>

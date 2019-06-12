@@ -49,6 +49,13 @@
                     </div>
                     <input v-model="initrdPath" type="text" class="dash form-control mdl" placeholder="Initrd path">
                   </div>
+                  <div>
+                  <select v-model="kernelpair">
+                  <option disabled value="">Please select one</option>
+                  <option v-for="item in IMAGES" :value="item.name">{{ item.name }}</option>
+                  </option>
+                  </select>
+                </div>
                 </div>
                 <!-- Cobbler profile, -profile, only shows if right side of above switch is active -->
                 <div v-if="!isKernelInit" class="form-group switchcobbler mdl">
@@ -198,10 +205,10 @@
         cmdArgs: '',
         resLength: '60m',
         afterDate: '',
-
+        kernelpair: '',
         isKernelInit: true,
         isNodeList: false,
-
+        selected: null,
         serverMessage: '',
         serverSuccess: true,
       };
@@ -214,7 +221,7 @@
         }
 
         if (this.isKernelInit) {
-          if (!this.kernelPath || !this.initrdPath) {
+          if ((!this.kernelPath || !this.initrdPath) && !this.kernelpair) {
             return false;
           }
         } else {
@@ -239,7 +246,9 @@
       command() {
         let bootFrom = `-profile ${this.cobblerProfile}`;
         if (this.isKernelInit) {
-          bootFrom = `-k ${this.kernelPath} -i ${this.initrdPath}`;
+          if (this.kernelpair && !(this.kernelPath && this.initrdPath)){
+            bootFrom = `-k ${IMAGEPATH}${this.kernelpair}.kernel -i ${IMAGEPATH}${this.kernelpair}.initrd`;
+          }else {bootFrom = `-k ${this.kernelPath} -i ${this.initrdPath}`;}
         }
 
         let nodes = `-n ${this.numNodes}`;
@@ -305,7 +314,7 @@
             }
           );
         }
-      },
+      },      
     },
   };
 })();

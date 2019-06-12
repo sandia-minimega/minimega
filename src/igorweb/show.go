@@ -12,6 +12,8 @@ type Show struct {
 	RangeStart, RangeEnd, RackWidth, RackHeight int
 	Available, Down                             []string
 	Reservations                                []Res
+	Listimages                                  map[string]*kiPair
+	Path                                        string
 }
 
 // DownRow returns a ResTableRow that enumerates all nodes in the "down" state
