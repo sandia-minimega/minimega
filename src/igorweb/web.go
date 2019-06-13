@@ -302,7 +302,6 @@ func getDefaultImages() map[string]*kiPair {
 		k := ""
 		i := ""
 		iskernel := false
-		log.Debug("Found File: %v.%v", fn[0], fn[1])
 		if fn[1] == "kernel" {
 			iskernel = true
 			k = file.Name()
@@ -313,7 +312,6 @@ func getDefaultImages() map[string]*kiPair {
 		}
 
 		if pair, ok := imagelist[fn[0]]; ok {
-			log.Debug("Searching for Pair %v", pair.Name)
 			if iskernel {
 				pair.Kernel = k
 				if pair.Initrd != "" && pair.Kernel != "" {

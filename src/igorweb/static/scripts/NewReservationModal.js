@@ -195,7 +195,6 @@
     data() {
       return {
         speculating: false,
-
         name: '',
         kernelPath: '',
         initrdPath: '',
@@ -245,9 +244,20 @@
 
       command() {
         let bootFrom = `-profile ${this.cobblerProfile}`;
-        if (this.isKernelInit) {
-          if (this.kernelpair && !(this.kernelPath && this.initrdPath)){
-            bootFrom = `-k ${IMAGEPATH}${this.kernelpair}.kernel -i ${IMAGEPATH}${this.kernelpair}.initrd`;
+        if (this.isKernelInit) { // Check if using cobbler or KI Pairs
+          if (this.kernelpair && !(this.kernelPath && this.initrdPath)){ // Check whether using textbox or dropdown (text overrides dropdown) 
+            if (this.kernelpair.includes('(user defined)')){ // If using drop down check whether its a user defined or default a KI Pair
+              var i =0;
+              while (i < userDefinedImages.length){
+                if (userDefinedImages[i].name == this.kernelpair){
+                  bootFrom = `-k ${userDefinedImages[i].kernel} -i ${userDefinedImages[i].initrd}`;
+                  break;
+                }
+                i++;
+              }
+            } else {
+              bootFrom = `-k ${IMAGEPATH}${this.kernelpair}.kernel -i ${IMAGEPATH}${this.kernelpair}.initrd`;
+            }
           }else {bootFrom = `-k ${this.kernelPath} -i ${this.initrdPath}`;}
         }
 
@@ -298,11 +308,32 @@
         this.afterDate = formattedStart;
       },
 
+      searchImage(target,container) {
+        var i;
+              var found = false;
+              for (i=0;i < container.length;i++){
+                if (container[i].name == target.name){
+                  found = true;
+                  return i;
+                }
+              }
+              return -1;
+      },
+
       submitReservation() {
         if (this.validForm) {
+          if (this.kernelPath && this.initrdPath){
+            var tmp = this.kernelPath.split('/');
+            var image = {name:tmp[tmp.length-1].split('.')[0]+'(user defined)',kernel:this.kernelPath,initrd:this.initrdPath};
+            if (this.searchImage(image,userDefinedImages ==-1)){
+              userDefinedImages.push(image);
+              localStorage.setItem('usrImages', JSON.stringify(userDefinedImages));
+            }
+          }
+          
           this.showLoading();
           this.hide();
-
+          console.log('Running Command');
           $.get(
             'run/',
             {run: this.command},
@@ -316,5 +347,31 @@
         }
       },      
     },
+    
+    mounted() {
+      if (localStorage.kernelPath) {
+        this.kernelPath = localStorage.kernelPath;
+      }
+      if (localStorage.initrdPath) {
+        this.initrdPath = localStorage.initrdPath;
+      }
+      if (localStorage.getItem('usrImages')) {
+        userDefinedImages = JSON.parse(localStorage.getItem('usrImages'));
+        for (i=0;i < userDefinedImages.length;i++){
+          if (this.searchImage(userDefinedImages[i],IMAGES)==-1){
+            IMAGES.push(userDefinedImages[i])
+          }
+        }
+        
+      }
+    },
+    watch: {
+      kernelPath(newkernelPath) {
+        localStorage.kernelPath = newkernelPath;
+      },
+      initrdPath(newinitrdPath) {
+        localStorage.initrdPath = newinitrdPath;
+      }
+    }
   };
 })();

@@ -86,6 +86,7 @@
         const CLUSTER = {{ .Prefix }};
         const INITIALRESERVATIONS = {{ .ResTable }};
         var IMAGES = [{{- range $name, $pair := .Listimages }}{name:{{ $name -}} },{{ end -}} {"name":"image"}];
+        var userDefinedImages = [];
         IMAGES.pop();
         const IMAGEPATH = {{ .Path }}
     </script>
