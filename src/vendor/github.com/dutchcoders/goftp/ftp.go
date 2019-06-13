@@ -17,9 +17,8 @@ import (
 // RePwdPath is the default expression for matching files in the current working directory
 var (
 	RePwdPath = regexp.MustCompile(`\"(.*)\"`)
-	HitFunc func()
+	HitFunc   func()
 )
-
 
 type StatusError struct {
 	s string
@@ -35,14 +34,14 @@ type FTP struct {
 
 	addr string
 
-	debug     bool
-	tlsconfig *tls.Config
+	debug          bool
+	tlsconfig      *tls.Config
 	dataEncryption bool
-	reader *bufio.Reader
-	writer *bufio.Writer
+	reader         *bufio.Reader
+	writer         *bufio.Writer
 }
 
-func (ftp *FTP) HitCallback (fn func()) {
+func (ftp *FTP) HitCallback(fn func()) {
 	HitFunc = fn
 }
 
@@ -370,7 +369,6 @@ func (ftp *FTP) receiveNoDiscard() (string, error) {
 	//fmt.Println(line)
 	return line, err
 }
-
 
 func (ftp *FTP) send(command string, arguments ...interface{}) error {
 	if ftp.debug {

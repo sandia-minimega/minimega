@@ -81,14 +81,14 @@ func (socket *ftpActiveSocket) Close() error {
 }
 
 type ftpPassiveSocket struct {
-	conn       net.Conn
-	port       int
-	host       string
-	ingress    chan []byte
-	egress     chan []byte
-	logger     *Logger
-	wg         sync.WaitGroup
-	err        error
+	conn      net.Conn
+	port      int
+	host      string
+	ingress   chan []byte
+	egress    chan []byte
+	logger    *Logger
+	wg        sync.WaitGroup
+	err       error
 	tlsConfig *tls.Config
 }
 

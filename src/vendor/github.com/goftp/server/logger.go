@@ -2,7 +2,7 @@ package server
 
 import (
 	"fmt"
-	log"minilog"
+	log "minilog"
 )
 
 // Use an instance of this to log in a standard format
