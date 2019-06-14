@@ -217,7 +217,7 @@ func cliPipeBroadcast(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 
 			if c.BoolArgs["truncate"] {
 				length, err := strconv.Atoi(c.StringArgs["length"])
-				if err != nil {
+				if err != nil || length < 0 {
 					return fmt.Errorf("invalid truncation length: %v", c.StringArgs["length"])
 				} else {
 					resp.Tabular = append(resp.Tabular, []string{name, v.Mode(), fmt.Sprintf("%v", v.NumReaders()), fmt.Sprintf("%v", v.NumWriters()), fmt.Sprintf("%v", v.NumMessages()), v.GetVia(), truncatePipeOutput(strings.TrimSpace(v.Last()), length)})
