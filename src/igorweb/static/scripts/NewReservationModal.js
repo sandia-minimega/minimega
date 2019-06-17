@@ -38,7 +38,13 @@
                         <code id="dashkcode" class="mdl">-k</code>
                       </div>
                     </div>
-                    <input v-model="kernelPath" type="text" class="dash form-control mdl" placeholder="Kernel path">
+                    <input v-model="kernelPath" type="text" class="dash form-control mdl" :class="{'is-valid': kernelPathIsValid, 'is-invalid': !kernelPathIsValid}" placeholder="Kernel path">
+                    <div v-if="kernelPathIsValid" class="valid-feedback">
+                      Looking good!
+                    </div>
+                    <div v-if="!kernelPathIsValid" class="invalid-feedback">
+                      Path must be an absolute path to a kernel.
+                    </div>
                   </div>
                 </div>
                 <!-- Initrd path, -i, only shows if left side of above switch is active -->
@@ -47,7 +53,14 @@
                     <div class="input-group-prepend mdl">
                       <div class="input-group-text mdl"><code id="dashicode" class="mdl">-i</code></div>
                     </div>
-                    <input v-model="initrdPath" type="text" class="dash form-control mdl" placeholder="Initrd path">
+                    <input v-model="initrdPath" type="text" class="dash form-control mdl" :class="{'is-valid': initrdPathIsValid, 'is-invalid': !initrdPathIsValid}" placeholder="Initrd path">
+
+                    <div v-if="initrdPathIsValid" class="valid-feedback">
+                      Looking good!
+                    </div>
+                    <div v-if="!initrdPathIsValid" class="invalid-feedback">
+                      Path must be an absolute path to an initial RAM disk.
+                    </div>
                   </div>
                 </div>
                 <!-- Cobbler profile, -profile, only shows if right side of above switch is active -->
@@ -208,13 +221,23 @@
     },
 
     computed: {
+      kernelPathIsValid() {
+        let re = new RegExp('^(/[^/]*)+[^/]+\\.kernel$');
+        return this.kernelPath.match(re) != null;
+      },
+
+      initrdPathIsValid() {
+        let re = new RegExp('^(/[^/]*)+[^/]+\\.initrd$');
+        return this.initrdPath.match(re) != null;
+      },
+
       validForm() {
         if (!this.name) {
           return false;
         }
 
         if (this.isKernelInit) {
-          if (!this.kernelPath || !this.initrdPath) {
+          if (!this.kernelPathIsValid || !this.initrdPathIsValid) {
             return false;
           }
         } else {
