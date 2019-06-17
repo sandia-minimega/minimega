@@ -22,7 +22,7 @@ const app = new Vue({
 
     selectedReservation() {
       return this.$store.state.selectedReservation;
-    }
+    },
   },
 
   // Runs after the Vue component (the whole app, in this case) has

@@ -7,7 +7,7 @@ window.store = new Vuex.Store({
     selectedReservation: null,
     selectedNodes: [],
     reservations: [],
-    alert: "",
+    alert: '',
   },
 
   // Convenience methods for accessing application-wide data.  The
@@ -25,7 +25,7 @@ window.store = new Vuex.Store({
     },
 
     nodes: (state, getters) => {
-      let n = {};
+      const n = {};
 
       for (let i = STARTNODE; i <= ENDNODE; i++) {
         n[i] = {
@@ -48,16 +48,16 @@ window.store = new Vuex.Store({
       }
 
       // The first reservation is our list of down nodes
-      let down = state.reservations[0].Nodes;
+      const down = state.reservations[0].Nodes;
       for (let i = 0; i < down.length; i++) {
         n[down[i]].Up = false;
       }
 
       for (let i = 1; i < state.reservations.length; i++) {
-        let r = state.reservations[i];
+        const r = state.reservations[i];
 
         for (let j = 0; j < r.Nodes.length; j++) {
-          let nodeID = r.Nodes[j];
+          const nodeID = r.Nodes[j];
 
           n[nodeID].Reservation = r;
           n[nodeID].Reservation.Range = `${getters.clusterPrefix}[${toRange(r.Nodes)}]`;
@@ -114,12 +114,12 @@ window.store = new Vuex.Store({
     // state.vms accordingly.
     getReservations({commit}) {
       $.get(
-        'run/',
-        {run: 'igor show'},
-        function(data) {
-          let response = JSON.parse(data);
-          commit('updateReservations', response.Extra);
-        }
+          'run/',
+          {run: 'igor show'},
+          function(data) {
+            const response = JSON.parse(data);
+            commit('updateReservations', response.Extra);
+          }
       );
     },
 
@@ -151,8 +151,8 @@ function toRange(nodes) {
 
   let min = null;
   for (let i = 0; i < nodes.length-1; i++) {
-    let n = nodes[i];
-    let m = nodes[i+1];
+    const n = nodes[i];
+    const m = nodes[i+1];
 
     if (min === null) {
       min = n;
@@ -175,7 +175,7 @@ function toRange(nodes) {
     min = null;
   }
 
-  let n = nodes[nodes.length-1];
+  const n = nodes[nodes.length-1];
   if (result !== '') {
     result += ', ';
   }

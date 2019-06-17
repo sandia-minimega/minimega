@@ -50,26 +50,26 @@
 
     methods: {
       select(availability, power) {
-        let nodes = Object.values(this.$store.getters.nodes);
+        const nodes = Object.values(this.$store.getters.nodes);
 
         let selected = nodes;
-        if (availability == "available") {
+        if (availability == 'available') {
           selected = nodes.filter((x) => x.Reservation == null);
         }
-        if (availability == "reserved") {
+        if (availability == 'reserved') {
           selected = nodes.filter((x) => x.Reservation != null);
         }
 
-        if (power == "up") {
+        if (power == 'up') {
           selected = selected.filter((x) => x.Up);
         }
-        if (power == "down") {
+        if (power == 'down') {
           selected = selected.filter((x) => !x.Up);
         }
 
         selected = selected.map((x) => x.NodeID);
 
-        this.$store.dispatch("selectNodes", selected);
+        this.$store.dispatch('selectNodes', selected);
       },
     },
   };

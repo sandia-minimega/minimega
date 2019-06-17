@@ -54,7 +54,7 @@
     methods: {
       selectNode() {
         this.$store.dispatch('selectNodes', [this.nodeInfo.NodeID]);
-      }
+      },
     },
   };
 })();

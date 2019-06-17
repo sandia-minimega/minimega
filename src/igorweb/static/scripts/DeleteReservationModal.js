@@ -68,23 +68,23 @@
         this.showLoading();
 
         $.get(
-          'run/',
-          {run: `igor del ${this.reservation.Name}`},
-          (data) => {
-            let response = JSON.parse(data);
+            'run/',
+            {run: `igor del ${this.reservation.Name}`},
+            (data) => {
+              const response = JSON.parse(data);
 
-            let msg = response.Message;
-            if (msg == '\n') {
-              msg = `Successfully deleted ${this.reservation.Name}`;
+              let msg = response.Message;
+              if (msg == '\n') {
+                msg = `Successfully deleted ${this.reservation.Name}`;
+              }
+
+              this.$store.commit('updateReservations', response.Extra);
+              this.$store.commit('setAlert', msg);
+              setTimeout(() => {
+                this.hideLoading();
+                this.$emit('deleted');
+              }, 500);
             }
-
-            this.$store.commit('updateReservations', response.Extra);
-            this.$store.commit('setAlert', msg);
-            setTimeout(() => {
-              this.hideLoading();
-              this.$emit('deleted');
-            }, 500);
-          }
         );
       },
     },

@@ -33,13 +33,13 @@
           return false;
         }
         return this.$store.state.selectedReservation.Name == this.reservation.Name;
-      }
+      },
     },
 
     methods: {
       selectReservation(r) {
         this.$store.dispatch('selectReservation', r);
-      }
-    }
+      },
+    },
   };
 })();

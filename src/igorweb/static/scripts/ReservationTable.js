@@ -48,7 +48,7 @@
       },
     },
 
-    data(){
+    data() {
       return {
         sortBy: 'name',
         reversed: false,
@@ -58,30 +58,30 @@
     computed: {
       reservations() {
         let sortFunc = null;
-        switch(this.sortBy) {
-        case 'name':
-          sortFunc = sortHelper((x) => x.Name.toUpperCase());
-          break;
-        case 'owner':
-          sortFunc = sortHelper((x) => x.Owner.toUpperCase());
-          break;
-        case 'start':
-          sortFunc = sortHelper((x) => x.StartInt);
-          break;
-        case 'end':
-          sortFunc = sortHelper((x) => x.EndInt);
-          break;
-        case 'nodes':
-          sortFunc = sortHelper((x) => x.Nodes.length);
-          break;
-        case 'range':
-          sortFunc = sortHelper((x) => x.Nodes[0]);
-          break;
+        switch (this.sortBy) {
+          case 'name':
+            sortFunc = sortHelper((x) => x.Name.toUpperCase());
+            break;
+          case 'owner':
+            sortFunc = sortHelper((x) => x.Owner.toUpperCase());
+            break;
+          case 'start':
+            sortFunc = sortHelper((x) => x.StartInt);
+            break;
+          case 'end':
+            sortFunc = sortHelper((x) => x.EndInt);
+            break;
+          case 'nodes':
+            sortFunc = sortHelper((x) => x.Nodes.length);
+            break;
+          case 'range':
+            sortFunc = sortHelper((x) => x.Nodes[0]);
+            break;
         }
 
-        let clone = $.extend(true, [], this.$store.getters.reservations);
-        let sorted = clone.sort(sortFunc);
-        let filtered = sorted.filter((x) => {
+        const clone = $.extend(true, [], this.$store.getters.reservations);
+        const sorted = clone.sort(sortFunc);
+        const filtered = sorted.filter((x) => {
           let include = false;
           [x.Name, x.Owner].forEach((d) => {
             if (d) {
@@ -91,9 +91,9 @@
           include = include || x.Nodes.includes(+this.filter);
           include = include || x.Range == this.filter;
 
-          let single_node_range = this.filter.match(/^.+\[(\d+)\]$/);
+          const single_node_range = this.filter.match(/^.+\[(\d+)\]$/);
           if (single_node_range) {
-            let node = single_node_range[1];
+            const node = single_node_range[1];
             include = include || x.Nodes.includes(+node);
           }
 
@@ -116,8 +116,8 @@
 
   function sortHelper(getter) {
     return (a, b) => {
-      let gA = getter(a);
-      let gB = getter(b);
+      const gA = getter(a);
+      const gB = getter(b);
 
       if (gA < gB) {
         return -1;

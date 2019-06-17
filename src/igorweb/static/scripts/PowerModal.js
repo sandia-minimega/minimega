@@ -105,13 +105,13 @@
 
     methods: {
       show() {
-        let range = this.$store.getters.selectedRange;
+        const range = this.$store.getters.selectedRange;
         if (range) {
           this.nodeRange = range;
           this.byReservation = false;
         }
 
-        let res = this.$store.state.selectedReservation;
+        const res = this.$store.state.selectedReservation;
         if (res) {
           this.resName = res.Name;
           this.byReservation = true;
@@ -137,14 +137,14 @@
         this.showLoading();
 
         $.get(
-          'run/',
-          {run: `${this.command} ${cmd}`},
-          (data) => {
-            let response = JSON.parse(data);
+            'run/',
+            {run: `${this.command} ${cmd}`},
+            (data) => {
+              const response = JSON.parse(data);
 
-            this.$store.commit('setAlert', response.Message);
-            this.hideLoading();
-          }
+              this.$store.commit('setAlert', response.Message);
+              this.hideLoading();
+            }
         );
       },
     },

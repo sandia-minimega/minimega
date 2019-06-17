@@ -42,13 +42,13 @@
 
     data() {
       return {
-        searchText: "",
+        searchText: '',
       };
     },
 
     methods: {
       clearFilter() {
-        this.searchText = "";
+        this.searchText = '';
       },
     },
   };

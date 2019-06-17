@@ -19,10 +19,10 @@
 
     props: {
       header: {
-        type: String
+        type: String,
       },
       body: {
-        type: String
+        type: String,
       },
     },
 

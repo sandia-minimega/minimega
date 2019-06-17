@@ -41,7 +41,7 @@
     template: template,
 
     components: {
-      Alert
+      Alert,
     },
 
     props: {
@@ -59,19 +59,19 @@
 
     mounted() {
       $.get(
-        'run/',
-        {run: `${this.cmd} -s`},
-        (data) => {
-          let response = JSON.parse(data);
-          this.speculations = response.Extra;
+          'run/',
+          {run: `${this.cmd} -s`},
+          (data) => {
+            const response = JSON.parse(data);
+            this.speculations = response.Extra;
 
-          let msg = response.Message;
-          if (msg.match(/^AVAILABLE/)) {
-            this.serverMessage = 'Speculation successful';
-          } else {
-            this.serverMessage = response.Message;
+            const msg = response.Message;
+            if (msg.match(/^AVAILABLE/)) {
+              this.serverMessage = 'Speculation successful';
+            } else {
+              this.serverMessage = response.Message;
+            }
           }
-        }
       );
     },
   };

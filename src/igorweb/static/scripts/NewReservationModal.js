@@ -222,12 +222,12 @@
 
     computed: {
       kernelPathIsValid() {
-        let re = new RegExp('^(/[^/]*)+[^/]+\\.kernel$');
+        const re = new RegExp('^(/[^/]*)+[^/]+\\.kernel$');
         return this.kernelPath.match(re) != null;
       },
 
       initrdPathIsValid() {
-        let re = new RegExp('^(/[^/]*)+[^/]+\\.initrd$');
+        const re = new RegExp('^(/[^/]*)+[^/]+\\.initrd$');
         return this.initrdPath.match(re) != null;
       },
 
@@ -286,7 +286,7 @@
 
     methods: {
       show() {
-        let range = this.$store.getters.selectedRange;
+        const range = this.$store.getters.selectedRange;
         if (range != '') {
           this.numNodes = this.$store.state.selectedNodes.length;
           this.nodeList = range;
@@ -318,14 +318,14 @@
           this.hide();
 
           $.get(
-            'run/',
-            {run: this.command},
-            (data) => {
-              let response = JSON.parse(data);
-              this.$store.commit('updateReservations', response.Extra);
-              this.$store.commit('setAlert', `Reservation ${this.name}: ${response.Message}`);
-              this.hideLoading();
-            }
+              'run/',
+              {run: this.command},
+              (data) => {
+                const response = JSON.parse(data);
+                this.$store.commit('updateReservations', response.Extra);
+                this.$store.commit('setAlert', `Reservation ${this.name}: ${response.Message}`);
+                this.hideLoading();
+              }
           );
         }
       },

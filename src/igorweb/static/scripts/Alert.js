@@ -12,7 +12,7 @@
 
     data() {
       return {
-        ignored: "",
+        ignored: '',
       };
     },
 
@@ -31,7 +31,7 @@
     watch: {
       message(oldMsg, newMsg) {
         // Whenever the message changes, clear out the "ignored" field
-        ignored = "";
+        ignored = '';
 
         // Scroll to the top of the page
         $(window).scrollTop(0);
