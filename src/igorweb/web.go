@@ -280,7 +280,7 @@ func main() {
 
 	for _, envvar := range os.Environ() {
 		if strings.HasPrefix(envvar, "SUDO_USER=") {
-			log.Error("SUDO_USER is set. This will likely cause problems with names on reservations.")
+			log.Fatalln("SUDO_USER is set. This will likely cause problems with names on reservations.")
 		}
 	}
 
