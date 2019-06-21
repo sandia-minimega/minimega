@@ -44,8 +44,7 @@ type Message struct {
 	Client *Client
 
 	// MESSAGE_FILE
-	File     []byte
-	Filename string
+	File *File
 
 	// MESSAGE_TUNNEL and MESSAGE_UFS
 	Tunnel []byte
