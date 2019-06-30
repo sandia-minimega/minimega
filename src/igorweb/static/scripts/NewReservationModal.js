@@ -98,6 +98,21 @@
                 <!-- The rest of the fields are optional -->
                 <i class="mb-2 mdl">Optional:</i>
                 <div class="mb-4 mdl" style="border-top: 1px solid #e9ecef; border-bottom: 1px solid #e9ecef; padding-top: 5px;">
+                  <!-- Group, -g, optional -->
+                  <div class="form-group mdl">
+                    <div class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="An optional group that can modify this reservation">
+                      <div class="input-group-prepend mdl">
+                        <div class="input-group-text mdl"><code id="dashccode" class="mdl" style="color: royalblue;">-g</code></div>
+                      </div>
+                      <input v-model="group" type="text" class="dash form-control mdl" :class="{'is-valid': group && groupIsValid, 'is-invalid': group && !groupIsValid}" placeholder="Group">
+                    <div v-if="group && groupIsValid" class="valid-feedback">
+                      Looking good!
+                    </div>
+                    <div v-if="group && !groupIsValid" class="invalid-feedback">
+                      Invalid group name.
+                    </div>
+                    </div>
+                  </div>
                   <!-- Command line arguments, -c, optional -->
                   <div class="form-group mdl">
                     <div class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="e.g. console=tty0">
@@ -208,6 +223,7 @@
         cobblerProfile: '',
         numNodes: '',
         nodeList: '',
+        group: '',
         cmdArgs: '',
         resLength: '60m',
         afterDate: '',
@@ -221,6 +237,11 @@
     },
 
     computed: {
+      groupIsValid() {
+        const re = new RegExp('^[_a-z][0-9a-z_-]*\\$?$');
+        return this.group.match(re) != null;
+      },
+
       kernelPathIsValid() {
         const re = new RegExp('^(/[^/]*)+[^/]+\\.kernel$');
         return this.kernelPath.match(re) != null;
@@ -233,6 +254,10 @@
 
       validForm() {
         if (!this.name) {
+          return false;
+        }
+
+        if (this.group && !this.groupIsValid) {
           return false;
         }
 
@@ -270,6 +295,11 @@
           nodes = `-w ${this.nodeList}`;
         }
 
+        let group = '';
+        if (this.group) {
+          group = ` -g ${this.group}`;
+        }
+
         let args = '';
         if (this.cmdArgs) {
           args = ` -c ${this.cmdArgs}`;
@@ -280,7 +310,7 @@
           after = ` -a ${this.afterDate}`;
         }
 
-        return `igor sub -r ${this.name} ${bootFrom} ${nodes} -t ${this.resLength}${args}${after}`;
+        return `igor sub -r ${this.name} ${bootFrom} ${nodes} -t ${this.resLength}${args}${after}${group}`;
       },
     },
 
