@@ -5,22 +5,22 @@
         <tr class="mdl">
           <!-- Reservation table headers with sorting arrows -->
           <th id="rtname" class="mdl restableheader clickable" scope="col" v-on:click="changeSort('name')">
-            Name <span v-if="sortBy == 'name'"><b v-if="!reversed">&uarr;</b><b v-if="reversed">&darr;</b></span>
+            Name <span v-if="sortBy == 'name'" class="oi" :class="{'oi-arrow-thick-top': !reversed, 'oi-arrow-thick-bottom': reversed}"></span>
           </th>
           <th id="rtowner" class="mdl restableheader clickable" scope="col" v-on:click="changeSort('owner')">
-            Owner <span v-if="sortBy == 'owner'"><b v-if="!reversed">&uarr;</b><b v-if="reversed">&darr;</b></span>
+            Owner <span v-if="sortBy == 'owner'" class="oi" :class="{'oi-arrow-thick-top': !reversed, 'oi-arrow-thick-bottom': reversed}"></span>
           </th>
           <th id="rtstart" class="mdl restableheader clickable" scope="col" v-on:click="changeSort('start')">
-            Start Time <span v-if="sortBy == 'start'"><b v-if="!reversed">&uarr;</b><b v-if="reversed">&darr;</b></span>
+            Start Time <span v-if="sortBy == 'start'" class="oi" :class="{'oi-arrow-thick-top': !reversed, 'oi-arrow-thick-bottom': reversed}"></span>
           </th>
           <th id="rtend" class="mdl restableheader clickable" scope="col" v-on:click="changeSort('end')">
-            End Time <span v-if="sortBy == 'end'"><b v-if="!reversed">&uarr;</b><b v-if="reversed">&darr;</b></span>
+            End Time <span v-if="sortBy == 'end'" class="oi" :class="{'oi-arrow-thick-top': !reversed, 'oi-arrow-thick-bottom': reversed}"></span>
           </th>
           <th id="rtnumber" class="mdl restableheader clickable" scope="col" v-on:click="changeSort('nodes')">
-            Nodes <span v-if="sortBy == 'nodes'"><b v-if="!reversed">&uarr;</b><b v-if="reversed">&darr;</b></span>
+            Nodes <span v-if="sortBy == 'nodes'" class="oi" :class="{'oi-arrow-thick-top': !reversed, 'oi-arrow-thick-bottom': reversed}"></span>
           </th>
           <th id="rtnumber" class="mdl restableheader clickable" scope="col" v-on:click="changeSort('range')">
-            Range <span v-if="sortBy == 'range'"><b v-if="!reversed">&uarr;</b><b v-if="reversed">&darr;</b></span>
+            Range <span v-if="sortBy == 'range'" class="oi" :class="{'oi-arrow-thick-top': !reversed, 'oi-arrow-thick-bottom': reversed}"></span>
           </th>
         </tr>
       </thead>
