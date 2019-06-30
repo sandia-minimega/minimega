@@ -145,7 +145,7 @@ func userFromAuthHeader(r *http.Request) (string, error) {
 	}
 
 	// strip off "Basic " and decode
-	authInfo, err := base64.StdEncoding.DecodeString(authHeader[6:])
+	authInfo, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(authHeader, "Basic "))
 	if err != nil {
 		return "", errors.New("Invalid user.")
 	}
@@ -247,6 +247,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		log.Debug(fmt.Sprintf("%s %s %s", r.Method, r.URL, r.RemoteAddr))
 	}
 
+	username, err := userFromAuthHeader(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	// serve igorweb.html with JS template variables filled in
 	//              for initial display of reservation info
 	if r.URL.Path == "/" {
@@ -259,6 +265,8 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			panic(err)
 		}
+
+		log.Info("Initial page load by %s", username)
 	} else {
 		// reject all other requests
 		http.Error(w, "404 not found.", http.StatusNotFound)
