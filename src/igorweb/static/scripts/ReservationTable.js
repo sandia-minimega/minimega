@@ -10,6 +10,9 @@
           <th id="rtowner" class="mdl restableheader clickable" scope="col" v-on:click="changeSort('owner')">
             Owner <span v-if="sortBy == 'owner'" class="oi" :class="{'oi-arrow-thick-top': !reversed, 'oi-arrow-thick-bottom': reversed}"></span>
           </th>
+          <th id="rtgroup" class="mdl restableheader clickable" scope="col" v-on:click="changeSort('group')">
+            Group <span v-if="sortBy == 'group'" class="oi" :class="{'oi-arrow-thick-top': !reversed, 'oi-arrow-thick-bottom': reversed}"></span>
+          </th>
           <th id="rtstart" class="mdl restableheader clickable" scope="col" v-on:click="changeSort('start')">
             Start Time <span v-if="sortBy == 'start'" class="oi" :class="{'oi-arrow-thick-top': !reversed, 'oi-arrow-thick-bottom': reversed}"></span>
           </th>
@@ -64,6 +67,9 @@
             break;
           case 'owner':
             sortFunc = sortHelper((x) => x.Owner.toUpperCase());
+            break;
+          case 'group':
+            sortFunc = sortHelper((x) => x.Group.toUpperCase());
             break;
           case 'start':
             sortFunc = sortHelper((x) => x.StartInt);

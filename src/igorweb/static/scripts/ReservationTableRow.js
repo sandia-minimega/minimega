@@ -7,6 +7,7 @@
     >
       <td class="mdl">{{ reservation.Name }}</td>
       <td class="mdl">{{ reservation.Owner }}</td>
+      <td class="mdl">{{ reservation.Group }}</td>
       <td class="mdl current">{{ reservation.Start }}</td>
       <td class="mdl">{{ reservation.End }}</td>
       <td class="mdl">{{ nodeCount }}</td>

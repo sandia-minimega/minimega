@@ -1,6 +1,7 @@
 package main
 
 import (
+	log "minilog"
 	"ranges"
 	"time"
 )
@@ -14,27 +15,31 @@ type Show struct {
 	Reservations                                []Res
 }
 
+// Returns the range of nodes based on Show
+func (s Show) Range() *ranges.Range {
+	rnge, err := ranges.NewRange(s.Prefix, s.RangeStart, s.RangeEnd)
+	if err != nil {
+		log.Fatal("Cannot compute Range: %v", err)
+	}
+	return rnge
+}
+
 // DownRow returns a ResTableRow that enumerates all nodes in the "down" state
 func (s Show) DownRow() ResTableRow {
-	rnge, _ := ranges.NewRange(s.Prefix, s.RangeStart, s.RangeEnd)
 	return ResTableRow{
-		"",
-		"",
-		"",
-		time.Now().Unix(),
-		"",
-		0,
-		rnge.RangeToInts(s.Down),
+		StartInt: time.Now().Unix(),
+		EndInt:   0,
+		Nodes:    s.Range().RangeToInts(s.Down),
 	}
 }
 
 // ResTable returns the reservations as a ResTable. The first element
 // in the ResTable enumerates the hosts that are "down"
-func (s Show) ResTable() ResTable {
+func (s *Show) ResTable() ResTable {
 	// First element is a row containing all down nodes
 	resRows := ResTable{s.DownRow()}
 	for _, r := range s.Reservations {
-		resRows = append(resRows, r.ResTableRow(s.Prefix, s.RangeStart, s.RangeEnd))
+		resRows = append(resRows, r.ResTableRow(s))
 	}
 	return resRows
 }
@@ -46,23 +51,24 @@ func (s Show) ResTable() ResTable {
 type Res struct {
 	Name  string
 	Owner string
+	Group string
 	Start time.Time
 	End   time.Time
 	Hosts []string // separate, not a range
 }
 
 // ResTableRow returns a Res as a ResTableRow.
-func (r Res) ResTableRow(prefix string, start, end int) ResTableRow {
+func (r Res) ResTableRow(s *Show) ResTableRow {
 	timefmt := "Jan 2 15:04"
-	rnge, _ := ranges.NewRange(prefix, start, end)
 
 	return ResTableRow{
 		Name:     r.Name,
 		Owner:    r.Owner,
+		Group:    r.Group,
 		Start:    r.Start.Format(timefmt),
 		StartInt: r.Start.UnixNano(),
 		End:      r.End.Format(timefmt),
 		EndInt:   r.End.UnixNano(),
-		Nodes:    rnge.RangeToInts(r.Hosts),
+		Nodes:    s.Range().RangeToInts(r.Hosts),
 	}
 }

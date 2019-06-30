@@ -10,6 +10,7 @@ import (
 type ResTableRow struct {
 	Name  string
 	Owner string
+	Group string
 	// display string for "Start Time"
 	Start string
 	// integer start time for comparisons
