@@ -31,7 +31,8 @@
         <template v-for="r in reservations">
           <reservation-table-row
             v-if="r.Owner != ''"
-            v-bind:reservation="r">
+            v-bind:reservation="r"
+            v-on:res-action="(...args) => $emit('res-action', ...args)">
           </reservation-table-row>
         </template>
       </tbody>

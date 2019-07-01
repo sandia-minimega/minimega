@@ -67,12 +67,16 @@ func (s *UserShow) ResTable() ResTable {
 // fields in Res is less than igor.Reservation, since we don't need
 // everything there.
 type Res struct {
-	Name  string
-	Owner string
-	Group string
-	Start time.Time
-	End   time.Time
-	Hosts []string // separate, not a range
+	Name           string
+	Owner          string
+	Group          string
+	Kernel         string
+	Initrd         string
+	CobblerProfile string
+	KernelArgs     string
+	Start          time.Time
+	End            time.Time
+	Hosts          []string // separate, not a range
 }
 
 // GetGroup returns the user.Group that can edit tihs
@@ -128,14 +132,18 @@ func (r Res) ResTableRow(s *UserShow) ResTableRow {
 	timefmt := "Jan 2 15:04"
 
 	return ResTableRow{
-		Name:     r.Name,
-		Owner:    r.Owner,
-		Group:    r.Group,
-		CanEdit:  r.IsEditableBy(s.User()),
-		Start:    r.Start.Format(timefmt),
-		StartInt: r.Start.UnixNano(),
-		End:      r.End.Format(timefmt),
-		EndInt:   r.End.UnixNano(),
-		Nodes:    s.Range().RangeToInts(r.Hosts),
+		Name:           r.Name,
+		Owner:          r.Owner,
+		Group:          r.Group,
+		CanEdit:        r.IsEditableBy(s.User()),
+		Kernel:         r.Kernel,
+		Initrd:         r.Initrd,
+		CobblerProfile: r.CobblerProfile,
+		KernelArgs:     r.KernelArgs,
+		Start:          r.Start.Format(timefmt),
+		StartInt:       r.Start.UnixNano(),
+		End:            r.End.Format(timefmt),
+		EndInt:         r.End.UnixNano(),
+		Nodes:          s.Range().RangeToInts(r.Hosts),
 	}
 }

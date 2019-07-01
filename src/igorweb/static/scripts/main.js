@@ -10,6 +10,7 @@ const app = new Vue({
     Alert,
     ReservationInfo,
     NewReservationModal,
+    EditReservationModal,
     DeleteReservationModal,
     ExtendReservationModal,
     PowerModal,
@@ -40,8 +41,20 @@ const app = new Vue({
 
   // Helper methods
   methods: {
+    handleReservationAction(action, resName) {
+      switch(action) {
+      case 'edit':
+        this.$refs['editResModal'].show(resName);
+        break;
+      }
+    },
+
     showNewResForm() {
       this.$refs['newResModal'].show();
+    },
+
+    showEditForm(resName) {
+      console.log("EDIT!")
     },
 
     showActionBar() {

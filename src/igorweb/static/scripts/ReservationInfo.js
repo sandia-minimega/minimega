@@ -20,7 +20,10 @@
                       <button v-if="searchText != ''" class="btn btn-default" v-on:click="clearFilter()">Clear</button>
                     </div>
                     <div id="table" class="row mdl" style="margin: 0.5em; opacity: 1;">
-                      <reservation-table :filter="searchText"></reservation-table>
+                      <reservation-table
+                        v-on:res-action="(...args) => $emit('res-action', ...args)"
+                        :filter="searchText">
+                      </reservation-table>
                     </div>
                   </div>
                 </div>

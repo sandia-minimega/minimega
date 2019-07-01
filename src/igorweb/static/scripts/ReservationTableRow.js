@@ -12,7 +12,11 @@
       <td class="mdl">{{ reservation.End }}</td>
       <td class="mdl">{{ nodeCount }}</td>
       <td class="mdl">{{ reservation.Range }}</td>
-      <td class="mdl"><span v-if="reservation.CanEdit" class="oi oi-star"></span></td>
+      <td class="mdl" v-if="reservation.CanEdit">
+        <button class="btn btn-primary" v-on:click="$emit('res-action', 'edit', reservation.Name)">
+          <i class="oi oi-pencil"></i>
+        </button>
+      </td>
     </tr>
     `;
 

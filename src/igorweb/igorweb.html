@@ -39,7 +39,9 @@
 
       <alert :message="alertMessage"></alert>
 
-      <reservation-info></reservation-info>
+      <reservation-info
+        v-on:res-action="handleReservationAction">
+      </reservation-info>
 
       <div
         id="actionbar"
@@ -71,6 +73,7 @@
       </div>
 
       <new-reservation-modal ref="newResModal"></new-reservation-modal>
+      <edit-reservation-modal ref="editResModal"></edit-reservation-modal>
       <delete-reservation-modal ref="deleteModal"></delete-reservation-modal>
       <power-modal ref="powerModal"></power-modal>
       <extend-reservation-modal ref="extendModal"></extend-reservation-modal>
@@ -95,6 +98,7 @@
     <script src="static/scripts/LoadingModal.js"></script>
     <script src="static/scripts/SpeculateTable.js"></script>
     <script src="static/scripts/NewReservationModal.js"></script>
+    <script src="static/scripts/EditReservationModal.js"></script>
     <script src="static/scripts/DeleteReservationModal.js"></script>
     <script src="static/scripts/ExtendReservationModal.js"></script>
     <script src="static/scripts/PowerModal.js"></script>
