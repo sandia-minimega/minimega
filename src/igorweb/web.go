@@ -81,8 +81,8 @@ var (
 	showCache     *Show
 )
 
-// "run" igor show
-func show() *Show {
+// show "runs" igor show for the given user
+func show(username string) *UserShow {
 	if showCache == nil || time.Now().Sub(showCache.LastUpdated) > 10*time.Second {
 		updateShow()
 	}
@@ -90,10 +90,10 @@ func show() *Show {
 	showCacheLock.RLock()
 	defer showCacheLock.RUnlock()
 
-	return showCache
+	return &UserShow{showCache, username}
 }
 
-// run "show" and update cache
+// updateShow runs "igor show" and updates the cache
 func updateShow() {
 	showCacheLock.Lock()
 	defer showCacheLock.Unlock()
@@ -216,7 +216,7 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 
 	} else {
 		// all other commands get an updated reservations array in Response.Extra
-		extra = show().ResTable()
+		extra = show(username).ResTable()
 	}
 
 	// clean up response message
@@ -261,7 +261,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			panic(err)
 		}
 
-		err = t.Execute(w, show())
+		err = t.Execute(w, show(username))
 		if err != nil {
 			panic(err)
 		}

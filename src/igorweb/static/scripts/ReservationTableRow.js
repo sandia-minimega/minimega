@@ -12,6 +12,7 @@
       <td class="mdl">{{ reservation.End }}</td>
       <td class="mdl">{{ nodeCount }}</td>
       <td class="mdl">{{ reservation.Range }}</td>
+      <td class="mdl"><span v-if="reservation.CanEdit" class="oi oi-star"></span></td>
     </tr>
     `;
 

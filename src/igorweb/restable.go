@@ -8,9 +8,10 @@ import (
 // array of these is passed to client need to convert data to this
 // structure in order to send it to client
 type ResTableRow struct {
-	Name  string
-	Owner string
-	Group string
+	Name    string
+	Owner   string
+	Group   string
+	CanEdit bool
 	// display string for "Start Time"
 	Start string
 	// integer start time for comparisons
