@@ -656,18 +656,6 @@ func (vm *KvmVM) launch() error {
 				vm.Disks[i].SnapshotPath = dst
 			}
 		}
-
-		// create the namespaces/<namespace> directory
-		namespaceAliasDir := filepath.Join(*f_base, "namespaces", vm.Namespace)
-		if err := os.MkdirAll(namespaceAliasDir, os.FileMode(0700)); err != nil {
-			return fmt.Errorf("unable to create namespace dir: %v", err)
-		}
-
-		// create a symlink under namespaces/<namespace> to the instance path
-		vmAlias := filepath.Join(namespaceAliasDir, vm.UUID)
-		if err := os.Symlink(vm.instancePath, vmAlias); err != nil {
-			return fmt.Errorf("unable to create VM dir symlink: %v", err)
-		}
 	}
 
 	mustWrite(vm.path("name"), vm.Name)
