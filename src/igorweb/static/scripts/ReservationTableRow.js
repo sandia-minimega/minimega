@@ -1,8 +1,8 @@
 (function() {
   const template = `
     <tr
-      class="res clickable mdl"
       :class="{active: selected}"
+      class="res clickable mdl"
       v-on:click.stop="selectReservation(reservation)"
     >
       <td class="mdl">{{ reservation.Name }}</td>
@@ -13,12 +13,15 @@
       <td class="mdl">{{ nodeCount }}</td>
       <td class="mdl">{{ reservation.Range }}</td>
       <td class="mdl" v-if="reservation.CanEdit">
-        <button class="btn btn-primary" v-on:click="$emit('res-action', 'edit', reservation.Name)">
+        <button
+          class="btn btn-primary"
+          v-on:click="$emit('res-action', 'edit', reservation.Name)"
+        >
           <i class="oi oi-pencil"></i>
         </button>
       </td>
     </tr>
-    `;
+  `;
 
   window.ReservationTableRow = {
     template: template,

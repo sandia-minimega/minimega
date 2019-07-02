@@ -1,142 +1,266 @@
 (function() {
   const template = `
-      <div id="outer">
+    <div id="outer">
       <!-- Edit reservation modal -->
-      <div class="modal fade mdl" tabindex="-1" role="dialog" aria-labelledby="Edit Reservation" aria-hidden="true" ref="modal">
+      <div
+        aria-hidden="true"
+        aria-labelledby="Edit Reservation"
+        class="modal fade mdl"
+        ref="modal"
+        role="dialog"
+        tabindex="-1"
+      >
         <div class="modal-dialog modal-dialog-centered mdl" role="document">
           <div class="modal-content mdl">
             <div class="modal-header m-3 mdl">
               <h5 class="modal-title text-center col-12 mdl" id="modaltitle">
                 <b class="mdl">Edit Reservation</b>
               </h5>
-              <button type="button" class="close mdl" data-dismiss="modal" aria-label="Close" style="position: absolute; right: 15px; top: 10px;">
-                <span class="mdl" aria-hidden="true">&times;</span>
+              <button
+                aria-label="Close"
+                class="close mdl"
+                data-dismiss="modal"
+                style="position: absolute; right: 15px; top: 10px;"
+                type="button"
+              >
+                <span aria-hidden="true" class="mdl">&times;</span>
               </button>
             </div>
             <div class="modal-body m-3 mdl">
               <form class="mdl">
                 <!-- Reservation name, -r -->
                 <div class="form-group mdl">
-                  <div class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="Reservation name">
+                  <div
+                    class="input-group mdl"
+                    data-placement="bottom"
+                    data-toggle="tooltip"
+                    title="Reservation name"
+                  >
                     <div class="input-group-prepend mdl">
-                      <div class="input-group-text mdl"><code id="dashrcode" class="mdl">-r</code></div>
+                      <div class="input-group-text mdl">
+                        <code class="mdl" id="dashrcode">-r</code>
+                      </div>
                     </div>
-                    <input v-model="name" type="text" class="dash form-control mdl" placeholder="Reservation name" autofocus disabled>
+                    <input
+                      autofocus
+                      class="dash form-control mdl"
+                      disabled
+                      placeholder="Reservation name"
+                      type="text"
+                      v-model="name"
+                    >
                   </div>
                 </div>
                 <!-- Switch for (kernel and initrd) or (cobbler profile) -->
-                <div class="mdl btn-group" role="group" aria-label="Use kernel and initrd or Cobbler profile?" style="width: 100%; margin-bottom: 0;">
-                  <button type="button" class="modalswitch btn btn-light mdl" :class="{active: isKernelInit}" style="width: 50%;" v-on:click="isKernelInit = true">Use kernel and initrd</button>
-                  <button type="button" class="modalswitch btn btn-light mdl" :class="{active: !isKernelInit}" style="width: 50%;" v-on:click="isKernelInit = false">Use Cobbler profile</button>
+                <div
+                  aria-label="Use kernel and initrd or Cobbler profile?"
+                  class="mdl btn-group"
+                  role="group"
+                  style="width: 100%; margin-bottom: 0;"
+                >
+                  <button
+                    :class="{active: isKernelInit}"
+                    class="modalswitch btn btn-light mdl"
+                    style="width: 50%;"
+                    type="button"
+                    v-on:click="isKernelInit = true"
+                  >Use kernel and initrd</button>
+                  <button
+                    :class="{active: !isKernelInit}"
+                    class="modalswitch btn btn-light mdl"
+                    style="width: 50%;"
+                    type="button"
+                    v-on:click="isKernelInit = false"
+                  >Use Cobbler profile</button>
                 </div>
                 <!-- Kernel path, -k, only shows if left side of above switch is active -->
-                <div v-if="isKernelInit" class="form-group switchki mdl" style="margin-bottom: 10px;">
-                  <div id="dashkparent" class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="Location of the kernel the nodes should boot. This kernel will be copied to a separate directory for use.">
+                <div
+                  class="form-group switchki mdl"
+                  style="margin-bottom: 10px;"
+                  v-if="isKernelInit"
+                >
+                  <div
+                    class="input-group mdl"
+                    data-placement="bottom"
+                    data-toggle="tooltip"
+                    id="dashkparent"
+                    title="Location of the kernel the nodes should boot. This kernel will be copied to a separate directory for use."
+                  >
                     <div class="input-group-prepend mdl">
                       <div class="input-group-text mdl">
-                        <code id="dashkcode" class="mdl">-k</code>
+                        <code class="mdl" id="dashkcode">-k</code>
                       </div>
                     </div>
-                    <input v-model="kernelPath" type="text" class="dash form-control mdl" :class="{'is-valid': kernelPath && kernelPathIsValid, 'is-invalid': !kernelPathIsValid}" placeholder="Kernel path">
-                    <div v-if="kernelPathIsValid" class="valid-feedback">
-                      Looking good!
-                    </div>
-                    <div v-if="!kernelPathIsValid" class="invalid-feedback">
-                      Path must be an absolute path to a kernel.
-                    </div>
+                    <input
+                      :class="{'is-valid': kernelPath && kernelPathIsValid, 'is-invalid': !kernelPathIsValid}"
+                      class="dash form-control mdl"
+                      placeholder="Kernel path"
+                      type="text"
+                      v-model="kernelPath"
+                    >
+                    <div
+                      class="valid-feedback"
+                      v-if="kernelPathIsValid"
+                    >Looking good!</div>
+                    <div
+                      class="invalid-feedback"
+                      v-if="!kernelPathIsValid"
+                    >Path must be an absolute path to a kernel.</div>
                   </div>
                 </div>
                 <!-- Initrd path, -i, only shows if left side of above switch is active -->
-                <div v-if="isKernelInit" class="form-group switchki mdl">
-                  <div id="dashiparent" class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="Location of the initrd the nodes should boot. This file will be copied to a separate directory for use.">
+                <div class="form-group switchki mdl" v-if="isKernelInit">
+                  <div
+                    class="input-group mdl"
+                    data-placement="bottom"
+                    data-toggle="tooltip"
+                    id="dashiparent"
+                    title="Location of the initrd the nodes should boot. This file will be copied to a separate directory for use."
+                  >
                     <div class="input-group-prepend mdl">
-                      <div class="input-group-text mdl"><code id="dashicode" class="mdl">-i</code></div>
+                      <div class="input-group-text mdl">
+                        <code class="mdl" id="dashicode">-i</code>
+                      </div>
                     </div>
-                    <input v-model="initrdPath" type="text" class="dash form-control mdl" :class="{'is-valid': initrdPath && initrdPathIsValid, 'is-invalid': !initrdPathIsValid}" placeholder="Initrd path">
+                    <input
+                      :class="{'is-valid': initrdPath && initrdPathIsValid, 'is-invalid': !initrdPathIsValid}"
+                      class="dash form-control mdl"
+                      placeholder="Initrd path"
+                      type="text"
+                      v-model="initrdPath"
+                    >
 
-                    <div v-if="initrdPathIsValid" class="valid-feedback">
-                      Looking good!
-                    </div>
-                    <div v-if="!initrdPathIsValid" class="invalid-feedback">
-                      Path must be an absolute path to an initial RAM disk.
-                    </div>
+                    <div
+                      class="valid-feedback"
+                      v-if="initrdPathIsValid"
+                    >Looking good!</div>
+                    <div
+                      class="invalid-feedback"
+                      v-if="!initrdPathIsValid"
+                    >Path must be an absolute path to an initial RAM disk.</div>
                   </div>
                 </div>
                 <!-- Cobbler profile, -profile, only shows if right side of above switch is active -->
-                <div v-if="!isKernelInit" class="form-group switchcobbler mdl">
-                  <div id="dashpparent" class="input-group mdl">
+                <div class="form-group switchcobbler mdl" v-if="!isKernelInit">
+                  <div class="input-group mdl" id="dashpparent">
                     <div class="input-group-prepend mdl">
-                      <div class="input-group-text mdl"><code id="dashpcode" class="mdl">-profile</code></div>
+                      <div class="input-group-text mdl">
+                        <code class="mdl" id="dashpcode">-profile</code>
+                      </div>
                     </div>
-                    <input v-model="cobblerProfile" type="text" class="dash form-control mdl" placeholder="Cobbler profile">
+                    <input
+                      class="dash form-control mdl"
+                      placeholder="Cobbler profile"
+                      type="text"
+                      v-model="cobblerProfile"
+                    >
                   </div>
                 </div>
 
                 <!-- The rest of the fields are optional -->
                 <i class="mb-2 mdl">Optional:</i>
-                <div class="mb-4 mdl" style="border-top: 1px solid #e9ecef; border-bottom: 1px solid #e9ecef; padding-top: 5px;">
+                <div
+                  class="mb-4 mdl"
+                  style="border-top: 1px solid #e9ecef; border-bottom: 1px solid #e9ecef; padding-top: 5px;"
+                >
                   <!-- Group, -g, optional -->
                   <div class="form-group mdl">
-                    <div class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="An optional group that can modify this reservation">
+                    <div
+                      class="input-group mdl"
+                      data-placement="bottom"
+                      data-toggle="tooltip"
+                      title="An optional group that can modify this reservation"
+                    >
                       <div class="input-group-prepend mdl">
-                        <div class="input-group-text mdl"><code id="dashccode" class="mdl" style="color: royalblue;">-g</code></div>
+                        <div class="input-group-text mdl">
+                          <code
+                            class="mdl"
+                            id="dashccode"
+                            style="color: royalblue;"
+                          >-g</code>
+                        </div>
                       </div>
-                      <input v-model="group" type="text" class="dash form-control mdl" :class="{'is-valid': group && groupIsValid, 'is-invalid': group && !groupIsValid}" placeholder="Group">
-                    <div v-if="group && groupIsValid" class="valid-feedback">
-                      Looking good!
-                    </div>
-                    <div v-if="group && !groupIsValid" class="invalid-feedback">
-                      Invalid group name.
-                    </div>
+                      <input
+                        :class="{'is-valid': group && groupIsValid, 'is-invalid': group && !groupIsValid}"
+                        class="dash form-control mdl"
+                        placeholder="Group"
+                        type="text"
+                        v-model="group"
+                      >
+                      <div
+                        class="valid-feedback"
+                        v-if="group && groupIsValid"
+                      >Looking good!</div>
+                      <div
+                        class="invalid-feedback"
+                        v-if="group && !groupIsValid"
+                      >Invalid group name.</div>
                     </div>
                   </div>
                   <!-- Command line arguments, -c, optional -->
                   <div class="form-group mdl">
-                    <div class="input-group mdl" data-toggle="tooltip" data-placement="bottom" title="e.g. console=tty0">
+                    <div
+                      class="input-group mdl"
+                      data-placement="bottom"
+                      data-toggle="tooltip"
+                      title="e.g. console=tty0"
+                    >
                       <div class="input-group-prepend mdl">
-                        <div class="input-group-text mdl"><code id="dashccode" class="mdl" style="color: royalblue;">-c</code></div>
+                        <div class="input-group-text mdl">
+                          <code
+                            class="mdl"
+                            id="dashccode"
+                            style="color: royalblue;"
+                          >-c</code>
+                        </div>
                       </div>
-                      <input v-model="cmdArgs" type="text" class="dash form-control mdl" placeholder="Command line arguments">
+                      <input
+                        class="dash form-control mdl"
+                        placeholder="Command line arguments"
+                        type="text"
+                        v-model="cmdArgs"
+                      >
                     </div>
                   </div>
                 </div>
               </form>
 
               <div class="card commandline mdl">
-                <code id="commandline" class="mdl" style="color: seagreen;">
-                  {{ command }}
-                </code>
+                <code
+                  class="mdl"
+                  id="commandline"
+                  style="color: seagreen;"
+                >{{ command }}</code>
               </div>
             </div>
             <div class="modal-footer m-3 mdl">
               <button
-                type="button"
                 class="modalbtn igorbtn btn btn-secondary mr-auto mdl cancel"
-                data-dismiss="modal">
-                  Cancel
-              </button>
+                data-dismiss="modal"
+                type="button"
+              >Cancel</button>
 
               <button
-                type="button"
-                style="background-color: #a975d6; border-color: #a975d6;"
-                class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand"
                 :disabled="!validForm"
-                v-on:click="submitUpdate()">
-                  <span class="mdl mdlcmdtext">Update Reservation</span>
+                class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand"
+                style="background-color: #a975d6; border-color: #a975d6;"
+                type="button"
+                v-on:click="submitUpdate()"
+              >
+                <span class="mdl mdlcmdtext">Update Reservation</span>
               </button>
             </div>
           </div>
         </div>
       </div>
 
-        <loading-modal
-          ref="loadingModal"
-          header="Submitting reservation"
-          body="This may take some time..."
-        >
-        </loading-modal>
-      </div>
-    `;
+      <loading-modal
+        body="This may take some time..."
+        header="Submitting reservation"
+        ref="loadingModal"
+      ></loading-modal>
+    </div>
+  `;
 
   window.EditReservationModal = {
     template: template,

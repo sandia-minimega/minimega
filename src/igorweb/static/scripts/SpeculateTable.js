@@ -1,6 +1,9 @@
 (function() {
   const template = `
-    <div class="mdl" style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e9ecef;">
+    <div
+      class="mdl"
+      style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e9ecef;"
+    >
       <alert :message="serverMessage"></alert>
       <table class="mdl table table-borderless">
         <thead class="mdl">
@@ -13,7 +16,9 @@
         <tbody class="mdl" id="spec_table">
           <template v-if="speculations.length == 0">
             <tr class="mdl">
-              <td><i>One moment...</i></td>
+              <td>
+                <i>One moment...</i>
+              </td>
             </tr>
           </template>
 
@@ -23,11 +28,12 @@
               <td class="align-middle mdl">{{ spec.End }}</td>
               <td class="mdl">
                 <button
-                  type="button"
-                  style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;"
                   class="modalbtn specreserve igorbtn btn btn-primary mdl modalcommand reserve"
-                  v-on:click="$emit('reserve', spec.Formatted)">
-                    <span class="mdl mdlcmdtext">Use Window</span>
+                  style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;"
+                  type="button"
+                  v-on:click="$emit('reserve', spec.Formatted)"
+                >
+                  <span class="mdl mdlcmdtext">Use Window</span>
                 </button>
               </td>
             </tr>

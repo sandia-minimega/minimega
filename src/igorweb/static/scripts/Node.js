@@ -1,16 +1,14 @@
 (function() {
   const template = `
-      <div
-        draggable="true"
-        tabindex="-1"
-        style="opacity: 1; width:100%; padding: 12px; padding-left: 0px; padding-right: 0px; cursor: pointer;"
-        class="list-group-item list-group-item-action node unselected"
-        :class="{ reserved: isReserved, available: !isReserved, up: isUp, down: !isUp, active: isSelected }"
-        v-on:click.stop="selectNode()"
-      >
-        {{ nodeID }}
-      </div>
-    `;
+    <div
+      :class="{ reserved: isReserved, available: !isReserved, up: isUp, down: !isUp, active: isSelected }"
+      class="list-group-item list-group-item-action node unselected"
+      draggable="true"
+      style="opacity: 1; width:100%; padding: 12px; padding-left: 0px; padding-right: 0px; cursor: pointer;"
+      tabindex="-1"
+      v-on:click.stop="selectNode()"
+    >{{ nodeID }}</div>
+  `;
 
   window.Node = {
     template: template,
