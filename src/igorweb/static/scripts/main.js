@@ -1,80 +1,68 @@
-const app = new Vue({
+'use strict';
+
+var app = new Vue({
   // Main element
   el: '#app',
-
   // Vuex storage
   store: store,
-
   // Components used in #app
   components: {
-    Alert,
-    ReservationInfo,
-    NewReservationModal,
-    EditReservationModal,
-    DeleteReservationModal,
-    ExtendReservationModal,
-    PowerModal,
+    Alert: Alert,
+    ReservationInfo: ReservationInfo,
+    NewReservationModal: NewReservationModal,
+    EditReservationModal: EditReservationModal,
+    DeleteReservationModal: DeleteReservationModal,
+    ExtendReservationModal: ExtendReservationModal,
+    PowerModal: PowerModal,
   },
-
   computed: {
-    alertMessage() {
+    alertMessage: function alertMessage() {
       return this.$store.state.alert;
     },
-
-    selectedReservation() {
+    selectedReservation: function selectedReservation() {
       return this.$store.state.selectedReservation;
     },
   },
-
   // Runs after the Vue component (the whole app, in this case) has
   // been mounted and is ready-to-go
-  mounted: function() {
+  mounted: function mounted() {
+    const _this = this;
+
     // Load initial reservation data
-    this.$store.commit('updateReservations', INITIALRESERVATIONS);
+    this.$store.commit('updateReservations', INITIALRESERVATIONS); // Fetch reservation data
 
-    // Fetch reservation data
-    this.$store.dispatch('getReservations');
+    this.$store.dispatch('getReservations'); // Set an interval, so that we fetch more reservation data every 5 seconds
 
-    // Set an interval, so that we fetch more reservation data every 5 seconds
-    setInterval(() => this.$store.dispatch('getReservations'), 5000);
+    setInterval(function() {
+      return _this.$store.dispatch('getReservations');
+    }, 5000);
   },
-
   // Helper methods
   methods: {
-    handleReservationAction(action, resName) {
-      switch(action) {
-      case 'edit':
-        this.$refs['editResModal'].show(resName);
-        break;
+    handleReservationAction: function handleReservationAction(action, resName) {
+      switch (action) {
+        case 'edit':
+          this.$refs['editResModal'].show(resName);
+          break;
       }
     },
-
-    showNewResForm() {
+    showNewResForm: function showNewResForm() {
       this.$refs['newResModal'].show();
     },
-
-    showEditForm(resName) {
-      console.log("EDIT!")
-    },
-
-    showActionBar() {
+    showActionBar: function showActionBar() {
       $(this.$refs['actionbar']).show();
       $(this.$refs['actionbar']).addClass('active');
     },
-
-    showDeleteModal() {
+    showDeleteModal: function showDeleteModal() {
       this.$refs['deleteModal'].show();
     },
-
-    showPowerModal() {
+    showPowerModal: function showPowerModal() {
       this.$refs['powerModal'].show();
     },
-
-    showExtendModal() {
+    showExtendModal: function showExtendModal() {
       this.$refs['extendModal'].show();
     },
-
-    clearSelection() {
+    clearSelection: function clearSelection() {
       this.$store.dispatch('clearSelection');
     },
   },
