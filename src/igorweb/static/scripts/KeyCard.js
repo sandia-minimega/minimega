@@ -7,48 +7,48 @@
             <tr>
               <td></td>
               <td
-                class="mdl key available clickable tdhover headtext text-center"
+                class="key available clickable tdhover text-center"
                 v-on:click.stop="select('available', null);"
               >Available</td>
               <td
-                class="mdl key reserved clickable tdhover headtext text-center"
+                class="key reserved clickable tdhover text-center"
                 v-on:click.stop="select('reserved', null);"
               >Reserved</td>
             </tr>
             <tr>
               <td
-                class="mdl key up clickable tdhover headtext text-right"
+                class="key up clickable tdhover text-right"
                 v-on:click.stop="select(null, 'up');"
               >Powered On</td>
               <td
-                class="mdl key available up clickable tdhover"
+                class="key available up clickable tdhover"
                 v-on:click.stop="select('available', 'up');"
               >
-                <div class="mdl mx-auto keycolor available up unselected"></div>
+                <div class="mx-auto keycolor available up unselected"></div>
               </td>
               <td
-                class="mdl key reserved up clickable tdhover"
+                class="key reserved up clickable tdhover"
                 v-on:click.stop="select('reserved', 'up')"
               >
-                <div class="mdl mx-auto keycolor reserved up unselected"></div>
+                <div class="mx-auto keycolor reserved up unselected"></div>
               </td>
             </tr>
             <tr>
               <td
-                class="mdl key down clickable tdhover headtext text-right"
+                class="key down clickable tdhover text-right"
                 v-on:click.stop="select(null, 'down');"
               >Powered Off</td>
               <td
-                class="mdl key available down clickable tdhover"
+                class="key available down clickable tdhover"
                 v-on:click.stop="select('available', 'down')"
               >
-                <div class="mdl mx-auto keycolor available down unselected"></div>
+                <div class="mx-auto keycolor available down unselected"></div>
               </td>
               <td
-                class="mdl key reserved down clickable tdhover"
+                class="key reserved down clickable tdhover"
                 v-on:click.stop="select('reserved', 'down')"
               >
-                <div class="mdl mx-auto keycolor reserved down unselected"></div>
+                <div class="mx-auto keycolor reserved down unselected"></div>
               </td>
             </tr>
           </tbody>

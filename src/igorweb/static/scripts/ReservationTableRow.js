@@ -2,17 +2,17 @@
   const template = `
     <tr
       :class="{active: selected}"
-      class="res clickable mdl"
+      class="res clickable"
       v-on:click.stop="selectReservation(reservation)"
     >
-      <td class="mdl">{{ reservation.Name }}</td>
-      <td class="mdl">{{ reservation.Owner }}</td>
-      <td class="mdl">{{ reservation.Group }}</td>
-      <td class="mdl current">{{ reservation.Start }}</td>
-      <td class="mdl">{{ reservation.End }}</td>
-      <td class="mdl">{{ nodeCount }}</td>
-      <td class="mdl">{{ reservation.Range }}</td>
-      <td class="mdl" v-if="reservation.CanEdit">
+      <td>{{ reservation.Name }}</td>
+      <td>{{ reservation.Owner }}</td>
+      <td>{{ reservation.Group }}</td>
+      <td class="current">{{ reservation.Start }}</td>
+      <td>{{ reservation.End }}</td>
+      <td>{{ nodeCount }}</td>
+      <td>{{ reservation.Range }}</td>
+      <td v-if="reservation.CanEdit">
         <button
           class="btn btn-primary"
           v-on:click="$emit('res-action', 'edit', reservation.Name)"

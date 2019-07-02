@@ -1,21 +1,20 @@
 (function() {
   const template = `
     <div
-      class="mdl"
       style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e9ecef;"
     >
       <alert :message="serverMessage"></alert>
-      <table class="mdl table table-borderless">
-        <thead class="mdl">
-          <tr class="mdl">
-            <th class="mdl" scope="col">Start Time</th>
-            <th class="mdl" scope="col">End Time</th>
-            <th class="mdl" scope="col"></th>
+      <table class="table table-borderless">
+        <thead>
+          <tr>
+            <th scope="col">Start Time</th>
+            <th scope="col">End Time</th>
+            <th scope="col"></th>
           </tr>
         </thead>
-        <tbody class="mdl" id="spec_table">
+        <tbody>
           <template v-if="speculations.length == 0">
-            <tr class="mdl">
+            <tr>
               <td>
                 <i>One moment...</i>
               </td>
@@ -23,17 +22,17 @@
           </template>
 
           <template v-for="spec in speculations">
-            <tr class="mdl">
-              <td class="align-middle mdl">{{ spec.Start }}</td>
-              <td class="align-middle mdl">{{ spec.End }}</td>
-              <td class="mdl">
+            <tr>
+              <td class="align-middle">{{ spec.Start }}</td>
+              <td class="align-middle">{{ spec.End }}</td>
+              <td>
                 <button
-                  class="modalbtn specreserve igorbtn btn btn-primary mdl modalcommand reserve"
+                  class="modalbtn igorbtn btn btn-primary modalcommand reserve"
                   style="background-color: #a975d6; border-color: #a975d6; margin-left: 38px;"
                   type="button"
                   v-on:click="$emit('reserve', spec.Formatted)"
                 >
-                  <span class="mdl mdlcmdtext">Use Window</span>
+                  <span>Use Window</span>
                 </button>
               </td>
             </tr>

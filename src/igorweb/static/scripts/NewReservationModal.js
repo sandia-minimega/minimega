@@ -5,46 +5,46 @@
       <div
         aria-hidden="true"
         aria-labelledby="New Reservation"
-        class="modal fade mdl"
+        class="modal fade"
         ref="modal"
         role="dialog"
         tabindex="-1"
       >
-        <div class="modal-dialog modal-dialog-centered mdl" role="document">
-          <div class="modal-content mdl">
-            <div class="modal-header m-3 mdl">
-              <h5 class="modal-title text-center col-12 mdl" id="modaltitle">
-                <b class="mdl" v-if="!speculating">New Reservation</b>
-                <b class="mdl" v-if="speculating">Available Reservations</b>
+        <div class="modal-dialog modal-dialog-centered" role="document">
+          <div class="modal-content">
+            <div class="modal-header m-3">
+              <h5 class="modal-title text-center col-12">
+                <b v-if="!speculating">New Reservation</b>
+                <b v-if="speculating">Available Reservations</b>
               </h5>
               <button
                 aria-label="Close"
-                class="close mdl"
+                class="close"
                 data-dismiss="modal"
                 style="position: absolute; right: 15px; top: 10px;"
                 type="button"
               >
-                <span aria-hidden="true" class="mdl">&times;</span>
+                <span aria-hidden="true">&times;</span>
               </button>
             </div>
-            <div class="modal-body m-3 mdl">
-              <form class="mdl" v-if="!speculating">
+            <div class="modal-body m-3">
+              <form v-if="!speculating">
                 <!-- Reservation name, -r -->
-                <div class="form-group mdl">
+                <div class="form-group">
                   <div
-                    class="input-group mdl"
+                    class="input-group"
                     data-placement="bottom"
                     data-toggle="tooltip"
                     title="Reservation name"
                   >
-                    <div class="input-group-prepend mdl">
-                      <div class="input-group-text mdl">
-                        <code class="mdl" id="dashrcode">-r</code>
+                    <div class="input-group-prepend">
+                      <div class="input-group-text">
+                        <code>-r</code>
                       </div>
                     </div>
                     <input
                       autofocus
-                      class="dash form-control mdl"
+                      class="dash form-control"
                       placeholder="Reservation name"
                       type="text"
                       v-model="name"
@@ -54,20 +54,20 @@
                 <!-- Switch for (kernel and initrd) or (cobbler profile) -->
                 <div
                   aria-label="Use kernel and initrd or Cobbler profile?"
-                  class="mdl btn-group"
+                  class="btn-group"
                   role="group"
                   style="width: 100%; margin-bottom: 0;"
                 >
                   <button
                     :class="{active: isKernelInit}"
-                    class="modalswitch btn btn-light mdl"
+                    class="modalswitch btn btn-light"
                     style="width: 50%;"
                     type="button"
                     v-on:click="isKernelInit = true"
                   >Use kernel and initrd</button>
                   <button
                     :class="{active: !isKernelInit}"
-                    class="modalswitch btn btn-light mdl"
+                    class="modalswitch btn btn-light"
                     style="width: 50%;"
                     type="button"
                     v-on:click="isKernelInit = false"
@@ -75,25 +75,24 @@
                 </div>
                 <!-- Kernel path, -k, only shows if left side of above switch is active -->
                 <div
-                  class="form-group switchki mdl"
+                  class="form-group"
                   style="margin-bottom: 10px;"
                   v-if="isKernelInit"
                 >
                   <div
-                    class="input-group mdl"
+                    class="input-group"
                     data-placement="bottom"
                     data-toggle="tooltip"
-                    id="dashkparent"
                     title="Location of the kernel the nodes should boot. This kernel will be copied to a separate directory for use."
                   >
-                    <div class="input-group-prepend mdl">
-                      <div class="input-group-text mdl">
-                        <code class="mdl" id="dashkcode">-k</code>
+                    <div class="input-group-prepend">
+                      <div class="input-group-text">
+                        <code>-k</code>
                       </div>
                     </div>
                     <input
                       :class="{'is-valid': kernelPathIsValid, 'is-invalid': !kernelPathIsValid}"
-                      class="dash form-control mdl"
+                      class="dash form-control"
                       placeholder="Kernel path"
                       type="text"
                       v-model="kernelPath"
@@ -109,22 +108,21 @@
                   </div>
                 </div>
                 <!-- Initrd path, -i, only shows if left side of above switch is active -->
-                <div class="form-group switchki mdl" v-if="isKernelInit">
+                <div class="form-group" v-if="isKernelInit">
                   <div
-                    class="input-group mdl"
+                    class="input-group"
                     data-placement="bottom"
                     data-toggle="tooltip"
-                    id="dashiparent"
                     title="Location of the initrd the nodes should boot. This file will be copied to a separate directory for use."
                   >
-                    <div class="input-group-prepend mdl">
-                      <div class="input-group-text mdl">
-                        <code class="mdl" id="dashicode">-i</code>
+                    <div class="input-group-prepend">
+                      <div class="input-group-text">
+                        <code>-i</code>
                       </div>
                     </div>
                     <input
                       :class="{'is-valid': initrdPathIsValid, 'is-invalid': !initrdPathIsValid}"
-                      class="dash form-control mdl"
+                      class="dash form-control"
                       placeholder="Initrd path"
                       type="text"
                       v-model="initrdPath"
@@ -141,15 +139,15 @@
                   </div>
                 </div>
                 <!-- Cobbler profile, -profile, only shows if right side of above switch is active -->
-                <div class="form-group switchcobbler mdl" v-if="!isKernelInit">
-                  <div class="input-group mdl" id="dashpparent">
-                    <div class="input-group-prepend mdl">
-                      <div class="input-group-text mdl">
-                        <code class="mdl" id="dashpcode">-profile</code>
+                <div class="form-group" v-if="!isKernelInit">
+                  <div class="input-group">
+                    <div class="input-group-prepend">
+                      <div class="input-group-text">
+                        <code>-profile</code>
                       </div>
                     </div>
                     <input
-                      class="dash form-control mdl"
+                      class="dash form-control"
                       placeholder="Cobbler profile"
                       type="text"
                       v-model="cobblerProfile"
@@ -159,41 +157,40 @@
                 <!-- Switch for (number of nodes) or (node list) -->
                 <div
                   aria-label="Number of nodes or node list?"
-                  class="mdl btn-group"
+                  class="btn-group"
                   role="group"
                   style="width: 100%; margin-bottom: 0;"
                 >
                   <button
                     :class="{active: !isNodeList}"
-                    class="modalswitch btn btn-light mdl"
+                    class="modalswitch btn btn-light"
                     style="width: 50%;"
                     type="button"
                     v-on:click="isNodeList = false"
                   >Number of nodes</button>
                   <button
                     :class="{active: isNodeList}"
-                    class="modalswitch btn btn-light mdl"
+                    class="modalswitch btn btn-light"
                     style="width: 50%;"
                     type="button"
                     v-on:click="isNodeList = true"
                   >Node list</button>
                 </div>
                 <!-- Number of nodes, -n, only shows if left side of above switch is active -->
-                <div class="form-group mdl switchnumnodes" v-if="!isNodeList">
+                <div class="form-group" v-if="!isNodeList">
                   <div
-                    class="input-group mdl"
+                    class="input-group"
                     data-placement="bottom"
                     data-toggle="tooltip"
-                    id="dashnparent"
                     title="Number of nodes"
                   >
-                    <div class="input-group-prepend mdl">
-                      <div class="input-group-text mdl">
-                        <code class="mdl" id="dashncode">-n</code>
+                    <div class="input-group-prepend">
+                      <div class="input-group-text">
+                        <code>-n</code>
                       </div>
                     </div>
                     <input
-                      class="dash form-control mdl"
+                      class="dash form-control"
                       min="1"
                       placeholder="Number of nodes"
                       type="number"
@@ -202,21 +199,20 @@
                   </div>
                 </div>
                 <!-- Node list, -w, only shows if the right side of the above switch is active -->
-                <div class="form-group mdl switchnodelist" v-if="isNodeList">
+                <div class="form-group" v-if="isNodeList">
                   <div
-                    class="input-group mdl"
+                    class="input-group"
                     data-placement="bottom"
                     data-toggle="tooltip"
-                    id="dashwparent"
                     title="Node list, e.g. 34, 57, 158 ..."
                   >
-                    <div class="input-group-prepend mdl">
-                      <div class="input-group-text mdl">
-                        <code class="mdl" id="dashwcode">-w</code>
+                    <div class="input-group-prepend">
+                      <div class="input-group-text">
+                        <code>-w</code>
                       </div>
                     </div>
                     <input
-                      class="dash form-control mdl"
+                      class="dash form-control"
                       placeholder="Node list"
                       type="text"
                       v-model="nodeList"
@@ -224,31 +220,27 @@
                   </div>
                 </div>
                 <!-- The rest of the fields are optional -->
-                <i class="mb-2 mdl">Optional:</i>
+                <i class="mb-2">Optional:</i>
                 <div
-                  class="mb-4 mdl"
+                  class="mb-4"
                   style="border-top: 1px solid #e9ecef; border-bottom: 1px solid #e9ecef; padding-top: 5px;"
                 >
                   <!-- Group, -g, optional -->
-                  <div class="form-group mdl">
+                  <div class="form-group">
                     <div
-                      class="input-group mdl"
+                      class="input-group"
                       data-placement="bottom"
                       data-toggle="tooltip"
                       title="An optional group that can modify this reservation"
                     >
-                      <div class="input-group-prepend mdl">
-                        <div class="input-group-text mdl">
-                          <code
-                            class="mdl"
-                            id="dashccode"
-                            style="color: royalblue;"
-                          >-g</code>
+                      <div class="input-group-prepend">
+                        <div class="input-group-text">
+                          <code style="color: royalblue;">-g</code>
                         </div>
                       </div>
                       <input
                         :class="{'is-valid': group && groupIsValid, 'is-invalid': group && !groupIsValid}"
-                        class="dash form-control mdl"
+                        class="dash form-control"
                         placeholder="Group"
                         type="text"
                         v-model="group"
@@ -264,24 +256,20 @@
                     </div>
                   </div>
                   <!-- Command line arguments, -c, optional -->
-                  <div class="form-group mdl">
+                  <div class="form-group">
                     <div
-                      class="input-group mdl"
+                      class="input-group"
                       data-placement="bottom"
                       data-toggle="tooltip"
                       title="e.g. console=tty0"
                     >
-                      <div class="input-group-prepend mdl">
-                        <div class="input-group-text mdl">
-                          <code
-                            class="mdl"
-                            id="dashccode"
-                            style="color: royalblue;"
-                          >-c</code>
+                      <div class="input-group-prepend">
+                        <div class="input-group-text">
+                          <code style="color: royalblue;">-c</code>
                         </div>
                       </div>
                       <input
-                        class="dash form-control mdl"
+                        class="dash form-control"
                         placeholder="Command line arguments"
                         type="text"
                         v-model="cmdArgs"
@@ -289,24 +277,20 @@
                     </div>
                   </div>
                   <!-- Reservation length, -t, optional, 60m by default -->
-                  <div class="form-group mdl">
+                  <div class="form-group">
                     <div
-                      class="input-group mdl"
+                      class="input-group"
                       data-placement="bottom"
                       data-toggle="tooltip"
                       title="Time denominations should be specified in days(d), hours(h), and minutes(m), in that order. Unitless numbers are treated as minutes. Days are defined as 24*60 minutes. Example: To make a reservation for 7 days: 7d. To make a reservation for 4 days, 6 hours, 30 minutes: 4d6h30m (default = 60m)."
                     >
-                      <div class="input-group-prepend mdl">
-                        <div class="input-group-text mdl">
-                          <code
-                            class="mdl"
-                            id="dashtkcode"
-                            style="color: royalblue;"
-                          >-t</code>
+                      <div class="input-group-prepend">
+                        <div class="input-group-text">
+                          <code style="color: royalblue;">-t</code>
                         </div>
                       </div>
                       <input
-                        class="dash form-control mdl"
+                        class="dash form-control"
                         placeholder="Reservation length"
                         type="text"
                         v-model="resLength"
@@ -315,24 +299,20 @@
                     </div>
                   </div>
                   <!-- After this date, -a, optional, set automatically if Reserve is clicked from Speculate page -->
-                  <div class="form-group mdl">
+                  <div class="form-group">
                     <div
-                      class="input-group mdl"
+                      class="input-group"
                       data-placement="bottom"
                       data-toggle="tooltip"
                       title="Indicates that the reservation should take place on or after the specified time, given in the format '2017-Jan-2-15:04'. Especially useful on Speculate."
                     >
-                      <div class="input-group-prepend mdl">
-                        <div class="input-group-text mdl">
-                          <code
-                            class="mdl"
-                            id="dashacode"
-                            style="color: royalblue;"
-                          >-a</code>
+                      <div class="input-group-prepend">
+                        <div class="input-group-text">
+                          <code style="color: royalblue;">-a</code>
                         </div>
                       </div>
                       <input
-                        class="dash form-control mdl"
+                        class="dash form-control"
                         placeholder="After this date"
                         type="text"
                         v-model="afterDate"
@@ -348,24 +328,20 @@
                 v-on:reserve="reserveSpec($event)"
               ></speculate-table>
 
-              <div class="card commandline mdl" v-if="!speculating">
-                <code
-                  class="mdl"
-                  id="commandline"
-                  style="color: seagreen;"
-                >{{ command }}</code>
+              <div class="card commandline" v-if="!speculating">
+                <code id="commandline" style="color: seagreen;">{{ command }}</code>
               </div>
             </div>
-            <div class="modal-footer m-3 mdl">
+            <div class="modal-footer m-3">
               <button
-                class="modalbtn igorbtn btn btn-secondary mr-auto mdl"
+                class="modalbtn igorbtn btn btn-secondary mr-auto"
                 type="button"
                 v-if="speculating"
                 v-on:click="speculating = false"
               >Back</button>
 
               <button
-                class="modalbtn igorbtn btn btn-secondary mr-auto mdl cancel"
+                class="modalbtn igorbtn btn btn-secondary mr-auto cancel"
                 data-dismiss="modal"
                 type="button"
                 v-if="!speculating"
@@ -373,24 +349,24 @@
 
               <button
                 :disabled="!validForm"
-                class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand speculate"
+                class="modalbtn igorbtn btn btn-primary modalcommand"
                 style="background-color: #ff902d; border-color: #ff902d;"
                 type="button"
                 v-if="!speculating"
                 v-on:click="speculating = !speculating"
               >
-                <span class="mdl mdlcmdtext speculate">Speculate</span>
+                <span class>Speculate</span>
               </button>
 
               <button
                 :disabled="!validForm"
-                class="modalbtn newresmodalgobtn igorbtn btn btn-primary mdl modalcommand"
+                class="modalbtn igorbtn btn btn-primary modalcommand"
                 style="background-color: #a975d6; border-color: #a975d6;"
                 type="button"
                 v-if="!speculating"
                 v-on:click="submitReservation()"
               >
-                <span class="mdl mdlcmdtext">Reserve</span>
+                <span>Reserve</span>
               </button>
             </div>
           </div>

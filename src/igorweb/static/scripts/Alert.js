@@ -1,6 +1,6 @@
 (function() {
   const template = `
-    <div class="alert alert-warning alert-dismissable" v-if="message != ignored">
+    <div class="alert alert-warning" v-if="message != ignored">
       <button class="close" type="button" v-on:click="ignore()">&times;</button>
       {{ message }}
     </div>
