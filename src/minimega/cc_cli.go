@@ -5,7 +5,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -239,7 +238,6 @@ func cliCCResponses(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 
 	// must be searching for a prefix
 	var match bool
-	var buf bytes.Buffer
 
 	for _, c := range ns.ccServer.GetCommands() {
 		if c.Prefix == s {
@@ -248,7 +246,7 @@ func cliCCResponses(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 				return err
 			}
 
-			buf.WriteString(s)
+			resp.Response += s + "\n"
 
 			match = true
 		}
