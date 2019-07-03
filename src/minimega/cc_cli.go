@@ -107,7 +107,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 
 			"cc <responses,> <id or prefix or all> [raw,]",
 
-			"cc <tunnel,> <uuid> <src port> <host> <dst port>",
+			"cc <tunnel,> <vm name or uuid> <src port> <host> <dst port>",
 			"cc <rtunnel,> <src port> <host> <dst port>",
 
 			"cc <delete,> <command,> <id or prefix or all>",
@@ -208,7 +208,16 @@ func cliCCTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	}
 
 	host := c.StringArgs["host"]
-	uuid := c.StringArgs["uuid"]
+
+	v := c.StringArgs["vm"]
+
+	// get the vm uuid
+	vm := ns.FindVM(v)
+	if vm == nil {
+		return vmNotFound(v)
+	}
+	log.Debug("got vm: %v %v", vm.GetID(), vm.GetName())
+	uuid := vm.GetUUID()
 
 	if c.BoolArgs["rtunnel"] {
 		return ns.ccServer.Reverse(ns.ccFilter, src, host, dst)
