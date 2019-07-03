@@ -308,7 +308,13 @@ func (vms *VMs) Launch(namespace string, q *QueuedVMs) <-chan error {
 				}
 
 				// create a symlink under namespaces/<namespace> to the instance path
+				// only if it does not already exist, otherwise error
 				vmAlias := filepath.Join(namespaceAliasDir, vm.GetUUID())
+				if _, err := os.Stat(vmAlias); err == nil {
+					// symlink already exists
+					errs <- fmt.Errorf("`%v` already exists.", vmAlias)
+					return
+				}
 				if err := os.Symlink(vm.GetInstancePath(), vmAlias); err != nil {
 					errs <- err
 					return
