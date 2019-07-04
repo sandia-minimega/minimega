@@ -789,6 +789,27 @@ func (vm *BaseVM) path(s string) string {
 	return filepath.Join(vm.instancePath, s)
 }
 
+func (vm *BaseVM) createInstancePathAlias() error {
+	// create the namespaces/<namespace> directory
+	namespaceAliasDir := filepath.Join(*f_base, "namespaces", vm.GetNamespace())
+	if err := os.MkdirAll(namespaceAliasDir, os.FileMode(0700)); err != nil {
+		return fmt.Errorf("unable to create namespace dir: %v", err)
+	}
+
+	// create a symlink under namespaces/<namespace> to the instance path
+	// only if it does not already exist, otherwise error
+	vmAlias := filepath.Join(namespaceAliasDir, vm.GetUUID())
+	if _, err := os.Stat(vmAlias); err == nil {
+		// symlink already exists
+		return fmt.Errorf("unable to create VM dir symlink: %v already exists", vmAlias)
+	}
+	if err := os.Symlink(vm.GetInstancePath(), vmAlias); err != nil {
+		return fmt.Errorf("unable to create VM dir symlink: %v", err)
+	}
+
+	return nil
+}
+
 func writeVMConfig(vm VM) error {
 	log.Info("writing vm config")
 

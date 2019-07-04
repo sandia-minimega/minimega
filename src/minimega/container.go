@@ -831,7 +831,7 @@ func (vm *ContainerVM) launch() error {
 	// check, create a directory for it, and setup the FS.
 	if vm.State == VM_BUILDING {
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
-			return fmt.Errorf("unable to create VM dir: %v", err)
+			return vm.setErrorf("unable to create VM dir: %v", err)
 		}
 
 		if vm.Snapshot {
@@ -840,6 +840,10 @@ func (vm *ContainerVM) launch() error {
 			}
 		} else {
 			vm.effectivePath = vm.FilesystemPath
+		}
+
+		if err := vm.createInstancePathAlias(); err != nil {
+			return vm.setErrorf("createInstancePathAlias: %v", err)
 		}
 	}
 
@@ -917,7 +921,7 @@ func (vm *ContainerVM) launch() error {
 
 		// create source directory if it doesn't exist
 		if err := os.MkdirAll(v, 0755); err != nil {
-			return err
+			return vm.setErrorf("start container: %v", err)
 		}
 	}
 	// denotes end of volumes

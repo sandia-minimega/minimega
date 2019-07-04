@@ -10,8 +10,6 @@ import (
 	"meshage"
 	"minicli"
 	log "minilog"
-	"os"
-	"path/filepath"
 	"ranges"
 	"ron"
 	"runtime"
@@ -296,26 +294,6 @@ func (vms *VMs) Launch(namespace string, q *QueuedVMs) <-chan error {
 
 				// Note: the VM is already in the VMs map
 				if err := vm.Launch(); err != nil {
-					errs <- err
-					return
-				}
-
-				// create the namespaces/<namespace> directory
-				namespaceAliasDir := filepath.Join(*f_base, "namespaces", vm.GetNamespace())
-				if err := os.MkdirAll(namespaceAliasDir, os.FileMode(0700)); err != nil {
-					errs <- err
-					return
-				}
-
-				// create a symlink under namespaces/<namespace> to the instance path
-				// only if it does not already exist, otherwise error
-				vmAlias := filepath.Join(namespaceAliasDir, vm.GetUUID())
-				if _, err := os.Stat(vmAlias); err == nil {
-					// symlink already exists
-					errs <- fmt.Errorf("`%v` already exists.", vmAlias)
-					return
-				}
-				if err := os.Symlink(vm.GetInstancePath(), vmAlias); err != nil {
 					errs <- err
 					return
 				}
