@@ -369,7 +369,7 @@ func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 
 	}
 
-	ns.NewCommand(cmd)
+	resp.Data = ns.NewCommand(cmd)
 	return nil
 }
 
@@ -384,7 +384,7 @@ func cliCCFileRecv(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 		})
 	}
 
-	ns.NewCommand(cmd)
+	resp.Data = ns.NewCommand(cmd)
 	return nil
 }
 
@@ -400,7 +400,7 @@ func cliCCBackground(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 		Stderr:     stderr,
 	}
 
-	ns.NewCommand(cmd)
+	resp.Data = ns.NewCommand(cmd)
 	return nil
 }
 
@@ -408,7 +408,7 @@ func cliCCProcessKill(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 	// kill all processes
 	if c.StringArgs["pid"] == Wildcard {
 		cmd := &ron.Command{PID: -1}
-		ns.NewCommand(cmd)
+		resp.Data = ns.NewCommand(cmd)
 
 		return nil
 	}
@@ -420,7 +420,7 @@ func cliCCProcessKill(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 	}
 
 	cmd := &ron.Command{PID: pid}
-	ns.NewCommand(cmd)
+	resp.Data = ns.NewCommand(cmd)
 
 	return nil
 }
@@ -430,7 +430,7 @@ func cliCCProcessKillAll(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 		KillAll: c.StringArgs["name"],
 	}
 
-	ns.NewCommand(cmd)
+	resp.Data = ns.NewCommand(cmd)
 	return nil
 }
 
@@ -445,7 +445,7 @@ func cliCCExec(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		Stderr:  stderr,
 	}
 
-	ns.NewCommand(cmd)
+	resp.Data = ns.NewCommand(cmd)
 	return nil
 }
 
@@ -544,7 +544,7 @@ func cliCCLog(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 		Level: &level,
 	}
 
-	ns.NewCommand(cmd)
+	resp.Data = ns.NewCommand(cmd)
 	return nil
 }
 
