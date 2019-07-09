@@ -14,6 +14,8 @@ type Show struct {
 	RangeStart, RangeEnd, RackWidth, RackHeight int
 	Available, Down                             []string
 	Reservations                                []Res
+	Listimages                                  map[string]*kiPair
+	Path                                        string
 }
 
 // Returns the range of nodes based on Show
