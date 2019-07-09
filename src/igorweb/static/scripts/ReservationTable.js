@@ -73,8 +73,7 @@
     + '      ></reservation-table-row>'
     + '    </template>'
     + '  </tbody>'
-    + '</table>'
-    + '';
+    + '</table>';
   window.ReservationTable = {
     template: template,
     components: {

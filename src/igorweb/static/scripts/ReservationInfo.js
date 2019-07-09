@@ -43,8 +43,7 @@
     + '      </div>'
     + '    </div>'
     + '  </div>'
-    + '</div>'
-    + '';
+    + '</div>';
   window.ReservationInfo = {
     template: template,
     components: {

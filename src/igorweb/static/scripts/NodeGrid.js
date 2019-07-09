@@ -23,8 +23,7 @@
     + '      </div>'
     + '    </div>'
     + '  </div>'
-    + '</div>'
-    + '';
+    + '</div>';
   window.NodeGrid = {
     template: template,
     components: {

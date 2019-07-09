@@ -31,7 +31,6 @@
     + '            <span aria-hidden="true">&times;</span>'
     + '          </button>'
     + '        </div>'
-    + ''
     + '        <!-- Buttons at bottom of modal -->'
     + '        <div'
     + '          class="modal-footer m-3"'
@@ -56,14 +55,12 @@
     + '      </div>'
     + '    </div>'
     + '  </div>'
-    + ''
     + '  <loading-modal'
     + '    body="This may take some time..."'
     + '    header="Deleting Reservation"'
     + '    ref="loadingModal"'
     + '  ></loading-modal>'
-    + '</div>'
-    + '';
+    + '</div>';
   window.DeleteReservationModal = {
     template: template,
     components: {

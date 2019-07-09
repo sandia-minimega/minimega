@@ -15,8 +15,7 @@
     + '      </div>'
     + '    </div>'
     + '  </div>'
-    + '</div>'
-    + '';
+    + '</div>';
   window.LoadingModal = {
     template: template,
     props: {

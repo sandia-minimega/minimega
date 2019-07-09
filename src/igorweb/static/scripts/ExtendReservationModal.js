@@ -111,14 +111,12 @@
     + '      </div>'
     + '    </div>'
     + '  </div>'
-    + ''
     + '  <loading-modal'
     + '    body="This may take some time..."'
     + '    header="Extending Reservation"'
     + '    ref="loadingModal"'
     + '  ></loading-modal>'
-    + '</div>
-    + '';
+    + '</div>';
   window.ExtendReservationModal = {
     template: template,
     components: {

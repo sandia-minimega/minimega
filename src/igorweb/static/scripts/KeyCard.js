@@ -56,8 +56,7 @@
     + '      </tbody>'
     + '    </table>'
     + '  </div>'
-    + '</div>'
-    + '';
+    + '</div>';
   window.KeyCard = {
     template: template,
     methods: {

@@ -5,8 +5,7 @@
     + '<div class="alert alert-warning" v-if="message != ignored">'
     + '  <button class="close" type="button" v-on:click="ignore()">&times;</button>'
     + '  {{ message }}'
-    + '</div>'
-    + '';
+    + '</div>';
   window.Alert = {
     template: template,
     data: function data() {

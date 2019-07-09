@@ -9,8 +9,7 @@
     + '  style="opacity: 1; width:100%; padding: 12px; padding-left: 0px; padding-right: 0px; cursor: pointer;"'
     + '  tabindex="-1"'
     + '  v-on:click.stop="selectNode()"'
-    + '>{{ nodeID }}</div>'
-    + '';
+    + '>{{ nodeID }}</div>';
   window.Node = {
     template: template,
     props: {

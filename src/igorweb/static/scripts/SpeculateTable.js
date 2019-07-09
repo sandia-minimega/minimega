@@ -22,7 +22,6 @@
     + '          </td>'
     + '        </tr>'
     + '      </template>'
-    + ''
     + '      <template v-for="spec in speculations">'
     + '        <tr>'
     + '          <td class="align-middle">{{ spec.Start }}</td>'
@@ -41,8 +40,7 @@
     + '      </template>'
     + '    </tbody>'
     + '  </table>'
-    + '</div>'
-    + '';
+    + '</div>';
   window.SpeculateTable = {
     template: template,
     components: {

@@ -152,14 +152,12 @@
     + '      </div>'
     + '    </div>'
     + '  </div>'
-    + ''
     + '  <loading-modal'
     + '    body="This may take some time..."'
     + '    header="Issuing Power Command"'
     + '    ref="loadingModal"'
     + '  ></loading-modal>'
-    + '</div>'
-    + '';
+    + '</div>';
   window.PowerModal = {
     template: template,
     components: {

@@ -22,8 +22,7 @@
     + '      <i class="oi oi-pencil"></i>'
     + '    </button>'
     + '  </td>'
-    + '</tr>'
-    + '';
+    + '</tr>';
   window.ReservationTableRow = {
     template: template,
     props: {
