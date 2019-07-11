@@ -585,7 +585,7 @@ func containerShim() {
 	logFile.Close()
 
 	// GO!
-	log.Debug("vm %v exec: %v %v", vmID, vmInit)
+	log.Debug("vm %v exec: %v", vmID, vmInit)
 	err = syscall.Exec(vmInit[0], vmInit, nil)
 	if err != nil {
 		log.Fatal("Exec: %v", err)

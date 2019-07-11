@@ -776,7 +776,7 @@ func (vm *BaseVM) conflicts(vm2 *BaseVM) error {
 	for _, n := range vm.Networks {
 		for _, n2 := range vm2.Networks {
 			if n.MAC == n2.MAC && n.VLAN == n2.VLAN {
-				log.Warn("duplicate MAC/VLAN: %v/%v for %v and %v", vm.ID, vm2.ID)
+				log.Warn("duplicate MAC/VLAN: %v/%v for %v and %v", n.MAC, n.VLAN, vm.ID, vm2.ID)
 			}
 		}
 	}
