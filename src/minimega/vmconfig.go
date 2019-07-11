@@ -46,7 +46,7 @@ type BaseConfig struct {
 	Memory uint64
 
 	// Enable or disable snapshot mode for disk images and container
-	// filesystems. When enabled, disks/filesystems will be loaded in memory
+	// filesystems. When enabled, disks/filesystems will have temporary snapshots created
 	// when run and changes will not be saved. This allows a single
 	// disk/filesystem to be used for many VMs.
 	//
