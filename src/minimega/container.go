@@ -1266,6 +1266,8 @@ func (vm *ContainerVM) overlayMount() error {
 }
 
 func (vm *ContainerVM) overlayUnmount() error {
+	sleepAmount := time.Duration(1)
+
 	for i := 0; i < UnmountRetries; i++ {
 		err := syscall.Unmount(vm.effectivePath, 0)
 		if err == nil {
@@ -1274,7 +1276,8 @@ func (vm *ContainerVM) overlayUnmount() error {
 
 		if err, ok := err.(syscall.Errno); ok && err == syscall.EBUSY {
 			log.Info("filesystem busy for vm %v, sleeping", vm.ID)
-			time.Sleep(time.Second)
+			time.Sleep(sleepAmount * time.Millisecond)
+			sleepAmount = sleepAmount * 2
 			continue
 		}
 
