@@ -21,3 +21,11 @@ fe81982801b5861ad01e643527daac63629b7fdd github.com/goftp/server
 35ad2879c0a351783e807c89f139dd9a1aed52c4 github.com/Harvey-OS/ninep (jcrussell/ninep)
 
 e211265541925782f873487c7cef09ab8f7c1267 github.com:anthonynsimon/bild
+
+7553b97266dcbbf78298bd1a2b12d9c9aaae5f40 golang.org/x/net/websocket
+
+da137c7871d730100384dbcf36e6f8fa493aef5b golang.org/x/net/bpf
+
+6ec70d6a5542cba804c6d16ebe8392601a0b7b60 golang.org/x/sys/unix
+
+575fdbe86e5dd89229707ebec0575ce7d088a4a6 golang.org/x/crypto
