@@ -377,7 +377,7 @@ func (vm *KvmVM) Info(field string) (string, error) {
 	case "vnc_port":
 		return strconv.Itoa(vm.VNCPort), nil
 	case "pid":
-		return strconv.Itoa(vm.pid), nil
+		return strconv.Itoa(vm.Pid), nil
 	}
 
 	return vm.KVMConfig.Info(field)
@@ -728,8 +728,8 @@ func (vm *KvmVM) launch() error {
 		return vm.setErrorf("unable to start qemu: %v %v", err, sErr.String())
 	}
 
-	vm.pid = cmd.Process.Pid
-	log.Debug("vm %v has pid %v", vm.ID, vm.pid)
+	vm.Pid = cmd.Process.Pid
+	log.Debug("vm %v has pid %v", vm.ID, vm.Pid)
 
 	// Channel to signal when the process has exited
 	var waitChan = make(chan bool)
@@ -955,12 +955,12 @@ func (vm *KvmVM) ejectCD(force bool) error {
 }
 
 func (vm *KvmVM) ProcStats() (map[int]*ProcStats, error) {
-	p, err := GetProcStats(vm.pid)
+	p, err := GetProcStats(vm.Pid)
 	if err != nil {
 		return nil, err
 	}
 
-	return map[int]*ProcStats{vm.pid: p}, nil
+	return map[int]*ProcStats{vm.Pid: p}, nil
 }
 
 func (vm *KvmVM) WriteConfig(w io.Writer) error {
