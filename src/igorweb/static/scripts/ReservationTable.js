@@ -1,7 +1,7 @@
 'use strict';
 
 (function() {
-  const template = ''
+  var template = ''
     + '<table class="table table-hover table-borderless">'
     + '  <thead>'
     + '    <tr>'
@@ -62,6 +62,7 @@
     + '          v-if="sortBy == \'range\'"'
     + '        ></span>'
     + '      </th>'
+    + '      <th scope="col">&nbsp;</th> <!-- Buttons column -->'
     + '    </tr>'
     + '  </thead>'
     + '  <tbody>'
@@ -92,9 +93,9 @@
     },
     computed: {
       reservations: function reservations() {
-        const _this = this;
+        var _this = this;
 
-        let sortFunc = null;
+        var sortFunc = null;
 
         switch (this.sortBy) {
           case 'name':
@@ -140,10 +141,10 @@
             break;
         }
 
-        const clone = $.extend(true, [], this.$store.getters.reservations);
-        const sorted = clone.sort(sortFunc);
-        const filtered = sorted.filter(function(x) {
-          let include = false;
+        var clone = $.extend(true, [], this.$store.getters.reservations);
+        var sorted = clone.sort(sortFunc);
+        var filtered = sorted.filter(function(x) {
+          var include = false;
           [x.Name, x.Owner].forEach(function(d) {
             if (d) {
               include = include || d.toString().includes(_this.filter);
@@ -152,10 +153,10 @@
           include = include || x.Nodes.includes(+_this.filter);
           include = include || x.Range == _this.filter;
 
-          const single_node_range = _this.filter.match(/^.+\[(\d+)\]$/);
+          var single_node_range = _this.filter.match(/^.+\[(\d+)\]$/);
 
           if (single_node_range) {
-            const node = single_node_range[1];
+            var node = single_node_range[1];
             include = include || x.Nodes.includes(+node);
           }
 
@@ -177,8 +178,8 @@
 
   function sortHelper(getter) {
     return function(a, b) {
-      const gA = getter(a);
-      const gB = getter(b);
+      var gA = getter(a);
+      var gB = getter(b);
 
       if (gA < gB) {
         return -1;

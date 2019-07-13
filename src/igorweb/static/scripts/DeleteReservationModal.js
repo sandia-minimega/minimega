@@ -1,7 +1,7 @@
 'use strict';
 
 (function() {
-  const template = ''
+  var template = ''
     + '<div>'
     + '  <!-- Delete reservation modal -->'
     + '  <div'
@@ -86,15 +86,15 @@
         this.$refs['loadingModal'].hide();
       },
       deleteReservation: function deleteReservation() {
-        const _this = this;
+        var _this = this;
 
         this.hide();
         this.showLoading();
         $.get('run/', {
           run: 'igor del '.concat(this.reservation.Name),
         }, function(data) {
-          const response = JSON.parse(data);
-          let msg = response.Message;
+          var response = JSON.parse(data);
+          var msg = response.Message;
 
           if (msg == '\n') {
             msg = 'Successfully deleted '.concat(_this.reservation.Name);

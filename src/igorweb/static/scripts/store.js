@@ -8,6 +8,8 @@ window.store = new Vuex.Store({
     selectedNodes: [],
     reservations: [],
     alert: '',
+    defaultImages: [],
+    recentImages: [],
   },
   // Convenience methods for accessing application-wide data.  The
   // return values are cached until dependencies change
@@ -23,9 +25,9 @@ window.store = new Vuex.Store({
       return ''.concat(getters.clusterPrefix, '[').concat(toRange(state.selectedNodes), ']');
     },
     nodes: function nodes(state, getters) {
-      const n = {};
+      var n = {};
 
-      for (let i = STARTNODE; i <= ENDNODE; i++) {
+      for (var i = STARTNODE; i <= ENDNODE; i++) {
         n[i] = {
           NodeID: i,
           Waiting: true,
@@ -36,7 +38,7 @@ window.store = new Vuex.Store({
         return n;
       }
 
-      for (let _i = STARTNODE; _i <= ENDNODE; _i++) {
+      for (var _i = STARTNODE; _i <= ENDNODE; _i++) {
         n[_i] = {
           NodeID: _i,
           Up: true,
@@ -46,17 +48,17 @@ window.store = new Vuex.Store({
       } // The first reservation is our list of down nodes
 
 
-      const down = state.reservations[0].Nodes;
+      var down = state.reservations[0].Nodes;
 
-      for (let _i2 = 0; _i2 < down.length; _i2++) {
+      for (var _i2 = 0; _i2 < down.length; _i2++) {
         n[down[_i2]].Up = false;
       }
 
-      for (let _i3 = 1; _i3 < state.reservations.length; _i3++) {
-        const r = state.reservations[_i3];
+      for (var _i3 = 1; _i3 < state.reservations.length; _i3++) {
+        var r = state.reservations[_i3];
 
-        for (let j = 0; j < r.Nodes.length; j++) {
-          const nodeID = r.Nodes[j];
+        for (var j = 0; j < r.Nodes.length; j++) {
+          var nodeID = r.Nodes[j];
           n[nodeID].Reservation = r;
           n[nodeID].Reservation.Range = ''.concat(getters.clusterPrefix, '[').concat(toRange(r.Nodes), ']');
         }
@@ -76,6 +78,9 @@ window.store = new Vuex.Store({
     rackWidth: function rackWidth() {
       return RACKWIDTH;
     },
+    allImages: function allImages(state) {
+      return [].concat(state.recentImages, state.defaultImages);
+    },
   },
   // Methods to change applicaiton-wide state. Note that this is not
   // the place to perform asyncronous actions.
@@ -92,6 +97,13 @@ window.store = new Vuex.Store({
     setSelectedReservation: function setSelectedReservation(state, res) {
       state.selectedReservation = res;
     },
+    addRecentImage: function addRecentImage(state, img) {
+      // Add image to the beginning of the list of recent images
+      state.recentImages.unshift(img);
+    },
+    setRecentImages: function setRecentImages(state, imgs) {
+      state.recentImages = imgs;
+    },
   },
   // Methods to perform actions that eventaually result in a state
   // mutation. This is a good place to perform any necessary
@@ -101,28 +113,47 @@ window.store = new Vuex.Store({
     // Fetch new "vm info" from /vms/info.json and update
     // state.vms accordingly.
     getReservations: function getReservations(_ref) {
-      const commit = _ref.commit;
+      var commit = _ref.commit;
       $.get('run/', {
         run: 'igor show',
       }, function(data) {
-        const response = JSON.parse(data);
+        var response = JSON.parse(data);
         commit('updateReservations', response.Extra);
       });
     },
     selectReservation: function selectReservation(_ref2, r) {
-      const commit = _ref2.commit;
+      var commit = _ref2.commit;
       commit('setSelectedNodes', r.Nodes);
       commit('setSelectedReservation', r);
     },
     selectNodes: function selectNodes(_ref3, n) {
-      const commit = _ref3.commit;
+      var commit = _ref3.commit;
       commit('setSelectedNodes', n);
       commit('setSelectedReservation', null);
     },
     clearSelection: function clearSelection(_ref4) {
-      const commit = _ref4.commit;
+      var commit = _ref4.commit;
       commit('setSelectedNodes', []);
       commit('setSelectedReservation', null);
+    },
+    saveRecentImage: function saveRecentImage(_ref5, kernelInitPair) {
+      var commit = _ref5.commit;
+      var getters = _ref5.getters;
+      var kernelPath = kernelInitPair.kernelPath;
+      var initrdPath = kernelInitPair.initrdPath;
+      var tmp = kernelPath.split('/');
+      var image = {
+        name: tmp[tmp.length - 1].split('.')[0] + ' (recent)',
+        kernel: kernelPath,
+        initrd: initrdPath,
+      };
+
+      if (!getters.allImages.some(function(x) {
+        return x.name == image.name;
+      })) {
+        commit('addRecentImage', image);
+        localStorage.setItem('usrImages', JSON.stringify(getters.allImages));
+      }
     },
   },
 });
@@ -132,12 +163,12 @@ function toRange(nodes) {
     return '[]';
   }
 
-  let result = '';
-  let min = null;
+  var result = '';
+  var min = null;
 
-  for (let i = 0; i < nodes.length - 1; i++) {
-    const _n = nodes[i];
-    const m = nodes[i + 1];
+  for (var i = 0; i < nodes.length - 1; i++) {
+    var _n = nodes[i];
+    var m = nodes[i + 1];
 
     if (min === null) {
       min = _n;
@@ -160,7 +191,7 @@ function toRange(nodes) {
     min = null;
   }
 
-  const n = nodes[nodes.length - 1];
+  var n = nodes[nodes.length - 1];
 
   if (result !== '') {
     result += ', ';

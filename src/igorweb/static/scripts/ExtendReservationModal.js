@@ -1,7 +1,7 @@
 'use strict';
 
 (function() {
-  const template = ''
+  var template = ''
     + '<div>'
     + '  <!-- Extend reservation modal -->'
     + '  <div'
@@ -136,7 +136,7 @@
         return this.resName !== '';
       },
       command: function command() {
-        let time = '';
+        var time = '';
 
         if (this.timeRange) {
           time = ' -t '.concat(this.timeRange);
@@ -147,7 +147,7 @@
     },
     methods: {
       show: function show() {
-        const res = this.$store.state.selectedReservation;
+        var res = this.$store.state.selectedReservation;
 
         if (res) {
           this.resName = res.Name;
@@ -165,14 +165,14 @@
         setTimeout(this.$refs['loadingModal'].hide, 500);
       },
       extendReservation: function extendReservation() {
-        const _this = this;
+        var _this = this;
 
         this.hide();
         this.showLoading();
         $.get('run/', {
           run: this.command,
         }, function(data) {
-          const response = JSON.parse(data);
+          var response = JSON.parse(data);
 
           _this.$store.commit('setAlert', response.Message);
 

@@ -1,7 +1,7 @@
 'use strict';
 
 (function() {
-  const template = ''
+  var template = ''
     + '<div>'
     + '  <!-- Power-control modal -->'
     + '  <div'
@@ -191,14 +191,14 @@
     },
     methods: {
       show: function show() {
-        const range = this.$store.getters.selectedRange;
+        var range = this.$store.getters.selectedRange;
 
         if (range) {
           this.nodeRange = range;
           this.byReservation = false;
         }
 
-        const res = this.$store.state.selectedReservation;
+        var res = this.$store.state.selectedReservation;
 
         if (res) {
           this.resName = res.Name;
@@ -217,14 +217,14 @@
         setTimeout(this.$refs['loadingModal'].hide, 500);
       },
       submitPower: function submitPower(cmd) {
-        const _this = this;
+        var _this = this;
 
         this.hide();
         this.showLoading();
         $.get('run/', {
           run: ''.concat(this.command, ' ').concat(cmd),
         }, function(data) {
-          const response = JSON.parse(data);
+          var response = JSON.parse(data);
 
           _this.$store.commit('setAlert', response.Message);
 

@@ -1,7 +1,7 @@
 'use strict';
 
 (function() {
-  const template = ''
+  var template = ''
     + '<!-- Container of node grid, key, and reservation table -->'
     + '<div class="container-fluid" style="margin-top:10px;">'
     + '  <div class="row">'

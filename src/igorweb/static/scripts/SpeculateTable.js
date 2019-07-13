@@ -1,7 +1,7 @@
 'use strict';
 
 (function() {
-  const template = ''
+  var template = ''
     + '<div'
     + '  style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e9ecef;"'
     + '>'
@@ -58,14 +58,14 @@
       };
     },
     mounted: function mounted() {
-      const _this = this;
+      var _this = this;
 
       $.get('run/', {
         run: ''.concat(this.cmd, ' -s'),
       }, function(data) {
-        const response = JSON.parse(data);
+        var response = JSON.parse(data);
         _this.speculations = response.Extra;
-        const msg = response.Message;
+        var msg = response.Message;
 
         if (msg.match(/^AVAILABLE/)) {
           _this.serverMessage = 'Speculation successful';

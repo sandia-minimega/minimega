@@ -1,7 +1,7 @@
 'use strict';
 
 (function() {
-  const template = ''
+  var template = ''
     + '<div id="outer">'
     + '  <!-- Edit reservation modal -->'
     + '  <div'
@@ -263,15 +263,15 @@
     },
     computed: {
       groupIsValid: function groupIsValid() {
-        const re = new RegExp('^[_a-z][0-9a-z_-]*\\$?$');
+        var re = new RegExp('^[_a-z][0-9a-z_-]*\\$?$');
         return this.group.match(re) != null;
       },
       kernelPathIsValid: function kernelPathIsValid() {
-        const re = new RegExp('^(/[^/]*)+[^/]+\\.kernel$');
+        var re = new RegExp('^(/[^/]*)+[^/]+\\.kernel$');
         return this.kernelPath.match(re) != null || this.kernelPath == '';
       },
       initrdPathIsValid: function initrdPathIsValid() {
-        const re = new RegExp('^(/[^/]*)+[^/]+\\.initrd$');
+        var re = new RegExp('^(/[^/]*)+[^/]+\\.initrd$');
         return this.initrdPath.match(re) != null || this.initrdPath == '';
       },
       validForm: function validForm() {
@@ -302,7 +302,7 @@
         return true;
       },
       command: function command() {
-        let bootFrom = '';
+        var bootFrom = '';
 
         if (this.isKernelInit && this.kernelPath != '' + this.initrdPath != '') {
           bootFrom = ' -k '.concat(this.kernelPath, ' -i ').concat(this.initrdPath);
@@ -310,13 +310,13 @@
           ' -profile '.concat(this.cobblerProfile);
         }
 
-        let group = '';
+        var group = '';
 
         if (this.group) {
           group = ' -g '.concat(this.group);
         }
 
-        let args = '';
+        var args = '';
 
         if (this.cmdArgs) {
           args = ' -c '.concat(this.cmdArgs);
@@ -328,10 +328,10 @@
     methods: {
       show: function show(resName) {
         // Find the matching reservation
-        let res = null;
+        var res = null;
 
-        for (let i = 0; i < this.$store.state.reservations.length; i++) {
-          const r = this.$store.state.reservations[i];
+        for (var i = 0; i < this.$store.state.reservations.length; i++) {
+          var r = this.$store.state.reservations[i];
 
           if (r['Name'] == resName) {
             res = r;
@@ -358,7 +358,7 @@
         setTimeout(this.$refs['loadingModal'].hide, 500);
       },
       submitUpdate: function submitUpdate() {
-        const _this = this;
+        var _this = this;
 
         if (this.validForm) {
           this.showLoading();
@@ -366,7 +366,7 @@
           $.get('run/', {
             run: this.command,
           }, function(data) {
-            const response = JSON.parse(data);
+            var response = JSON.parse(data);
 
             _this.$store.commit('updateReservations', response.Extra);
 

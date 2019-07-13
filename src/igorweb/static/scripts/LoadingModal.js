@@ -1,7 +1,7 @@
 'use strict';
 
 (function() {
-  const template = ''
+  var template = ''
     + '<div class="modal fade" ref="lmodal" tabindex="-1">'
     + '  <div class="modal-dialog modal-dialog-centered" role="document">'
     + '    <div class="modal-content">'

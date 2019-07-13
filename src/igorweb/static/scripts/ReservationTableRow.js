@@ -1,7 +1,7 @@
 'use strict';
 
 (function() {
-  const template = ''
+  var template = ''
     + '<tr'
     + '  :class="{active: selected}"'
     + '  class="res clickable"'

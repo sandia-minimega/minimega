@@ -26,9 +26,16 @@ var app = new Vue({
   // Runs after the Vue component (the whole app, in this case) has
   // been mounted and is ready-to-go
   mounted: function mounted() {
-    const _this = this;
+    var _this = this;
 
-    // Load initial reservation data
+    var imgs = JSON.parse(localStorage.getItem('usrImages'));
+
+    if (!imgs) {
+      imgs = [];
+    }
+
+    this.$store.commit('setRecentImages', imgs); // Load initial reservation data
+
     this.$store.commit('updateReservations', INITIALRESERVATIONS); // Fetch reservation data
 
     this.$store.dispatch('getReservations'); // Set an interval, so that we fetch more reservation data every 5 seconds

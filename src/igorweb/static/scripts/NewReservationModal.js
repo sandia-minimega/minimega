@@ -1,7 +1,7 @@
 'use strict';
 
 (function() {
-  const template = ''
+  var template = ''
     + '<div id="outer">'
     + '  <!-- New reservation modal -->'
     + '  <div'
@@ -139,11 +139,11 @@
     + '                >Path must be an absolute path to an initial RAM disk.</div>'
     + '              </div>'
     + '              <div>'
-    + '                <select v-model="kernelpair">'
-    + '                  <option disabled value>Please select one</option>'
+    + '                <select v-model="kernelPair">'
+    + '                  <option disabled value>Choose a kernel pair</option>'
     + '                  <option'
-    + '                    :value="item.name"'
-    + '                    v-for="item in IMAGES"'
+    + '                    v-bind:value="{kernelPath: item.kernel, initrdPath: item.initrd}"'
+    + '                    v-for="item in images"'
     + '                  >{{ item.name }}</option>'
     + '                </select>'
     + '              </div>'
@@ -390,11 +390,21 @@
       LoadingModal: LoadingModal,
     },
     data: function data() {
+      var latestImage = this.$store.state.recentImages[0];
+
+      if (!latestImage) {
+        latestImage = {
+          kernelPath: '',
+          initrdPath: '',
+        };
+      }
+
       return {
         speculating: false,
         name: '',
-        kernelPath: '',
-        initrdPath: '',
+        kernelPair: '',
+        kernelPath: latestImage.kernelPath,
+        initrdPath: latestImage.initrdPath,
         cobblerProfile: '',
         numNodes: '',
         nodeList: '',
@@ -402,7 +412,6 @@
         cmdArgs: '',
         resLength: '60m',
         afterDate: '',
-        kernelpair: '',
         isKernelInit: true,
         isNodeList: false,
         selected: null,
@@ -410,18 +419,35 @@
         serverSuccess: true,
       };
     },
+    watch: {
+      kernelPath: function kernelPath() {
+        this.kernelPair = '';
+      },
+      initrdPath: function initrdPath() {
+        this.kernelPair = '';
+      },
+      kernelPair: function kernelPair(value) {
+        if (value) {
+          this.kernelPath = value.kernelPath;
+          this.initrdPath = value.initrdPath;
+        }
+      },
+    },
     computed: {
       groupIsValid: function groupIsValid() {
-        const re = new RegExp('^[_a-z][0-9a-z_-]*\\$?$');
+        var re = new RegExp('^[_a-z][0-9a-z_-]*\\$?$');
         return this.group.match(re) != null;
       },
       kernelPathIsValid: function kernelPathIsValid() {
-        const re = new RegExp('^(/[^/]*)+[^/]+\\.kernel$');
+        var re = new RegExp('^(/[^/]*)+[^/]+\\.kernel$');
         return this.kernelPath.match(re) != null;
       },
       initrdPathIsValid: function initrdPathIsValid() {
-        const re = new RegExp('^(/[^/]*)+[^/]+\\.initrd$');
+        var re = new RegExp('^(/[^/]*)+[^/]+\\.initrd$');
         return this.initrdPath.match(re) != null;
+      },
+      images: function images() {
+        return this.$store.getters.allImages;
       },
       validForm: function validForm() {
         if (!this.name) {
@@ -433,7 +459,7 @@
         }
 
         if (this.isKernelInit) {
-          if ((!this.kernelPathIsValid || !this.initrdPathIsValid) && !this.kernelpair) {
+          if (!this.kernelPathIsValid || !this.initrdPathIsValid) {
             return false;
           }
         } else {
@@ -455,51 +481,31 @@
         return true;
       },
       command: function command() {
-        let bootFrom = '-profile '.concat(this.cobblerProfile);
+        var bootFrom = '-profile '.concat(this.cobblerProfile);
 
         if (this.isKernelInit) {
-          // Check if using cobbler or KI Pairs
-          if (this.kernelpair && !(this.kernelPath && this.initrdPath)) {
-            // Check whether using textbox or dropdown (text overrides dropdown)
-            if (this.kernelpair.includes('(user defined)')) {
-              // If using drop down check whether its a user defined or default a KI Pair
-              let _i = 0;
-
-              while (_i < userDefinedImages.length) {
-                if (userDefinedImages[_i].name == this.kernelpair) {
-                  bootFrom = '-k '.concat(userDefinedImages[_i].kernel, ' -i ').concat(userDefinedImages[_i].initrd);
-                  break;
-                }
-
-                _i++;
-              }
-            } else {
-              bootFrom = '-k '.concat(IMAGEPATH).concat(this.kernelpair, '.kernel -i ').concat(IMAGEPATH).concat(this.kernelpair, '.initrd');
-            }
-          } else {
-            bootFrom = '-k '.concat(this.kernelPath, ' -i ').concat(this.initrdPath);
-          }
+          bootFrom = '-k '.concat(this.kernelPath, ' -i ').concat(this.initrdPath);
         }
 
-        let nodes = '-n '.concat(this.numNodes);
+        var nodes = '-n '.concat(this.numNodes);
 
         if (this.isNodeList) {
           nodes = '-w '.concat(this.nodeList);
         }
 
-        let group = '';
+        var group = '';
 
         if (this.group) {
           group = ' -g '.concat(this.group);
         }
 
-        let args = '';
+        var args = '';
 
         if (this.cmdArgs) {
           args = ' -c '.concat(this.cmdArgs);
         }
 
-        let after = '';
+        var after = '';
 
         if (this.afterDate) {
           after = ' -a '.concat(this.afterDate);
@@ -510,7 +516,7 @@
     },
     methods: {
       show: function show() {
-        const range = this.$store.getters.selectedRange;
+        var range = this.$store.getters.selectedRange;
 
         if (range != '') {
           this.numNodes = this.$store.state.selectedNodes.length;
@@ -533,44 +539,23 @@
         this.speculating = false;
         this.afterDate = formattedStart;
       },
-      searchImage: function searchImage(target, container) {
-        let i;
-        let found = false;
-
-        for (i = 0; i < container.length; i++) {
-          if (container[i].name == target.name) {
-            found = true;
-            return i;
-          }
-        }
-
-        return -1;
-      },
       submitReservation: function submitReservation() {
-        const _this = this;
+        var _this = this;
 
         if (this.validForm) {
-          if (this.kernelPath && this.initrdPath) {
-            const tmp = this.kernelPath.split('/');
-            const image = {
-              name: tmp[tmp.length - 1].split('.')[0] + '(user defined)',
-              kernel: this.kernelPath,
-              initrd: this.initrdPath,
-            };
-
-            if (this.searchImage(image, userDefinedImages == -1)) {
-              userDefinedImages.push(image);
-              localStorage.setItem('usrImages', JSON.stringify(userDefinedImages));
-            }
+          if (this.isKernelInit) {
+            this.$store.dispatch('saveRecentImage', {
+              kernelPath: this.kernelPath,
+              initrdPath: this.initrdPath,
+            });
           }
 
           this.showLoading();
           this.hide();
-          console.log('Running Command');
           $.get('run/', {
             run: this.command,
           }, function(data) {
-            const response = JSON.parse(data);
+            var response = JSON.parse(data);
 
             _this.$store.commit('updateReservations', response.Extra);
 
@@ -579,33 +564,6 @@
             _this.hideLoading();
           });
         }
-      },
-    },
-    mounted: function mounted() {
-      if (localStorage.kernelPath) {
-        this.kernelPath = localStorage.kernelPath;
-      }
-
-      if (localStorage.initrdPath) {
-        this.initrdPath = localStorage.initrdPath;
-      }
-
-      if (localStorage.getItem('usrImages')) {
-        userDefinedImages = JSON.parse(localStorage.getItem('usrImages'));
-
-        for (i = 0; i < userDefinedImages.length; i++) {
-          if (this.searchImage(userDefinedImages[i], IMAGES) == -1) {
-            IMAGES.push(userDefinedImages[i]);
-          }
-        }
-      }
-    },
-    watch: {
-      kernelPath: function kernelPath(newkernelPath) {
-        localStorage.kernelPath = newkernelPath;
-      },
-      initrdPath: function initrdPath(newinitrdPath) {
-        localStorage.initrdPath = newinitrdPath;
       },
     },
   };

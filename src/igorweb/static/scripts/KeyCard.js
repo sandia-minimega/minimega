@@ -1,7 +1,7 @@
 'use strict';
 
 (function() {
-  const template = ''
+  var template = ''
     + '<div class="card" style="margin-bottom:10px;">'
     + '  <div class="card-body" style="padding:0px;">'
     + '    <table class="table table-borderless">'
@@ -61,8 +61,8 @@
     template: template,
     methods: {
       select: function select(availability, power) {
-        const nodes = Object.values(this.$store.getters.nodes);
-        let selected = nodes;
+        var nodes = Object.values(this.$store.getters.nodes);
+        var selected = nodes;
 
         if (availability == 'available') {
           selected = nodes.filter(function(x) {

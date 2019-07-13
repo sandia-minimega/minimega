@@ -1,7 +1,7 @@
 'use strict';
 
 (function() {
-  const template = ''
+  var template = ''
     + '<div'
     + '  :class="{ reserved: isReserved, available: !isReserved, up: isUp, down: !isUp, active: isSelected }"'
     + '  class="list-group-item list-group-item-action node unselected"'
