@@ -110,8 +110,11 @@ func parseCPUs(r io.Reader) (map[string]bool, error) {
 	res := map[string]bool{}
 
 	scanner := bufio.NewScanner(r)
-	scanner.Scan() // skip header
 	for scanner.Scan() {
+		if scanner.Text() == "Available CPUs:" {
+			continue
+		}
+
 		fields := strings.Fields(scanner.Text())
 		if len(fields) == 0 {
 			break
