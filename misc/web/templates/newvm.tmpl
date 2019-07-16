@@ -1,0 +1,26 @@
+{{define "content"}}
+<div id="content">
+	<h1>New VM:</h1>
+	<form method="post">
+		<div style="display: grid; grid-template-columns: max-content max-content; grid-gap: 5px;">
+			<label for="name">Name: </label>
+			<input name="name" id="name" type="text">
+
+			<label for="kind">Kind: </label>
+			<select name="kind" id="kind">
+				<option value="kvm">kvm</option>
+				<option value="container">container</option>
+			</select>
+
+			<label for="config">Config: </label>
+			<select name="config" id="config">
+				{{ range . }}
+					<option value="{{ . }}">{{ . }}</option>
+				{{ end }}
+			</select>
+
+			<input type="submit">
+		</div>
+	</form>
+</div>
+{{end}}

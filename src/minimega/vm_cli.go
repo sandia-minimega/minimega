@@ -107,13 +107,20 @@ naming scheme:
 
 Note: VM names cannot be integers or reserved words (e.g. "all").
 
+Users may specify a saved config explicity rather than use the current one, for
+example:
+
+	vm config save endpoint
+	[other commands]
+	vm launch kvm 5 endpoint
+
 If queueing is enabled (see "ns"), VMs will be queued for launching until "vm
 launch" is called with no additional arguments. This allows the scheduler to
 better allocate resources across the cluster.`,
 		Patterns: []string{
 			"vm launch",
-			"vm launch <kvm,> <name or count>",
-			"vm launch <container,> <name or count>",
+			"vm launch <kvm,> <name or count> [config]",
+			"vm launch <container,> <name or count> [config]",
 		},
 		Call: wrapSimpleCLI(cliVMLaunch),
 	},
@@ -590,8 +597,17 @@ func cliVMLaunch(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 	// adding VM to queue
 	if len(c.StringArgs) > 0 {
-		// create a local copy of the current VMConfig
-		vmConfig := ns.vmConfig.Copy()
+		// create a local copy of the current or specified VMConfig
+		var vmConfig VMConfig
+
+		if name := c.StringArgs["config"]; name != "" {
+			if _, ok := ns.savedVMConfig[name]; !ok {
+				return fmt.Errorf("config %v does not exist", name)
+			}
+			vmConfig = ns.savedVMConfig[name].Copy()
+		} else {
+			vmConfig = ns.vmConfig.Copy()
+		}
 
 		vmType, err := findVMType(c.BoolArgs)
 		if err != nil {
