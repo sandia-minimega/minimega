@@ -80,6 +80,16 @@ def print_rows(resps):
 		for row in resp['Tabular'] or []:
 			print(row)
 
+def as_dict(resp):
+	'''
+	as_dict converts a minimega Header/Tabular response into a list of dictionaries.
+	'''
+	res = []
+	for row in resp['Tabular']:
+		res.append({header: row[i] for (i, header) in enumerate(resp['Header'])})
+
+	return res
+
 
 def discard(mm):
 	'''
