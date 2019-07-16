@@ -351,10 +351,10 @@ func (vms *VMs) Flush(cc *ron.Server) error {
 	var mapLock sync.Mutex
 
 	for i, vm := range vms.m {
-		go func(i int, vm VM) {
-			if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
-				wg.Add(1)
+		if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
+			wg.Add(1)
 
+			go func(i int, vm VM) {
 				log.Info("deleting VM: %v", i)
 
 				if err := vm.Disconnect(cc); err != nil {
@@ -369,8 +369,8 @@ func (vms *VMs) Flush(cc *ron.Server) error {
 				defer mapLock.Unlock()
 				delete(vms.m, i)
 				wg.Done()
-			}
-		}(i, vm)
+			}(i, vm)
+		}
 	}
 	wg.Wait()
 
