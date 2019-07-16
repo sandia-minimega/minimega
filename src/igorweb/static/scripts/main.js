@@ -1,75 +1,84 @@
-'use strict';
-
-var app = new Vue({
+const app = new Vue({
   // Main element
   el: '#app',
+
   // Vuex storage
   store: store,
+
   // Components used in #app
   components: {
-    Alert: Alert,
-    ReservationInfo: ReservationInfo,
-    NewReservationModal: NewReservationModal,
-    EditReservationModal: EditReservationModal,
-    DeleteReservationModal: DeleteReservationModal,
-    ExtendReservationModal: ExtendReservationModal,
-    PowerModal: PowerModal,
+    Alert,
+    ReservationInfo,
+    NewReservationModal,
+    EditReservationModal,
+    DeleteReservationModal,
+    ExtendReservationModal,
+    PowerModal,
   },
+
   computed: {
-    alertMessage: function alertMessage() {
+    alertMessage() {
       return this.$store.state.alert;
     },
-    selectedReservation: function selectedReservation() {
+
+    selectedReservation() {
       return this.$store.state.selectedReservation;
     },
   },
+
   // Runs after the Vue component (the whole app, in this case) has
   // been mounted and is ready-to-go
-  mounted: function mounted() {
-    var _this = this;
-
-    var imgs = JSON.parse(localStorage.getItem('usrImages'));
-
+  mounted: function() {
+    // Load recently used images from Local Storage
+    let imgs = JSON.parse(localStorage.getItem('usrImages'));
     if (!imgs) {
       imgs = [];
     }
+    this.$store.commit('setRecentImages', imgs);
 
-    this.$store.commit('setRecentImages', imgs); // Load initial reservation data
 
-    this.$store.commit('updateReservations', INITIALRESERVATIONS); // Fetch reservation data
+    // Load initial reservation data
+    this.$store.commit('updateReservations', INITIALRESERVATIONS);
 
-    this.$store.dispatch('getReservations'); // Set an interval, so that we fetch more reservation data every 5 seconds
+    // Fetch reservation data
+    this.$store.dispatch('getReservations');
 
-    setInterval(function() {
-      return _this.$store.dispatch('getReservations');
-    }, 5000);
+    // Set an interval, so that we fetch more reservation data every 5 seconds
+    setInterval(() => this.$store.dispatch('getReservations'), 5000);
   },
+
   // Helper methods
   methods: {
-    handleReservationAction: function handleReservationAction(action, resName) {
+    handleReservationAction(action, resName) {
       switch (action) {
         case 'edit':
           this.$refs['editResModal'].show(resName);
           break;
       }
     },
-    showNewResForm: function showNewResForm() {
+
+    showNewResForm() {
       this.$refs['newResModal'].show();
     },
-    showActionBar: function showActionBar() {
+
+    showActionBar() {
       $(this.$refs['actionbar']).show();
       $(this.$refs['actionbar']).addClass('active');
     },
-    showDeleteModal: function showDeleteModal() {
+
+    showDeleteModal() {
       this.$refs['deleteModal'].show();
     },
-    showPowerModal: function showPowerModal() {
+
+    showPowerModal() {
       this.$refs['powerModal'].show();
     },
-    showExtendModal: function showExtendModal() {
+
+    showExtendModal() {
       this.$refs['extendModal'].show();
     },
-    clearSelection: function clearSelection() {
+
+    clearSelection() {
       this.$store.dispatch('clearSelection');
     },
   },

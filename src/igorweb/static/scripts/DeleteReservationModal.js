@@ -1,115 +1,122 @@
-'use strict';
-
 (function() {
-  var template = ''
-    + '<div>'
-    + '  <!-- Delete reservation modal -->'
-    + '  <div'
-    + '    aria-hidden="true"'
-    + '    aria-labelledby="Delete Reservation?"'
-    + '    class="modal fade"'
-    + '    ref="modal"'
-    + '    role="dialog"'
-    + '    tabindex="-1"'
-    + '  >'
-    + '    <div class="modal-dialog modal-sm modal-dialog-centered" role="document">'
-    + '      <div class="modal-content">'
-    + '        <div'
-    + '          class="modal-header m-3"'
-    + '          style="padding-bottom: 0px; margin-bottom: 5px !important; border: none;"'
-    + '        >'
-    + '          <h5 class="modal-title text-center col-12">'
-    + '            <b>Delete reservation "{{reservation.Name}}"?</b>'
-    + '          </h5>'
-    + '          <button'
-    + '            aria-label="Close"'
-    + '            class="close"'
-    + '            data-dismiss="modal"'
-    + '            style="position: absolute; right: 15px; top: 10px;"'
-    + '            type="button"'
-    + '          >'
-    + '            <span aria-hidden="true">&times;</span>'
-    + '          </button>'
-    + '        </div>'
-    + '        <!-- Buttons at bottom of modal -->'
-    + '        <div'
-    + '          class="modal-footer m-3"'
-    + '          style="padding-top: 20px; margin-top: 20px;"'
-    + '        >'
-    + '          <!-- Cancel, exits modal, only shows on main reservation page -->'
-    + '          <button'
-    + '            class="modalbtn igorbtn btn btn-secondary mr-auto cancel"'
-    + '            data-dismiss="modal"'
-    + '            type="button"'
-    + '          >Cancel</button>'
-    + '          <!-- Delete, sends a igor del command to the server -->'
-    + '          <button'
-    + '            class="modalbtn gobtn igorbtn btn btn-primary modalcommand"'
-    + '            style="background-color: #a975d6; border-color: #a975d6;"'
-    + '            type="button"'
-    + '            v-on:click="deleteReservation()"'
-    + '          >'
-    + '            <span>Delete</span>'
-    + '          </button>'
-    + '        </div>'
-    + '      </div>'
-    + '    </div>'
-    + '  </div>'
-    + '  <loading-modal'
-    + '    body="This may take some time..."'
-    + '    header="Deleting Reservation"'
-    + '    ref="loadingModal"'
-    + '  ></loading-modal>'
-    + '</div>';
+  const template = `
+    <div>
+      <!-- Delete reservation modal -->
+      <div
+        aria-hidden="true"
+        aria-labelledby="Delete Reservation?"
+        class="modal fade"
+        ref="modal"
+        role="dialog"
+        tabindex="-1"
+      >
+        <div class="modal-dialog modal-sm modal-dialog-centered" role="document">
+          <div class="modal-content">
+            <div
+              class="modal-header m-3"
+              style="padding-bottom: 0px; margin-bottom: 5px !important; border: none;"
+            >
+              <h5 class="modal-title text-center col-12">
+                <b>Delete reservation "{{reservation.Name}}"?</b>
+              </h5>
+              <button
+                aria-label="Close"
+                class="close"
+                data-dismiss="modal"
+                style="position: absolute; right: 15px; top: 10px;"
+                type="button"
+              >
+                <span aria-hidden="true">&times;</span>
+              </button>
+            </div>
+
+            <!-- Buttons at bottom of modal -->
+            <div
+              class="modal-footer m-3"
+              style="padding-top: 20px; margin-top: 20px;"
+            >
+              <!-- Cancel, exits modal, only shows on main reservation page -->
+              <button
+                class="modalbtn igorbtn btn btn-secondary mr-auto cancel"
+                data-dismiss="modal"
+                type="button"
+              >Cancel</button>
+              <!-- Delete, sends a igor del command to the server -->
+              <button
+                class="modalbtn gobtn igorbtn btn btn-primary modalcommand"
+                style="background-color: #a975d6; border-color: #a975d6;"
+                type="button"
+                v-on:click="deleteReservation()"
+              >
+                <span>Delete</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <loading-modal
+        body="This may take some time..."
+        header="Deleting Reservation"
+        ref="loadingModal"
+      ></loading-modal>
+    </div>
+  `;
+
   window.DeleteReservationModal = {
     template: template,
+
     components: {
-      LoadingModal: LoadingModal,
+      LoadingModal,
     },
-    data: function data() {
+
+    data() {
       return {
         reservation: {},
       };
     },
+
     methods: {
-      show: function show() {
+      show() {
         this.reservation = this.$store.state.selectedReservation;
         $(this.$refs['modal']).modal('show');
       },
-      hide: function hide() {
+
+      hide() {
         $(this.$refs['modal']).modal('hide');
       },
-      showLoading: function showLoading() {
+
+      showLoading() {
         this.$refs['loadingModal'].show();
       },
-      hideLoading: function hideLoading() {
+
+      hideLoading() {
         this.$refs['loadingModal'].hide();
       },
-      deleteReservation: function deleteReservation() {
-        var _this = this;
 
+      deleteReservation() {
         this.hide();
         this.showLoading();
-        $.get('run/', {
-          run: 'igor del '.concat(this.reservation.Name),
-        }, function(data) {
-          var response = JSON.parse(data);
-          var msg = response.Message;
 
-          if (msg == '\n') {
-            msg = 'Successfully deleted '.concat(_this.reservation.Name);
-          }
+        $.get(
+            'run/',
+            {run: `igor del ${this.reservation.Name}`},
+            (data) => {
+              const response = JSON.parse(data);
 
-          _this.$store.commit('updateReservations', response.Extra);
+              let msg = response.Message;
+              if (msg == '\n') {
+                msg = `Successfully deleted ${this.reservation.Name}`;
+              }
 
-          _this.$store.commit('setAlert', msg);
-
-          setTimeout(function() {
-            _this.hideLoading();
-
-            _this.$emit('deleted');
-          }, 500);
-        });
+              this.$store.commit('updateReservations', response.Extra);
+              this.$store.commit('setAlert', msg);
+              setTimeout(() => {
+                this.hideLoading();
+                this.$emit('deleted');
+              }, 500);
+            }
+        );
       },
     },
   };

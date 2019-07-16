@@ -95,14 +95,14 @@
   <!-- Scripts -->
   <script>
   <!-- Set some globals provided by the Go template -->
-  var STARTNODE = {{ .RangeStart }};
-  var ENDNODE = {{ .RangeEnd }};
-  var RACKWIDTH = {{ .RackWidth }};
-  var CLUSTER = {{ .Prefix }};
-  var INITIALRESERVATIONS = {{ .ResTable }};
-  var IMAGES = [{{- range $name, $pair := .Listimages }}{name:{{ $name -}} },{{ end -}} {"name":"image"}];
+  const STARTNODE = {{ .RangeStart }};
+  const ENDNODE = {{ .RangeEnd }};
+  const RACKWIDTH = {{ .RackWidth }};
+  const CLUSTER = {{ .Prefix }};
+  const INITIALRESERVATIONS = {{ .ResTable }};
+  const IMAGES = [{{- range $name, $pair := .Listimages }}{name:{{ $name -}} },{{ end -}} {"name":"image"}];
   IMAGES.pop();
-  var IMAGEPATH = {{ .Path }};
+  const IMAGEPATH = {{ .Path }};
   </script>
 
   <script src="static/libs/jquery-3.3.1.min.js" type="text/javascript"></script>
