@@ -460,7 +460,7 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 
 		tty, err := pty.Start(cmd)
 		if err != nil {
-			log.Error("start failed:", err)
+			log.Error("start failed: %v", err)
 			return
 		}
 

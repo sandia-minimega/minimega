@@ -352,7 +352,7 @@ func (vm *KvmVM) Stop() error {
 
 	log.Info("stopping VM: %v", vm.ID)
 	if err := vm.q.Stop(); err != nil {
-		return vm.setErrorf("unstoppable: %v")
+		return vm.setErrorf("unstoppable: %v", vm.ID)
 	}
 
 	vm.setState(VM_PAUSED)
