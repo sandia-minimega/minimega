@@ -347,21 +347,32 @@ func (vms *VMs) Flush(cc *ron.Server) error {
 	vms.mu.Lock()
 	defer vms.mu.Unlock()
 
+	var wg sync.WaitGroup
+	var mapLock sync.Mutex
+
 	for i, vm := range vms.m {
-		if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
-			log.Info("deleting VM: %v", i)
+		go func(i int, vm VM) {
+			if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
+				wg.Add(1)
 
-			if err := vm.Disconnect(cc); err != nil {
-				log.Error("unable to disconnect to cc for vm %v: %v", vm.GetID(), err)
+				log.Info("deleting VM: %v", i)
+
+				if err := vm.Disconnect(cc); err != nil {
+					log.Error("unable to disconnect to cc for vm %v: %v", vm.GetID(), err)
+				}
+
+				if err := vm.Flush(); err != nil {
+					log.Error("clogged vm %v: %v", vm.GetID(), err)
+				}
+
+				mapLock.Lock()
+				defer mapLock.Unlock()
+				delete(vms.m, i)
+				wg.Done()
 			}
-
-			if err := vm.Flush(); err != nil {
-				log.Error("clogged vm %v: %v", vm.GetID(), err)
-			}
-
-			delete(vms.m, i)
-		}
+		}(i, vm)
 	}
+	wg.Wait()
 
 	return nil
 }
