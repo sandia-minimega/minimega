@@ -582,11 +582,17 @@ func (n *Namespace) hostSlice() []string {
 func (n *Namespace) processVMDisks(vals []string) error {
 	n.vmConfig.Disks = nil
 
+	var ideCount int
+
 	for _, spec := range vals {
 		disk, err := ParseDiskConfig(spec, n.vmConfig.Snapshot)
 		if err != nil {
 			n.vmConfig.Disks = nil
 			return err
+		}
+
+		if disk.Interface == "ide" || (disk.Interface == "" && DefaultKVMDiskInterface == "ide") {
+			ideCount += 1
 		}
 
 		// check for disk conflicts in a single VM
@@ -598,6 +604,11 @@ func (n *Namespace) processVMDisks(vals []string) error {
 		}
 
 		n.vmConfig.Disks = append(n.vmConfig.Disks, *disk)
+	}
+
+	if ideCount > 3 {
+		// Warn or return an error? Maybe some systems support more than four?
+		log.Warn("too many IDE devices, one for cdrom and %v for disks", ideCount)
 	}
 
 	return nil
