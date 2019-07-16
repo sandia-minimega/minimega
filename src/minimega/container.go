@@ -762,7 +762,7 @@ func (vm *ContainerVM) Info(field string) (string, error) {
 	case "volume":
 		return marshal(vm.VolumePaths), nil
 	case "pid":
-		return strconv.Itoa(vm.pid), nil
+		return strconv.Itoa(vm.Pid), nil
 	}
 
 	return vm.ContainerConfig.Info(field)
@@ -945,8 +945,8 @@ func (vm *ContainerVM) launch() error {
 		return vm.setErrorf("start container: %v", err)
 	}
 
-	vm.pid = cmd.Process.Pid
-	log.Debug("vm %v has pid %v", vm.ID, vm.pid)
+	vm.Pid = cmd.Process.Pid
+	log.Debug("vm %v has pid %v", vm.ID, vm.Pid)
 
 	// log the child
 	childLog.Close()
@@ -1216,7 +1216,7 @@ func (vm *ContainerVM) symlinkNetns() error {
 	if err != nil {
 		return err
 	}
-	src := fmt.Sprintf("/proc/%v/ns/net", vm.pid)
+	src := fmt.Sprintf("/proc/%v/ns/net", vm.Pid)
 	dst := fmt.Sprintf("/var/run/netns/meganet_%v", vm.ID)
 	vm.netns = fmt.Sprintf("meganet_%v", vm.ID)
 	return os.Symlink(src, dst)

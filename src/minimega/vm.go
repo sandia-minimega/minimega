@@ -118,7 +118,7 @@ type BaseVM struct {
 	Type       VMType
 	ActiveCC   bool // set when CC is active
 
-	pid int
+	Pid int
 
 	lock sync.Mutex // synchronizes changes to this VM
 	cond *sync.Cond
@@ -240,6 +240,7 @@ func (vm *BaseVM) copy() *BaseVM {
 	vm2.Type = vm.Type
 	vm2.ActiveCC = vm.ActiveCC
 	vm2.instancePath = vm.instancePath
+	vm2.Pid = vm.Pid
 
 	return vm2
 }
@@ -355,7 +356,7 @@ func (vm *BaseVM) GetCoschedule() int {
 }
 
 func (vm *BaseVM) GetPID() int {
-	return vm.pid
+	return vm.Pid
 }
 
 // Kill a VM. Blocks until the VM process has terminated.
@@ -668,7 +669,7 @@ func (vm *BaseVM) Info(field string) (string, error) {
 	case "id":
 		return strconv.Itoa(vm.ID), nil
 	case "pid":
-		return strconv.Itoa(vm.pid), nil
+		return strconv.Itoa(vm.Pid), nil
 	case "name":
 		return vm.Name, nil
 	case "state":
