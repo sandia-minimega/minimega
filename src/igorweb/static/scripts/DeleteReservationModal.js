@@ -1,3 +1,19 @@
+/*
+ * DeleteReservationModal.js
+ *
+ * The DeleteReservationModal component allows a user to delete a
+ * reservation.
+ *
+ * Initially, the modal is hidden. To show the modal, the properties
+ * of the DeleteReservationModal component should be set, then the
+ * "show()" method can be called. The modal will hide itself
+ * automatically when the user submits a command or closes it
+ * manually. If necessary, the "hide()" method also closes it.
+ *
+ * A DeleteReservationModal emits a "deleted" event when a reservation
+ * is deleted. There is no associated payload.
+ *
+ */
 (function() {
   const template = `
     <div>

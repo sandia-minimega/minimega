@@ -1,14 +1,39 @@
+/*
+ * store.js
+ *
+ * This script sets up the storage for the whole application.
+ *
+ * Vuex is a library that provides a way to define a global, mutable
+ * storage that allows our application to stay reactive. That is, Vuex
+ * provides a sane, well-defined way for us to keep track of our
+ * application state while ensuring that all of our components stay
+ * reactive to changes in application state.
+ *
+ * TL;DR it lets us use global variables without losing our minds
+ *
+ */
 Vue.use(Vuex);
 
 window.store = new Vuex.Store({
   strict: true,
 
   state: {
+    // The currently selected reservation in the ReservationTable
     selectedReservation: null,
+
+    // The currently selected nodes in the NodeGrid
     selectedNodes: [],
+
+    // An array of reservation data we received from the last "igor show"
     reservations: [],
+
+    // The currently displayed alert message
     alert: '',
+
+    // An array of the default kernel/init images
     defaultImages: [],
+
+    // An array of images recently used by the user
     recentImages: [],
   },
 

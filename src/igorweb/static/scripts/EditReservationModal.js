@@ -1,3 +1,16 @@
+/*
+ * EditReservationModal.js
+ *
+ * The EditReservationModal component allows a user to edit certain
+ * aspects of a reservation.
+ *
+ * Initially, the modal is hidden. To show the modal, the properties
+ * of the EditReservationModal component should be set, then the
+ * "show()" method can be called. The modal will hide itself
+ * automatically when the user submits a command or closes it
+ * manually. If necessary, the "hide()" method also closes it.
+ *
+ */
 (function() {
   const template = `
     <div id="outer">

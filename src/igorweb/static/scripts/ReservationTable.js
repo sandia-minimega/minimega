@@ -1,3 +1,17 @@
+/*
+ * ReservationTable.js
+ *
+ * The ReservationTable component lists reservations in a table. Each
+ * row in the table is a ReservationTableRow.
+ *
+ * Whenever a ReservationTableRow emits a "res-action" event, the
+ * event and its payload are re-emitted.
+ *
+ * A ReservationTable has clickable column headers that allow the user
+ * to sort reservations by Name, Owner, Group, etc.
+ *
+ */
+
 (function() {
   const template = `
     <table class="table table-hover table-borderless">

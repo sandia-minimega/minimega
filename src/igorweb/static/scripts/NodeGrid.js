@@ -1,3 +1,11 @@
+/*
+ * NodeGrid.js
+ *
+ * The NodeGrid component component displays reservation information
+ * as a grid. Nodes are color coded to indicate their power (on/off)
+ * status and reservation availability.
+ *
+ */
 (function() {
   const template = `
     <div class="col">

@@ -1,3 +1,10 @@
+/*
+ * Alert.js
+ *
+ * Alert.js shows a dismissable banner that's useful for displaying
+ * success/warning/error messages to users.
+ *
+ */
 (function() {
   const template = `
     <div class="alert alert-warning" v-if="message != ignored">

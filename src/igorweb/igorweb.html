@@ -1,13 +1,4 @@
 <!doctype html>
-<!--
-    - igorweb.html
-    - This file holds the visual aspects of IgorWeb, sent from the server on a request to /.
-    - All static files in IgorWeb are referenced from this file.
-    - End of the file has javascript template variables that are filled by web.go
-    -      for initial reservation information. The rest comes from requests made
-    -      by igorweb.js.
--->
-
 <html lang="en-US">
 <head>
   <meta content="width=device-width, initial-scale=1" name="viewport">
@@ -15,7 +6,6 @@
 
   <title>igorweb</title>
 
-  <!-- Style files -->
   <link href="static/style/bootstrap.min.css" rel="stylesheet">
   <link
     href="static/style/open-iconic/font/css/open-iconic-bootstrap.min.css"
@@ -27,7 +17,6 @@
   <div id="app" v-on:click="clearSelection()">
     <!-- Navigation bar -->
     <nav class="navbar fixed-top navbar-dark">
-      <!-- IgorWeb logo -->
       <span
         class="navbar-brand"
         style="margin-left: 10%; color: white; font-size: 2.25em; font-family: Logo, sans-serif;"
@@ -36,12 +25,6 @@
         <i>Web</i>
       </span>
 
-      <!-- Text that shows how many nodes are selected -->
-      <span
-        style="color: white; font-size: 1.25em; font-weight: bold; display: none;"
-      ></span>
-
-      <!-- New reservation button, floating blue plus -->
       <div
         class="clickable"
         data-placement="bottom"
@@ -94,7 +77,7 @@
 
   <!-- Scripts -->
   <script>
-  <!-- Set some globals provided by the Go template -->
+  <!-- Use Go Template to set some initial application state -->
   const STARTNODE = {{ .RangeStart }};
   const ENDNODE = {{ .RangeEnd }};
   const RACKWIDTH = {{ .RackWidth }};

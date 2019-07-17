@@ -103,6 +103,7 @@ func (r Res) IsEditableBy(u *user.User) bool {
 		return false
 	}
 
+	// If you own it, you can edit it
 	if u.Username == r.Owner {
 		return true
 	}

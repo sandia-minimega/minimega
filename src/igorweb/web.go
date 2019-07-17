@@ -57,7 +57,7 @@ var webP string // port
 var webF string // location of static folder
 var webS bool   // silent
 var webE string // path to igor executable
-var webD string // path to igor executable
+var webD string // path to default kernel/init pairs
 
 func init() {
 	flag.StringVar(&webP, "p", "8080", "port")
@@ -67,17 +67,20 @@ func init() {
 	flag.StringVar(&webD, "d", "", "path to default kernel/init pairs")
 }
 
-// object containing the response from web.go to client
+// Response contains a response sent from the server to the client
 type Response struct {
 	Success bool
+
 	// string displayed in response box
 	Message string
+
 	// additional information:
 	//              if speculate command - array of Speculate objects
 	//              else - updated reservations array
 	Extra interface{}
 }
 
+// kiPair represents a kernel/init pair found in webD
 type kiPair struct {
 	Name   string
 	Kernel string
@@ -86,12 +89,21 @@ type kiPair struct {
 }
 
 var (
-	igorLock      sync.Mutex
+	// igorLock is locked if igor is being run by igorweb
+	igorLock sync.Mutex
+
+	// showCache stores cached results from the last time igorweb
+	// ran "igor show"
+	showCache *Show
+
+	// showCacheLock is locked if showCache is being read or
+	// written
 	showCacheLock sync.RWMutex
-	showCache     *Show
 )
 
-// show "runs" igor show for the given user
+// show fetches "igor show" data relevant to the given user. It
+// updates the "igor show" cache if the cache is more than 10 seconds
+// old.
 func show(username string) *UserShow {
 	if showCache == nil || time.Now().Sub(showCache.LastUpdated) > 10*time.Second {
 		updateShow()
@@ -103,7 +115,7 @@ func show(username string) *UserShow {
 	return &UserShow{showCache, username}
 }
 
-// updateShow runs "igor show" and updates the cache
+// updateShow runs "igor show" in a subprocess and updates the cache
 func updateShow() {
 	log.Debug("Running update Show")
 	showCacheLock.Lock()
@@ -132,8 +144,9 @@ func updateShow() {
 	showCache = data
 }
 
-// Returns a non-nil error if something's wrong with the igor command
-// and argument list. We expect that the first item in "args" is "igor"
+// validCommand returns a non-nil error if something's wrong with the
+// igor command and argument list. We expect that the first item in
+// "args" is "igor"
 func validCommand(args []string) error {
 	// Check that the command starts with 'igor'
 	if args[0] != "igor" {
@@ -149,8 +162,8 @@ func validCommand(args []string) error {
 	return nil
 }
 
-// Grabs the user's username from the Authorization header. This
-// header must exist in incoming requests.
+// userFromAuthHeader grabs the user's username from the Authorization
+// header. This header must exist in incoming requests.
 func userFromAuthHeader(r *http.Request) (string, error) {
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
@@ -167,10 +180,12 @@ func userFromAuthHeader(r *http.Request) (string, error) {
 	return strings.Split(string(authInfo), ":")[0], nil
 }
 
-// handler for commands from client (sent through /run/[command])
-//              "show" is run on heartbeat, no igor command needs to be run
+// cmdHandler handles commands from clients (sent through
+// /run/[command]) "show" is run on heartbepat, no igor command needs
+// to be run
 func cmdHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain")
+
 	// separate command from path
 	command := r.URL.Query()["run"][0]
 	splitcmd := strings.Split(command, " ")
@@ -185,8 +200,10 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get the username from the auth header
 	username, err := userFromAuthHeader(r)
 	if err != nil {
+		// Kick them out if we can't find the username
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -254,14 +271,17 @@ func cmdHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(jsonrsp))
 }
 
-// general handler for requests, only accepts requests to /
+// handler handles all other requests. Kicks back 404 if Path is
+// anything but /
 func handler(w http.ResponseWriter, r *http.Request) {
 	if !webS {
 		log.Debug(fmt.Sprintf("%s %s %s", r.Method, r.URL, r.RemoteAddr))
 	}
 
+	// Determine the user's username
 	username, err := userFromAuthHeader(r)
 	if err != nil {
+		// Kick them out if we can't find it
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -287,7 +307,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// Grabs a list of kernel inits to serve to reservation drop down
+// getDefaultImages grabs a list of kernel inits to serve to reservation drop down.
 func getDefaultImages() map[string]*kiPair {
 	log.Debugln("Getting Images")
 	imagelist := make(map[string]*kiPair)
@@ -345,7 +365,6 @@ func getDefaultImages() map[string]*kiPair {
 	return imagelist
 }
 
-// main web function
 func main() {
 	flag.Usage = usage
 	flag.Parse()
@@ -357,6 +376,7 @@ func main() {
 		usage()
 	}
 
+	// Kill the server if SUDO_USER is set. It interferes with subprocess calls to "igor"
 	for _, envvar := range os.Environ() {
 		if strings.HasPrefix(envvar, "SUDO_USER=") {
 			log.Fatalln("SUDO_USER is set. This will likely cause problems with names on reservations.")
@@ -365,10 +385,13 @@ func main() {
 
 	// handle requests for files in /static/
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(filepath.Join(webF, "static")))))
+
 	// general requests
 	http.HandleFunc("/", handler)
+
 	// commands
 	http.HandleFunc("/run/", cmdHandler)
+
 	// spin up server on specified port
 	log.Fatal(http.ListenAndServe("127.0.0.1:"+webP, nil).Error())
 }

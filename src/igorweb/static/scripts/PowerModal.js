@@ -1,3 +1,16 @@
+/*
+ * PowerModal.js
+ *
+ * The PowerModal component allows a user to change the power status
+ * of a host.
+ *
+ * Initially, the modal is hidden. To show the modal, the properties
+ * of the PowerModal component should be set, then the "show()" method
+ * can be called. The modal will hide itself automatically when the
+ * user submits a command or closes it manually. If necessary, the
+ * "hide()" method also closes it.
+ *
+ */
 (function() {
   const template = `
     <div>

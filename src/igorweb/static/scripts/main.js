@@ -1,3 +1,16 @@
+/*
+ * main.js
+ *
+ * This is the "entry point" into the igorweb JS application. It turns
+ * the "app" div in igorweb.html into a reactive application.
+ *
+ * Custom components are wired up here to create a usable app.
+ *
+ * Unlike the other component files, the template used by this Vue
+ * instance lives in "igorweb.html".
+ *
+ */
+
 const app = new Vue({
   // Main element
   el: '#app',
@@ -35,7 +48,6 @@ const app = new Vue({
       imgs = [];
     }
     this.$store.commit('setRecentImages', imgs);
-
 
     // Load initial reservation data
     this.$store.commit('updateReservations', INITIALRESERVATIONS);

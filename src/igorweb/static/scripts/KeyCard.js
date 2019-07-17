@@ -1,3 +1,12 @@
+/*
+ * KeyCard.js
+ *
+ * The KeyCard component displays a legend that indicates which color
+ * nodes are in which state (on/off/available/reserved).
+ *
+ * Clicking on the boxes in the legend will select the corresponding
+ * nodes in the rest of the application.
+ */
 (function() {
   const template = `
     <div class="card" style="margin-bottom:10px;">
