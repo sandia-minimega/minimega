@@ -642,7 +642,7 @@ func (vm *KvmVM) launch() error {
 	if vm.State == VM_BUILDING {
 		// create a directory for the VM at the instance path
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
-			return fmt.Errorf("unable to create VM dir: %v", err)
+			return vm.setErrorf("unable to create VM dir: %v", err)
 		}
 
 		// Create a snapshot of each disk image
@@ -650,23 +650,15 @@ func (vm *KvmVM) launch() error {
 			for i, d := range vm.Disks {
 				dst := vm.path(fmt.Sprintf("disk-%v.qcow2", i))
 				if err := diskSnapshot(d.Path, dst); err != nil {
-					return fmt.Errorf("unable to snapshot %v: %v", d, err)
+					return vm.setErrorf("unable to snapshot %v: %v", d, err)
 				}
 
 				vm.Disks[i].SnapshotPath = dst
 			}
 		}
 
-		// create the namespaces/<namespace> directory
-		namespaceAliasDir := filepath.Join(*f_base, "namespaces", vm.Namespace)
-		if err := os.MkdirAll(namespaceAliasDir, os.FileMode(0700)); err != nil {
-			return fmt.Errorf("unable to create namespace dir: %v", err)
-		}
-
-		// create a symlink under namespaces/<namespace> to the instance path
-		vmAlias := filepath.Join(namespaceAliasDir, vm.UUID)
-		if err := os.Symlink(vm.instancePath, vmAlias); err != nil {
-			return fmt.Errorf("unable to create VM dir symlink: %v", err)
+		if err := vm.createInstancePathAlias(); err != nil {
+			return vm.setErrorf("createInstancePathAlias: %v", err)
 		}
 	}
 
