@@ -49,6 +49,14 @@ const app = new Vue({
     }
     this.$store.commit('setRecentImages', imgs);
 
+    // Load default image list
+    const path = IMAGEPATH.endsWith('/') ? IMAGEPATH : `${IMAGEPATH}/`;
+    IMAGES.forEach(d => {
+      d.kernel = `${path}${d.name}.kernel`;
+      d.initrd = `${path}${d.name}.initrd`;
+    });
+    this.$store.commit('setDefaultImages', IMAGES);
+
     // Load initial reservation data
     this.$store.commit('updateReservations', INITIALRESERVATIONS);
 

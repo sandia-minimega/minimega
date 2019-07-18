@@ -139,6 +139,9 @@ window.store = new Vuex.Store({
     setRecentImages(state, imgs) {
       state.recentImages = imgs;
     },
+    setDefaultImages(state, imgs) {
+      state.defaultImages = imgs;
+    },
   },
 
   // Methods to perform actions that eventaually result in a state
@@ -174,7 +177,7 @@ window.store = new Vuex.Store({
       commit('setSelectedNodes', []);
       commit('setSelectedReservation', null);
     },
-    saveRecentImage({commit, getters}, kernelInitPair) {
+    saveRecentImage({commit, getters, state}, kernelInitPair) {
       const kernelPath = kernelInitPair.kernelPath;
       const initrdPath = kernelInitPair.initrdPath;
       const tmp = kernelPath.split('/');
@@ -186,7 +189,7 @@ window.store = new Vuex.Store({
 
       if (!getters.allImages.some((x) => x.name == image.name)) {
         commit('addRecentImage', image);
-        localStorage.setItem('usrImages', JSON.stringify(getters.allImages));
+        localStorage.setItem('usrImages', JSON.stringify(state.recentImages));
       }
     },
   },
