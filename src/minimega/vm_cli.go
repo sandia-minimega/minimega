@@ -854,9 +854,9 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 		log.Info("vm networks: %v", vm.GetNetworks())
 
 		if c.BoolArgs["add"] {
-			// This will do the work of adding the interface to the vmconfig
-			log.Info("Adding netspec to vm config...")
-			err = ns.processVMNets(c.ListArgs["netspec"])
+			// This will do the work of adding the interface to the vm
+			log.Info("Adding netspec to vm...")
+			nics, err := ns.parseVMNets(c.ListArgs["netspec"])
 			if err != nil {
 				return true, err
 			}
@@ -864,7 +864,7 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 			if !ok {
 				return true, fmt.Errorf("Unable to get Kvm")
 			}
-			err = kvm.AddNIC()
+			err = kvm.AddNIC(nics)
 		} else if c.BoolArgs["disconnect"] {
 			err = vm.NetworkDisconnect(pos)
 		} else {

@@ -803,45 +803,35 @@ func (vm *KvmVM) Disconnect(cc *ron.Server) error {
 	return nil
 }
 
-func (vm *KvmVM) AddNIC() error {
+func (vm *KvmVM) AddNIC(nics []NetConfig) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	// We just added this network, so it should be the last one in the list
-	pos := len(vm.Networks) - 1
-	if pos < 0 {
-		// weird...
-		return fmt.Errorf("Missing network interface to add...")
-	}
-	log.Info("Creating network at pos %v", pos)
-	nic := &vm.Networks[pos]
-	if nic.MAC == "" {
-		nic.MAC = randomMac()
-	}
-	//vm.UpdateNetworks()
-
-	// generate an id by adding 2 to the highest in the list for the
-	// nic devices, 0 if it's empty - we add two because we need to
-	// generate 2 devices for every nic, a net device (tap) for the
+	pos := len(vm.Networks)
+	// we need to generate 2 devices for every nic, a net device (tap) for the
 	// nic and the nic itself
-	id := 0
-	for k := range vm.Networks {
-		id = k + 2
-	}
-	ndid := fmt.Sprintf("nd%v", id)
-	tapid := fmt.Sprintf("tap%v", id)
-	r, err := vm.q.NetDevAdd(ndid, "tap", tapid)
-	if err != nil {
-		return err
-	}
-	log.Debugln("Add Nic: NetDevAdd QMP response:", r)
+	for i, nic := range nics {
+		log.Info("Creating network at pos %v", pos)
+		if nic.MAC == "" {
+			nic.MAC = randomMac()
+		}
+		vm.Networks = append(vm.Networks, nic)
+		pos = pos + i
+		ndid := fmt.Sprintf("nd%v", pos)
+		tapid := fmt.Sprintf("tap%v", pos)
+		r, err := vm.q.NetDevAdd(ndid, "tap", tapid)
+		if err != nil {
+			return err
+		}
+		log.Debugln("Add Nic: NetDevAdd QMP response:", r)
 
-	nicid := fmt.Sprintf("nic%v", id+1)
-	r, err = vm.q.NicAdd(nicid, ndid, "pci.0", nic.Driver, nic.MAC)
-	if err != nil {
-		return err
+		nicid := fmt.Sprintf("nic%v", pos)
+		r, err = vm.q.NicAdd(nicid, ndid, "pci.0", nic.Driver, nic.MAC)
+		if err != nil {
+			return err
+		}
+		log.Debugln("Add Nic: NicAdd QMP response:", r)
 	}
-	log.Debugln("Add Nic: NicAdd QMP response:", r)
 
 	return nil
 }
