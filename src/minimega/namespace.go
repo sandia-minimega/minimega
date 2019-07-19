@@ -616,34 +616,49 @@ func (n *Namespace) processVMDisks(vals []string) error {
 
 // processVMNets parses a list of netspecs using processVMNet and updates the
 // active vmConfig.
-func (n *Namespace) processVMNets(vals []string) error {
+func (n *Namespace) parseVMNets(vals []string) ([]*NetConfig, error) {
 	// get valid NIC drivers for current qemu/machine
 	nics, err := qemu.NICs(n.vmConfig.QemuPath, n.vmConfig.Machine)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	n.vmConfig.Networks = nil
+	res := []*NetConfig{}
 
 	for _, spec := range vals {
 		nic, err := ParseNetConfig(spec, nics)
 		if err != nil {
 			n.vmConfig.Networks = nil
-			return err
+			return nil, err
 		}
 
 		vlan, err := lookupVLAN(n.Name, nic.Alias)
 		if err != nil {
 			n.vmConfig.Networks = nil
-			return err
+			return nil, err
 		}
 
 		nic.VLAN = vlan
 		nic.Raw = spec
-
-		n.vmConfig.Networks = append(n.vmConfig.Networks, *nic)
+		res = append(res, nic)
 	}
 
+	return res, nil
+}
+
+// processVMNets parses a list of netspecs using parseVMNet and updates the
+// active vmConfig.
+func (n *Namespace) processVMNets(vals []string) error {
+	n.vmConfig.Networks = nil
+
+	nics, err := n.parseVMNets(vals)
+	if err != nil {
+		return err
+	}
+
+	for _, nic := range nics {
+		n.vmConfig.Networks = append(n.vmConfig.Networks, *nic)
+	}
 	return nil
 }
 
