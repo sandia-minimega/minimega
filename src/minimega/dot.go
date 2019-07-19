@@ -63,7 +63,7 @@ func cliDot(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 		ip6, err2 := vm.Info("ip6")
 		if err != nil || err2 != nil {
 			// Should never happen
-			log.Error("bad VM info for %v:%v", vm.GetHost(), vm.GetID(), err)
+			log.Error("bad VM info for %v:%v: %v", vm.GetHost(), vm.GetID(), err)
 			continue
 		}
 

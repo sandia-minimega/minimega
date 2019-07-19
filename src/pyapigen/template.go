@@ -49,9 +49,6 @@ __date__ = '{{ .Date }}'
 class Error(Exception): pass
 
 
-DEFAULT_TIMEOUT = 60
-
-
 # HAX: python 2/3 hack
 try:
 	basestring
@@ -62,13 +59,13 @@ except NameError:
 		return isinstance(obj, str)
 
 
-def connect(path='/tmp/minimega/minimega', raise_errors=True, debug=False, namespace=None, timeout=DEFAULT_TIMEOUT):
+def connect(path='/tmp/minimega/minimega', raise_errors=True, debug=False, namespace=None):
 	'''
 	Connect to the minimega instance with UNIX socket at <path> and return a
 	new minimega API object. See help(minimega.minimega) for an explaination of
 	the other parameters.
 	'''
-	mm = minimega(path, raise_errors, debug, namespace, timeout)
+	mm = minimega(path, raise_errors, debug, namespace)
 	for resp in mm.version():
 		if __version__ not in resp['Response']:
 			print('WARNING: API was built using a different version of minimega')
@@ -82,6 +79,16 @@ def print_rows(resps):
 	for resp in resps:
 		for row in resp['Tabular'] or []:
 			print(row)
+
+def as_dict(resp):
+	'''
+	as_dict converts a minimega Header/Tabular response into a list of dictionaries.
+	'''
+	res = []
+	for row in resp['Tabular']:
+		res.append({header: row[i] for (i, header) in enumerate(resp['Header'])})
+
+	return res
 
 
 def discard(mm):
@@ -105,15 +112,14 @@ class minimega(object):
 	be returned unless an Exception is thrown.
 	'''
 
-	def __init__(self, path, raise_errors, debug, namespace, timeout):
+	def __init__(self, path, raise_errors, debug, namespace):
 		'''
 		Connects to the minimega instance with UNIX socket at <path>. If
 		<raise_errors> is set, the Python APIs will raise an Exception whenever
 		minimega returns a response with an error. If <debug> is set, debugging
 		information will be printed. The <namespace> parameter allows you to
 		"bind" the minimega object to a particular namespace (see
-		help(minimega.minimega.namespace) for more info on namespaces). The
-		<timeout> parameter allow you to set a command timeout.
+		help(minimega.minimega.namespace) for more info on namespaces).
 		'''
 
 		self.moreResponses = False
@@ -123,34 +129,21 @@ class minimega(object):
 		self._raise_errors = raise_errors
 		self._debug = debug
 		self._namespace = namespace
-		self._timeout = timeout
 		self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-		self._socket.settimeout(timeout if timeout != None else DEFAULT_TIMEOUT)
 		self._socket.connect(path)
+		self._socketfile = self._socket.makefile('rb')
 
 
 	def _get_response(self):
 		'''
 		_get_response reads a single response from minimega
 		'''
-
-		msg = ''
-		more = self._socket.recv(1).decode('utf-8')
-		response = None
-		while response is None and more:
-			msg += more
-			# want to read a full JSON object, and not run json.loads for
-			# every byte read
-			if more != '}':
-				more = self._socket.recv(1).decode('utf-8')
-				continue
-
-			try:
-				response = json.loads(msg)
-			except ValueError as e:
-				if self._debug:
-					print(e)
-			more = self._socket.recv(1).decode('utf-8')
+		line = self._socketfile.readline().decode('utf-8')
+		try:
+			response = json.loads(line)
+		except ValueError as e:
+			if self._debug:
+				print(e)
 
 		if not response:
 			raise Error('Expected response, socket closed')

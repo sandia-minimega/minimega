@@ -29,8 +29,8 @@ preferably the head node. It has many flags, seen here:
 			create password file for auth
 	  -cert string
 			cert file for TLS in PEM format
-	  -console
-			enable console
+	  -console string
+			path to minimega to enable console (e.g. bin/minimega)
 	  -key string
 			key file for TLS in PEM format
 	  -level value
@@ -184,7 +184,7 @@ Each KVM VM can returns its current screenshot to `miniweb` via the
 
 * Console
 
-`miniweb` includes a minimega console via `/console`. It is disabled by default but
-can be enabled with the `-console` flag:
+`miniweb` includes a minimega console via `/console`. It is disabled by default
+but can be enabled with the `-console` flag:
 
-	$ miniweb -console
+	$ miniweb -console bin/minimega

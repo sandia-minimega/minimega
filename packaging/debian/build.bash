@@ -15,9 +15,9 @@ mkdir -p $DST
 cp -r $MM/bin $DST/
 cp -r $MM/doc $DST/
 mkdir -p $DST/misc
-cp -r $MM/misc/daemon $DST/
-cp -r $MM/misc/vmbetter_configs $DST/
-cp -r $MM/misc/web $DST/
+cp -r $MM/misc/daemon $DST/misc/
+cp -r $MM/misc/vmbetter_configs $DST/misc/
+cp -r $MM/misc/web $DST/misc/
 
 mkdir -p $DST/lib
 cp minimega.py $DST/lib/

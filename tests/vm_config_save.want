@@ -13,7 +13,7 @@ Tags:             {}
 
 KVM configuration:
 Migrate Path:        
-Disk Paths:          []
+Disks:               []
 CDROM Path:          
 Kernel Path:         
 Initrd Path:         
@@ -21,7 +21,7 @@ Kernel Append:       []
 QEMU Path:           kvm
 QEMU Append:         []
 Serial Ports:        0
-Virtio-Serial Ports: 0
+Virtio-Serial Ports: 
 Machine:             
 CPU:                 host
 Cores:               0
@@ -58,7 +58,7 @@ Tags:             {}
 
 KVM configuration:
 Migrate Path:        
-Disk Paths:          []
+Disks:               []
 CDROM Path:          
 Kernel Path:         
 Initrd Path:         
@@ -66,7 +66,7 @@ Kernel Append:       []
 QEMU Path:           kvm
 QEMU Append:         [-k en-us]
 Serial Ports:        0
-Virtio-Serial Ports: 0
+Virtio-Serial Ports: 
 Machine:             
 CPU:                 host
 Cores:               0
@@ -100,7 +100,7 @@ Tags:             {}
 
 KVM configuration:
 Migrate Path:        
-Disk Paths:          []
+Disks:               []
 CDROM Path:          
 Kernel Path:         
 Initrd Path:         
@@ -108,7 +108,7 @@ Kernel Append:       []
 QEMU Path:           kvm
 QEMU Append:         []
 Serial Ports:        0
-Virtio-Serial Ports: 0
+Virtio-Serial Ports: 
 Machine:             
 CPU:                 host
 Cores:               0
@@ -139,7 +139,7 @@ Tags:             {}
 
 KVM configuration:
 Migrate Path:        
-Disk Paths:          []
+Disks:               []
 CDROM Path:          
 Kernel Path:         
 Initrd Path:         
@@ -147,7 +147,7 @@ Kernel Append:       []
 QEMU Path:           kvm
 QEMU Append:         [-k en-us]
 Serial Ports:        0
-Virtio-Serial Ports: 0
+Virtio-Serial Ports: 
 Machine:             
 CPU:                 host
 Cores:               0

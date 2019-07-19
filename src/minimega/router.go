@@ -39,7 +39,7 @@ type Router struct {
 
 type ospf struct {
 	area       string
-	interfaces map[string]bool
+	interfaces map[string]map[string]string
 	prefixes   map[string]bool
 }
 
@@ -314,8 +314,13 @@ func (r *Router) writeConfig(w io.Writer) error {
 		}
 	}
 	for _, o := range r.ospfRoutes {
-		for iface := range o.interfaces {
+		for iface, options := range o.interfaces {
+			// ensure interface is created, even if there are no options
 			fmt.Fprintf(w, "bird ospf %v %v\n", o.area, iface)
+			// set all the options
+			for k, v := range options {
+				fmt.Fprintf(w, "bird ospf %v %v %q %q\n", o.area, iface, k, v)
+			}
 		}
 		for filter := range o.prefixes {
 			fmt.Fprintf(w, "bird ospf %v filter %v\n", o.area, filter)
@@ -758,7 +763,7 @@ func (r *Router) ospfFindOrCreate(area string) *ospf {
 	}
 	o := &ospf{
 		area:       area,
-		interfaces: make(map[string]bool),
+		interfaces: make(map[string]map[string]string),
 		prefixes:   make(map[string]bool),
 	}
 	r.ospfRoutes[area] = o
@@ -801,7 +806,7 @@ func (o *ospf) String() string {
 func (r *Router) RouteOSPFAdd(area, iface, filter string) {
 	o := r.ospfFindOrCreate(area)
 	if iface != "" {
-		o.interfaces[iface] = true
+		o.interfaces[iface] = make(map[string]string)
 	}
 	if filter != "" {
 		if strings.Contains(filter, "/") {
@@ -810,6 +815,15 @@ func (r *Router) RouteOSPFAdd(area, iface, filter string) {
 			o.prefixes[filter] = true
 		}
 	}
+}
+
+func (r *Router) RouteOSPFOption(area, iface, option, value string) {
+	o := r.ospfFindOrCreate(area)
+	if iface != "" {
+		o.interfaces[iface] = make(map[string]string)
+	}
+
+	o.interfaces[iface][option] = value
 }
 
 // Deletes an OSPF Interface Setting or the entire area
@@ -824,7 +838,7 @@ func (r *Router) RouteOSPFDel(area, iface string) error {
 	}
 
 	if iface == "" {
-		o.interfaces = make(map[string]bool)
+		o.interfaces = make(map[string]map[string]string)
 		return nil
 	}
 	if _, ok := o.interfaces[iface]; ok {

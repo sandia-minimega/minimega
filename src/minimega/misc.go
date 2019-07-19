@@ -13,6 +13,7 @@ import (
 	"image/png"
 	"io"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"minicli"
 	log "minilog"
@@ -422,4 +423,39 @@ func readInt(filename string) (int, error) {
 	log.Debug("got %v from %v", int(run), filename)
 
 	return int(run), nil
+}
+
+func mesh(vals []string, pairwise bool) map[string][]string {
+	res := make(map[string][]string)
+
+	if pairwise {
+		for _, v := range vals {
+			for _, v2 := range vals {
+				if v == v2 {
+					continue
+				}
+
+				res[v] = append(res[v], v2)
+			}
+		}
+
+		return res
+	}
+
+	n := uint(math.Ceil(math.Log2(float64(len(vals)))))
+	log.Info("generating mesh with %v links per endpoint", n)
+
+	for i, v := range vals {
+		for j := uint(0); j < n; j++ {
+			i2 := (i + 1<<j) % len(vals)
+			// make sure we don't connect to self
+			if i == i2 {
+				i2 = (i2 + 1) % len(vals)
+			}
+
+			res[v] = append(res[v], vals[i2])
+		}
+	}
+
+	return res
 }

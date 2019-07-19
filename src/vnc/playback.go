@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"image"
 	log "minilog"
 	"os"
 	"path/filepath"
@@ -24,9 +25,10 @@ type playback struct {
 
 	start time.Time // start for when the playback started
 
-	out    chan Event
-	signal chan signal
-	done   chan bool
+	out         chan Event // events to write to vnc server
+	signal      chan signal
+	done        chan bool        // teardown playback
+	screenshots chan *image.RGBA // screenshots of the VM
 
 	sync.Mutex               // guards below
 	depth      int           // how nested we are in LoadFiles
@@ -40,7 +42,7 @@ type playback struct {
 
 type signal struct {
 	kind Control
-	data string
+	data interface{}
 }
 
 // newPlayback creates a new playback with given id.
@@ -51,12 +53,13 @@ func newPlayback(id, rhost string) (*playback, error) {
 	}
 
 	return &playback{
-		ID:     id,
-		Conn:   conn,
-		out:    make(chan Event),
-		signal: make(chan signal),
-		done:   make(chan bool),
-		state:  Play,
+		ID:          id,
+		Conn:        conn,
+		out:         make(chan Event),
+		signal:      make(chan signal),
+		done:        make(chan bool),
+		screenshots: make(chan *image.RGBA),
+		state:       Play,
 	}, nil
 }
 
@@ -86,7 +89,11 @@ func (p *playback) Info() []string {
 		res = append(res, fmt.Sprintf("%v remaining", p.duration))
 	}
 
-	res = append(res, p.file.Name())
+	if p.file != nil {
+		res = append(res, p.file.Name())
+	} else {
+		res = append(res, "N/A")
+	}
 
 	return res
 }
@@ -119,6 +126,35 @@ func (p *playback) Start(filename string) error {
 
 		// finished with this playback
 		p.Stop()
+	}()
+	go func() {
+		// consume responses from the server
+		for {
+			msg, err := p.Conn.ReadMessage()
+			if err != nil {
+				log.Error("server to playback error: %v", err)
+				break
+			}
+
+			switch msg := msg.(type) {
+			case *FramebufferUpdate:
+				for _, rect := range msg.Rectangles {
+					// ignore non-image
+					if rect.RGBA == nil {
+						continue
+					}
+
+					select {
+					case p.screenshots <- rect.RGBA:
+						// success
+					default:
+						// drop
+					}
+				}
+			case *SetColorMapEntries:
+			case *Bell:
+			}
+		}
 	}()
 
 	return nil
@@ -180,6 +216,15 @@ func (p *playback) Stop() error {
 }
 
 func (p *playback) Inject(cmd string) error {
+	e, err := parseEvent(cmd)
+	if err != nil {
+		return err
+	}
+
+	return p.InjectEvent(e)
+}
+
+func (p *playback) InjectEvent(e interface{}) error {
 	p.Lock()
 	defer p.Unlock()
 
@@ -187,15 +232,18 @@ func (p *playback) Inject(cmd string) error {
 		return errors.New("playback has already stopped")
 	}
 
-	e, err := parseEvent(cmd)
-	if err != nil {
-		return err
-	}
-
 	if event, ok := e.(Event); ok {
 		p.out <- event
-	} else {
-		p.signal <- signal{kind: LoadFile, data: e.(string)}
+		return nil
+	}
+
+	switch e := e.(type) {
+	case *LoadFileEvent:
+		p.signal <- signal{kind: LoadFile, data: e}
+	case *WaitForItEvent:
+		p.signal <- signal{kind: WaitForIt, data: e}
+	default:
+		return fmt.Errorf("unknown event: %v", e)
 	}
 
 	return nil
@@ -262,7 +310,7 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 		// Set the current event context
 		v.setStep(scanner.Text())
 
-		duration, err := time.ParseDuration(s[0] + "ns")
+		duration, err := parseDuration(s[0])
 		if err != nil {
 			log.Errorln(err)
 			continue
@@ -304,15 +352,26 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 					default:
 						log.Error("unexpected signal: %v", sig)
 					}
-				case LoadFile:
-					if err := v.playFile(f, sig.data); err != nil {
-						return err
-					}
 				case Step:
 					// decrease by the remaining
 					v.addDuration(-duration)
 
 					goto Event
+				case LoadFile:
+					e := sig.data.(LoadFileEvent)
+
+					if err := v.playFile(f, e.File); err != nil {
+						return err
+					}
+				case WaitForIt:
+					e := sig.data.(*WaitForItEvent)
+
+					// TODO: what to do for duration?
+					if e2, err := v.waitForIt(e); err != nil {
+						return err
+					} else if e.Click {
+						v.out <- e2
+					}
 				default:
 					log.Error("unexpected signal: %v", sig)
 				}
@@ -321,17 +380,68 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 
 		// waited so process the event
 	Event:
-		switch event := res.(type) {
+		switch e := res.(type) {
 		case Event:
-			v.out <- event
-		case string:
-			if err := v.playFile(f, event); err != nil {
+			v.out <- e
+		case *LoadFileEvent:
+			if err := v.playFile(f, e.File); err != nil {
 				return err
+			}
+		case *WaitForItEvent:
+			// TODO: what to do for duration?
+			if e2, err := v.waitForIt(e); err != nil {
+				return err
+			} else if e.Click {
+				v.out <- e2
 			}
 		}
 	}
 
 	return nil
+}
+
+// waitForIt waits until the template image is displayed. If it is detected
+// within the timeout, returns a PointerEvent to click on the center of the
+// template image.
+func (p *playback) waitForIt(e *WaitForItEvent) (*PointerEvent, error) {
+	log.Info("playback %v, wait for %v, timeout = %v", p.ID, e.Source, e.Timeout)
+
+	// timeout tracks how long we have left to wait
+	timeout := e.Timeout
+
+	fb := &FramebufferUpdateRequest{
+		Width:  p.Conn.s.Width,
+		Height: p.Conn.s.Height,
+	}
+
+	for timeout > 0 {
+		// request an updated screenshot
+		if err := fb.Write(p.Conn); err != nil {
+			return nil, err
+		}
+
+		start := time.Now()
+
+		select {
+		case screenshot := <-p.screenshots:
+			waited := time.Now().Sub(start)
+			timeout -= waited
+
+			log.Info("playback %v got screenshot after %v", p.ID, waited)
+
+			if e := matchTemplate(screenshot, e.Template); e != nil {
+				return e, nil
+			}
+		case <-time.After(timeout):
+			return nil, fmt.Errorf("timeout waiting for %v", e.Source)
+		}
+
+		// sleep and try again
+		time.Sleep(time.Second)
+		timeout -= time.Second
+	}
+
+	return nil, fmt.Errorf("timeout waiting for %v", e.Source)
 }
 
 func (p *playback) setFile(f *os.File) (old *os.File, err error) {

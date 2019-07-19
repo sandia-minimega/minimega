@@ -351,6 +351,7 @@ func vmHandler(w http.ResponseWriter, r *http.Request) {
 // vmsHandler handles the following URLs:
 //   /vms/info.json
 //   /vms/top.json
+//   /vms/new
 func vmsHandler(w http.ResponseWriter, r *http.Request) {
 	log.Info("vms request: %v", r.URL)
 
@@ -359,8 +360,6 @@ func vmsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid path", http.StatusBadRequest)
 		return
 	}
-
-	var vms []map[string]string
 
 	cmd := NewCommand(r)
 
@@ -374,12 +373,51 @@ func vmsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	case "top.json":
 		cmd.Command = "vm top"
+	case "new":
+		switch r.Method {
+		case http.MethodGet:
+			// list the available VMs
+			cmd.Command = "vm config restore"
+
+			var names []string
+			for resps := range run(cmd) {
+				for _, resp := range resps.Resp {
+					names = append(names, strings.Split(resp.Response, "\n")...)
+				}
+			}
+
+			renderTemplate(w, r, "newvm.tmpl", names)
+			return
+		case http.MethodPost:
+			// launch VM with specified name/config
+			name := r.PostFormValue("name")
+			kind := r.PostFormValue("kind")
+			config := r.PostFormValue("config")
+
+			cmd.Command = fmt.Sprintf("vm launch %q %q %q", kind, name, config)
+
+			// check for error
+			for resps := range run(cmd) {
+				for _, resp := range resps.Resp {
+					if resp.Error != "" {
+						http.Error(w, resp.Error, http.StatusBadRequest)
+						return
+					}
+				}
+			}
+
+			http.Redirect(w, r, "/vms", http.StatusFound)
+			return
+		}
+
+		http.Error(w, "not allowed", http.StatusMethodNotAllowed)
+		return
 	default:
 		http.NotFound(w, r)
 		return
 	}
 
-	vms = runTabular(cmd)
+	vms := runTabular(cmd)
 	sortVMs(vms)
 	respondJSON(w, vms)
 }
@@ -418,11 +456,11 @@ func tabularHandler(w http.ResponseWriter, r *http.Request) {
 func consoleHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/console" {
 		// create a new console
-		cmd := exec.Command("bin/minimega", "-attach")
+		cmd := exec.Command(*f_console, "-attach")
 
 		tty, err := pty.Start(cmd)
 		if err != nil {
-			log.Error("start failed:", err)
+			log.Error("start failed: %v", err)
 			return
 		}
 

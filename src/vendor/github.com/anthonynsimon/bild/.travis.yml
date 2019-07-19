@@ -1,0 +1,11 @@
+sudo: false
+
+language: go
+
+go:
+- 1.x
+- master
+
+script:
+- go vet ./...
+- go test -v ./...

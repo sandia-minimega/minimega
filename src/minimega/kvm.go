@@ -28,8 +28,11 @@ import (
 )
 
 const (
-	DefaultKVMCPU    = "host"
-	DefaultKVMDriver = "e1000"
+	DefaultKVMCPU                    = "host"
+	DefaultKVMDriver                 = "e1000"
+	DefaultKVMDiskInterface          = "ide"
+	DefaultKVMDiskCacheSnapshotTrue  = "unsafe"
+	DefaultKVMDiskCacheSnapshotFalse = "writeback"
 
 	DEV_PER_BUS    = 32
 	DEV_PER_VIRTIO = 30 // Max of 30 virtio ports/device (0 and 32 are reserved)
@@ -37,8 +40,6 @@ const (
 	QMP_CONNECT_RETRY = 50
 	QMP_CONNECT_DELAY = 100
 )
-
-const DefaultDriver = "e1000"
 
 type KVMConfig struct {
 	// Set the QEMU binary name to invoke. Relative paths are ok.
@@ -141,7 +142,14 @@ type KVMConfig struct {
 	//
 	// To create three virtio-serial ports:
 	//   vm config virtio-ports 3
-	VirtioPorts uint64
+	//
+	// To explicitly name the virtio-ports, pass a comma-separated list of names:
+	//
+	//   vm config virtio-ports foo,bar
+	//
+	// The ports (on the guest) will then be mapped to /dev/virtio-port/foo and
+	// /dev/virtio-port/bar.
+	VirtioPorts string
 
 	// Specify the graphics card to emulate. "cirrus" or "std" should work with
 	// most operating systems.
@@ -161,10 +169,11 @@ type KVMConfig struct {
 
 	// Attach one or more disks to a vm. Any disk image supported by QEMU is a
 	// valid parameter. Disk images launched in snapshot mode may safely be
-	// used for multiple VMs.
+	// used for multiple VMs since minimega snapshots the disk image when the
+	// VM launches, creating a back qcow2 in the VM's instance directory.
 	//
 	// Note: this configuration only applies to KVM-based VMs.
-	DiskPaths []string
+	Disks DiskConfigs
 
 	// Add additional arguments to be passed to the QEMU instance. For example:
 	//
@@ -215,8 +224,8 @@ func (old KVMConfig) Copy() KVMConfig {
 	res := old
 
 	// Make deep copy of slices
-	res.DiskPaths = make([]string, len(old.DiskPaths))
-	copy(res.DiskPaths, old.DiskPaths)
+	res.Disks = make([]DiskConfig, len(old.Disks))
+	copy(res.Disks, old.Disks)
 	res.QemuAppend = make([]string, len(old.QemuAppend))
 	copy(res.QemuAppend, old.QemuAppend)
 
@@ -343,7 +352,7 @@ func (vm *KvmVM) Stop() error {
 
 	log.Info("stopping VM: %v", vm.ID)
 	if err := vm.q.Stop(); err != nil {
-		return vm.setErrorf("unstoppable: %v")
+		return vm.setErrorf("unstoppable: %v", vm.ID)
 	}
 
 	vm.setState(VM_PAUSED)
@@ -368,7 +377,7 @@ func (vm *KvmVM) Info(field string) (string, error) {
 	case "vnc_port":
 		return strconv.Itoa(vm.VNCPort), nil
 	case "pid":
-		return strconv.Itoa(vm.pid), nil
+		return strconv.Itoa(vm.Pid), nil
 	}
 
 	return vm.KVMConfig.Info(field)
@@ -392,9 +401,9 @@ func (vm *KvmVM) ConflictsKVM(vm2 *KvmVM) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	for _, d := range vm.DiskPaths {
-		for _, d2 := range vm2.DiskPaths {
-			if d == d2 && (!vm.Snapshot || !vm2.Snapshot) {
+	for _, d := range vm.Disks {
+		for _, d2 := range vm2.Disks {
+			if d.Path == d2.Path && (!vm.Snapshot || !vm2.Snapshot) {
 				return fmt.Errorf("disk conflict with vm %v: %v", vm.Name, d)
 			}
 		}
@@ -410,7 +419,7 @@ func (vm *KVMConfig) String() string {
 	w.Init(&o, 5, 0, 1, ' ', 0)
 	fmt.Fprintln(&o, "KVM configuration:")
 	fmt.Fprintf(w, "Migrate Path:\t%v\n", vm.MigratePath)
-	fmt.Fprintf(w, "Disk Paths:\t%v\n", vm.DiskPaths)
+	fmt.Fprintf(w, "Disks:\t%v\n", vm.DiskString(namespace))
 	fmt.Fprintf(w, "CDROM Path:\t%v\n", vm.CdromPath)
 	fmt.Fprintf(w, "Kernel Path:\t%v\n", vm.KernelPath)
 	fmt.Fprintf(w, "Initrd Path:\t%v\n", vm.InitrdPath)
@@ -428,6 +437,10 @@ func (vm *KVMConfig) String() string {
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
+}
+
+func (vm *KVMConfig) DiskString(namespace string) string {
+	return fmt.Sprintf("[%s]", vm.Disks.String())
 }
 
 func (vm *KvmVM) QMPRaw(input string) (string, error) {
@@ -629,19 +642,23 @@ func (vm *KvmVM) launch() error {
 	if vm.State == VM_BUILDING {
 		// create a directory for the VM at the instance path
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
-			return fmt.Errorf("unable to create VM dir: %v", err)
+			return vm.setErrorf("unable to create VM dir: %v", err)
 		}
 
-		// create the namespaces/<namespace> directory
-		namespaceAliasDir := filepath.Join(*f_base, "namespaces", vm.Namespace)
-		if err := os.MkdirAll(namespaceAliasDir, os.FileMode(0700)); err != nil {
-			return fmt.Errorf("unable to create namespace dir: %v", err)
+		// Create a snapshot of each disk image
+		if vm.Snapshot {
+			for i, d := range vm.Disks {
+				dst := vm.path(fmt.Sprintf("disk-%v.qcow2", i))
+				if err := diskSnapshot(d.Path, dst); err != nil {
+					return vm.setErrorf("unable to snapshot %v: %v", d, err)
+				}
+
+				vm.Disks[i].SnapshotPath = dst
+			}
 		}
 
-		// create a symlink under namespaces/<namespace> to the instance path
-		vmAlias := filepath.Join(namespaceAliasDir, vm.UUID)
-		if err := os.Symlink(vm.instancePath, vmAlias); err != nil {
-			return fmt.Errorf("unable to create VM dir symlink: %v", err)
+		if err := vm.createInstancePathAlias(); err != nil {
+			return vm.setErrorf("createInstancePathAlias: %v", err)
 		}
 	}
 
@@ -703,8 +720,8 @@ func (vm *KvmVM) launch() error {
 		return vm.setErrorf("unable to start qemu: %v %v", err, sErr.String())
 	}
 
-	vm.pid = cmd.Process.Pid
-	log.Debug("vm %v has pid %v", vm.ID, vm.pid)
+	vm.Pid = cmd.Process.Pid
+	log.Debug("vm %v has pid %v", vm.ID, vm.Pid)
 
 	// Channel to signal when the process has exited
 	var waitChan = make(chan bool)
@@ -934,12 +951,12 @@ func (vm *KvmVM) HotplugInfo() map[int]vmHotplug {
 	return res
 }
 
-func (vm *KvmVM) ChangeCD(f string) error {
+func (vm *KvmVM) ChangeCD(f string, force bool) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
 	if vm.CdromPath != "" {
-		if err := vm.ejectCD(); err != nil {
+		if err := vm.ejectCD(force); err != nil {
 			return err
 		}
 	}
@@ -952,7 +969,7 @@ func (vm *KvmVM) ChangeCD(f string) error {
 	return err
 }
 
-func (vm *KvmVM) EjectCD() error {
+func (vm *KvmVM) EjectCD(force bool) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
@@ -960,11 +977,11 @@ func (vm *KvmVM) EjectCD() error {
 		return errors.New("no cdrom inserted")
 	}
 
-	return vm.ejectCD()
+	return vm.ejectCD(force)
 }
 
-func (vm *KvmVM) ejectCD() error {
-	err := vm.q.BlockdevEject("ide0-cd0")
+func (vm *KvmVM) ejectCD(force bool) error {
+	err := vm.q.BlockdevEject("ide0-cd0", force)
 	if err == nil {
 		vm.CdromPath = ""
 	}
@@ -973,12 +990,12 @@ func (vm *KvmVM) ejectCD() error {
 }
 
 func (vm *KvmVM) ProcStats() (map[int]*ProcStats, error) {
-	p, err := GetProcStats(vm.pid)
+	p, err := GetProcStats(vm.Pid)
 	if err != nil {
 		return nil, err
 	}
 
-	return map[int]*ProcStats{vm.pid: p}, nil
+	return map[int]*ProcStats{vm.Pid: p}, nil
 }
 
 func (vm *KvmVM) WriteConfig(w io.Writer) error {
@@ -1091,15 +1108,47 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		args = append(args, "media=cdrom")
 	}
 
-	if len(vm.DiskPaths) != 0 {
-		for _, diskPath := range vm.DiskPaths {
-			args = append(args, "-drive")
-			args = append(args, "file="+diskPath+",media=disk")
-		}
-	}
+	// disks
+	var ahciBusSlot int
 
-	if vm.Snapshot {
-		args = append(args, "-snapshot")
+	for _, diskConfig := range vm.Disks {
+		var driveParams string
+
+		path := diskConfig.Path
+		if vm.Snapshot && diskConfig.SnapshotPath != "" {
+			path = diskConfig.SnapshotPath
+		}
+
+		if diskConfig.Interface == "ahci" {
+			if ahciBusSlot == 0 {
+				args = append(args, "-device")
+				args = append(args, "ahci,id=ahci")
+			}
+
+			args = append(args, "-device")
+			args = append(args, fmt.Sprintf("ide-drive,drive=ahci-drive-%v,bus=ahci.%v", ahciBusSlot, ahciBusSlot))
+
+			driveParams = fmt.Sprintf("id=ahci-drive-%v,file=%v,media=disk,if=none", ahciBusSlot, path)
+
+			ahciBusSlot++
+		} else if diskConfig.Interface != "" {
+			driveParams = fmt.Sprintf("file=%v,media=disk,if=%v", path, diskConfig.Interface)
+		} else {
+			driveParams = fmt.Sprintf("file=%v,media=disk,if=%v", path, DefaultKVMDiskInterface)
+		}
+
+		if diskConfig.Cache != "" {
+			driveParams = fmt.Sprintf("%v,cache=%v", driveParams, diskConfig.Cache)
+		} else {
+			if vm.Snapshot {
+				driveParams = fmt.Sprintf("%v,cache=%v", driveParams, DefaultKVMDiskCacheSnapshotTrue)
+			} else {
+				driveParams = fmt.Sprintf("%v,cache=%v", driveParams, DefaultKVMDiskCacheSnapshotFalse)
+			}
+		}
+
+		args = append(args, "-drive")
+		args = append(args, driveParams)
 	}
 
 	if vm.KernelPath != "" {
@@ -1161,16 +1210,36 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserialCC,id=charvserialCC,name=cc", virtioPort))
 	}
 
-	for i := uint64(0); i < vm.VirtioPorts; i++ {
-		// If we've maxed out the device, create a new one
-		if i%DEV_PER_VIRTIO == 0 {
-			addVirtioDevice()
+	if vm.VirtioPorts != "" {
+		names := []string{}
+
+		v, err := strconv.ParseUint(vm.VirtioPorts, 10, 64)
+		if err == nil {
+			// if the VirtioPorts is an int, assume they want automatically generated names
+			for i := uint64(0); i < v; i++ {
+				names = append(names, "virtio-serial"+strconv.FormatUint(i, 10))
+			}
+		} else {
+			// otherwise, assume they specified a list of names
+			names = strings.Split(vm.VirtioPorts, ",")
 		}
 
-		args = append(args, "-chardev")
-		args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%v%v,server,nowait", i, filepath.Join(vmPath, "virtio-serial"), i))
-		args = append(args, "-device")
-		args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserial%v,id=charvserial%v,name=virtio-serial%v", virtioPort, i, i, i))
+		for i, name := range names {
+			if name == "cc" && vm.Backchannel {
+				// TODO: abort?
+				log.Warn("virtio-port name conflicts with miniccc's")
+			}
+
+			// If we've maxed out the device, create a new one
+			if i%DEV_PER_VIRTIO == 0 {
+				addVirtioDevice()
+			}
+
+			args = append(args, "-chardev")
+			args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%v%v,server,nowait", i, filepath.Join(vmPath, "virtio-serial"), i))
+			args = append(args, "-device")
+			args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserial%v,id=charvserial%v,name=%v", virtioPort, i, i, name))
+		}
 	}
 
 	// hook for hugepage support
