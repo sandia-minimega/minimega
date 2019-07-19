@@ -796,10 +796,12 @@ func (vm *KvmVM) AddNIC() error {
 		// weird...
 		return fmt.Errorf("Missing network interface to add...")
 	}
+	log.Info("Creating network at pos %v", pos)
 	nic := &vm.Networks[pos]
 	if nic.MAC == "" {
 		nic.MAC = randomMac()
 	}
+	//vm.UpdateNetworks()
 
 	// generate an id by adding 2 to the highest in the list for the
 	// nic devices, 0 if it's empty - we add two because we need to

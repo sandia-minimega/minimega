@@ -821,20 +821,18 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 	bridge := c.StringArgs["bridge"]
 
-	// This will do the work of adding the interface to the vmconfig
-	if c.BoolArgs["add"] {
-		err := ns.processVMNets(c.ListArgs["netspec"])
-		if err != nil {
-			return err
-		}
-	}
-
 	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
 		var err error
 
 		log.Info("vm networks: %v", vm.GetNetworks())
 
 		if c.BoolArgs["add"] {
+			// This will do the work of adding the interface to the vmconfig
+			log.Info("Adding netspec to vm config...")
+			err = ns.processVMNets(c.ListArgs["netspec"])
+			if err != nil {
+				return true, err
+			}
 			kvm, ok := vm.(*KvmVM)
 			if !ok {
 				return true, fmt.Errorf("Unable to get Kvm")
