@@ -87,6 +87,31 @@
 .node.available.up.active {
     background-color: #a975d6;
 }
+/* Hovering colors */
+.node.reserved.down.unselected:hover {
+    background-color: #fce2ae;
+}
+.node.reserved.down.active:hover {
+    background-color: #d1b888;
+}
+.node.reserved.up.unselected:hover {
+    background-color: #e4eeff;
+}
+.node.reserved.up.active:hover {
+    background-color: #7996c9;
+}
+.node.available.down.unselected:hover {
+    background-color: #ffc1c1;
+}
+.node.available.down.active:hover {
+    background-color: #e87474;
+}
+.node.available.up.unselected:hover {
+    background-color: #efe3f9;
+}
+.node.available.up.active:hover {
+    background-color: #ba9bd6;
+}
 
 th {
     -webkit-transition-duration: 0.2s;
