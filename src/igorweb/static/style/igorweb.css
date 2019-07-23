@@ -100,35 +100,27 @@ th {
     box-shadow: 0px 4px 40px -5px rgba(0#ffdd9b,0,0,0.38);
     background-color: #a975d6;
 }
+
 /* new button in navigation bar */
 #newbutton {
     position: fixed;
     top: 43px;
     z-index: 5000;
     right: 10%;
-    background-color: #659af5;
-    color: white;
-    width: 75px;
-    height: 75px;
-    border-radius: 100%;
-    text-align: center;
-    line-height: 69px;
-    font-weight: bold;
-    font-size: 2rem;
-    -webkit-box-shadow: 5px 5px 14px -1px rgba(0,0,0,0.20);
-    -moz-box-shadow: 5px 5px 14px -1px rgba(0,0,0,0.20);
-    box-shadow: 5px 5px 14px -1px rgba(0,0,0,0.20);
-    -webkit-transition-duration: 0.3s !important;
+}
+#newbutton circle {
+    fill: #659af5;
+    fill-opacity: 1;
+    fill-rule: evenodd;
     transition-duration: 0.3s !important;
 }
-#newbutton:hover {
-    background-color: #88b0f5;
+#newbutton:hover circle {
+    fill: #88b0f5;
 }
-#newbutton:active {
-    -webkit-box-shadow: 5px 5px 14px -4px rgba(0,0,0,0.20);
-    -moz-box-shadow: 5px 5px 14px -4px rgba(0,0,0,0.20);
-    box-shadow: 5px 5px 14px -4px rgba(0,0,0,0.20);
+#newbutton:active circle {
+    fill: #b3ccf7;
 }
+
 /* font of logo in navigation bar */
 @font-face {
     font-family: Logo;
@@ -377,4 +369,3 @@ thead {
     width: 50%;
     height: 20px;
 }
-

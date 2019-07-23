@@ -27,12 +27,29 @@
 
       <div
         class="clickable"
-        data-placement="bottom"
-        data-toggle="tooltip"
         id="newbutton"
         title="Make a new reservation"
         v-on:click="showNewResForm()"
-      >+</div>
+      >
+        <svg
+          viewBox="0 0 75.000008 75.000008"
+          height="75.000008"
+          width="75.000008"
+        >
+          <g>
+            <circle
+              id="newcircle"
+              r="37.5"
+              cy="37.5"
+              cx="37.500004"
+            />
+            <path
+              d="m 39.83399,26.757814 0,8.398438 8.398438,0 0,4.648437 -8.398438,0 0,8.4375 -4.628906,0 0,-8.4375 -8.4375,0 0,-4.648437 8.4375,0 0,-8.398438 4.628906,0 z"
+              style="fill:#ffffff;fill-opacity:1;"
+            />
+          </g>
+        </svg>
+      </div>
     </nav>
 
     <alert :message="alertMessage"></alert>
