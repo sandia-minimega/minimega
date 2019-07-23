@@ -6,6 +6,7 @@
       draggable="true"
       style="opacity: 1; width:100%; padding: 12px; padding-left: 0px; padding-right: 0px; cursor: pointer;"
       tabindex="-1"
+      v-bind:title="title"
       v-on:click.stop="selectNode()"
     >{{ nodeID }}</div>
   `;
@@ -22,6 +23,18 @@
     computed: {
       nodeID() {
         return this.nodeInfo.NodeID;
+      },
+
+      title() {
+        let resInfo = 'Available';
+        if (this.nodeInfo.Reservation) {
+          resInfo = `Name: ${this.nodeInfo.Reservation.Name}\nOwner: ${this.nodeInfo.Reservation.Owner}`;
+        }
+
+        let power = this.isUp ? "Powered On" : "Powered Off";
+        let reserved = this.isReserved ? "" : "Available";
+
+        return `${resInfo}\n${power}`;
       },
 
       isWaiting() {
