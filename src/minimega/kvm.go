@@ -352,7 +352,7 @@ func (vm *KvmVM) Stop() error {
 
 	log.Info("stopping VM: %v", vm.ID)
 	if err := vm.q.Stop(); err != nil {
-		return vm.setErrorf("unstoppable: %v")
+		return vm.setErrorf("unstoppable: %v", vm.ID)
 	}
 
 	vm.setState(VM_PAUSED)
@@ -377,7 +377,7 @@ func (vm *KvmVM) Info(field string) (string, error) {
 	case "vnc_port":
 		return strconv.Itoa(vm.VNCPort), nil
 	case "pid":
-		return strconv.Itoa(vm.pid), nil
+		return strconv.Itoa(vm.Pid), nil
 	}
 
 	return vm.KVMConfig.Info(field)
@@ -642,7 +642,7 @@ func (vm *KvmVM) launch() error {
 	if vm.State == VM_BUILDING {
 		// create a directory for the VM at the instance path
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
-			return fmt.Errorf("unable to create VM dir: %v", err)
+			return vm.setErrorf("unable to create VM dir: %v", err)
 		}
 
 		// Create a snapshot of each disk image
@@ -650,23 +650,15 @@ func (vm *KvmVM) launch() error {
 			for i, d := range vm.Disks {
 				dst := vm.path(fmt.Sprintf("disk-%v.qcow2", i))
 				if err := diskSnapshot(d.Path, dst); err != nil {
-					return fmt.Errorf("unable to snapshot %v: %v", d, err)
+					return vm.setErrorf("unable to snapshot %v: %v", d, err)
 				}
 
 				vm.Disks[i].SnapshotPath = dst
 			}
 		}
 
-		// create the namespaces/<namespace> directory
-		namespaceAliasDir := filepath.Join(*f_base, "namespaces", vm.Namespace)
-		if err := os.MkdirAll(namespaceAliasDir, os.FileMode(0700)); err != nil {
-			return fmt.Errorf("unable to create namespace dir: %v", err)
-		}
-
-		// create a symlink under namespaces/<namespace> to the instance path
-		vmAlias := filepath.Join(namespaceAliasDir, vm.UUID)
-		if err := os.Symlink(vm.instancePath, vmAlias); err != nil {
-			return fmt.Errorf("unable to create VM dir symlink: %v", err)
+		if err := vm.createInstancePathAlias(); err != nil {
+			return vm.setErrorf("createInstancePathAlias: %v", err)
 		}
 	}
 
@@ -728,8 +720,8 @@ func (vm *KvmVM) launch() error {
 		return vm.setErrorf("unable to start qemu: %v %v", err, sErr.String())
 	}
 
-	vm.pid = cmd.Process.Pid
-	log.Debug("vm %v has pid %v", vm.ID, vm.pid)
+	vm.Pid = cmd.Process.Pid
+	log.Debug("vm %v has pid %v", vm.ID, vm.Pid)
 
 	// Channel to signal when the process has exited
 	var waitChan = make(chan bool)
@@ -955,12 +947,12 @@ func (vm *KvmVM) ejectCD(force bool) error {
 }
 
 func (vm *KvmVM) ProcStats() (map[int]*ProcStats, error) {
-	p, err := GetProcStats(vm.pid)
+	p, err := GetProcStats(vm.Pid)
 	if err != nil {
 		return nil, err
 	}
 
-	return map[int]*ProcStats{vm.pid: p}, nil
+	return map[int]*ProcStats{vm.Pid: p}, nil
 }
 
 func (vm *KvmVM) WriteConfig(w io.Writer) error {

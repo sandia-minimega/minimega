@@ -31,7 +31,7 @@ router takes a number of subcommands:
 
 - 'interface': Set IPv4 or IPv6 addresses, or configure an interface to assign
   using DHCP. The interface field is an integer index of the interface defined
-  with 'vm config net'. You could also specify if that interface will be a 
+  with 'vm config net'. You could also specify if that interface will be a
   loopback interface For example, to configure the second interface of the
   router with a static IP and a loopback witha  different IP:
 
@@ -59,15 +59,15 @@ router takes a number of subcommands:
   subnet.
 
 - 'route': Set static, OSPF, or BGP routes. Static routes include a subnet,
-  next-hop, and optionally a name for this router. For example to specify a 
+  next-hop, and optionally a name for this router. For example to specify a
   static route(s):
 
     router foo route static 0.0.0.0/0 10.0.0.1 default-route
-  
-  OSPF routes include an area and a network index corresponding to the 
-  interface described in 'vm config net'. You can also specify what networks 
+
+  OSPF routes include an area and a network index corresponding to the
+  interface described in 'vm config net'. You can also specify what networks
   to advertise using the export command.
-  
+
   For example, to enable OSPF on area 0 for both interfaces of a router:
 
 	vm config net 100 200
@@ -75,9 +75,9 @@ router takes a number of subcommands:
 	router foo route ospf 0 0
 	router foo route ospf 0 1
 
-  For example, to advertise specific networks, advertise a static route or 
+  For example, to advertise specific networks, advertise a static route or
   use a static route as a filter:
-	
+
     router foo route static 11.0.0.0/24 0 bar-route
 	router foo route static 12.0.0.0/24 0 bar-route
 	router foo route ospf 0 export 10.0.0.0/24
@@ -89,18 +89,18 @@ router takes a number of subcommands:
 
   For example, local router is in AS 100 with an ip 10.0.0.1 and bgp peer is in AS 200 with an ip of 20.0.0.1
   and you want to advterise network 10.0.0.0/24:
-	
+
     router foo route static 10.0.0.0/24 0 foo_out
     router foo bgp bar local 10.0.0.1 100
 	router foo bgp bar neighbor 20.0.0.1 200
 	router foo bgp bar export filter foo_out
 
-  You can set up route reflection for BGP by ussing the rrclient command for that process. 
+  You can set up route reflection for BGP by ussing the rrclient command for that process.
   By using the command it indicates that the peer is a bgp client:
-	
+
     router foo bgp bar rrclient
 
-- 'rid': Sets the 32 bit router ID for the router. Typically this ID is unqiue 
+- 'rid': Sets the 32 bit router ID for the router. Typically this ID is unqiue
   across the orginizations network and is used for various routing protocols ie OSPF
 
     router foo rid 1.1.1.1
@@ -121,6 +121,7 @@ router takes a number of subcommands:
 			"router <vm> <ra,> <subnet>",
 			"router <vm> <route,> <static,> <network> <next-hop> [staticroutename]",
 			"router <vm> <route,> <ospf,> <area> <network>",
+			"router <vm> <route,> <ospf,> <area> <network> <option> <value>",
 			"router <vm> <route,> <ospf,> <area> <export,> <Ipv4/Mask or staticroutename>",
 			"router <vm> <route,> <bgp,> <processname> <local,neighbor> <IPv4> <asnumber>",
 			"router <vm> <route,> <bgp,> <processname> <rrclient,>",
@@ -260,6 +261,10 @@ func cliRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 			if c.StringArgs["network"] != "" {
 				iface := c.StringArgs["network"]
 				rtr.RouteOSPFAdd(area, iface, "")
+
+				if opt := c.StringArgs["option"]; opt != "" {
+					rtr.RouteOSPFOption(area, iface, opt, c.StringArgs["value"])
+				}
 			} else if c.BoolArgs["export"] {
 				filter := c.StringArgs["Ipv4/Mask"]
 				rtr.RouteOSPFAdd(area, "", filter)

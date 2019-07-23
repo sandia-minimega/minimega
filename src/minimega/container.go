@@ -585,7 +585,7 @@ func containerShim() {
 	logFile.Close()
 
 	// GO!
-	log.Debug("vm %v exec: %v %v", vmID, vmInit)
+	log.Debug("vm %v exec: %v", vmID, vmInit)
 	err = syscall.Exec(vmInit[0], vmInit, nil)
 	if err != nil {
 		log.Fatal("Exec: %v", err)
@@ -762,7 +762,7 @@ func (vm *ContainerVM) Info(field string) (string, error) {
 	case "volume":
 		return marshal(vm.VolumePaths), nil
 	case "pid":
-		return strconv.Itoa(vm.pid), nil
+		return strconv.Itoa(vm.Pid), nil
 	}
 
 	return vm.ContainerConfig.Info(field)
@@ -831,7 +831,7 @@ func (vm *ContainerVM) launch() error {
 	// check, create a directory for it, and setup the FS.
 	if vm.State == VM_BUILDING {
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
-			return fmt.Errorf("unable to create VM dir: %v", err)
+			return vm.setErrorf("unable to create VM dir: %v", err)
 		}
 
 		if vm.Snapshot {
@@ -840,6 +840,10 @@ func (vm *ContainerVM) launch() error {
 			}
 		} else {
 			vm.effectivePath = vm.FilesystemPath
+		}
+
+		if err := vm.createInstancePathAlias(); err != nil {
+			return vm.setErrorf("createInstancePathAlias: %v", err)
 		}
 	}
 
@@ -917,7 +921,7 @@ func (vm *ContainerVM) launch() error {
 
 		// create source directory if it doesn't exist
 		if err := os.MkdirAll(v, 0755); err != nil {
-			return err
+			return vm.setErrorf("start container: %v", err)
 		}
 	}
 	// denotes end of volumes
@@ -945,8 +949,8 @@ func (vm *ContainerVM) launch() error {
 		return vm.setErrorf("start container: %v", err)
 	}
 
-	vm.pid = cmd.Process.Pid
-	log.Debug("vm %v has pid %v", vm.ID, vm.pid)
+	vm.Pid = cmd.Process.Pid
+	log.Debug("vm %v has pid %v", vm.ID, vm.Pid)
 
 	// log the child
 	childLog.Close()
@@ -1216,7 +1220,7 @@ func (vm *ContainerVM) symlinkNetns() error {
 	if err != nil {
 		return err
 	}
-	src := fmt.Sprintf("/proc/%v/ns/net", vm.pid)
+	src := fmt.Sprintf("/proc/%v/ns/net", vm.Pid)
 	dst := fmt.Sprintf("/var/run/netns/meganet_%v", vm.ID)
 	vm.netns = fmt.Sprintf("meganet_%v", vm.ID)
 	return os.Symlink(src, dst)

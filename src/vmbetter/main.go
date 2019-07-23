@@ -25,9 +25,10 @@ var (
 	f_stage1        = flag.Bool("1", false, "stop after stage one, and copy build files to <config>_stage1")
 	f_stage2        = flag.String("2", "", "complete stage 2 from an existing stage 1 directory")
 	f_branch        = flag.String("branch", "testing", "debian branch to use")
-	f_qcow          = flag.Bool("qcow", false, "generate a qcow2 image instead of a kernel/initrd pair")
-	f_qcowsize      = flag.String("qcowsize", "1G", "qcow2 image size (eg 1G, 1024M)")
-	f_mbr           = flag.String("mbr", "/usr/lib/syslinux/mbr.bin", "path to mbr.bin if building qcow2 images")
+	f_disk          = flag.Bool("disk", false, "generate a disk image, use -format to set format")
+	f_diskSize      = flag.String("size", "1G", "disk image size (e.g. 1G, 1024M)")
+	f_format        = flag.String("format", "qcow2", "disk format to use when -disk is set")
+	f_mbr           = flag.String("mbr", "/usr/lib/syslinux/mbr/mbr.bin", "path to mbr.bin if building disk images")
 	f_iso           = flag.Bool("iso", false, "generate an ISO")
 	f_isolinux      = flag.String("isolinux", "misc/isolinux/", "path to a directory containing isolinux.bin, ldlinux.c32, and isolinux.cfg")
 	f_rootfs        = flag.Bool("rootfs", false, "generate a simple rootfs")
@@ -157,8 +158,8 @@ func main() {
 
 		// build the image file
 		fmt.Println("building target files")
-		if *f_qcow {
-			err = Buildqcow2(buildPath, config)
+		if *f_disk {
+			err = BuildDisk(buildPath, config)
 		} else if *f_iso {
 			err = BuildISO(buildPath, config)
 		} else if *f_rootfs {
