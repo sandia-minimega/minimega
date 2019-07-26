@@ -824,18 +824,18 @@ func (vm *KvmVM) AddNIC(nics []NetConfig) error {
 		if nic.MAC == "" {
 			nic.MAC = randomMac()
 		}
-		vm.Networks = append(vm.Networks, nic)
 		pos = pos + i
-		ndid := fmt.Sprintf("nd%v", pos)
+		nic.Tap = fmt.Sprintf("nd%v", pos)
+		vm.Networks = append(vm.Networks, nic)
 		tapid := fmt.Sprintf("tap%v", pos)
-		r, err := vm.q.NetDevAdd(ndid, "tap", tapid)
+		r, err := vm.q.NetDevAdd("tap", nic.Tap, tapid)
 		if err != nil {
 			return err
 		}
 		log.Debugln("Add Nic: NetDevAdd QMP response:", r)
 
 		nicid := fmt.Sprintf("nic%v", pos)
-		r, err = vm.q.NicAdd(nicid, ndid, "pci.0", nic.Driver, nic.MAC)
+		r, err = vm.q.NicAdd(nicid, nic.Tap, "pci.0", nic.Driver, nic.MAC)
 		if err != nil {
 			return err
 		}

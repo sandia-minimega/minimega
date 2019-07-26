@@ -395,7 +395,7 @@ func (q *Conn) USBDeviceAdd(id, bus, serial string) (string, error) {
 	return resp, err
 }
 
-func (q *Conn) NetDevAdd(id, devType, ifname string) (string, error) {
+func (q *Conn) NetDevAdd(devType, id, ifname string) (string, error) {
 	if !q.ready {
 		return "", ERR_READY
 	}
