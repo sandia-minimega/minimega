@@ -641,8 +641,7 @@ func (vm *KvmVM) createTapName(bridge string) (string, error) {
 	return br.CreateTapName(), nil
 }
 
-// add taps does the work of adding a specified tap that are associated with
-// a network
+// addTap does the work of adding the specified tap associated with a network
 func (vm *KvmVM) addTap(name, bridge, mac string, vlan int) (string, error) {
 	br, err := getBridge(bridge)
 	if err != nil {
@@ -651,7 +650,7 @@ func (vm *KvmVM) addTap(name, bridge, mac string, vlan int) (string, error) {
 	return br.CreateTap(name, mac, vlan)
 }
 
-// create taps does the work of adding any taps if we are associated with
+// createTaps does the work of adding any taps if we are associated with
 // any networks
 func (vm *KvmVM) createTaps() error {
 	for i := range vm.Networks {
@@ -837,22 +836,6 @@ func (vm *KvmVM) AddNIC(nic NetConfig) error {
 	nic.Tap, err = vm.createTapName(nic.Bridge)
 	vm.Networks = append(vm.Networks, nic)
 
-	// This pass has qmp add them to the kvm
-	//qmp_tapid := fmt.Sprintf("qmp_%v", nic.Tap)
-	//r, err := vm.q.NetDevAdd("tap", nic.Tap, qmp_tapid)
-	r, err := vm.q.NetDevAdd("tap", nic.Tap, nic.Tap)
-	if err != nil {
-		return err
-	}
-	log.Debugln("qmp netdev_add response:", r)
-
-	//r, err = vm.q.NicAdd(qmp_tapid, nic.Tap, "pci.0", nic.Driver, nic.MAC)
-	r, err = vm.q.NicAdd(nic.Tap, nic.Tap, "pci.0", nic.Driver, nic.MAC)
-	if err != nil {
-		return err
-	}
-	log.Debugln("qmp device_add response:", r)
-
 	if _, err := vm.addTap(nic.Tap, nic.Bridge, nic.MAC, nic.VLAN); err != nil {
 		return vm.setErrorf("Unable to add tap %v: %v", nic.Tap, err)
 	}
@@ -860,6 +843,20 @@ func (vm *KvmVM) AddNIC(nic NetConfig) error {
 	if err := vm.writeTaps(); err != nil {
 		return vm.setErrorf("unable to write taps: %v", err)
 	}
+
+	// TODO: figure out a better naming convention for these
+	r, err := vm.q.NetDevAdd("tap", nic.Tap, nic.Tap)
+	if err != nil {
+		return err
+	}
+	log.Debugln("qmp netdev_add response:", r)
+
+	r, err = vm.q.NicAdd(nic.Tap, nic.Tap, "pci.0", nic.Driver, nic.MAC)
+	if err != nil {
+		return err
+	}
+	log.Debugln("qmp device_add response:", r)
+
 	return nil
 }
 
