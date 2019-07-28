@@ -400,6 +400,7 @@ func (q *Conn) NetDevAdd(devType, id, ifname string) (string, error) {
 		return "", ERR_READY
 	}
 	arg := fmt.Sprintf("netdev_add type=%v,id=%v,ifname=%v,script=no,downscript=no", devType, id, ifname)
+	log.Debugln("sending qmp command: ", arg)
 	resp, err := q.HumanMonitorCommand(arg)
 	return resp, err
 }
@@ -410,6 +411,7 @@ func (q *Conn) NicAdd(id, netdevID, bus, driver, mac string) (string, error) {
 	}
 	//arg := fmt.Sprintf("device_add id=%v,netdev=%v,bus=%v,addr=%v,driver=%v,mac=%v", id, netdevID, bus, addr, driver, mac)
 	arg := fmt.Sprintf("device_add id=%v,netdev=%v,bus=%v,driver=%v,mac=%v", id, netdevID, bus, driver, mac)
+	log.Debugln("sending qmp command: ", arg)
 	resp, err := q.HumanMonitorCommand(arg)
 	return resp, err
 }

@@ -632,6 +632,25 @@ func (vm *KvmVM) connectVNC() error {
 	return nil
 }
 
+// createTapName will return a generated tap name from the specified bridge
+func (vm *KvmVM) createTapName(bridge string) (string, error) {
+	br, err := getBridge(bridge)
+	if err != nil {
+		return "", vm.setErrorf("unable to get bridge %v: %v", bridge, err)
+	}
+	return br.CreateTapName(), nil
+}
+
+// add taps does the work of adding a specified tap that are associated with
+// a network
+func (vm *KvmVM) addTap(name, bridge, mac string, vlan int) (string, error) {
+	br, err := getBridge(bridge)
+	if err != nil {
+		return name, vm.setErrorf("unable to get bridge %v: %v", bridge, err)
+	}
+	return br.CreateTap(name, mac, vlan)
+}
+
 // create taps does the work of adding any taps if we are associated with
 // any networks
 func (vm *KvmVM) createTaps() error {
@@ -642,12 +661,7 @@ func (vm *KvmVM) createTaps() error {
 			continue
 		}
 
-		br, err := getBridge(nic.Bridge)
-		if err != nil {
-			return vm.setErrorf("unable to get bridge %v: %v", nic.Bridge, err)
-		}
-
-		tap, err := br.CreateTap(nic.MAC, nic.VLAN)
+		tap, err := vm.addTap("", nic.Bridge, nic.MAC, nic.VLAN)
 		if err != nil {
 			return vm.setErrorf("unable to create tap %v: %v", i, err)
 		}
@@ -812,39 +826,40 @@ func (vm *KvmVM) Disconnect(cc *ron.Server) error {
 	return nil
 }
 
-func (vm *KvmVM) AddNIC(nics []NetConfig) error {
+func (vm *KvmVM) AddNIC(nic NetConfig) error {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	pos := len(vm.Networks)
-	// we need to generate 2 devices for every nic, a net device (tap) for the
-	// nic and the nic itself
-	for i, nic := range nics {
-		log.Info("Creating network at pos %v", pos)
-		if nic.MAC == "" {
-			nic.MAC = randomMac()
-		}
-		pos = pos + i
-		nic.Tap = fmt.Sprintf("nd%v", pos)
-		vm.Networks = append(vm.Networks, nic)
-		tapid := fmt.Sprintf("tap%v", pos)
-		r, err := vm.q.NetDevAdd("tap", nic.Tap, tapid)
-		if err != nil {
-			return err
-		}
-		log.Debugln("Add Nic: NetDevAdd QMP response:", r)
-
-		nicid := fmt.Sprintf("nic%v", pos)
-		r, err = vm.q.NicAdd(nicid, nic.Tap, "pci.0", nic.Driver, nic.MAC)
-		if err != nil {
-			return err
-		}
-		log.Debugln("Add Nic: NicAdd QMP response:", r)
+	if nic.MAC == "" {
+		nic.MAC = randomMac()
 	}
-	if err := vm.createTaps(); err != nil {
+	var err error
+	nic.Tap, err = vm.createTapName(nic.Bridge)
+	vm.Networks = append(vm.Networks, nic)
+
+	// This pass has qmp add them to the kvm
+	//qmp_tapid := fmt.Sprintf("qmp_%v", nic.Tap)
+	//r, err := vm.q.NetDevAdd("tap", nic.Tap, qmp_tapid)
+	r, err := vm.q.NetDevAdd("tap", nic.Tap, nic.Tap)
+	if err != nil {
 		return err
 	}
+	log.Debugln("qmp netdev_add response:", r)
 
+	//r, err = vm.q.NicAdd(qmp_tapid, nic.Tap, "pci.0", nic.Driver, nic.MAC)
+	r, err = vm.q.NicAdd(nic.Tap, nic.Tap, "pci.0", nic.Driver, nic.MAC)
+	if err != nil {
+		return err
+	}
+	log.Debugln("qmp device_add response:", r)
+
+	if _, err := vm.addTap(nic.Tap, nic.Bridge, nic.MAC, nic.VLAN); err != nil {
+		return vm.setErrorf("Unable to add tap %v: %v", nic.Tap, err)
+	}
+
+	if err := vm.writeTaps(); err != nil {
+		return vm.setErrorf("unable to write taps: %v", err)
+	}
 	return nil
 }
 

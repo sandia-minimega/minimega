@@ -9,9 +9,15 @@ import (
 	log "minilog"
 )
 
+// CreateTapName will return the next created tap name from the name channel
+func (b *Bridge) CreateTapName() string {
+	return <-b.nameChan
+}
+
 // CreateTap creates a new tap and adds it to the bridge. mac is the MAC
 // address to assign to the interface. vlan is the VLAN for the traffic.
-func (b *Bridge) CreateTap(mac string, vlan int) (string, error) {
+// If a name is not provided, one will be automatically generated
+func (b *Bridge) CreateTap(tap, mac string, vlan int) (string, error) {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
@@ -21,7 +27,9 @@ func (b *Bridge) CreateTap(mac string, vlan int) (string, error) {
 	// faster than the periodic tap reaper
 	b.reapTaps()
 
-	tap := <-b.nameChan
+	if tap == "" {
+		tap = <-b.nameChan
+	}
 
 	var created bool
 
