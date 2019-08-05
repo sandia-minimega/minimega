@@ -368,4 +368,6 @@ thead {
 .keycolor {
     width: 50%;
     height: 20px;
+    line-height: 20px;
+    text-align: center;
 }
