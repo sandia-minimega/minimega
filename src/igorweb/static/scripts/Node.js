@@ -6,7 +6,7 @@
       draggable="true"
       style="opacity: 1; width:100%; padding: 12px; padding-left: 0px; padding-right: 0px; cursor: pointer;"
       tabindex="-1"
-      v-on:click.stop="selectNode()"
+      v-on:click.stop="selectNode($event)"
     >{{ nodeID }}</div>
   `;
 
@@ -50,9 +50,21 @@
     },
 
     methods: {
-      selectNode() {
-        this.$store.dispatch('selectNodes', [this.nodeInfo.NodeID]);
+      selectNode(evt) {
+        let selectedNodes = this.$store.state.selectedNodes;
+
+        if (evt.shiftKey && selectedNodes.length > 0) {
+          this.$emit('nodeShiftClicked', this);
+        } else if (evt.ctrlKey && selectedNodes.length > 0) {
+          this.$emit('nodeCtrlClicked', this);
+        } else {
+          this.$store.dispatch('selectNodes', [this.nodeInfo.NodeID]);
+        }
+
+        this.$emit('nodeClicked', this);
       },
+        
     },
+      
   };
 })();
