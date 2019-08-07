@@ -148,7 +148,7 @@ PR [[https://github.com/sandia-minimega/minimega/pull/1263][#1263]].
 `ns`del-hosts`. Add `mesh`list`peers` and `mesh`list`all` subcommands. Resolve
 `localhost` for `vm`config`schedule`.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1319][#1319]]
+PR [[https://github.com/sandia-minimega/minimega/pull/1319][#1319]].
 
 *** cc tunnel API
 
@@ -196,7 +196,7 @@ header and sidebar.
 
 PRs [[https://github.com/sandia-minimega/minimega/pull/1207][#1207]],
 [[https://github.com/sandia-minimega/minimega/pull/1237][#1237]],
-[[https://github.com/sandia-minimega/minimega/pull/1246][#1246]],
+[[https://github.com/sandia-minimega/minimega/pull/1246][#1246]].
 
 ** Auxiliary Tools
 
