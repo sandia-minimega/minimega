@@ -824,7 +824,7 @@ func (vm *ContainerVM) launch() error {
 
 	err := containerInit()
 	if err != nil || !containerInitSuccess {
-		return vm.setErrorf("cgroups are not initialized, cannot continue")
+		return vm.setErrorf("cgroups are not initialized, cannot continue: %v", err)
 	}
 
 	// If this is the first time launching the VM, do the final configuration
