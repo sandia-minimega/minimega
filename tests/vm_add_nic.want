@@ -1,3 +1,4 @@
+## clear cc responses
 ## vm config kernel $images/miniccc.kernel
 ## vm config initrd $images/miniccc.initrd
 ## # Launch a vm with no network
@@ -11,17 +12,17 @@
 ## # wait for cc to connect
 ## shell sleep 30
 
-## .column name,vlan,bridge,tap,ip vm info
-name | vlan  | bridge        | tap         | ip
-bar  | [100] | [mega_bridge] | [mega_tap0] | []
-foo  | []    | []            | []          | []
+## .column name,vlan,bridge,ip vm info
+name | vlan  | bridge        | ip
+bar  | [100] | [mega_bridge] | []
+foo  | []    | []            | []
 
 ## # try adding a nic to foo on the same vlan as bar
 ## vm net add foo 100
-## .column name,vlan,bridge,tap,ip vm info
-name | vlan  | bridge        | tap         | ip
-bar  | [100] | [mega_bridge] | [mega_tap0] | []
-foo  | [100] | [mega_bridge] | [mega_tap1] | []
+## .column name,vlan,bridge,ip vm info
+name | vlan  | bridge        | ip
+bar  | [100] | [mega_bridge] | []
+foo  | [100] | [mega_bridge] | []
 ## shell sleep 1
 
 ## # Let's give foo an ip
@@ -54,10 +55,10 @@ foo  | [100] | [mega_bridge] | [mega_tap1] | []
 ## shell sleep 1
 ## vm net add bar 110
 ## shell sleep 1
-## .column vlan,bridge,tap,ip vm info
-vlan       | bridge                     | tap                    | ip
-[100, 110] | [mega_bridge, mega_bridge] | [mega_tap0, mega_tap3] | [, ]
-[100, 110] | [mega_bridge, mega_bridge] | [mega_tap1, mega_tap2] | [, ]
+## .column vlan,bridge,ip vm info
+vlan       | bridge                     | ip
+[100, 110] | [mega_bridge, mega_bridge] | [, ]
+[100, 110] | [mega_bridge, mega_bridge] | [, ]
 
 ## # still targetting bar
 ## cc exec bash -c 'ip addr | grep eth1'
@@ -103,3 +104,4 @@ vlan       | bridge                     | tap                    | ip
     inet 20.0.0.2/24 brd 20.0.0.255 scope global eth1
 ## cc response 15 raw
 1 packets transmitted, 1 received, 0% packet loss, time 0ms
+## clear cc responses

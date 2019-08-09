@@ -1,3 +1,4 @@
+clear cc responses
 vm config kernel $images/miniccc.kernel
 vm config initrd $images/miniccc.initrd
 # Launch a vm with no network
@@ -11,11 +12,11 @@ vm start all
 # wait for cc to connect
 shell sleep 30
 
-.column name,vlan,bridge,tap,ip vm info
+.column name,vlan,bridge,ip vm info
 
 # try adding a nic to foo on the same vlan as bar
 vm net add foo 100
-.column name,vlan,bridge,tap,ip vm info
+.column name,vlan,bridge,ip vm info
 shell sleep 1
 
 # Let's give foo an ip
@@ -48,7 +49,7 @@ vm net add foo 110
 shell sleep 1
 vm net add bar 110
 shell sleep 1
-.column vlan,bridge,tap,ip vm info
+.column vlan,bridge,ip vm info
 
 # still targetting bar
 cc exec bash -c 'ip addr | grep eth1'
@@ -80,3 +81,4 @@ cc response 11 raw
 cc response 12 raw
 cc response 14 raw
 cc response 15 raw
+clear cc responses
