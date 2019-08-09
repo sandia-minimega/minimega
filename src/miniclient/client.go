@@ -16,6 +16,7 @@ import (
 	"net"
 	"os"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -302,6 +303,8 @@ func (mm *Conn) Attach(namespace string) {
 		} else if err == io.EOF {
 			break
 		}
+
+		line = strings.TrimSpace(line)
 
 		log.Debug("got line from stdin: `%s`", line)
 

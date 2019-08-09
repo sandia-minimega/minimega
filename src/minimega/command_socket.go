@@ -118,6 +118,8 @@ func commandSocketHandle(c net.Conn) {
 			continue
 		}
 
+		r.Command = minicli.ExpandAliases(r.Command)
+
 		// client specified a command
 		cmd, err = minicli.Compile(r.Command)
 		if err != nil {
