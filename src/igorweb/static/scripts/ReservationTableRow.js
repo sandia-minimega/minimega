@@ -13,13 +13,34 @@
       <td>{{ nodeCount }}</td>
       <td>{{ reservation.Range }}</td>
       <td>
-        <button
-          class="btn btn-primary"
+        <template
           v-if="reservation.CanEdit"
-          v-on:click="$emit('res-action', 'edit', reservation.Name)"
         >
-          <i class="oi oi-pencil"></i>
-        </button>
+          <button
+            class="btn btn-primary"
+            v-on:click="$emit('res-action', 'edit', reservation.Name)"
+          >
+            <i class="oi oi-pencil"></i>
+          </button>
+          <button
+            class="btn btn-success"
+            v-on:click="$emit('res-action', 'extend', reservation.Name)"
+          >
+            <i class="oi oi-clock"></i>
+          </button>
+          <button
+            class="btn btn-warning"
+            v-on:click="$emit('res-action', 'power', reservation.Name)"
+          >
+            <i class="oi oi-power-standby"></i>
+          </button>
+          <button
+            class="btn btn-danger"
+            v-on:click="$emit('res-action', 'delete', reservation.Name)"
+          >
+            <i class="oi oi-x"></i>
+          </button>
+        </template>
       </td>
     </tr>
   `;

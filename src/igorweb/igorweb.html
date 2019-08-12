@@ -56,35 +56,6 @@
 
     <reservation-info v-on:res-action="handleReservationAction"></reservation-info>
 
-    <div
-      class="mx-auto fixed-bottom card active"
-      id="actionbar"
-      v-if="selectedReservation != null"
-    >
-      <button
-        class="igorbtn btn btn-outline-light actionbar"
-        v-if="selectedReservation != null"
-        v-on:click="showDeleteModal()"
-      >Delete Reservation</button>
-
-      <button
-        class="igorbtn btn btn-outline-light actionbar"
-        v-if="selectedReservation != null"
-        v-on:click="showPowerModal()"
-      >Power Control</button>
-
-      <button
-        class="igorbtn btn btn-outline-light actionbar"
-        v-if="selectedReservation != null"
-        v-on:click="showExtendModal()"
-      >Extend Reservation</button>
-
-      <span
-        class="close clickable closeactionbar"
-        v-on:click="clearSelection()"
-      >&times;</span>
-    </div>
-
     <new-reservation-modal ref="newResModal"></new-reservation-modal>
     <edit-reservation-modal ref="editResModal"></edit-reservation-modal>
     <delete-reservation-modal ref="deleteModal"></delete-reservation-modal>

@@ -74,28 +74,20 @@ const app = new Vue({
         case 'edit':
           this.$refs['editResModal'].show(resName);
           break;
+        case 'extend':
+          this.$refs['extendModal'].show(resName);
+          break;
+        case 'power':
+          this.$refs['powerModal'].show(resName);
+          break;
+        case 'delete':
+          this.$refs['deleteModal'].show(resName);
+          break;
       }
     },
 
     showNewResForm() {
       this.$refs['newResModal'].show();
-    },
-
-    showActionBar() {
-      $(this.$refs['actionbar']).show();
-      $(this.$refs['actionbar']).addClass('active');
-    },
-
-    showDeleteModal() {
-      this.$refs['deleteModal'].show();
-    },
-
-    showPowerModal() {
-      this.$refs['powerModal'].show();
-    },
-
-    showExtendModal() {
-      this.$refs['extendModal'].show();
     },
 
     clearSelection() {
