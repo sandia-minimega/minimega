@@ -6,36 +6,36 @@
       v-on:click.stop="selectReservation(reservation)"
     >
       <td>{{ reservation.Name }}</td>
-      <td>{{ reservation.Owner }}</td>
-      <td>{{ reservation.Group }}</td>
-      <td class="current">{{ reservation.Start }}</td>
-      <td>{{ reservation.End }}</td>
-      <td>{{ nodeCount }}</td>
-      <td>{{ reservation.Range }}</td>
+      <td v-if="columns.includes('Owner')">{{ reservation.Owner }}</td>
+      <td v-if="columns.includes('Group')">{{ reservation.Group }}</td>
+      <td v-if="columns.includes('Start Time')">{{ reservation.Start }}</td>
+      <td v-if="columns.includes('End Time')">{{ reservation.End }}</td>
+      <td v-if="columns.includes('Nodes')">{{ nodeCount }}</td>
+      <td v-if="columns.includes('Range')">{{ reservation.Range }}</td>
       <td>
         <template
           v-if="reservation.CanEdit"
         >
           <button
-            class="btn btn-primary"
+            class="btn btn-sm btn-primary"
             v-on:click="$emit('res-action', 'edit', reservation.Name)"
           >
             <i class="oi oi-pencil"></i>
           </button>
           <button
-            class="btn btn-success"
+            class="btn btn-sm btn-success"
             v-on:click="$emit('res-action', 'extend', reservation.Name)"
           >
             <i class="oi oi-clock"></i>
           </button>
           <button
-            class="btn btn-warning"
+            class="btn btn-sm btn-warning"
             v-on:click="$emit('res-action', 'power', reservation.Name)"
           >
             <i class="oi oi-power-standby"></i>
           </button>
           <button
-            class="btn btn-danger"
+            class="btn btn-sm btn-danger"
             v-on:click="$emit('res-action', 'delete', reservation.Name)"
           >
             <i class="oi oi-x"></i>
@@ -51,6 +51,9 @@
     props: {
       reservation: {
         type: Object,
+      },
+      columns: {
+        type: Array,
       },
     },
 

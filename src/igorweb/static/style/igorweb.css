@@ -4,6 +4,10 @@
  * All styling of elements in igorweb.html
  ***************************/
 
+body {
+  font-stretch: condensed;
+}
+
 /* change cursor to pointer on hover */
 .clickable {
     cursor: pointer;
@@ -407,3 +411,15 @@ thead {
     width: 50%;
     height: 20px;
 }
+
+
+tr.res td:last-child {
+    width: 1%;
+    white-space: nowrap;
+}
+/*
+tr.res td {
+    width: 1%;
+    white-space: nowrap;
+}
+*/

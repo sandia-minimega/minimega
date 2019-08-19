@@ -29,9 +29,28 @@
                       v-on:click="clearFilter()"
                     >Clear</button>
                   </div>
+                  <div
+                    class="form-group"
+                  >
+                    <div
+                      class="form-check form-check-inline"
+                      v-for="col in columns"
+                    >
+                      <input
+                        class="form-check-input"
+                        type="checkbox"
+                        :value="col"
+                        v-model="shownColumns"
+                      >
+                      <label
+                        class="form-check-label font-weight-bold"
+                      >{{ col }}</label>
+                    </div>
+                  </div>
                   <div class="row" id="table" style="margin: 0.5em; opacity: 1;">
                     <reservation-table
                       :filter="searchText"
+                      :columns="shownColumns"
                       v-on:res-action="(...args) => $emit('res-action', ...args)"
                     ></reservation-table>
                   </div>
@@ -56,6 +75,8 @@
     data() {
       return {
         searchText: '',
+        columns: ['Owner', 'Group', 'Start Time', 'End Time', 'Nodes', 'Range'],
+        shownColumns: ['Owner', 'End Time', 'Range'],
       };
     },
 
