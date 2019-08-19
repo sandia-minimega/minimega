@@ -33,13 +33,17 @@
                 class="key available up clickable tdhover"
                 v-on:click.stop="select('available', 'up');"
               >
-                <div class="mx-auto keycolor available up unselected"></div>
+                <div class="mx-auto keycolor available up unselected">
+                  <span>{{ nodeCounts.upAvailable }}</span>
+                </div>
               </td>
               <td
                 class="key reserved up clickable tdhover"
                 v-on:click.stop="select('reserved', 'up')"
               >
-                <div class="mx-auto keycolor reserved up unselected"></div>
+                <div class="mx-auto keycolor reserved up unselected">
+                  <span>{{ nodeCounts.upReserved }}</span>
+                </div>
               </td>
             </tr>
             <tr>
@@ -51,13 +55,17 @@
                 class="key available down clickable tdhover"
                 v-on:click.stop="select('available', 'down')"
               >
-                <div class="mx-auto keycolor available down unselected"></div>
+                <div class="mx-auto keycolor available down unselected">
+                  <span>{{ nodeCounts.downAvailable }}</span>
+                </div>
               </td>
               <td
                 class="key reserved down clickable tdhover"
                 v-on:click.stop="select('reserved', 'down')"
               >
-                <div class="mx-auto keycolor reserved down unselected"></div>
+                <div class="mx-auto keycolor reserved down unselected">
+                  <span>{{ nodeCounts.downReserved }}</span>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -68,6 +76,40 @@
 
   window.KeyCard = {
     template: template,
+
+    computed: {
+      nodeID() {
+        return this.nodeInfo.NodeID;
+      },
+
+      nodeCounts() {
+        const nodes = Object.values(this.$store.getters.nodes);
+        let counts = {
+          upAvailable: 0,
+          upReserved: 0,
+          downAvailable: 0,
+          downReserved: 0
+        };
+
+        nodes.forEach((v, _) => {
+          if (v.Waiting) {
+            return; 
+          }
+
+          if (v.Up && !v.Reservation) {
+            counts.upAvailable++;
+          } else if (v.Up && v.Reservation) {
+            counts.upReserved++;
+          } else if (!v.Up && !v.Reservation) {
+            counts.downAvailable++;
+          } else {
+            counts.downReserved++;
+          }
+        });
+
+        return counts;
+      }
+    },
 
     methods: {
       select(availability, power) {
