@@ -1,14 +1,13 @@
 (function() {
   const template = `
-    <div
+    <td
       :class="{ reserved: isReserved, available: !isReserved, up: isUp, down: !isUp, active: isSelected }"
-      class="list-group-item list-group-item-action node unselected"
+      class="node unselected"
       draggable="true"
-      style="opacity: 1; width:100%; padding: 12px; padding-left: 0px; padding-right: 0px; cursor: pointer;"
       tabindex="-1"
       v-bind:title="title"
       v-on:click.stop="selectNode()"
-    >{{ nodeID }}</div>
+    >{{ nodeID }}</td>
   `;
 
   window.Node = {

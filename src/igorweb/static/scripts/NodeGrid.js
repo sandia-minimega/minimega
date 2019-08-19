@@ -14,23 +14,21 @@
         id="nodegridcard"
         style="background-color: #e7ccff; border: none;"
       >
-        <div class="card-body">
-          <div class="row"
-               id="nodegrid"
-               style="margin: 0.5em; min-height: 400px;"
-               v-on:click.stop=""
-          >
-            <div class="col" style="padding: 0" v-for="c in columns">
-              <div class="list-group">
-                <template v-for="r in rows">
-                  <node
-                    v-bind:id="getNodeInfo(c, r)['NodeID']"
-                    v-bind:node-info="getNodeInfo(c, r)"
-                  ></node>
-                </template>
-              </div>
-            </div>
-          </div>
+        <div
+          class="card-body"
+          id="nodegrid"
+          v-on:click.stop=""
+        >
+          <table id="node-grid">
+            <tr v-for="r in rows">
+              <template v-for="c in columns">
+                <node
+                  v-bind:id="getNodeInfo(c, r)['NodeID']"
+                  v-bind:node-info="getNodeInfo(c, r)"
+                ></node>
+              </template>
+            </tr>
+          </table>
         </div>
       </div>
     </div>
