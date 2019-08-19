@@ -13,7 +13,7 @@
  */
 (function() {
   const template = `
-    <div id="outer">
+    <div>
       <!-- Edit reservation modal -->
       <div
         aria-hidden="true"
@@ -150,6 +150,15 @@
                       v-if="!initrdPathIsValid"
                     >Path must be an absolute path to an initial RAM disk.</div>
                   </div>
+                  <div>
+                    <select v-model="kernelPair">
+                      <option disabled value>Choose a kernel pair</option>
+                      <option
+                        v-bind:value="{kernelPath: item.kernel, initrdPath: item.initrd}"
+                        v-for="item in images"
+                      >{{ item.name }}</option>
+                    </select>
+                  </div>
                 </div>
                 <!-- Cobbler profile, -profile, only shows if right side of above switch is active -->
                 <div class="form-group" v-if="!isKernelInit">
@@ -271,6 +280,7 @@
     data() {
       return {
         name: '',
+        kernelPair: '',
         kernelPath: '',
         initrdPath: '',
         cobblerProfile: '',
@@ -282,6 +292,21 @@
         serverMessage: '',
         serverSuccess: true,
       };
+    },
+
+    watch: {
+      kernelPath() {
+        this.kernelPair = '';
+      },
+      initrdPath() {
+        this.kernelPair = '';
+      },
+      kernelPair(value) {
+        if (value) {
+          this.kernelPath = value.kernelPath;
+          this.initrdPath = value.initrdPath;
+        }
+      },
     },
 
     computed: {
@@ -298,6 +323,10 @@
       initrdPathIsValid() {
         const re = new RegExp('^(/[^/]*)+[^/]+\\.initrd$');
         return this.initrdPath.match(re) != null || this.initrdPath == '';
+      },
+
+      images() {
+        return this.$store.getters.allImages;
       },
 
       validForm() {
