@@ -60,10 +60,15 @@
       },
 
       selected() {
-        if (this.$store.state.selectedReservation == null) {
-          return false;
+        if (this.$store.state.selectedReservation != null) {
+          if (this.$store.state.selectedReservation.Name == this.reservation.Name) {
+            return true;
+          }
         }
-        return this.$store.state.selectedReservation.Name == this.reservation.Name;
+
+        return this.$store.state.selectedNodes.some((n) => {
+          return this.reservation.Nodes.includes(n);
+        });
       },
     },
 
