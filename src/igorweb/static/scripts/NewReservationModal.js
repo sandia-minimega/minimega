@@ -13,7 +13,7 @@
  */
 (function() {
   const template = `
-    <div id="outer">
+    <div>
       <!-- New reservation modal -->
       <div
         aria-hidden="true"
@@ -341,6 +341,22 @@
                       >
                     </div>
                   </div>
+                  <div
+                    class="form-check"
+                  >
+                    <input
+                      class="form-check-input"
+                      id="cycle"
+                      type="checkbox"
+                      v-model="powerCycle"
+                    >
+                    <label
+                      class="form-check-label"
+                      for="cycle"
+                    >
+                      Power cycle after reservation is created
+                    </label>
+                  </div>
                 </div>
               </form>
 
@@ -434,6 +450,7 @@
         cmdArgs: '',
         resLength: '60m',
         afterDate: '',
+        powerCycle: false,
 
         isKernelInit: true,
         isNodeList: false,
@@ -442,13 +459,16 @@
         serverSuccess: true,
       };
     },
+
     watch: {
       kernelPath() {
         this.kernelPair = '';
       },
+
       initrdPath() {
         this.kernelPair = '';
       },
+
       kernelPair(value) {
         if (value) {
           this.kernelPath = value.kernelPath;
@@ -456,6 +476,7 @@
         }
       },
     },
+
     computed: {
       groupIsValid() {
         const re = new RegExp('^[_a-z][0-9a-z_-]*\\$?$');
@@ -471,6 +492,7 @@
         const re = new RegExp('^(/[^/]*)+[^/]+\\.initrd$');
         return this.initrdPath.match(re) != null;
       },
+
       images() {
         return this.$store.getters.allImages;
       },
@@ -585,6 +607,18 @@
                 this.$store.commit('updateReservations', response.Extra);
                 this.$store.commit('setAlert', `Reservation ${this.name}: ${response.Message}`);
                 this.hideLoading();
+
+                if (response.Message.match(/^Reservation created for/) && this.powerCycle) {
+                  $.get(
+                      'run/',
+                      {run: `igor power -r ${this.name} cycle`},
+                      (data) => {
+                        const response = JSON.parse(data);
+                        this.$store.commit('setAlert', response.Message);
+                        this.hideLoading();
+                      }
+                  );
+                }
               }
           );
         }
