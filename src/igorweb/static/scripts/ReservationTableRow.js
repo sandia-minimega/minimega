@@ -18,25 +18,25 @@
         >
           <button
             class="btn btn-sm btn-primary"
-            v-on:click="$emit('res-action', 'edit', reservation.Name)"
+            v-on:click="console.log('boonk'); action('edit')"
           >
             <i class="oi oi-pencil"></i>
           </button>
           <button
             class="btn btn-sm btn-success"
-            v-on:click="$emit('res-action', 'extend', reservation.Name)"
+            v-on:click="action('extend')"
           >
             <i class="oi oi-clock"></i>
           </button>
           <button
             class="btn btn-sm btn-warning"
-            v-on:click="$emit('res-action', 'power', reservation.Name)"
+            v-on:click="action('power')"
           >
             <i class="oi oi-power-standby"></i>
           </button>
           <button
             class="btn btn-sm btn-danger"
-            v-on:click="$emit('res-action', 'delete', reservation.Name)"
+            v-on:click="action('delete')"
           >
             <i class="oi oi-x"></i>
           </button>
@@ -76,6 +76,11 @@
     },
 
     methods: {
+      action(kind) {
+        this.selectReservation(this.reservation);
+        this.$emit('res-action', kind, this.reservation.Name);
+      },
+
       selectReservation(r) {
         this.$store.dispatch('selectReservation', r);
       },
