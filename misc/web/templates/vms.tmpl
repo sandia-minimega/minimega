@@ -22,10 +22,10 @@
         $('nav a[href$="' + "vms" + '"]').addClass("current-view");
 
         if(window.location.hash == "#top") {
-            $("#vms-switcher").html("<a href=\"#\" onClick=\"window.location.reload()\">Toggle info view</a>");
+            $("#vms-switcher").html("<a href=\"#\" onClick=\"window.location.href='#';window.location.reload();return false;\">Toggle info view</a>");
             initVMTopDataTable();
         } else {
-            $("#vms-switcher").html("<a href=\"#top\" onClick=\"window.location.reload()\">Toggle top view</a>");
+            $("#vms-switcher").html("<a href=\"#top\" onClick=\"window.location.href='#top';window.location.reload();return false;\">Toggle top view</a>");
             initVMInfoDataTable();
         }
 
