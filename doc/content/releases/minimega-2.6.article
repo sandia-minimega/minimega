@@ -313,6 +313,12 @@ Fix a bug where the VM PID was not copied to the head node.
 
 PR [[https://github.com/sandia-minimega/minimega/pull/1352][#1352]].
 
+** .alias API
+
+Fix double expansion and only replace the first full word on a line.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1362][#1362]].
+
 * Availability
 
 minimega is available in several ways, both as pre-built distributions and
@@ -323,7 +329,8 @@ information.
 
 minimega is available as an x86-64 debian package, available
 [[https://storage.googleapis.com/minimega-files/minimega-2.6.deb][here]]. It is
-known to work in debian 9 (stretch) and ubuntu 16.04.
+known to work in debian 9 (stretch) and ubuntu 16.04. It is known not to work
+on debian 10 (buster).
 
 ** tarball
 
