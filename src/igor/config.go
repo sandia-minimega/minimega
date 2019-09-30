@@ -166,7 +166,7 @@ func (c Config) checkTimeLimit(nodes int, d time.Duration) error {
 	}
 
 	if d > max {
-		return fmt.Errorf("max allowable duration for %v nodes is %v", nodes, max)
+		return fmt.Errorf("max allowable duration for %v nodes is %v (you requested %v)", nodes, max, d)
 	}
 
 	return nil
