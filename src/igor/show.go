@@ -94,7 +94,7 @@ func init() {
 	cmdShow.Flag.BoolVar(&showOpts.sortName, "n", false, "sort by reservation name")
 	cmdShow.Flag.BoolVar(&showOpts.reverse, "r", false, "reverse order while sorting")
 
-	cmdShow.Flag.BoolVar(&showOpts.asJSON, "json", false, "return JSON-encoded reservations")
+	cmdShow.Flag.BoolVar(&showOpts.asJSON, "json", false, "print JSON-encoded reservation info")
 
 	cmdShow.Flag.StringVar(&showOpts.filterOwner, "owner", "", "filter by owner")
 	cmdShow.Flag.StringVar(&showOpts.filterGroup, "group", "", "filter by group")
