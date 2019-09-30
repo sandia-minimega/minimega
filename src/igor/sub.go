@@ -57,7 +57,7 @@ The -a flag indicates that the reservation should take place on or after the
 specified time, given in the format "2017-Jan-2-15:04". Especially useful in
 conjunction with the -s flag.
 
-The -vlan flag gives the name of an existing reservation or a VLAN number.
+The -vlan flag specifies the name of an existing reservation or a VLAN number.
 If a reservation name is provided, the VLAN of the new reservation is set to
 the same VLAN as the specified reservation. If a VLAN number is provided, the
 new reservation is set to use the specified VLAN.`,
