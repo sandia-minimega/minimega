@@ -126,6 +126,10 @@ window.store = new Vuex.Store({
     },
 
     setSelectedNodes(state, nodes) {
+      // sort in ascending order and remove duplicates
+      nodes.sort((a, b) => a > b);
+      nodes = nodes.filter((_, i) => nodes[i] != nodes[i-1]);
+
       state.selectedNodes = nodes;
     },
 

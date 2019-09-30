@@ -25,6 +25,9 @@
                 <node
                   v-bind:id="getNodeInfo(c, r)['NodeID']"
                   v-bind:node-info="getNodeInfo(c, r)"
+                  @nodeClicked="nodeClickedListener"
+                  @nodeShiftClicked="nodeShiftClickedListener"
+                  @nodeCtrlClicked="nodeCtrlClickedListener"
                 ></node>
               </template>
             </tr>
@@ -42,6 +45,7 @@
     },
 
     mounted() {
+
       $('.node').on('mousedown', (event) => {
         this.selection.start = event.target['id'];
 
@@ -75,6 +79,7 @@
     data() {
       return {
         selection: {start: null, end: null},
+        lastClickedNode: null
       };
     },
 
@@ -93,6 +98,43 @@
       numRows() {
         return Math.ceil(this.$store.getters.nodeCount/this.$store.getters.rackWidth);
       },
+
+      nodeClickedListener(clickedNode) {
+        this.lastClickedNode = clickedNode;
+      },
+
+      nodeShiftClickedListener(clickedNode) {
+        var selectedNodes = this.$store.state.selectedNodes;
+
+        // create an array with all numbers betwen clickedNodeID and lastClickedNodeID
+        let minNodeID = Math.min(clickedNode.nodeID, this.lastClickedNode.nodeID);
+        let maxNodeID = Math.max(clickedNode.nodeID, this.lastClickedNode.nodeID);
+        let nodesInRange = Array.from(Array(maxNodeID - minNodeID + 1), (_, i) => i + minNodeID);
+
+        if (selectedNodes.includes(clickedNode.nodeID)) {
+          // unselect the nodes in range if the node being clicked is already selected
+          selectedNodes = selectedNodes.filter(nodeID => !nodesInRange.includes(nodeID));
+        } else {
+          // select the nodes in range if the node being clicked is not already selected
+          selectedNodes = selectedNodes.concat(nodesInRange);
+        }
+
+        this.$store.dispatch('selectNodes', selectedNodes);
+      },
+
+      nodeCtrlClickedListener(clickedNode) {
+        var selectedNodes = this.$store.state.selectedNodes;
+
+        // check if node is already selected
+        if (selectedNodes.includes(clickedNode.nodeID)) {
+          selectedNodes = selectedNodes.filter(val => clickedNode.nodeID != val);
+        } else {
+          selectedNodes.push(clickedNode.nodeID);
+        }
+
+        this.$store.dispatch('selectNodes', selectedNodes);
+      }
+
     },
 
     computed: {

@@ -5,8 +5,8 @@
       class="node unselected"
       draggable="true"
       tabindex="-1"
+      v-on:click.stop="selectNode($event)"
       v-bind:title="title"
-      v-on:click.stop="selectNode()"
     >{{ nodeID }}</td>
   `;
 
@@ -62,9 +62,21 @@
     },
 
     methods: {
-      selectNode() {
-        this.$store.dispatch('selectNodes', [this.nodeInfo.NodeID]);
+      selectNode(evt) {
+        let selectedNodes = this.$store.state.selectedNodes;
+
+        if (evt.shiftKey && selectedNodes.length > 0) {
+          this.$emit('nodeShiftClicked', this);
+        } else if (evt.ctrlKey && selectedNodes.length > 0) {
+          this.$emit('nodeCtrlClicked', this);
+        } else {
+          this.$store.dispatch('selectNodes', [this.nodeInfo.NodeID]);
+        }
+
+        this.$emit('nodeClicked', this);
       },
+
     },
+
   };
 })();
