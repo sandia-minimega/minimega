@@ -193,6 +193,9 @@ func runShow(_ *Command, _ []string) {
 		}
 	}
 
+	// sort according to options
+	sortReservations(resarray)
+
 	// if printing as JSON, write out info and bail...
 	if showOpts.asJSON {
 		data, err := json.Marshal(struct {
@@ -219,9 +222,6 @@ func runShow(_ *Command, _ []string) {
 	}
 
 	// ... if not printing as json
-	// sort according to options
-	sortReservations(resarray)
-
 	if showOpts.showTable {
 		p := tablePrinter{
 			filter:     isFiltered,
