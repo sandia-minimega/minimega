@@ -93,11 +93,14 @@ func (r *Reservations) Install(res *Reservation) error {
 		return nil
 	}
 
-	// pick a network segment
-	if v, err := r.NextVLAN(); err != nil {
-		return fmt.Errorf("error setting network isolation: %v", err)
-	} else {
-		res.Vlan = v
+	// Vlan wasn't specified by flag
+	if res.Vlan == 0 {
+		// pick a network segment
+		if v, err := r.NextVLAN(); err != nil {
+			return fmt.Errorf("error setting network isolation: %v", err)
+		} else {
+			res.Vlan = v
+		}
 	}
 
 	// update network config
@@ -274,6 +277,16 @@ func (r *Reservations) Extend(res *Reservation, d time.Duration) error {
 
 	r.dirty = true
 	return nil
+}
+
+func (r *Reservations) UsingVLAN(vlan int) []*Reservation {
+	rs := []*Reservation{}
+	for _, res := range r.M {
+		if vlan == res.Vlan {
+			rs = append(rs, res)
+		}
+	}
+	return rs
 }
 
 func (r *Reservations) NextVLAN() (int, error) {
