@@ -341,6 +341,36 @@
                       >
                     </div>
                   </div>
+                  <!-- VLAN, -vlan, optional -->
+                  <div class="form-group">
+                    <div
+                      class="input-group"
+                      data-placement="bottom"
+                      data-toggle="tooltip"
+                      title="Specifies a VLAN to use. May be a VLAN ID or the name of an existing reservation. If a reservation name is provided, the new reservation will be on the same VLAN as the existing reservation."
+                    >
+                      <div class="input-group-prepend">
+                        <div class="input-group-text">
+                          <code style="color: royalblue;">-vlan</code>
+                        </div>
+                      </div>
+                      <input
+                        :class="{'is-valid': vlan && vlanIsValid, 'is-invalid': vlan && !vlanIsValid}"
+                        class="dash form-control"
+                        placeholder="VLAN"
+                        type="text"
+                        v-model="vlan"
+                      >
+                      <div
+                        class="valid-feedback"
+                        v-if="vlan && vlanIsValid"
+                      >Looking good!</div>
+                      <div
+                        class="invalid-feedback"
+                        v-if="vlan && !vlanIsValid"
+                      >Invalid value for VLAN</div>
+                    </div>
+                  </div>
                   <div
                     class="form-check"
                   >
@@ -448,6 +478,7 @@
         nodeList: '',
         group: '',
         cmdArgs: '',
+        vlan: '',
         resLength: '60m',
         afterDate: '',
         powerCycle: false,
@@ -493,12 +524,24 @@
         return this.initrdPath.match(re) != null;
       },
 
+      vlanIsValid() {
+        if (!isNaN(Number(this.vlan))) {
+          return true;
+        }
+
+        return this.$store.getters.reservations.some(r => r.Name == this.vlan);
+      },
+
       images() {
         return this.$store.getters.allImages;
       },
 
       validForm() {
         if (!this.name) {
+          return false;
+        }
+
+        if (this.vlan && !this.vlanIsValid) {
           return false;
         }
 
@@ -545,6 +588,11 @@
           group = ` -g ${this.group}`;
         }
 
+        let vlan = '';
+        if (this.vlan) {
+          vlan = ` -vlan ${this.vlan}`;
+        }
+
         let args = '';
         if (this.cmdArgs) {
           args = ` -c ${this.cmdArgs}`;
@@ -555,7 +603,7 @@
           after = ` -a ${this.afterDate}`;
         }
 
-        return `igor sub -r ${this.name} ${bootFrom} ${nodes} -t ${this.resLength}${args}${after}${group}`;
+        return `igor sub -r ${this.name} ${bootFrom} ${nodes} -t ${this.resLength}${args}${after}${group}${vlan}`;
       },
     },
 

@@ -234,6 +234,36 @@
                       >
                     </div>
                   </div>
+                  <!-- VLAN, -vlan, optional -->
+                  <div class="form-group">
+                    <div
+                      class="input-group"
+                      data-placement="bottom"
+                      data-toggle="tooltip"
+                      title="Specifies a VLAN to use. May be a VLAN ID or the name of an existing reservation. If a reservation name is provided, the reservation will be modified, so that it is on the same VLAN as the specified reservation."
+                    >
+                      <div class="input-group-prepend">
+                        <div class="input-group-text">
+                          <code style="color: royalblue;">-vlan</code>
+                        </div>
+                      </div>
+                      <input
+                        :class="{'is-valid': vlan && vlanIsValid, 'is-invalid': vlan && !vlanIsValid}"
+                        class="dash form-control"
+                        placeholder="VLAN"
+                        type="text"
+                        v-model="vlan"
+                      >
+                      <div
+                        class="valid-feedback"
+                        v-if="vlan && vlanIsValid"
+                      >Looking good!</div>
+                      <div
+                        class="invalid-feedback"
+                        v-if="vlan && !vlanIsValid"
+                      >Invalid value for VLAN</div>
+                    </div>
+                  </div>
                 </div>
               </form>
 
@@ -286,6 +316,7 @@
         cobblerProfile: '',
         group: '',
         cmdArgs: '',
+        vlan: '',
 
         isKernelInit: true,
 
@@ -325,6 +356,14 @@
         return this.initrdPath.match(re) != null || this.initrdPath == '';
       },
 
+      vlanIsValid() {
+        if (!isNaN(Number(this.vlan))) {
+          return true;
+        }
+
+        return this.$store.getters.reservations.some(r => r.Name == this.vlan);
+      },
+
       images() {
         return this.$store.getters.allImages;
       },
@@ -338,6 +377,10 @@
           return false;
         }
 
+        if (this.vlan && !this.vlanIsValid) {
+          return false;
+        }
+
         if (this.isKernelInit) {
           if (!this.kernelPathIsValid || !this.initrdPathIsValid) {
             return false;
@@ -348,7 +391,8 @@
           }
         }
 
-        if ([this.kernelPath, this.initrdPath, this.cobblerProfile, this.group, this.cmdArgs].every((x) => x == '')) {
+        // Check that *something* has been edited.
+        if ([this.kernelPath, this.initrdPath, this.cobblerProfile, this.group, this.cmdArgs, this.vlan].every((x) => x == '')) {
           return false;
         }
 
@@ -368,12 +412,17 @@
           group = ` -g ${this.group}`;
         }
 
+        let vlan = '';
+        if (this.vlan) {
+          group = ` -vlan ${this.vlan}`;
+        }
+
         let args = '';
         if (this.cmdArgs) {
           args = ` -c ${this.cmdArgs}`;
         }
 
-        return `igor edit -r ${this.name}${bootFrom}${args}${group}`;
+        return `igor edit -r ${this.name}${bootFrom}${args}${group}${vlan}`;
       },
     },
 
