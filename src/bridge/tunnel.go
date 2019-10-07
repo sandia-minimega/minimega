@@ -13,8 +13,8 @@ import (
 type TunnelType int
 
 const (
-	TunnelVXLAN TunnelType = 1
-	TunnelGRE              = 2
+	TunnelVXLAN TunnelType = iota
+	TunnelGRE
 )
 
 func (t TunnelType) String() string {
@@ -29,7 +29,7 @@ func (t TunnelType) String() string {
 }
 
 // AddTunnel adds a new vxlan or GRE tunnel to a bridge.
-func (b *Bridge) AddTunnel(typ TunnelType, remoteIP string) error {
+func (b *Bridge) AddTunnel(typ TunnelType, remoteIP, key string) error {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
@@ -47,6 +47,9 @@ func (b *Bridge) AddTunnel(typ TunnelType, remoteIP string) error {
 		tap,
 		fmt.Sprintf("type=%v", typ),
 		fmt.Sprintf("options:remote_ip=%v", remoteIP),
+	}
+	if key != "" {
+		args = append(args, fmt.Sprintf("options:key=%v", key))
 	}
 	if _, err := ovsCmdWrapper(args); err != nil {
 		return fmt.Errorf("add tunnel failed: %v", err)

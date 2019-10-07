@@ -62,6 +62,7 @@ Formatting:
 	-c: shows colors (default true, use -c=false to disable colors)
 	-t: show node status table (default true, use -t=false to disable)
 	-e: prints install errors for reservations (ignores other flags)
+	-json: prints reservation info as a JSON Object
 	`,
 }
 

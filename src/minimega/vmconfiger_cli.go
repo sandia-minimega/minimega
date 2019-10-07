@@ -527,6 +527,13 @@ To display current virtio-serial ports:
 
 To create three virtio-serial ports:
   vm config virtio-ports 3
+
+To explicitly name the virtio-ports, pass a comma-separated list of names:
+
+  vm config virtio-ports foo,bar
+
+The ports (on the guest) will then be mapped to /dev/virtio-port/foo and
+/dev/virtio-port/bar.
 `,
 		Patterns: []string{
 			"vm config virtio-ports [value]",
@@ -534,16 +541,11 @@ To create three virtio-serial ports:
 
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
-				r.Response = strconv.FormatUint(ns.vmConfig.VirtioPorts, 10)
+				r.Response = ns.vmConfig.VirtioPorts
 				return nil
 			}
 
-			i, err := strconv.ParseUint(c.StringArgs["value"], 10, 64)
-			if err != nil {
-				return err
-			}
-
-			ns.vmConfig.VirtioPorts = i
+			ns.vmConfig.VirtioPorts = c.StringArgs["value"]
 
 			return nil
 		}),
@@ -596,39 +598,6 @@ Note: this configuration only applies to KVM-based VMs.
 			}
 
 			ns.vmConfig.Append = c.ListArgs["value"]
-
-			return nil
-		}),
-	},
-	{
-		HelpShort: "configures disk",
-		HelpLong: `Attach one or more disks to a vm. Any disk image supported by QEMU is a
-valid parameter. Disk images launched in snapshot mode may safely be
-used for multiple VMs.
-
-Note: this configuration only applies to KVM-based VMs.
-`,
-		Patterns: []string{
-			"vm config disk [value]...",
-		},
-
-		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
-			if len(c.ListArgs) == 0 {
-				if len(ns.vmConfig.DiskPaths) == 0 {
-					return nil
-				}
-
-				r.Response = fmt.Sprintf("%v", ns.vmConfig.DiskPaths)
-				return nil
-			}
-
-			vals := c.ListArgs["value"]
-
-			for i := range vals {
-				vals[i] = checkPath(vals[i])
-			}
-
-			ns.vmConfig.DiskPaths = vals
 
 			return nil
 		}),
@@ -735,7 +704,7 @@ Default: 2048
 	{
 		HelpShort: "configures snapshot",
 		HelpLong: `Enable or disable snapshot mode for disk images and container
-filesystems. When enabled, disks/filesystems will be loaded in memory
+filesystems. When enabled, disks/filesystems will have temporary snapshots created
 when run and changes will not be saved. This allows a single
 disk/filesystem to be used for many VMs.
 
@@ -764,6 +733,8 @@ Note: Cannot specify Schedule and Colocate in the same config.
 		Patterns: []string{
 			"vm config schedule [value]",
 		},
+
+		Suggest: wrapHostnameSuggest(true, false, false),
 
 		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 			if len(c.StringArgs) == 0 {
@@ -904,7 +875,7 @@ newly launched VMs.
 			"clear vm config <colocate,>",
 			"clear vm config <cores,>",
 			"clear vm config <coschedule,>",
-			"clear vm config <disk,>",
+			"clear vm config <disks,>",
 			"clear vm config <fifos,>",
 			"clear vm config <filesystem,>",
 			"clear vm config <hostname,>",
@@ -1152,7 +1123,7 @@ func (v *KVMConfig) Info(field string) (string, error) {
 		return strconv.FormatUint(v.SerialPorts, 10), nil
 	}
 	if field == "virtio-ports" {
-		return strconv.FormatUint(v.VirtioPorts, 10), nil
+		return v.VirtioPorts, nil
 	}
 	if field == "vga" {
 		return v.Vga, nil
@@ -1160,8 +1131,8 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	if field == "append" {
 		return fmt.Sprintf("%v", v.Append), nil
 	}
-	if field == "disk" {
-		return fmt.Sprintf("%v", v.DiskPaths), nil
+	if field == "disks" {
+		return fmt.Sprintf("%v", v.Disks), nil
 	}
 	if field == "qemu-append" {
 		return fmt.Sprintf("%v", v.QemuAppend), nil
@@ -1208,7 +1179,7 @@ func (v *KVMConfig) Clear(mask string) {
 		v.SerialPorts = 0
 	}
 	if mask == Wildcard || mask == "virtio-ports" {
-		v.VirtioPorts = 0
+		v.VirtioPorts = ""
 	}
 	if mask == Wildcard || mask == "vga" {
 		v.Vga = "std"
@@ -1216,8 +1187,8 @@ func (v *KVMConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "append" {
 		v.Append = nil
 	}
-	if mask == Wildcard || mask == "disk" {
-		v.DiskPaths = nil
+	if mask == Wildcard || mask == "disks" {
+		v.Disks = nil
 	}
 	if mask == Wildcard || mask == "qemu-append" {
 		v.QemuAppend = nil
@@ -1261,7 +1232,7 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 	if v.SerialPorts != 0 {
 		fmt.Fprintf(w, "vm config serial-ports %v\n", v.SerialPorts)
 	}
-	if v.VirtioPorts != 0 {
+	if v.VirtioPorts != "" {
 		fmt.Fprintf(w, "vm config virtio-ports %v\n", v.VirtioPorts)
 	}
 	if v.Vga != "std" {
@@ -1270,8 +1241,8 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 	if len(v.Append) > 0 {
 		fmt.Fprintf(w, "vm config append %v\n", quoteJoin(v.Append, " "))
 	}
-	if len(v.DiskPaths) > 0 {
-		fmt.Fprintf(w, "vm config disk %v\n", quoteJoin(v.DiskPaths, " "))
+	if err := v.Disks.WriteConfig(w); err != nil {
+		return err
 	}
 	if len(v.QemuAppend) > 0 {
 		fmt.Fprintf(w, "vm config qemu-append %v\n", quoteJoin(v.QemuAppend, " "))

@@ -49,9 +49,13 @@ end a playback.
 
 VNC playback also supports injecting mouse/keyboard events in the format found
 in the playback file. Injected commands must omit the time delta as they are
-sent immediately.
+sent immediately:
 
-vnc host vm_id inject PointerEvent,0,465,245
+	vnc inject vm-0 PointerEvent,0,465,245
+
+New playback files can be injected as well:
+
+	vnc inject vm-0 LoadFile,foo.kb
 
 Comments in the playback file are logged at the info level. An example is given
 below.

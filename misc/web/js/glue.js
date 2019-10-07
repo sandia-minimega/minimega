@@ -85,7 +85,7 @@ function initVMInfoDataTable() {
             //{ "title": "ID", "data": "id" },
             { "title": "VCPUs", "data": "vcpus" },
             { "title": "Memory", "data": "memory" },
-            { "title": "Disk", "data": null, "visible": false, render: renderDisksColumn },
+            { "title": "Disks", "data": null, "visible": false, render: renderDisksColumn },
             { "title": "VLAN", "data": "vlan" },
             { "title": "IPv4", "data": "ip" },
             { "title": "IPv6", "data": "ip6", "visible": false },
@@ -576,7 +576,7 @@ function updateScreenshotTable(vmsData) {
                 { "title": "Model", "data": "model", "searchable": false },
                 { "title": "VM", "data": "vm", "visible": false, "searchable": false },
             ],
-            "createdRow": loadOrRestoreImage,
+            "rowCallback": loadOrRestoreImage,
             "stateSave": true,
             "stateDuration": 0
         });
@@ -678,7 +678,7 @@ function renderDisksColumn(data, type, full, meta) {
     if (data.type === "container") {
         var keys = ['filesystem', 'preinit', 'init'];
     } else if (data.type === "kvm") {
-        var keys = ['initrd', 'kernel', 'disk'];
+        var keys = ['initrd', 'kernel', 'disks'];
     }
 
     for (var i = 0; i < keys.length; i++) {

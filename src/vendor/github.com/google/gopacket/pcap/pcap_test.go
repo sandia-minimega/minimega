@@ -39,13 +39,13 @@ func TestPcapFileRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	invalidPcap.Close() // if the file is still open later, the invalid test fails with permission denied on windows
 	defer os.Remove(invalidPcap.Name())
 
 	err = ioutil.WriteFile(invalidPcap.Name(), invalidData, 0644)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer invalidPcap.Close()
 
 	for _, file := range []struct {
 		filename       string
@@ -62,7 +62,7 @@ func TestPcapFileRead(t *testing.T) {
 			},
 		},
 		{filename: "test_ethernet.pcap",
-			num: 16,
+			num: 10,
 			expectedLayers: []gopacket.LayerType{
 				layers.LayerTypeEthernet,
 				layers.LayerTypeIPv4,
@@ -132,6 +132,7 @@ func TestBPF(t *testing.T) {
 		{"tcp[tcpflags] & (tcp-syn|tcp-ack) == (tcp-syn|tcp-ack)", false, true},
 		{"tcp[tcpflags] & (tcp-syn|tcp-ack) == tcp-ack", false, true},
 		{"udp", false, false},
+		{string([]byte("udp")), false, false}, // test for #664
 	} {
 		data, ci, err := handle.ReadPacketData()
 		if err != nil {
@@ -291,12 +292,6 @@ func ExampleBPF() {
 	// Output:
 	// SYN packet
 	// SYN/ACK packet
-	// SYN flag not set
-	// SYN flag not set
-	// SYN flag not set
-	// SYN flag not set
-	// SYN flag not set
-	// SYN flag not set
 	// SYN flag not set
 	// SYN flag not set
 	// SYN flag not set

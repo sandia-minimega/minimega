@@ -46,7 +46,7 @@ type BaseConfig struct {
 	Memory uint64
 
 	// Enable or disable snapshot mode for disk images and container
-	// filesystems. When enabled, disks/filesystems will be loaded in memory
+	// filesystems. When enabled, disks/filesystems will have temporary snapshots created
 	// when run and changes will not be saved. This allows a single
 	// disk/filesystem to be used for many VMs.
 	//
@@ -56,7 +56,7 @@ type BaseConfig struct {
 	// Set a host where the VM should be scheduled.
 	//
 	// Note: Cannot specify Schedule and Colocate in the same config.
-	Schedule string `validate:"validSchedule"`
+	Schedule string `validate:"validSchedule" suggest:"wrapHostnameSuggest(true, false, false)"`
 
 	// Colocate this VM with another VM that has already been launched or is
 	// queued for launching.
@@ -199,7 +199,17 @@ func validSchedule(vmConfig VMConfig, s string) error {
 		return errors.New("cannot specify schedule and colocate in the same config")
 	}
 
-	// TODO: could check if s is a host in the mesh
+	if s == "localhost" {
+		s = hostname
+	}
+
+	// check if s is in the namespace
+	ns := GetNamespace()
+
+	if !ns.Hosts[s] {
+		return fmt.Errorf("host is not in namespace: %v", s)
+	}
+
 	return nil
 }
 

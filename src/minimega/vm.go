@@ -118,7 +118,7 @@ type BaseVM struct {
 	Type       VMType
 	ActiveCC   bool // set when CC is active
 
-	pid int
+	Pid int
 
 	lock sync.Mutex // synchronizes changes to this VM
 	cond *sync.Cond
@@ -137,7 +137,7 @@ var vmInfo = []string{
 	// more generic fields but want next to vcpus
 	"memory",
 	// kvm fields
-	"vcpus", "disk", "snapshot", "initrd", "kernel", "cdrom", "migrate",
+	"vcpus", "disks", "snapshot", "initrd", "kernel", "cdrom", "migrate",
 	"append", "serial-ports", "virtio-ports", "vnc_port",
 	// container fields
 	"filesystem", "hostname", "init", "preinit", "fifo", "volume",
@@ -240,6 +240,7 @@ func (vm *BaseVM) copy() *BaseVM {
 	vm2.Type = vm.Type
 	vm2.ActiveCC = vm.ActiveCC
 	vm2.instancePath = vm.instancePath
+	vm2.Pid = vm.Pid
 
 	return vm2
 }
@@ -355,7 +356,7 @@ func (vm *BaseVM) GetCoschedule() int {
 }
 
 func (vm *BaseVM) GetPID() int {
-	return vm.pid
+	return vm.Pid
 }
 
 // Kill a VM. Blocks until the VM process has terminated.
@@ -668,7 +669,7 @@ func (vm *BaseVM) Info(field string) (string, error) {
 	case "id":
 		return strconv.Itoa(vm.ID), nil
 	case "pid":
-		return strconv.Itoa(vm.pid), nil
+		return strconv.Itoa(vm.Pid), nil
 	case "name":
 		return vm.Name, nil
 	case "state":
@@ -776,7 +777,7 @@ func (vm *BaseVM) conflicts(vm2 *BaseVM) error {
 	for _, n := range vm.Networks {
 		for _, n2 := range vm2.Networks {
 			if n.MAC == n2.MAC && n.VLAN == n2.VLAN {
-				log.Warn("duplicate MAC/VLAN: %v/%v for %v and %v", vm.ID, vm2.ID)
+				log.Warn("duplicate MAC/VLAN: %v/%v for %v and %v", n.MAC, n.VLAN, vm.ID, vm2.ID)
 			}
 		}
 	}
@@ -787,6 +788,27 @@ func (vm *BaseVM) conflicts(vm2 *BaseVM) error {
 // path joins instancePath with provided path
 func (vm *BaseVM) path(s string) string {
 	return filepath.Join(vm.instancePath, s)
+}
+
+func (vm *BaseVM) createInstancePathAlias() error {
+	// create the namespaces/<namespace> directory
+	namespaceAliasDir := filepath.Join(*f_base, "namespaces", vm.GetNamespace())
+	if err := os.MkdirAll(namespaceAliasDir, os.FileMode(0700)); err != nil {
+		return fmt.Errorf("unable to create namespace dir: %v", err)
+	}
+
+	// create a symlink under namespaces/<namespace> to the instance path
+	// only if it does not already exist, otherwise error
+	vmAlias := filepath.Join(namespaceAliasDir, vm.GetUUID())
+	if _, err := os.Stat(vmAlias); err == nil {
+		// symlink already exists
+		return fmt.Errorf("unable to create VM dir symlink: %v already exists", vmAlias)
+	}
+	if err := os.Symlink(vm.GetInstancePath(), vmAlias); err != nil {
+		return fmt.Errorf("unable to create VM dir symlink: %v", err)
+	}
+
+	return nil
 }
 
 func writeVMConfig(vm VM) error {

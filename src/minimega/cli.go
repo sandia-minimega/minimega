@@ -200,20 +200,28 @@ func wrapSuggest(fn wrappedSuggestFunc) minicli.SuggestFunc {
 }
 
 func wrapVMSuggest(mask VMState, wild bool) minicli.SuggestFunc {
-	return func(raw, val, prefix string) []string {
-		if attached != nil {
-			return attached.Suggest(raw)
-		}
-
-		// only make suggestions for VM fields
+	return wrapSuggest(func(ns *Namespace, val, prefix string) []string {
+		// only make suggestions for VM field
 		if val != "vm" {
 			return nil
 		}
 
-		ns := GetNamespace()
-
 		return cliVMSuggest(ns, prefix, mask, wild)
-	}
+	})
+}
+
+// wrapHostnameSuggest creates a completion function, wrapping
+// cliHostnameSuggest.
+func wrapHostnameSuggest(local, direct, wild bool) minicli.SuggestFunc {
+	return wrapSuggest(func(ns *Namespace, val, prefix string) []string {
+		// somewhat hacky... currently only two names for placeholders and
+		// unlikely to be too many more.
+		if val != "hostname" && val != "value" {
+			return nil
+		}
+
+		return cliHostnameSuggest(prefix, local, direct, wild)
+	})
 }
 
 // envCompleter completes environment variables
@@ -434,6 +442,8 @@ func cliLocal(input *liner.State) {
 			break
 		}
 
+		line = strings.TrimSpace(line)
+
 		log.Debug("got line from stdin: `%v`", line)
 
 		// skip blank lines
@@ -442,6 +452,9 @@ func cliLocal(input *liner.State) {
 		}
 
 		input.AppendHistory(line)
+
+		// expand aliases
+		line = minicli.ExpandAliases(line)
 
 		cmd, err := minicli.Compile(line)
 		if err != nil {

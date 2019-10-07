@@ -25,13 +25,17 @@ var (
 	f_stage1        = flag.Bool("1", false, "stop after stage one, and copy build files to <config>_stage1")
 	f_stage2        = flag.String("2", "", "complete stage 2 from an existing stage 1 directory")
 	f_branch        = flag.String("branch", "testing", "debian branch to use")
-	f_qcow          = flag.Bool("qcow", false, "generate a qcow2 image instead of a kernel/initrd pair")
-	f_qcowsize      = flag.String("qcowsize", "1G", "qcow2 image size (eg 1G, 1024M)")
-	f_mbr           = flag.String("mbr", "/usr/lib/syslinux/mbr.bin", "path to mbr.bin if building qcow2 images")
+	f_disk          = flag.Bool("disk", false, "generate a disk image, use -format to set format")
+	f_diskSize      = flag.String("size", "1G", "disk image size (e.g. 1G, 1024M)")
+	f_format        = flag.String("format", "qcow2", "disk format to use when -disk is set")
+	f_mbr           = flag.String("mbr", "/usr/lib/syslinux/mbr/mbr.bin", "path to mbr.bin if building disk images")
 	f_iso           = flag.Bool("iso", false, "generate an ISO")
 	f_isolinux      = flag.String("isolinux", "misc/isolinux/", "path to a directory containing isolinux.bin, ldlinux.c32, and isolinux.cfg")
 	f_rootfs        = flag.Bool("rootfs", false, "generate a simple rootfs")
 	f_dstrp_append  = flag.String("debootstrap-append", "", "additional arguments to be passed to debootstrap")
+	f_constraints   = flag.String("constraints", "debian,amd64", "specify build constraints, separated by commas")
+	f_target        = flag.String("O", "", "specify output name, by default uses name of config")
+	f_dry_run       = flag.Bool("dry-run", false, "parse and print configs and then exit")
 )
 
 var banner string = `vmbetter, Copyright 2012 Sandia Corporation.
@@ -68,9 +72,12 @@ func main() {
 	// find any other dependent configs and get an ordered list of those
 	configfile := flag.Arg(0)
 	log.Debugln("using config:", configfile)
-	config, err := vmconfig.ReadConfig(configfile)
+	config, err := vmconfig.ReadConfig(configfile, strings.Split(*f_constraints, ",")...)
 	if err != nil {
 		log.Fatalln(err)
+	} else if *f_dry_run {
+		fmt.Printf("%v", config)
+		os.Exit(0)
 	} else {
 		log.Debugln("read config:", config)
 	}
@@ -151,8 +158,8 @@ func main() {
 
 		// build the image file
 		fmt.Println("building target files")
-		if *f_qcow {
-			err = Buildqcow2(buildPath, config)
+		if *f_disk {
+			err = BuildDisk(buildPath, config)
 		} else if *f_iso {
 			err = BuildISO(buildPath, config)
 		} else if *f_rootfs {

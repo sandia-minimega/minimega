@@ -27,6 +27,7 @@ func commandSocketStart() {
 			conn, err := l.Accept()
 			if err != nil {
 				log.Error("commandSocketStart: accept: %v", err)
+				continue
 			}
 			log.Infoln("client connected")
 
@@ -116,6 +117,8 @@ func commandSocketHandle(c net.Conn) {
 			err = sendLocalSuggest(enc, cliCompleter(r.Suggest))
 			continue
 		}
+
+		r.Command = minicli.ExpandAliases(r.Command)
 
 		// client specified a command
 		cmd, err = minicli.Compile(r.Command)

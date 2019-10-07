@@ -103,6 +103,12 @@ func checkExternal() error {
 		return errors.New("openvswitch does not appear to be running")
 	}
 
+	// check kvm module is loaded
+	if !lsModule("kvm") {
+		// warn since not a hard requirement
+		log.Warn("no kvm module detected, is virtualization enabled?")
+	}
+
 	return nil
 }
 
@@ -246,6 +252,19 @@ func checkVersion(name string, min []int, versionFn func() ([]int, error)) error
 
 	// must match or exceed
 	return nil
+}
+
+// lsModule returns true if the specified module is in the `lsmod` output
+func lsModule(s string) bool {
+	log.Info("checking for kernel module: %v", s)
+
+	out, err := processWrapper("lsmod")
+	if err != nil {
+		log.Warn("unable to check lsmod for %v: %v", s, err)
+		return false
+	}
+
+	return strings.Contains(out, s)
 }
 
 // processWrapper executes the given arg list and returns a combined

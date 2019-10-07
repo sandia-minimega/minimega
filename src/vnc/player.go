@@ -124,6 +124,12 @@ func (p *Player) playback(id, rhost, filename string) error {
 }
 
 func (p *Player) Inject(id, rhost, s string) error {
+	// check to see that we have a valid event
+	e, err := parseEvent(s)
+	if err != nil {
+		return err
+	}
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -132,12 +138,7 @@ func (p *Player) Inject(id, rhost, s string) error {
 
 	// inject to existing playback
 	if p := p.m[id]; p != nil {
-		return p.Inject(s)
-	}
-
-	e, err := parseEvent(s)
-	if err != nil {
-		return err
+		return p.InjectEvent(e)
 	}
 
 	if e, ok := e.(Event); ok {
@@ -151,9 +152,16 @@ func (p *Player) Inject(id, rhost, s string) error {
 		return e.Write(conn)
 	}
 
-	// This is an injected LoadFile event without a running playback. This is
-	// equivalent to starting a new vnc playback.
-	return p.playback(id, rhost, e.(string))
+	switch e := e.(type) {
+	case *LoadFileEvent:
+		// This is an injected LoadFile event without a running playback. This is
+		// equivalent to starting a new vnc playback.
+		return p.playback(id, rhost, e.File)
+	case *WaitForItEvent:
+		return fmt.Errorf("unhandled inject event for non-running playback: %T", e)
+	default:
+		return fmt.Errorf("unhandled inject event: %T", e)
+	}
 }
 
 func (p *Player) Info() [][]string {

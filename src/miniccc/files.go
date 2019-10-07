@@ -67,7 +67,7 @@ func recvFiles(files []*ron.File) {
 
 		if _, err := os.Stat(dst); err == nil {
 			// file exists (TODO: overwrite?)
-			log.Info("skipping %v -- already exists")
+			log.Info("skipping %v -- already exists", dst)
 			continue
 		}
 

@@ -29,7 +29,7 @@ var (
 	f_base      = flag.String("base", defaultBase, "base path for minimega")
 	f_passwords = flag.String("passwords", "", "password file for auth")
 	f_bootstrap = flag.Bool("bootstrap", false, "create password file for auth")
-	f_console   = flag.Bool("console", false, "enable console and commands")
+	f_console   = flag.String("console", "", "path to minimega to enable console (e.g. bin/minimega)")
 	f_key       = flag.String("key", "", "key file for TLS in PEM format")
 	f_cert      = flag.String("cert", "", "cert file for TLS in PEM format")
 	f_namespace = flag.String("namespace", "", "limit miniweb to a namespace")
@@ -95,6 +95,7 @@ func main() {
 	mux.HandleFunc("/vlans.json", mustAuth(tabularHandler))
 	mux.HandleFunc("/vms/info.json", mustAuth(vmsHandler))
 	mux.HandleFunc("/vms/top.json", mustAuth(vmsHandler))
+	mux.HandleFunc("/vms/new", mustAuth(vmsHandler))
 
 	mux.HandleFunc("/files/", mustAuth(filesHandler))
 	mux.HandleFunc("/files.json", mustAuth(tabularHandler))
@@ -111,7 +112,7 @@ func main() {
 		})
 	}
 
-	if *f_console {
+	if *f_console != "" {
 		mux.HandleFunc("/console", mustAuth(consoleHandler))
 		mux.HandleFunc("/console/", mustAuth(consoleHandler))
 		mux.HandleFunc("/command", mustAuth(commandHandler))

@@ -57,6 +57,10 @@ type Namespace struct {
 	// Names of host taps associated with this namespace
 	Taps map[string]bool
 
+	// Names of bridges associated with this namespace and there associated
+	// tunnel keys
+	Bridges map[string]uint32
+
 	// Names of mirrors associated with this namespace
 	Mirrors map[string]bool
 
@@ -117,6 +121,7 @@ func NewNamespace(name string) *Namespace {
 		Name:       name,
 		Hosts:      map[string]bool{},
 		Taps:       map[string]bool{},
+		Bridges:    map[string]uint32{},
 		Mirrors:    map[string]bool{},
 		HostSortBy: "cpucommit",
 		VMs: VMs{
@@ -266,6 +271,10 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 	for _, name := range names {
 		if takenName[name] {
 			return fmt.Errorf("vm already exists with name `%s`", name)
+		}
+
+		if name != "" && !validName.MatchString(name) {
+			return fmt.Errorf("%v: `%v`", validNameErr, name)
 		}
 	}
 
@@ -566,6 +575,43 @@ func (n *Namespace) hostSlice() []string {
 	}
 
 	return hosts
+}
+
+// processVMDisks parses a list of diskspecs using processVMDisk and updates the
+// active vmConfig.
+func (n *Namespace) processVMDisks(vals []string) error {
+	n.vmConfig.Disks = nil
+
+	var ideCount int
+
+	for _, spec := range vals {
+		disk, err := ParseDiskConfig(spec, n.vmConfig.Snapshot)
+		if err != nil {
+			n.vmConfig.Disks = nil
+			return err
+		}
+
+		if disk.Interface == "ide" || (disk.Interface == "" && DefaultKVMDiskInterface == "ide") {
+			ideCount += 1
+		}
+
+		// check for disk conflicts in a single VM
+		for _, d2 := range n.vmConfig.Disks {
+			if disk.Path == d2.Path {
+				n.vmConfig.Disks = nil
+				return fmt.Errorf("disk conflict: %v", d2.Path)
+			}
+		}
+
+		n.vmConfig.Disks = append(n.vmConfig.Disks, *disk)
+	}
+
+	if ideCount > 3 {
+		// Warn or return an error? Maybe some systems support more than four?
+		log.Warn("too many IDE devices, one for cdrom and %v for disks", ideCount)
+	}
+
+	return nil
 }
 
 // processVMNets parses a list of netspecs using processVMNet and updates the
