@@ -37,8 +37,8 @@ func init() {
 }
 
 func runExtend(cmd *Command, args []string) {
-	if igor.Pause {
-		log.Fatal("Extending igor reservations has been paused. Contact your igor administrator(s) for details.")
+	if igor.Pause != "" {
+		log.Fatal(igor.Pause)
 	}
 
 	// duration is in minutes

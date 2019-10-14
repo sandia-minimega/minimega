@@ -89,8 +89,8 @@ type Config struct {
 
 	// Pause is set by administrators to prevent users from
 	// creating new reservations or extending current
-	// reservations.
-	Pause bool
+	// reservations. If the value is not "", igor is paused.
+	Pause string
 }
 
 // Read in the configuration from the specified path. Checks to make sure that

@@ -97,8 +97,8 @@ func init() {
 func runSub(cmd *Command, args []string) {
 	r := new(Reservation) // the new reservation
 
-	if igor.Pause {
-		log.Fatal("New igor reservations have been paused. Contact your igor administrator(s) for details.")
+	if igor.Pause != "" {
+		log.Fatal(igor.Pause)
 	}
 
 	format := "2006-Jan-2-15:04"
