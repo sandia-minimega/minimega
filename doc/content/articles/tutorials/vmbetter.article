@@ -23,7 +23,7 @@ install some libraries needed to build minimega and the associated tools:
 	# fetch pre-requisites
 	$ sudo apt-get install libpcap-dev syslinux
 	# On ubuntu 16.04lts you need these as well
-	$ sudo apt-get debootstrap genisoimage extlinux
+	$ sudo apt-get install debootstrap genisoimage extlinux
 
 With those installed, you can pull down the minimega repo and build:
 
