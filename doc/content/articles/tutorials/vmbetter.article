@@ -23,7 +23,7 @@ install some libraries needed to build minimega and the associated tools:
 	# fetch pre-requisites
 	$ sudo apt-get install libpcap-dev syslinux
 	# On ubuntu 16.04lts you need these as well
-	$ sudo apt-get debootstrap genisoimage extlinux
+	$ sudo apt-get install debootstrap genisoimage extlinux
 
 With those installed, you can pull down the minimega repo and build:
 
@@ -47,7 +47,7 @@ root, open a new file called `misc/vmbetter_configs/wireshark.conf`. This
 directory contains several other configurations which could be instructive, but
 for now just paste the following text into the file and save it:
 
-	parents = "default_amd64.conf"
+	parents = "default.conf"
 	packages = "traceroute dnsutils wget tcpdump telnet wireshark xserver-xorg-core xserver-xorg-input-all xserver-xorg-video-fbdev xserver-xorg-video-cirrus xterm xinit blackbox"
 	overlay = "misc/vmbetter_configs/wireshark_overlay"
 	postbuild = `
