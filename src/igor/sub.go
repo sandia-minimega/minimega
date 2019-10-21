@@ -97,10 +97,6 @@ func init() {
 func runSub(cmd *Command, args []string) {
 	r := new(Reservation) // the new reservation
 
-	if igor.Pause != "" {
-		log.Fatal(igor.Pause)
-	}
-
 	format := "2006-Jan-2-15:04"
 
 	// duration is in minutes

@@ -37,10 +37,6 @@ func init() {
 }
 
 func runExtend(cmd *Command, args []string) {
-	if igor.Pause != "" {
-		log.Fatal(igor.Pause)
-	}
-
 	// duration is in minutes
 	duration, err := parseDuration(subT)
 	if err != nil {
