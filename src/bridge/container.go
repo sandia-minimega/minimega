@@ -37,7 +37,7 @@ func (b *Bridge) CreateContainerTap(tap, ns, mac string, vlan, index int) (strin
 
 	var created bool
 
-	err := createVeth(tap, ns)
+	err := createVeth(tap, iface, ns)
 	if err == nil {
 		created = true
 		err = upInterface(tap, false)
