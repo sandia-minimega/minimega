@@ -32,12 +32,6 @@ type apigen struct {
 	Sections map[string][]*minicli.Handler
 }
 
-type BySharedPrefix []*minicli.Handler
-
-func (a BySharedPrefix) Len() int           { return len(a) }
-func (a BySharedPrefix) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
-func (a BySharedPrefix) Less(i, j int) bool { return a[i].SharedPrefix < a[j].SharedPrefix }
-
 func main() {
 	flag.Parse()
 
@@ -76,7 +70,7 @@ func main() {
 	}
 
 	// sort handlers
-	sort.Sort(BySharedPrefix(handlers))
+	sort.Slice(handlers, func(i, j int) bool { return handlers[i].SharedPrefix < handlers[j].SharedPrefix })
 
 	// collapse handlers based on SharedPrefix
 	matched := 0
