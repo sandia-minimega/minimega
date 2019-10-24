@@ -15,6 +15,7 @@ import (
 	"minicli"
 	log "minilog"
 	"os/exec"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
@@ -30,6 +31,12 @@ type apigen struct {
 	Date     string
 	Sections map[string][]*minicli.Handler
 }
+
+type BySharedPrefix []*minicli.Handler
+
+func (a BySharedPrefix) Len() int           { return len(a) }
+func (a BySharedPrefix) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
+func (a BySharedPrefix) Less(i, j int) bool { return a[i].SharedPrefix < a[j].SharedPrefix }
 
 func main() {
 	flag.Parse()
@@ -66,6 +73,25 @@ func main() {
 	api := apigen{
 		Date:     fmt.Sprintf("%v %v %v", day, month, year),
 		Sections: map[string][]*minicli.Handler{},
+	}
+
+	// sort handlers
+	sort.Sort(BySharedPrefix(handlers))
+
+	// collapse handlers based on SharedPrefix
+	matched := 0
+	for i := range handlers {
+		j := i - matched
+
+		if j > 0 && handlers[j].SharedPrefix == handlers[j-1].SharedPrefix {
+			handlers[j-1].Patterns = append(handlers[j-1].Patterns, handlers[j].Patterns...)
+			handlers[j-1].HelpShort += "\n" + handlers[j].HelpShort
+			handlers[j-1].HelpLong += "\n" + handlers[j].HelpLong
+
+			// delete matched handler
+			handlers = append(handlers[:j], handlers[j+1:]...)
+			matched++
+		}
 	}
 
 	for _, s := range strings.Split(*f_sections, ",") {
