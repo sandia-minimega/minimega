@@ -180,7 +180,7 @@
           let include = false;
           [x.Name, x.Owner].forEach((d) => {
             if (d) {
-              include = include || d.toString().includes(this.filter);
+              include = include || d.toString().toLowerCase().includes(this.filter.toLowerCase());
             }
           });
           include = include || x.Nodes.includes(+this.filter);
