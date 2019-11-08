@@ -90,7 +90,7 @@ func (r Res) GetGroup() *user.Group {
 
 	g, err := user.LookupGroup(r.Group)
 	if err != nil {
-		log.Warn("Unable to lookup group \"s\": %v", r.Group, err)
+		log.Warn("Unable to lookup group \"%s\": %v", r.Group, err)
 		return nil
 	}
 	return g
