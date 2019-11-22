@@ -39,7 +39,7 @@ the mega_tap interface on the host) is not policed to the desired rate.
 Examples:
 
 	Randomly drop packets on the 0th interface for vms foo0, 1, and 2 with
-	probably 25%
+	probability 25%
 
 	qos add foo[0-2] 0 loss 25
 
