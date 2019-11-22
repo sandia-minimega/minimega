@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -619,7 +620,12 @@ func (n *Namespace) processVMDisks(vals []string) error {
 func (n *Namespace) processVMNets(vals []string) error {
 	// get valid NIC drivers for current qemu/machine
 	nics, err := qemu.NICs(n.vmConfig.QemuPath, n.vmConfig.Machine)
-	if err != nil {
+
+	// warn on not finding kvm because we may just be using containers,
+	// otherwise throw a regular error
+	if err != nil && strings.Contains(err.Error(), "executable file not found in $PATH") {
+		log.Warnln(err)
+	} else if err != nil {
 		return err
 	}
 
