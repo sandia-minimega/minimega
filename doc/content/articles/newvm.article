@@ -1,7 +1,7 @@
-Building a new VM
+Building VMs with vmbetter
 
 The minimega authors
-3 July 2018
+2 December 2019
 
 * Introduction
 
@@ -119,3 +119,32 @@ The image should now be ready to use:
 
 Note that further changes can be made by launching the VM with
 `snapshot=false`.
+
+* Optional: multi-stage builds
+
+Occasionally builds are complex enough to require manual intervention between
+the initial install and the final packaging. To facilitate this, `vmbetter` is
+roughly split into two stages (build and package). You can use the `-1` and
+`-2` flags, along with `chroot` to perform post-install activities before
+having `vmbetter` build the final image. 
+
+To begin, use any arguments as you normally would, and add the `-1` flag. After
+the deployment, `vmbetter` will create a `<config>_stage1` directory, named
+after the config file you used. For example:
+
+    vmbetter -1 miniccc.conf
+    ls miniccc_stage1
+
+From here, you can use `chroot` to enter the filesystem, make changes, and then
+finalize the build:
+
+    chroot miniccc_stage1
+    touch foo
+    exit
+
+When your changes are complete - you can have vmbetter finalize the build by
+using the `-2` flag (along with the original config file):
+
+    vmbetter -2 miniccc_stage1 miniccc.conf
+
+
