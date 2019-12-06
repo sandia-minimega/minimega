@@ -379,9 +379,7 @@ func cliCCFileRecv(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 
 	// Add new files to receive
 	for _, file := range c.ListArgs["file"] {
-		cmd.FilesRecv = append(cmd.FilesRecv, &ron.File{
-			Name: file,
-		})
+		cmd.FilesRecv = append(cmd.FilesRecv, file)
 	}
 
 	resp.Data = ns.NewCommand(cmd)
