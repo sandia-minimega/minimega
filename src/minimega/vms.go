@@ -341,9 +341,34 @@ func (vms *VMs) Kill(target string) error {
 	})
 }
 
-// Flush deletes VMs that are in the QUIT or ERROR state, disconnecting them
+// Flush VMs matching target.
+func (vms *VMs) Flush(target string, cc *ron.Server) error {
+	return vms.Apply(target, func(vm VM, _ bool) (bool, error) {
+		if vm.GetState()&(VM_QUIT|VM_ERROR) == 0 {
+			return false, nil
+		}
+
+		log.Info("deleting VM: %v", vm.GetID())
+
+		if err := vm.Disconnect(cc); err != nil {
+			log.Error("unable to disconnect to cc for vm %v: %v", vm.GetID(), err)
+			return false, err
+		}
+
+		if err := vm.Flush(); err != nil {
+			log.Error("clogged vm %v: %v", vm.GetID(), err)
+			return false, err
+		}
+
+		delete(vms.m, vm.GetID())
+
+		return true, nil
+	})
+}
+
+// FlushAll deletes VMs that are in the QUIT or ERROR state, disconnecting them
 // from the provided ron.Server first.
-func (vms *VMs) Flush(cc *ron.Server) error {
+func (vms *VMs) FlushAll(cc *ron.Server) error {
 	vms.mu.Lock()
 	defer vms.mu.Unlock()
 
