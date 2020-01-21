@@ -7,6 +7,7 @@ package ranges
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"unicode"
 )
 
@@ -99,7 +100,8 @@ func (t *trieNode) Flatten() []string {
 		// record numeric children for later
 		if unicode.IsNumber(k) {
 			for i, child := range t.Children[k].flattenNums(k) {
-				nums[i] = child
+				v, _ := strconv.Atoi(i)
+				nums[v] = child
 			}
 
 			continue
@@ -157,11 +159,8 @@ func (t *trieNode) sortedChildren() []rune {
 
 // flattenNums converts trieNodes from a given point into ints and returns
 // pointers to the children. If r is not a number, returns an empty map.
-func (t *trieNode) flattenNums(r rune) map[int]*trieNode {
-	res := map[int]*trieNode{}
-
-	// value of this rune
-	i := int(r - '0')
+func (t *trieNode) flattenNums(r rune) map[string]*trieNode {
+	res := map[string]*trieNode{}
 
 	for k, child := range t.Children {
 		if !unicode.IsNumber(k) {
@@ -169,12 +168,12 @@ func (t *trieNode) flattenNums(r rune) map[int]*trieNode {
 		}
 
 		for k, v := range child.flattenNums(k) {
-			res[i*10+k] = v
+			res[string(r)+k] = v
 		}
 	}
 
 	if len(res) == 0 {
-		res[i] = t
+		res[string(r)] = t
 	}
 
 	return res
