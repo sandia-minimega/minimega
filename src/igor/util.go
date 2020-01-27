@@ -161,7 +161,7 @@ func getUser() (*user.User, error) {
 func emitReservationLog(action string, res *Reservation) {
 	format := "2006-Jan-2-15:04"
 	unsplit := igor.unsplitRange(res.Hosts)
-	log.Info("%s	user=%v	resname=%v	id=%v	nodes=%v	kernel=%s	kernelArgs=%s	kernelHash=%s	initrd=%s	initrdHash=%s	vlan=%d	group=%s	groupID=%s	cobblerProfile=%s	hosts=%v	pxeNames=%v	installed=%t	installError=%s	start=%v	end=%v	duration=%v\n", action, res.Owner, res.Name, res.ID, unsplit, res.Kernel, res.KernelArgs, res.KernelHash, res.Initrd, res.InitrdHash, res.Vlan, res.Group, res.GroupID, res.CobblerProfile, res.Hosts, res.PXENames, res.Installed, res.InstallError, res.Start.Format(format), res.End.Format(format), res.Duration)
+	log.Info("%s	user=%v	resname=%v	id=%v	nodes=%v	kernel=%s	kernelArgs=%s	initrd=%s	vlan=%d	group=%s	groupID=%s	cobblerProfile=%s	start=%v	end=%v	duration=%v\n", action, res.Owner, res.Name, res.ID, unsplit, res.Kernel, res.KernelArgs, res.Initrd, res.Vlan, res.Group, res.GroupID, res.CobblerProfile, res.Start.Format(format), res.End.Format(format), res.Duration)
 }
 
 // install src into dir, using the hash as the file name. Returns the hash or
