@@ -1,0 +1,6 @@
+This directory contains the pieces for minimega.org's App Engine website. If
+you're not one of the minimega.org owners, you may still find this useful to
+check out how your changes to minidoc might look when pushed.
+
+Run "update.bash" to pull the latest minimega repo and update tip. This script
+assumes that you have the google-cloud-sdk downloaded to /data/appengine.

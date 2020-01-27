@@ -1,0 +1,5 @@
+vm config qemu-override
+vm config virtio-ports 40
+vm config qemu-override
+clear vm config virtio-ports
+vm config qemu-override

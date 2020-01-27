@@ -1,0 +1,52 @@
+## namespace foo
+## vm config filesystem $images/minicccfs
+## vm config hostname foo
+## vm config uuid a5e980ca-3958-48cc-92e9-93d50c0157ad
+## vm launch container foo
+## vm start all
+
+## namespace bar
+## vm config filesystem $images/minicccfs
+## vm config hostname bar
+## vm config uuid d67f9fed-adea-415a-a66b-301d275a2383
+## vm launch container bar
+## vm start all
+
+## clear namespace
+
+## # wait for clients to start
+## shell sleep 10
+## .columns uuid,hostname namespace foo cc clients
+uuid                                 | hostname
+a5e980ca-3958-48cc-92e9-93d50c0157ad | foo
+## .columns uuid,hostname namespace bar cc clients
+uuid                                 | hostname
+d67f9fed-adea-415a-a66b-301d275a2383 | bar
+
+## # run command in one namespace
+## namespace foo cc exec hostname
+## namespace bar cc exec hostname
+## shell sleep 10
+
+## # check responses
+## namespace foo cc responses all
+1/a5e980ca-3958-48cc-92e9-93d50c0157ad/stdout:
+foo
+## namespace bar cc responses all
+1/d67f9fed-adea-415a-a66b-301d275a2383/stdout:
+bar
+
+## # make sure that commands ended up being attributed correctly
+## .columns id,responses,filter namespace foo cc commands
+id   | responses | filter
+1    | 1         |
+## .columns id,responses,filter namespace bar cc commands
+id   | responses | filter
+1    | 1         |
+
+## # clear commands in one namespace
+## namespace foo clear cc commands
+## namespace foo .columns id,responses,filter cc commands
+## namespace bar .columns id,responses,filter cc commands
+id   | responses | filter
+1    | 1         |

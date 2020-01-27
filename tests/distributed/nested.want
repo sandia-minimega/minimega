@@ -1,0 +1,33 @@
+## # these commands should all be disallowed (and not hang minimega)
+
+## mesh send all mesh send all host
+E: cannot run `mesh send all host` via meshage
+E: cannot run `mesh send all host` via meshage
+E: cannot run `mesh send all host` via meshage
+## mesh send all ns run host
+E: cannot run `ns run host` via meshage
+E: cannot run `ns run host` via meshage
+E: cannot run `ns run host` via meshage
+## mesh send all read foo
+E: cannot run `read foo` via meshage
+E: cannot run `read foo` via meshage
+E: cannot run `read foo` via meshage
+
+## namespace with-local
+## ns add-host localhost
+## ns run mesh send all host
+E: cannot run `mesh send all host` using `ns run`
+## ns run ns run host
+E: cannot run `ns run host` using `ns run`
+## ns run read foo
+E: cannot run `read foo` using `ns run`
+## clear namespace with-local
+
+## namespace without-local
+## ns run mesh send all host
+E: cannot run `mesh send all host` using `ns run`
+## ns run ns run host
+E: cannot run `ns run host` using `ns run`
+## ns run read foo
+E: cannot run `read foo` using `ns run`
+## clear namespace without-local

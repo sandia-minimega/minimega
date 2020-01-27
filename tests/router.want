@@ -1,0 +1,532 @@
+## # router interfaces
+## vm config net 100 200
+## vm config filesystem $images/minirouterfs
+## vm launch container vm0
+## vm start all
+## router vm0 interface 0 1.2.3.4/24
+## router vm0 interface 0 dhcp
+## router vm0 interface 1 5.6.7.8/16
+## router vm0 interface 0 10.0.0.1/32 lo
+## router vm0 interface 1 10.0.0.2/32 lo
+## router vm0 interface 2 10.0.0.3/32 lo
+## router vm0
+IPs:
+Network: 0: [1.2.3.4/24 dhcp]
+Network: 1: [5.6.7.8/16]
+Loopback IPs:
+10.0.0.1/32
+10.0.0.2/32
+10.0.0.3/32
+
+Log:
+## clear router vm0 interface 0 1.2.3.4/24
+## router vm0
+IPs:
+Network: 0: [dhcp]
+Network: 1: [5.6.7.8/16]
+Loopback IPs:
+10.0.0.1/32
+10.0.0.2/32
+10.0.0.3/32
+
+Log:
+## clear router vm0 interface 1 5.6.7.8/24
+E: no such network: 5.6.7.8/24
+## router vm0
+IPs:
+Network: 0: [dhcp]
+Network: 1: [5.6.7.8/16]
+Loopback IPs:
+10.0.0.1/32
+10.0.0.2/32
+10.0.0.3/32
+
+Log:
+## clear router vm0 interface 1 5.6.7.8/16
+## router vm0
+IPs:
+Network: 0: [dhcp]
+Network: 1: []
+Loopback IPs:
+10.0.0.1/32
+10.0.0.2/32
+10.0.0.3/32
+
+Log:
+## clear router vm0 interface 2 10.0.0.3/32 lo
+## router vm0
+IPs:
+Network: 0: [dhcp]
+Network: 1: []
+Loopback IPs:
+10.0.0.1/32
+10.0.0.2/32
+
+Log:
+## clear router vm0 interface 0 all lo
+## router vm0
+IPs:
+Network: 0: [dhcp]
+Network: 1: []
+
+Log:
+## router vm0 interface 0 1.2.3.4/24
+## router vm0 interface 1 5.6.7.8/16
+## clear router vm0 interface 0
+## router vm0
+IPs:
+Network: 0: []
+Network: 1: [5.6.7.8/16]
+
+Log:
+## router vm0 interface 0 1.2.3.4/24
+## router vm0 interface 0 dhcp
+## clear router vm0 interface
+## router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Log:
+## router vm0 interface 0 1.2.3.4/24
+## router vm0 interface 0 dhcp
+## router vm0 interface 1 5.6.7.8/16
+## clear router vm0
+## router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Log:
+
+## # router commit
+## router vm0 interface 0 1.2.3.4/24
+## router vm0 interface 1 5.6.7.8/24
+## router vm0 interface 0 10.0.0.1/32 lo
+## router vm0 commit
+## shell sort /tmp/minimega/files/minirouter-vm0
+bird commit
+bird flush
+bird routerid 10.0.0.1
+dnsmasq commit
+dnsmasq flush
+ip add 0 1.2.3.4/24
+ip add 1 5.6.7.8/24
+ip add lo 10.0.0.1/32
+ip flush
+log level error
+route del default
+
+## # check on interface ips
+## shell sleep 15
+## cc background ping -c 1 1.2.3.5
+## cc background ping -c 1 5.6.7.9
+## cc exec ip addr
+## shell sleep 30
+## .columns ip vm info
+ip
+[1.2.3.4, 5.6.7.8]
+
+## # router dhcp
+## clear router vm0
+## router vm0 dhcp 1.2.3.4 range 1.2.3.5 1.2.3.254
+## router vm0 dhcp 1.2.3.4 router 1.2.3.1
+## router vm0 dhcp 1.2.3.4 dns 8.8.8.8
+## router vm0 dhcp 1.2.3.4 static 00:11:22:33:44:55 1.2.3.66
+## router vm0 dhcp 1.2.3.4 static 00:11:22:33:44:56 1.2.3.67
+## router vm0 dhcp 5.6.7.8 range 1.1.1.1 1.1.1.2
+## router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         1.2.3.1
+DNS:            8.8.8.8
+Static IPs:     
+     00:11:22:33:44:55 1.2.3.66
+     00:11:22:33:44:56 1.2.3.67
+
+Listen address: 5.6.7.8
+Low address:    1.1.1.1
+High address:   1.1.1.2
+Router:         
+DNS:            
+Static IPs:     
+
+Log:
+## router vm0 dhcp 5.6.7.8 static 00:11:22:33:44:60 5.6.7.9
+## router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         1.2.3.1
+DNS:            8.8.8.8
+Static IPs:     
+     00:11:22:33:44:55 1.2.3.66
+     00:11:22:33:44:56 1.2.3.67
+
+Listen address: 5.6.7.8
+Low address:    1.1.1.1
+High address:   1.1.1.2
+Router:         
+DNS:            
+Static IPs:     
+     00:11:22:33:44:60 5.6.7.9
+
+Log:
+## clear router vm0 dhcp 1.2.3.4 router
+## router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         
+DNS:            8.8.8.8
+Static IPs:     
+     00:11:22:33:44:55 1.2.3.66
+     00:11:22:33:44:56 1.2.3.67
+
+Listen address: 5.6.7.8
+Low address:    1.1.1.1
+High address:   1.1.1.2
+Router:         
+DNS:            
+Static IPs:     
+     00:11:22:33:44:60 5.6.7.9
+
+Log:
+## clear router vm0 dhcp 1.2.3.4 dns
+## router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         
+DNS:            
+Static IPs:     
+     00:11:22:33:44:55 1.2.3.66
+     00:11:22:33:44:56 1.2.3.67
+
+Listen address: 5.6.7.8
+Low address:    1.1.1.1
+High address:   1.1.1.2
+Router:         
+DNS:            
+Static IPs:     
+     00:11:22:33:44:60 5.6.7.9
+
+Log:
+## clear router vm0 dhcp 1.2.3.4 static 00:11:22:33:44:56
+## router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         
+DNS:            
+Static IPs:     
+     00:11:22:33:44:55 1.2.3.66
+
+Listen address: 5.6.7.8
+Low address:    1.1.1.1
+High address:   1.1.1.2
+Router:         
+DNS:            
+Static IPs:     
+     00:11:22:33:44:60 5.6.7.9
+
+Log:
+## clear router vm0 dhcp 1.2.3.4 static
+## router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         
+DNS:            
+Static IPs:     
+
+Listen address: 5.6.7.8
+Low address:    1.1.1.1
+High address:   1.1.1.2
+Router:         
+DNS:            
+Static IPs:     
+     00:11:22:33:44:60 5.6.7.9
+
+Log:
+## clear router vm0 dhcp 1.2.3.4 range
+## router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    
+High address:   
+Router:         
+DNS:            
+Static IPs:     
+
+Listen address: 5.6.7.8
+Low address:    1.1.1.1
+High address:   1.1.1.2
+Router:         
+DNS:            
+Static IPs:     
+     00:11:22:33:44:60 5.6.7.9
+
+Log:
+## clear router vm0 dhcp 5.6.7.8
+## router vm0
+IPs:
+Network: 0: []
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    
+High address:   
+Router:         
+DNS:            
+Static IPs:     
+
+Log:
+
+## vm config net 100,00:1f:53:02:0b:51 200
+## vm launch container vm1
+## vm start all
+
+## clear router vm0
+## router vm0 interface 0 1.2.3.4/24
+## router vm0 interface 0 5.6.7.8/24
+## router vm0 dhcp 1.2.3.4 router 1.2.3.254
+## router vm0 dhcp 1.2.3.4 dns 1.2.3.4
+## router vm0 dhcp 1.2.3.4 range 1.2.3.5 1.2.3.254
+## router vm0 dhcp 1.2.3.4 static 00:1f:53:02:0b:51 1.2.3.250
+## router vm0 commit
+## shell sort /tmp/minimega/files/minirouter-vm0
+bird commit
+bird flush
+bird routerid 5.6.7.8
+dnsmasq commit
+dnsmasq dhcp option dns 1.2.3.4 1.2.3.4
+dnsmasq dhcp option router 1.2.3.4 1.2.3.254
+dnsmasq dhcp range 1.2.3.4 1.2.3.5 1.2.3.254
+dnsmasq dhcp static 1.2.3.4 00:1f:53:02:0b:51 1.2.3.250
+dnsmasq flush
+ip add 0 1.2.3.4/24
+ip add 0 5.6.7.8/24
+ip flush
+log level error
+route del default
+
+## cc filter hostname=vm1
+## cc exec dhclient -v veth0
+## clear cc filter
+## shell sleep 30
+## .columns ip .filter name=vm1 vm info
+ip
+[1.2.3.250, ]
+
+## # dns and dynamic updates
+## router vm0 dns 1.1.1.1 foo.com
+## router vm0 dns 2.2.2.2 bar.com
+## router vm0 dns 3.3.3.3 foobar.com
+## router vm0
+IPs:
+Network: 0: [1.2.3.4/24 5.6.7.8/24]
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         1.2.3.254
+DNS:            1.2.3.4
+Static IPs:     
+     00:1f:53:02:0b:51 1.2.3.250
+
+DNS:
+1.1.1.1	foo.com
+2.2.2.2	bar.com
+3.3.3.3	foobar.com
+
+Log:
+## clear router vm0 dns 1.1.1.1
+## router vm0
+IPs:
+Network: 0: [1.2.3.4/24 5.6.7.8/24]
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         1.2.3.254
+DNS:            1.2.3.4
+Static IPs:     
+     00:1f:53:02:0b:51 1.2.3.250
+
+DNS:
+2.2.2.2	bar.com
+3.3.3.3	foobar.com
+
+Log:
+## clear router vm0 dns
+## router vm0
+IPs:
+Network: 0: [1.2.3.4/24 5.6.7.8/24]
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         1.2.3.254
+DNS:            1.2.3.4
+Static IPs:     
+     00:1f:53:02:0b:51 1.2.3.250
+
+Log:
+## router vm0 dns 1.1.1.1 foo.com
+## router vm0 dns 2.2.2.2 bar.com
+## router vm0 commit
+## shell sort /tmp/minimega/files/minirouter-vm0
+bird commit
+bird flush
+bird routerid 5.6.7.8
+dnsmasq commit
+dnsmasq dhcp option dns 1.2.3.4 1.2.3.4
+dnsmasq dhcp option router 1.2.3.4 1.2.3.254
+dnsmasq dhcp range 1.2.3.4 1.2.3.5 1.2.3.254
+dnsmasq dhcp static 1.2.3.4 00:1f:53:02:0b:51 1.2.3.250
+dnsmasq dns 1.1.1.1 foo.com
+dnsmasq dns 2.2.2.2 bar.com
+dnsmasq flush
+log level error
+route del default
+## shell sleep 15
+## clear cc responses
+## cc filter hostname=vm1
+## cc exec nslookup foo.com 1.2.3.4
+## cc exec nslookup bar.com 1.2.3.4
+## shell sleep 30
+## cc response all raw
+Server:		1.2.3.4
+Address:	1.2.3.4#53
+
+Name:	foo.com
+Address: 1.1.1.1
+
+
+Server:		1.2.3.4
+Address:	1.2.3.4#53
+
+Name:	bar.com
+Address: 2.2.2.2
+
+## # router advertisements
+## router vm0 interface 0 2001:1::1/64
+## router vm0 ra 2001:1::
+## router vm0 ra 2001:2::
+## router vm0
+IPs:
+Network: 0: [1.2.3.4/24 5.6.7.8/24 2001:1::1/64]
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         1.2.3.254
+DNS:            1.2.3.4
+Static IPs:     
+     00:1f:53:02:0b:51 1.2.3.250
+
+DNS:
+1.1.1.1	foo.com
+2.2.2.2	bar.com
+
+Router Advertisements:
+2001:1::
+2001:2::
+
+Log:
+## clear router vm0 ra 2001:2::
+## router vm0
+IPs:
+Network: 0: [1.2.3.4/24 5.6.7.8/24 2001:1::1/64]
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         1.2.3.254
+DNS:            1.2.3.4
+Static IPs:     
+     00:1f:53:02:0b:51 1.2.3.250
+
+DNS:
+1.1.1.1	foo.com
+2.2.2.2	bar.com
+
+Router Advertisements:
+2001:1::
+
+Log:
+## clear router vm0 ra
+## router vm0
+IPs:
+Network: 0: [1.2.3.4/24 5.6.7.8/24 2001:1::1/64]
+Network: 1: []
+
+Listen address: 1.2.3.4
+Low address:    1.2.3.5
+High address:   1.2.3.254
+Router:         1.2.3.254
+DNS:            1.2.3.4
+Static IPs:     
+     00:1f:53:02:0b:51 1.2.3.250
+
+DNS:
+1.1.1.1	foo.com
+2.2.2.2	bar.com
+
+Log:
+## router vm0 ra 2001:1::
+## router vm0 commit
+## shell sort /tmp/minimega/files/minirouter-vm0
+bird commit
+bird flush
+bird routerid 5.6.7.8
+dnsmasq commit
+dnsmasq dhcp option dns 1.2.3.4 1.2.3.4
+dnsmasq dhcp option router 1.2.3.4 1.2.3.254
+dnsmasq dhcp range 1.2.3.4 1.2.3.5 1.2.3.254
+dnsmasq dhcp static 1.2.3.4 00:1f:53:02:0b:51 1.2.3.250
+dnsmasq dns 1.1.1.1 foo.com
+dnsmasq dns 2.2.2.2 bar.com
+dnsmasq flush
+dnsmasq ra 2001:1::
+ip add 0 1.2.3.4/24
+ip add 0 2001:1::1/64
+ip add 0 5.6.7.8/24
+ip flush
+log level error
+route del default
+## # we don't have a reliable way to test SLAAC addressing so we don't do it

@@ -1,0 +1,59 @@
+## # Try setting individual fields
+## cc filter uuid=99d2c66f-7e8f-4a26-af92-3876284d33f5
+## cc filter
+uuid                                 | hostname | arch | os | ip | mac | tags
+99d2c66f-7e8f-4a26-af92-3876284d33f5 |          |      |    |    |     | {}
+## cc filter hostname=foo
+## cc filter
+uuid | hostname | arch | os | ip | mac | tags
+     | foo      |      |    |    |     | {}
+## cc filter arch=amd64
+## cc filter
+uuid | hostname | arch  | os | ip | mac | tags
+     |          | amd64 |    |    |     | {}
+## cc filter os=linux
+## cc filter
+uuid | hostname | arch | os    | ip | mac | tags
+     |          |      | linux |    |     | {}
+## cc filter ip=10.0.0.1
+## cc filter
+uuid | hostname | arch | os | ip       | mac | tags
+     |          |      |    | 10.0.0.1 |     | {}
+## cc filter ip=10.0.0.0/24
+## cc filter
+uuid | hostname | arch | os | ip          | mac | tags
+     |          |      |    | 10.0.0.0/24 |     | {}
+## cc filter mac=13:37:13:37:00:00
+## cc filter
+uuid | hostname | arch | os | ip | mac               | tags
+     |          |      |    |    | 13:37:13:37:00:00 | {}
+
+## # Fun with tags
+## cc filter tag=foo
+## cc filter
+uuid | hostname | arch | os | ip | mac | tags
+     |          |      |    |    |     | {"foo":""}
+## cc filter tag=foo=bar
+## cc filter
+uuid | hostname | arch | os | ip | mac | tags
+     |          |      |    |    |     | {"foo":"bar"}
+## cc filter foo=bar
+## cc filter
+uuid | hostname | arch | os | ip | mac | tags
+     |          |      |    |    |     | {"foo":"bar"}
+## cc filter foo=
+## cc filter
+uuid | hostname | arch | os | ip | mac | tags
+     |          |      |    |    |     | {"foo":""}
+## cc filter tag=foo:bar
+## cc filter
+uuid | hostname | arch | os | ip | mac | tags
+     |          |      |    |    |     | {"foo":"bar"}
+## cc filter tag=foo tag=bar:car
+## cc filter
+uuid | hostname | arch | os | ip | mac | tags
+     |          |      |    |    |     | {"bar":"car","foo":""}
+## cc filter tag=foo tag=bar:car a=b
+## cc filter
+uuid | hostname | arch | os | ip | mac | tags
+     |          |      |    |    |     | {"a":"b","bar":"car","foo":""}

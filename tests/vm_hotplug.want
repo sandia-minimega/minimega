@@ -1,0 +1,55 @@
+## # Create test "image"
+## shell touch /tmp/minitest0.img
+## shell touch /tmp/minitest1.img
+
+## # Launch a VM to hotplug
+## vm launch kvm foo
+## vm launch kvm bar
+
+## # Add and then remove drives
+## vm hotplug
+## vm hotplug add foo /tmp/minitest0.img
+## vm hotplug
+name | id | file               | version
+foo  | 0  | /tmp/minitest0.img | 1.1
+## vm hotplug add foo /tmp/minitest1.img
+## vm hotplug
+name | id | file               | version
+foo  | 0  | /tmp/minitest0.img | 1.1
+foo  | 1  | /tmp/minitest1.img | 1.1
+## vm hotplug remove foo 0
+## vm hotplug
+name | id | file               | version
+foo  | 1  | /tmp/minitest1.img | 1.1
+## vm hotplug remove foo 1
+## vm hotplug
+
+## # Try adding to all
+## vm hotplug add all /tmp/minitest1.img
+## vm hotplug
+name | id | file               | version
+bar  | 0  | /tmp/minitest1.img | 1.1
+foo  | 0  | /tmp/minitest1.img | 1.1
+## vm hotplug remove all 0
+## vm hotplug
+
+## # Try remove all
+## vm hotplug add foo /tmp/minitest0.img
+## vm hotplug add foo /tmp/minitest1.img
+## vm hotplug
+name | id | file               | version
+foo  | 0  | /tmp/minitest0.img | 1.1
+foo  | 1  | /tmp/minitest1.img | 1.1
+## vm hotplug remove foo all
+## vm hotplug
+
+## # Try removing when none exist
+## vm hotplug remove foo 0
+E: no such hotplug device
+## vm hotplug remove foo all
+E: no hotplug devices to remove
+## vm hotplug remove all 0
+## vm hotplug remove all all
+
+## # Remove test files
+## shell rm /tmp/minitest0.img /tmp/minitest1.img

@@ -1,0 +1,46 @@
+## .annotate false
+
+## # Create a vm in ns0
+## namespace ns0
+## vm launch kvm vm0
+
+## # Start a kb recording
+## vnc record kb vm0 /tmp/vm0.kbr
+## # This should error as the recording is already running
+## vnc record kb vm0 /tmp/vm0.kbr
+E: kb recording for vm0 already running
+
+## # Check the kb recording is running
+## .columns name,type,filename vnc
+name | type      | filename
+vm0  | record kb | /tmp/vm0.kbr
+
+## # Create a vm in ns1
+## namespace ns1
+## vm launch kvm vm1
+
+## # This should be blank
+## vnc
+
+## # Start and check a kbrecording in the new ns
+## vnc record kb vm1 /tmp/vm1.kbr
+## .columns name,type,filename vnc
+name | type      | filename
+vm1  | record kb | /tmp/vm1.kbr
+
+## # Stop the kb recording, vnc should be blank
+## vnc stop kb vm1
+## vnc
+
+## # Switch to the first namespace, check the kb recording is still running,
+## # and then stop it.
+## namespace ns0
+## .columns name,type,filename vnc
+name | type      | filename
+vm0  | record kb | /tmp/vm0.kbr
+## vnc stop kb vm0
+## vnc
+
+## # Clean up
+## shell rm /tmp/vm0.kbr
+## shell rm /tmp/vm1.kbr

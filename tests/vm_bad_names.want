@@ -1,0 +1,8 @@
+## vm launch kvm [0]
+E: invalid vm name, `0` is an integer
+## vm launch kvm all
+E: invalid vm name, `all` is a reserved word
+## vm launch kvm foo,[0]
+E: invalid vm name, `0` is an integer
+## vm launch kvm foo,all
+E: invalid vm name, `all` is a reserved word

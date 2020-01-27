@@ -1,0 +1,33 @@
+# Create a tap, second time should fail
+.filter bridge=minitest tap
+tap create 10 bridge minitest name minitest_tap0
+tap create 10 bridge minitest name minitest_tap0
+
+# Create a tap in a different namespace
+namespace foo tap create 10 bridge minitest name minitest_tap1
+.filter bridge=minitest tap
+namespace foo .filter bridge=minitest tap
+
+# Create a tap in another, different namespace
+namespace bar tap create 10 bridge minitest name minitest_tap2
+.filter bridge=minitest tap
+namespace bar .filter bridge=minitest tap
+
+# Try to delete tap from wrong namespace
+namespace bar tap delete minitest_tap0
+namespace bar tap delete minitest_tap1
+
+# Delete all the foo taps
+namespace foo tap delete all
+namespace foo .filter bridge=minitest tap
+
+# Delete all the bar taps by deleting the namespace
+clear namespace bar
+# TODO: how to check?
+
+# Clean up taps
+tap delete all
+.filter bridge=minitest tap
+
+# Clean up foo namespace
+clear namespace foo

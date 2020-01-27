@@ -1,0 +1,66 @@
+    {{define "content"}}
+    <div id="content">
+
+      <div id="vms">
+        <div id="vms-network" class="box">
+          <h1 class="box-header">Network Graph</h1>
+          <div class="box-content">
+            <div id="chart">
+              <div id="chart-toolbar" class="btn-group" role="group">
+                <button type="button" class="btn btn-default" id="center-button">
+                  <i class="fa fa-compress"></i>
+                  <span>Center</span>
+                </button>
+                <button type="button" class="btn btn-default" id="reflow-button">
+                  <i class="fa fa-refresh"></i>
+                  <span>Reflow</span>
+                </button>
+              </div>
+            </div>
+            <div id="sidebar-container">
+              <div id="sidebar">
+                <div id="node-data" class="uninitialized">
+                  <div id="node-heading">
+                    <h1 id="node-name"></h1>
+                    <span id="node-count"></span>
+                  </div>
+                  <ul id="subnodes">
+                  </ul>
+                  <div id="node-info">
+                    <table class="graph-table">
+                    </table>
+                  </div>
+                </div>
+              </div>
+              <div id="popup" class="sidepoint hidden">
+                <h1 id="machine-name">vm-foo</h1>
+                <div id="machine-info">
+                  <table class="graph-table">
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+
+
+    <script type="text/javascript" src="/libs/d3.min.js"></script>
+    <script type="text/javascript" src="/libs/grapher/grapher.js"></script>
+    <script type="text/javascript" src="/libs/grapher/center.js"></script>
+    <script type="text/javascript" src="/libs/grapher/palette.js"></script>
+    <script type="text/javascript" src="/libs/grapher/target.js"></script>
+    <script type="text/javascript" src="/libs/grapher/zoom.js"></script>
+
+    <script type="text/javascript" src="/js/graph.js"></script>
+    <script type="text/javascript">
+      $(document).ready(function() {
+        $('nav a[href$="' + "graph" + '"]').addClass("current-view");
+
+        initializeGraph();
+      });
+    </script>
+    {{end}}

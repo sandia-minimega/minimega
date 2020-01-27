@@ -1,0 +1,17 @@
+[
+	{
+		"To":"foo@mail.com",
+		"From":"bar@mail.com",
+		"Subject": "foo",
+		"Msg":"benign message"
+	},
+	{
+		"To":"victim@mail.com",
+		"From":"evil@minimega.org",
+		"Subject": "foo",
+		"Msg":"CONFIDENTIAL",
+		"File": "foo"
+	}
+]
+
+

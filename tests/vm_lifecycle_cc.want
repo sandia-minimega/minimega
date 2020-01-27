@@ -1,0 +1,25 @@
+## vm config filesystem $images/minicccfs
+## vm launch container foo
+## vm start all
+
+## # make sure we have a client
+## shell sleep 5
+## cc
+clients
+1
+
+## vm kill all
+
+## # should lose client
+## shell sleep 5
+## cc
+clients
+0
+
+## vm start foo
+
+## # should have client again
+## shell sleep 5
+## cc
+clients
+1

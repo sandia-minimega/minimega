@@ -1,0 +1,79 @@
+## # Simple tests
+## vm config net 101
+## vm config net A # should be 102
+## vlans
+alias | vlan
+A     | 102
+## vm config net
+[A]
+## vm config net B # should be 103
+## vlans
+alias | vlan
+A     | 102
+B     | 103
+## vm config net
+[B]
+## vm config net A # should be 102
+## vlans
+alias | vlan
+A     | 102
+B     | 103
+## vm config net
+[A]
+
+## # Manually add aliases
+## vlans add foo 200
+## vlans add foo 201
+E: alias already in use
+## vlans add bar 300
+## vlans
+alias | vlan
+A     | 102
+B     | 103
+bar   | 300
+foo   | 200
+## vm config net foo
+## vm config net
+[foo]
+
+## # Tests with namespaces
+## namespace foo
+## vm config net A # should be 104
+## vlans
+alias | vlan
+A     | 104
+## vm config net
+[A]
+## namespace bar
+## vm config net A # should be 105
+## vlans
+alias | vlan
+A     | 105
+## vm config net
+[A]
+## vm config net minimega//A # should be 102
+## vlans
+alias | vlan
+A     | 105
+## vm config net
+[minimega//A]
+## vm config net foo//A # should be 104
+## vlans
+alias | vlan
+A     | 105
+## vm config net
+[foo//A]
+## clear namespace
+
+## # Specify ranges
+## namespace foo
+## vlans range 130 120
+E: expected min > max
+## vlans range 120 130
+## vm config net B # should be 120
+## vlans
+alias | vlan
+A     | 104
+B     | 120
+## vm config net
+[B]

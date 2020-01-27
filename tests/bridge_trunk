@@ -1,0 +1,7 @@
+bridge trunk minitest minitest_tap0
+.columns "trunks" .filter bridge=minitest bridge
+shell ovs-vsctl list-ports minitest
+
+bridge notrunk minitest minitest_tap0
+.columns "trunks" .filter bridge=minitest bridge
+shell ovs-vsctl list-ports minitest

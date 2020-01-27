@@ -1,0 +1,13 @@
+# Create a tap, second time should fail
+.filter bridge=minitest tap
+tap create 10 bridge minitest name minitest_tap0
+.filter bridge=minitest tap
+tap create 10 bridge minitest name minitest_tap0
+
+# Create another tap with a static IP
+tap create 10 bridge minitest ip 192.168.100.1 minitest_tap1
+.filter bridge=minitest tap
+
+# Clean up taps
+tap delete all
+.filter bridge=minitest tap

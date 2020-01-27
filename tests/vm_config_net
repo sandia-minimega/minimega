@@ -1,0 +1,46 @@
+vm config net
+
+# Just VLAN
+vm config net 100
+vm config net
+vm launch kvm vm0
+.filter name=vm0 .columns name,bridge,vlan vm info
+
+# VLAN and MAC address
+vm config net 100,13:37:13:37:00:00
+vm config net
+vm launch kvm vm1
+.filter name=vm1 .columns name,bridge,vlan,mac vm info
+
+# VLAN and Bridge
+vm config net test_bridge,100
+vm config net
+vm launch kvm vm2
+.filter name=vm2 .columns name,bridge,vlan vm info
+
+# VLAN, MAC address, and Bridge
+vm config net test_bridge,100,13:37:13:37:00:01
+vm config net
+vm launch kvm vm3
+.filter name=vm3 .columns name,bridge,vlan,mac vm info
+
+# VLAN and Network Driver
+vm config net 100,e1000
+vm config net
+vm launch kvm vm4
+.filter name=vm4 .columns name,bridge,vlan vm info
+vm config qemu-override
+
+# VLAN, MAC address, Bridge, and Network Driver
+vm config net test_bridge,100,13:37:13:37:00:02,e1000
+vm config net
+vm launch kvm vm5
+.filter name=vm5 .columns name,bridge,vlan,mac vm info
+vm config qemu-override
+
+# Almost two of everything
+vm config net test_bridge,100,13:37:13:37:00:03 test_bridge,200,13:37:13:37:00:04,e1000
+vm config net
+vm launch kvm vm6
+.filter name=vm6 .columns name,bridge,vlan,mac vm info
+vm config qemu-override

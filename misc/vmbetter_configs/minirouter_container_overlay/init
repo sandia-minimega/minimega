@@ -1,0 +1,13 @@
+#!/bin/sh
+
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+
+ifconfig lo up
+
+mkdir /var/run/sshd
+/usr/sbin/sshd &
+
+/miniccc -v=false -family unix -parent /cc -logfile /miniccc.log &
+/minirouter -v=false -logfile /minirouter.log &
+
+bash

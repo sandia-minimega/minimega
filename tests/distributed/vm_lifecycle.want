@@ -1,0 +1,44 @@
+## vm config filesystem /root/uminicccfs
+## vm config coschedule 0
+## vm launch container vm[1-3]
+## .columns name,state vm info
+name | state
+vm1  | BUILDING
+vm2  | BUILDING
+vm3  | BUILDING
+
+## # change VM states
+## vm start all
+## .columns name,state vm info
+name | state
+vm1  | RUNNING
+vm2  | RUNNING
+vm3  | RUNNING
+## vm kill vm[1-2]
+## .columns name,state vm info
+name | state
+vm1  | QUIT
+vm2  | QUIT
+vm3  | RUNNING
+## vm stop all
+## .columns name,state vm info
+name | state
+vm1  | QUIT
+vm2  | QUIT
+vm3  | PAUSED
+## vm start all
+## .columns name,state vm info
+name | state
+vm1  | QUIT
+vm2  | QUIT
+vm3  | RUNNING
+## vm flush
+## .columns name,state vm info
+name | state
+vm3  | RUNNING
+## vm kill all
+## .columns name,state vm info
+name | state
+vm3  | QUIT
+## vm flush
+## .columns name,state vm info

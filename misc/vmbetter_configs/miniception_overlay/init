@@ -1,0 +1,61 @@
+#!/bin/sh
+
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/
+
+# mount volatile filesystems
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs udev /dev
+mkdir /dev/pts
+mount -n -t devpts -o newinstance,ptmxmode=666,gid=5,mode=620 none /dev/pts
+rm /dev/ptmx
+ln -s /dev/pts/ptmx /dev/ptmx
+
+# setup cgroups
+mount -t tmpfs cgroup /sys/fs/cgroup
+mkdir /sys/fs/cgroup/memory
+mkdir /sys/fs/cgroup/freezer
+mkdir /sys/fs/cgroup/devices
+mkdir /sys/fs/cgroup/cpu,cpuacct
+ln -s /sys/fs/cgroup/cpu,cpuacct /sys/fs/cgroup/cpu
+ln -s /sys/fs/cgroup/cpu,cpuacct /sys/fs/cgroup/cpuacct
+mount -t cgroup cgroup -o memory /sys/fs/cgroup/memory
+mount -t cgroup cgroup -o freezer /sys/fs/cgroup/freezer
+mount -t cgroup cgroup -o devices /sys/fs/cgroup/devices
+mount -t cgroup cgroup -o cpu,cpuacct /sys/fs/cgroup/cpu,cpuacct
+
+# / needs permissions!?
+chmod a+rx /
+
+# minimega needs
+modprobe loop
+modprobe virtio_console
+modprobe virtio_pci
+
+# swath of network drivers that might be used
+modprobe e1000
+modprobe e1000e
+modprobe virtio_net
+modprobe vmxnet3
+
+# settle :(
+sleep 10
+
+ifconfig lo up
+ifconfig eth0 up
+dhclient -v eth0
+
+mkdir /var/run/sshd
+/usr/sbin/sshd
+
+# create symlinks for virtio devices
+mkdir /dev/virtio-ports
+
+for d in $(ls /sys/class/virtio-ports); do
+	name=$(cat /sys/class/virtio-ports/$d/name)
+	ln -s -T /dev/$d /dev/virtio-ports/$name
+done
+
+/miniccc -v=false -serial /dev/virtio-ports/cc -logfile /miniccc.log &
+
+setsid sh -c 'exec sh </dev/tty1 >/dev/tty1 2>&1'

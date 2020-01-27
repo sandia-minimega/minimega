@@ -1,0 +1,7 @@
+vm launch kvm foo
+
+vm qmp foo '{ "execute": "query-status" }'
+vm start foo
+vm qmp foo '{ "execute": "query-status" }'
+vm stop foo
+vm qmp foo '{ "execute": "query-status" }'

@@ -1,0 +1,48 @@
+## .annotate false
+
+## vm config net 100
+## vm launch kvm vm0
+
+## qos add vm0 0 loss 5
+## .columns qos vm info
+qos
+[0: loss 5]
+
+## qos add vm0 0 delay 100ms
+## .columns qos vm info
+qos
+[0: loss 5 delay 100ms]
+
+## qos add vm0 0 rate 1 mbit
+## .columns qos vm info
+qos
+[0: rate 1mbit]
+
+## qos add vm0 0 delay 200ms
+## .columns qos vm info
+qos
+[0: delay 200ms]
+
+## qos add vm0 0 rate 2 mbit
+## .columns qos vm info
+qos
+[0: rate 2mbit]
+
+## qos add vm0 0 loss 0.50
+## .columns qos vm info
+qos
+[0: loss 0.50]
+
+## qos add vm0 0 loss 150
+E: invalid loss: `150`
+
+## qos add vm0 0 delay 100xbit
+E: invalid duration: `100xbit`
+
+## qos add vm0 100 delay 100ms
+E: invalid tap index specified: 100
+
+## clear qos vm0 0
+## .column qos vm info
+qos
+[]

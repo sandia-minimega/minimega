@@ -1,0 +1,56 @@
+## # Launch three foos, one in default namespace, others in ns1 and ns2
+## vm launch kvm foo
+## .columns name,state vm info
+name | state
+foo  | BUILDING
+## namespace ns1
+## .columns name,state vm info
+## vm launch kvm foo
+## .columns name,state vm info
+name | state
+foo  | BUILDING
+## namespace ns2
+## .columns name,state vm info
+## vm launch kvm foo
+## .columns name,state vm info
+name | state
+foo  | BUILDING
+## clear namespace
+
+## # Change VM states, all should only apply within a given namespace
+## namespace ns1 vm start all
+## .columns name,state vm info
+name | state
+foo  | BUILDING
+## namespace ns1 .columns name,state vm info
+name | state
+foo  | RUNNING
+## namespace ns2 .columns name,state vm info
+name | state
+foo  | BUILDING
+## namespace ns2 vm kill all
+## .columns name,state vm info
+name | state
+foo  | BUILDING
+## namespace ns1 .columns name,state vm info
+name | state
+foo  | RUNNING
+## namespace ns2 .columns name,state vm info
+name | state
+foo  | QUIT
+## namespace ns2 vm flush
+## .columns name,state vm info
+name | state
+foo  | BUILDING
+## namespace ns1 .columns name,state vm info
+name | state
+foo  | RUNNING
+## namespace ns2 .columns name,state vm info
+
+## # Test clear/delete namespace
+## namespace ns3
+## namespace ns3
+E: already in namespace: ns3
+## clear namespace
+## clear namespace
+E: already in namespace: minimega
