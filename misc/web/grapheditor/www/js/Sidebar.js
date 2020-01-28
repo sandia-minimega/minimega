@@ -92,8 +92,10 @@ Sidebar.prototype.init = function()
 	//this.addBpmnPalette(dir, false);
 	//this.addStencilPalette('flowchart', 'Flowchart', dir + '/flowchart.xml',
 	//	';whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=2');
-	this.addImagePalette('Networking', mxResources.get('clipart'), dir + '/clipart/', '_128x128.png',
-		['Router','Router_Icon','Printer', 'Server_Tower', 'Workstation', 'Firewall_02']);
+	this.addImagePalette('Networking', mxResources.get('networking'), dir + '/clipart/', '_128x128.png',
+		['Router','Router_Icon', 'Firewall_02']);
+	this.addImagePalette('Hosts', mxResources.get('vm'), dir + '/clipart/', '_128x128.png',
+		['Printer', 'Server_Tower', 'Workstation']);
 	/*this.addImagePalette('clipart', mxResources.get('clipart'), dir + '/clipart/', '_128x128.png',
 		['Earth_globe', 'Empty_Folder', 'Full_Folder', 'Gear', 'Lock', 'Software', 'Virus', 'Email',
 		 'Database', 'Router_Icon', 'iPad', 'iMac', 'Laptop', 'MacBook', 'Monitor_Tower', 'Printer',
@@ -2541,6 +2543,7 @@ Sidebar.prototype.createDragSource = function(elt, dropHandler, preview, cells, 
 		if (firstVertex == null && this.editorUi.editor.graph.model.isVertex(cells[i]))
 		{
 			firstVertex = i;
+			cells[firstVertex].setAttribute("memory","3072")
 		}
 		else if (freeSourceEdge == null && this.editorUi.editor.graph.model.isEdge(cells[i]) &&
 				this.editorUi.editor.graph.model.getTerminal(cells[i], true) == null)
