@@ -121,11 +121,6 @@ func templateHandler(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, r, r.URL.Path+".tmpl", nil)
 }
 
-func minibuilderHandler(w http.ResponseWriter, r *http.Request) {
-	fp := filepath.Join(*f_root, "grapheditor", "www")
-	http.ServeFile(w, r, fp)
-}
-
 // filesHandler ignores subpaths and renders the files template
 func filesHandler(w http.ResponseWriter, r *http.Request) {
 	log.Info("files handler: %v", r.URL.Path)
@@ -554,13 +549,13 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 //
 // Example usage:
 //   curl 'http://localhost:9001/command' -d '{
-//   	"command": "vm info"
+//	"command": "vm info"
 //   }'
 //
 //   curl 'http://localhost:9001/command' -d '{
-//   	"command": "vm info",
-//   	"columns": ["name", "hostname"],
-//   	"filters": ["state=building"]
+//	"command": "vm info",
+//	"columns": ["name", "hostname"],
+//	"filters": ["state=building"]
 //   }'
 //
 // Must have -console=true to enable.
