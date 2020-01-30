@@ -90,6 +90,7 @@ func main() {
 	mux.HandleFunc("/graph", mustAuth(templateHandler))
 	mux.HandleFunc("/tilevnc", mustAuth(templateHandler))
 	mux.HandleFunc("/montage", mustAuth(templateHandler))
+	mux.HandleFunc("/minibuilder", mustAuth(templateHandler))
 
 	mux.HandleFunc("/hosts.json", mustAuth(tabularHandler))
 	mux.HandleFunc("/vlans.json", mustAuth(tabularHandler))
@@ -100,8 +101,9 @@ func main() {
 	mux.HandleFunc("/files/", mustAuth(filesHandler))
 	mux.HandleFunc("/files.json", mustAuth(tabularHandler))
 
+	mux.HandleFunc("/minibuilder/", mustAuth(minibuilderHandler))
+
 	mux.HandleFunc("/vm/", mustAuth(vmHandler))
-	mux.HandleFunc("/minibuilder", mustAuth(minibuilderHandler))
 
 	if *f_namespace == "" {
 		mux.HandleFunc("/namespaces", mustAuth(templateHandler))

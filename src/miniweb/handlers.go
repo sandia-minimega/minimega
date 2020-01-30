@@ -13,6 +13,7 @@ import (
 	"minicli"
 	log "minilog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -119,11 +120,6 @@ func renderTemplate(w http.ResponseWriter, r *http.Request, t string, d interfac
 // Templated HTML responses
 func templateHandler(w http.ResponseWriter, r *http.Request) {
 	renderTemplate(w, r, r.URL.Path+".tmpl", nil)
-}
-
-func minibuilderHandler(w http.ResponseWriter, r *http.Request) {
-	fp := filepath.Join(*f_root, "grapheditor", "www")
-	http.ServeFile(w, r, fp)
 }
 
 // filesHandler ignores subpaths and renders the files template
@@ -554,13 +550,13 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 //
 // Example usage:
 //   curl 'http://localhost:9001/command' -d '{
-//   	"command": "vm info"
+//	"command": "vm info"
 //   }'
 //
 //   curl 'http://localhost:9001/command' -d '{
-//   	"command": "vm info",
-//   	"columns": ["name", "hostname"],
-//   	"filters": ["state=building"]
+//	"command": "vm info",
+//	"columns": ["name", "hostname"],
+//	"filters": ["state=building"]
 //   }'
 //
 // Must have -console=true to enable.
@@ -589,4 +585,42 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, resps)
+}
+
+func minibuilderHandler(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	lp := parts[len(parts)-1]
+
+	switch lp {
+	case "export":
+	case "save":
+		// target filename
+		fname := r.FormValue("filename")
+		if fname == "" {
+			fname = "export"
+		}
+
+		// target format
+		format := r.FormValue("format")
+		if format == "" {
+			format = "xml"
+		}
+
+		log.Info(fmt.Sprintf("Saving file %s as %s", fname, format))
+
+		data, err := url.QueryUnescape(r.FormValue("xml"))
+		if err != nil {
+			log.Warn("Unable to decode XML")
+		}
+
+		w.Header().Set("Content-Type", "text/plain")
+
+		dis := fmt.Sprintf("attachment; filename=\"%s\"; filename*=UTF-8''%s", fname, fname)
+		w.Header().Set("Content-Disposition", dis)
+		w.WriteHeader(http.StatusOK)
+
+		fmt.Fprint(w, data)
+
+	case "open":
+	}
 }
