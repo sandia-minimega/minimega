@@ -547,7 +547,16 @@ EditorUi = function(editor, container, lightbox)
 				for (var i = 0; i < cells.length; i++)
 				{
 					var cell = cells[i];
-
+					/*var value = cell.getValue();
+					if (!mxUtils.isNode(value))
+					{
+						var doc = mxUtils.createXmlDocument();
+						var obj = doc.createElement('object');
+						obj.setAttribute('label', value || '');
+						value = obj;
+					}
+					value.setAttribute("memory","3072");
+					*/
 					var appliedStyles;
 
 					if (asText)

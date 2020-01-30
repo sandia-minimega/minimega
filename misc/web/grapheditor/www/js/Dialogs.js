@@ -2799,3 +2799,213 @@ var LayersWindow = function(editorUi, x, y, w, h)
 		this.window.destroy();
 	}
 };
+
+/**
+ * Constructs a new edit file dialog.
+ */
+var EditMiniConfigDialog = function(editorUi,vertices)
+{
+	var div = document.createElement('div');
+	div.style.textAlign = 'right';
+	var textarea = document.createElement('textarea');
+	textarea.setAttribute('wrap', 'off');
+	textarea.setAttribute('spellcheck', 'false');
+	textarea.setAttribute('autocorrect', 'off');
+	textarea.setAttribute('autocomplete', 'off');
+	textarea.setAttribute('autocapitalize', 'off');
+	textarea.style.overflow = 'auto';
+	textarea.style.resize = 'none';
+	textarea.style.width = '600px';
+	textarea.style.height = '360px';
+	textarea.style.marginBottom = '16px';
+
+	var vlan_count =50;
+	// Standardizes all cells to ahve standard value object
+	function checkValue(cell){
+		var value = cell.getValue();
+		if (!mxUtils.isNode(value)){
+			var doc = mxUtils.createXmlDocument();
+			var obj = doc.createElement('object');
+			obj.setAttribute('label', value || '');
+			value = obj;
+			cell.setValue(value);
+		}
+	}
+
+	function lookforvlan(cell){
+		checkValue(cell);
+		// Check if vertex is a switch, if it is and it does not have a vlan set all edges to a new vlan
+		if (cell.getStyle().includes("switch")){
+			if (cell.getAttribute("vlan") == undefined ){
+				cell.setAttribute("vlan", vlan_count.toString());
+				vlan_count++;
+			} 
+			for (var i =0; i< cell.getEdgeCount();i++){
+				var e = cell.getEdgeAt(i);
+				checkValue(e);
+				e.setAttribute("vlan",cell.getAttribute("vlan"));
+			}
+		} else {
+			for (var i =0; i< cell.getEdgeCount();i++){
+				var e = cell.getEdgeAt(i);
+				checkValue(e);
+				// check if edge has a vlan
+				if (e.getAttribute("vlan") != undefined) {
+					continue
+				}
+				var ec;
+
+				// Figure out which end is the true target for the edge
+				if (e.source.getId() != cell.getId()){
+					ec = e.source;
+				} else {ec = e.target;}
+				checkValue(ec);
+
+				// if connected vertex is a switch get the vlan number or sets one for the switch and the edge
+				if (ec.getStyle().includes("switch")){
+					if (ec.getAttribute("vlan") == undefined){
+						e.setAttribute("vlan", vlan_count.toString());
+						ec.setAttribute("vlan", vlan_count.toString());
+						vlan_count++;
+					} else {e.setAttribute("vlan", ec.getAttribute("vlan"));}
+				} // If its any other device just set a new vlan to the edge
+				else {
+					e.setAttribute("vlan", vlan_count.toString());
+					vlan_count++;
+				}
+			}
+		}
+	}
+	var count =0;
+	var parameters = {memory:"2048", vcpu:"1", network:undefined,kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
+	var config = "";
+	var prev_dev_config = "";
+	vertices.forEach(cell => {
+		var dev_config="";
+		var name = "";
+		lookforvlan(cell);
+		// if vertex is a switch skip the device in config
+		if (cell.getStyle().includes("switch")){return;}
+		if (cell.getStyle().includes("router")){cell.setAttribute("type","router");}
+		if (cell.getStyle().includes("firewall")){cell.setAttribute("type","firewall");}
+		if (cell.getStyle().includes("desktop")){cell.setAttribute("type","desktop");}
+		if (cell.getStyle().includes("server")){cell.setAttribute("type","server");}
+		if (cell.getStyle().includes("mobile")){cell.setAttribute("type","mobile");}
+		if (cell.getAttribute("name") != undefined) {
+			config += `## Config for ${cell.getAttribute("name")}\n`;
+			name = cell.getAttribute("name");
+		} 
+		else {
+			config+= `##Config for a ${cell.getAttribute("type")} device #${count}\n`;
+			name = `${cell.getAttribute("type")}_device_${count}`
+		}
+		count++;
+		var net ="";
+		for (var i =0; i< cell.getEdgeCount();i++){
+			var e = cell.getEdgeAt(i);
+			net += `${e.getAttribute("vlan")} `;
+		}
+		var tmp = `vm config net ${net} \n`;
+		if (!prev_dev_config.includes(tmp)){
+			dev_config=tmp;
+			config += tmp;
+		}
+
+		for (const p in parameters) {
+			if (cell.getAttribute(p) != undefined) { 
+				tmp = `vm config ${p} ${cell.getAttribute(p)} \n`;
+				if(!prev_dev_config.includes(tmp)){
+					dev_config+=tmp;
+					config += tmp;
+				}
+			}
+			else {
+				if (parameters[p] != undefined && prev_dev_config.includes(`vm config ${p} ${parameters[p]} \n`)){
+					dev_config += `vm config ${p} ${parameters[p]} \n`;
+					config += `vm config ${p} ${parameters[p]} \n`;
+				}
+			}
+		  }
+		if (dev_config != ""){
+			prev_dev_config = dev_config;
+		}
+		config+=`vm launch ${name}\n\n`
+	});
+	textarea.value = config;
+	div.appendChild(textarea);
+	
+	this.init = function()
+	{
+		textarea.focus();
+	};
+	
+	// Enables dropping files
+	if (Graph.fileSupport)
+	{
+		function handleDrop(evt)
+		{
+		    evt.stopPropagation();
+		    evt.preventDefault();
+		    
+		    if (evt.dataTransfer.files.length > 0)
+		    {
+    			var file = evt.dataTransfer.files[0];
+    			var reader = new FileReader();
+				
+				reader.onload = function(e)
+				{
+					textarea.value = e.target.result;
+				};
+				
+				reader.readAsText(file);
+    		}
+		    else
+		    {
+		    	textarea.value = editorUi.extractGraphModelFromEvent(evt);
+		    }
+		};
+		
+		function handleDragOver(evt)
+		{
+			evt.stopPropagation();
+			evt.preventDefault();
+		};
+
+		// Setup the dnd listeners.
+		textarea.addEventListener('dragover', handleDragOver, false);
+		textarea.addEventListener('drop', handleDrop, false);
+	}
+	
+	var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
+	{
+		editorUi.hideDialog();
+	});
+	cancelBtn.className = 'geBtn';
+	
+	if (editorUi.editor.cancelFirst)
+	{
+		div.appendChild(cancelBtn);
+	}
+
+	var okBtn = mxUtils.button(mxResources.get('ok'), function()
+	{
+		// Removes all illegal control characters before parsing
+		var data = Graph.zapGremlins(mxUtils.trim(textarea.value));
+		editorUi.hideDialog();
+	});
+	okBtn.className = 'geBtn gePrimaryBtn';
+	div.appendChild(okBtn);
+	
+	if (!editorUi.editor.cancelFirst)
+	{
+		div.appendChild(cancelBtn);
+	}
+
+	this.container = div;
+};
+
+/**
+ * 
+ */
+EditMiniConfigDialog.showNewWindowOption = true;
+

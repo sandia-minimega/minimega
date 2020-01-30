@@ -92,10 +92,10 @@ Sidebar.prototype.init = function()
 	//this.addBpmnPalette(dir, false);
 	//this.addStencilPalette('flowchart', 'Flowchart', dir + '/flowchart.xml',
 	//	';whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=2');
-	this.addImagePalette('Networking', mxResources.get('networking'), dir + '/clipart/', '_128x128.png',
-		['Router','Router_Icon', 'Firewall_02']);
-	this.addImagePalette('Hosts', mxResources.get('vm'), dir + '/clipart/', '_128x128.png',
-		['Printer', 'Server_Tower', 'Workstation']);
+	this.addImagePalette('Networking', mxResources.get('networking'), dir + '/clipart/', '.png',
+		['router_blue','router_grey', 'router_red','firewall_blue','firewall_grey', 'firewall_red','switch_blue','switch_grey', 'switch_red']);
+	this.addImagePalette('Hosts', mxResources.get('vm'), dir + '/clipart/', '.png',
+		['desktop_blue','desktop_grey', 'desktop_red','mobile_blue','mobile_grey', 'mobile_red','server_blue','server_grey', 'server_red']);
 	/*this.addImagePalette('clipart', mxResources.get('clipart'), dir + '/clipart/', '_128x128.png',
 		['Earth_globe', 'Empty_Folder', 'Full_Folder', 'Gear', 'Lock', 'Software', 'Virus', 'Email',
 		 'Database', 'Router_Icon', 'iPad', 'iMac', 'Laptop', 'MacBook', 'Monitor_Tower', 'Printer',
