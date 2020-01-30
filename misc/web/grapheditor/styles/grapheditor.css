@@ -772,3 +772,9 @@ html td.mxWindowTitle {
     -moz-box-sizing: revert;
     box-sizing: revert;
 }
+
+.geDialog  {
+    -webkit-box-sizing: revert;
+    -moz-box-sizing: revert;
+    box-sizing: revert;
+}

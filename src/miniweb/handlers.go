@@ -13,6 +13,7 @@ import (
 	"minicli"
 	log "minilog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -584,4 +585,42 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, resps)
+}
+
+func minibuilderHandler(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	lp := parts[len(parts)-1]
+
+	switch lp {
+	case "export":
+	case "save":
+		// target filename
+		fname := r.FormValue("filename")
+		if fname == "" {
+			fname = "export"
+		}
+
+		// target format
+		format := r.FormValue("format")
+		if format == "" {
+			format = "xml"
+		}
+
+		log.Info(fmt.Sprintf("Saving file %s as %s", fname, format))
+
+		data, err := url.QueryUnescape(r.FormValue("xml"))
+		if err != nil {
+			log.Warn("Unable to decode XML")
+		}
+
+		w.Header().Set("Content-Type", "text/plain")
+
+		dis := fmt.Sprintf("attachment; filename=\"%s\"; filename*=UTF-8''%s", fname, fname)
+		w.Header().Set("Content-Disposition", dis)
+		w.WriteHeader(http.StatusOK)
+
+		fmt.Fprint(w, data)
+
+	case "open":
+	}
 }

@@ -101,6 +101,8 @@ func main() {
 	mux.HandleFunc("/files/", mustAuth(filesHandler))
 	mux.HandleFunc("/files.json", mustAuth(tabularHandler))
 
+	mux.HandleFunc("/minibuilder/", mustAuth(minibuilderHandler))
+
 	mux.HandleFunc("/vm/", mustAuth(vmHandler))
 
 	if *f_namespace == "" {
