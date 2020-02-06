@@ -79,7 +79,9 @@ Actions.prototype.init = function()
 	{
 		var filter = function(cell) {return graph.model.isVertex(cell);}
 		var vertices = graph.model.filterDescendants(filter);
-		var dlg = new EditMiniConfigDialog(ui,vertices);
+		filter = function(cell) {return graph.model.isVertex(cell);}
+		var edges = graph.model.filterDescendants(filter);
+		var dlg = new EditMiniConfigDialog(ui,vertices,edges);
 		ui.showDialog(dlg.container, 620, 420, true, false);
 		dlg.init();
 		console.log(vertices)

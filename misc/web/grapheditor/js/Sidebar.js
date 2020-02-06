@@ -74,6 +74,10 @@ function Sidebar(editorUi, container)
 	this.init();
 };
 
+function getDevices(dir,subfolder){
+
+}
+
 /**
  * Adds all palettes to the sidebar.
  */
@@ -83,27 +87,14 @@ Sidebar.prototype.init = function()
 	
 	this.addSearchPalette(true);
 	this.addGeneralPalette(true);
-	//this.addMiscPalette(false);
-	//this.addAdvancedPalette(false);
-	//this.addBasicPalette(dir);
-	/*this.addStencilPalette('arrows', mxResources.get('arrows'), dir + '/arrows.xml',
-		';whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=2');*/
-	//this.addUmlPalette(false);
-	//this.addBpmnPalette(dir, false);
-	//this.addStencilPalette('flowchart', 'Flowchart', dir + '/flowchart.xml',
-	//	';whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;strokeWidth=2');
-	this.addImagePalette('Networking', mxResources.get('networking'), dir + '/clipart/', '.png',
+	this.addImagePalette('networking_vm', mxResources.get('networking_vm'), dir + '/virtual_machines/', '_vm.png',
 		['router_blue','router_grey', 'router_red','firewall_blue','firewall_grey', 'firewall_red','switch_blue','switch_grey', 'switch_red']);
-	this.addImagePalette('Hosts', mxResources.get('vm'), dir + '/clipart/', '.png',
+	this.addImagePalette('hosts_vm', mxResources.get('hosts_vm'), dir + '/virtual_machines/', '_vm.png',
 		['desktop_blue','desktop_grey', 'desktop_red','mobile_blue','mobile_grey', 'mobile_red','server_blue','server_grey', 'server_red']);
-	/*this.addImagePalette('clipart', mxResources.get('clipart'), dir + '/clipart/', '_128x128.png',
-		['Earth_globe', 'Empty_Folder', 'Full_Folder', 'Gear', 'Lock', 'Software', 'Virus', 'Email',
-		 'Database', 'Router_Icon', 'iPad', 'iMac', 'Laptop', 'MacBook', 'Monitor_Tower', 'Printer',
-		 'Server_Tower', 'Workstation', 'Firewall_02', 'Wireless_Router_N', 
-		 'Graph', 'Safe', 'Shopping_Cart', 'Suit1', 'Suit2', 'Suit3', 'Pilot1',
-		 'Worker1', 'Soldier1', 'Doctor1', 'Tech1', 'Security1', 'Telesales1'], null,
-		 {'Wireless_Router_N': 'wireless router switch wap wifi access point wlan',
-		  'Router_Icon': 'router switch'});*/
+	this.addImagePalette('networking_c', mxResources.get('networking_c'), dir + '/containers/', '_container.png',
+		['router_blue','router_grey', 'router_red','firewall_blue','firewall_grey', 'firewall_red','switch_blue','switch_grey', 'switch_red']);
+	this.addImagePalette('hosts_c', mxResources.get('hosts_c'), dir + '/containers/', '_container.png',
+		['desktop_blue','desktop_grey', 'desktop_red','mobile_blue','mobile_grey', 'mobile_red','server_blue','server_grey', 'server_red']);
 };
 
 /**
