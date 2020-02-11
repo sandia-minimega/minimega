@@ -95,7 +95,7 @@ func runPower(cmd *Command, args []string) {
 			log.Fatal("insufficient privileges to power %v reservation: %v", action, powerR)
 		}
 
-		// Detailed logging is happening in runner
+		// Detailed logging is happening in external
 		fmt.Printf("Powering %s reservation %s\n", action, powerR)
 		if err := doPower(r.Hosts, action); err != nil {
 			log.Error("Error running power command: %v", err)
@@ -121,7 +121,7 @@ func runPower(cmd *Command, args []string) {
 		}
 	}
 
-	// Detailed logging is happening in runner
+	// Detailed logging is happening in external
 	fmt.Printf("Powering %s nodes %s\n", action, powerN)
 	if err := doPower(nodes, action); err != nil {
 		log.Error("Error running power command: %v", err)
