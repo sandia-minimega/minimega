@@ -1521,6 +1521,7 @@ var EditDataDialog = function(ui, cell)
 	var graph = ui.editor.graph;
 	
 	var value = graph.getModel().getValue(cell);
+	var parameters = {memory:"2048", vcpu:"1", network:undefined,kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
 	
 	// Converts the value to an XML node
 	if (!mxUtils.isNode(value))
@@ -1608,6 +1609,22 @@ var EditDataDialog = function(ui, cell)
 		
 		addRemoveButton(texts[index], name);
 	};
+
+	var addDefaults = function(temp){
+		for (const p in parameters){
+			var i =0;
+			var found = false;
+			while (i <temp.length && !found){
+				if (temp[i].name==p){
+					found = true
+				}
+				i++;
+			}
+			if (!found){
+				temp.push({name: p, value: parameters[p]});
+			}
+		}
+	}
 	
 	var temp = [];
 	var isLayer = graph.getModel().getParent(cell) == graph.getModel().getRoot();
@@ -1619,6 +1636,7 @@ var EditDataDialog = function(ui, cell)
 			temp.push({name: attrs[i].nodeName, value: attrs[i].nodeValue});
 		}
 	}
+	addDefaults(temp);
 	
 	// Sorts by name
 	temp.sort(function(a, b)
@@ -2803,7 +2821,7 @@ var LayersWindow = function(editorUi, x, y, w, h)
 /**
  * Constructs a new edit file dialog.
  */
-var EditMiniConfigDialog = function(editorUi,vertices)
+var EditMiniConfigDialog = function(editorUi,vertices,edges)
 {
 	var div = document.createElement('div');
 	div.style.textAlign = 'right';
@@ -2818,8 +2836,22 @@ var EditMiniConfigDialog = function(editorUi,vertices)
 	textarea.style.width = '600px';
 	textarea.style.height = '360px';
 	textarea.style.marginBottom = '16px';
+	var vlans_in_use = {};
+	var vlan_count =10;
+	function searchNextVlan(v){
+		if (!vlans_in_use.hasOwnProperty(v.toString())){
+			vlans_in_use[v.toString()]=true;
+			return v;
+		}
+		while (vlans_in_use.hasOwnProperty(vlan_count) && v<4090){
+			vlan_count++;
+		}
+		vlans_in_use[vlan_count.toString()]=true;
+		v = vlan_count;
+		vlan_count+=1;
+		return v;
+	}
 
-	var vlan_count =50;
 	// Standardizes all cells to ahve standard value object
 	function checkValue(cell){
 		var value = cell.getValue();
@@ -2837,8 +2869,7 @@ var EditMiniConfigDialog = function(editorUi,vertices)
 		// Check if vertex is a switch, if it is and it does not have a vlan set all edges to a new vlan
 		if (cell.getStyle().includes("switch")){
 			if (cell.getAttribute("vlan") == undefined ){
-				cell.setAttribute("vlan", vlan_count.toString());
-				vlan_count++;
+				cell.setAttribute("vlan", searchNextVlan(vlan_count).toString());
 			} 
 			for (var i =0; i< cell.getEdgeCount();i++){
 				var e = cell.getEdgeAt(i);
@@ -2851,6 +2882,9 @@ var EditMiniConfigDialog = function(editorUi,vertices)
 				checkValue(e);
 				// check if edge has a vlan
 				if (e.getAttribute("vlan") != undefined) {
+					if (!vlans_in_use.hasOwnProperty(e.getAttribute("vlan"))){
+						vlans_in_use[e.getAttribute("vlan")]=true;
+					}
 					continue
 				}
 				var ec;
@@ -2864,18 +2898,27 @@ var EditMiniConfigDialog = function(editorUi,vertices)
 				// if connected vertex is a switch get the vlan number or sets one for the switch and the edge
 				if (ec.getStyle().includes("switch")){
 					if (ec.getAttribute("vlan") == undefined){
-						e.setAttribute("vlan", vlan_count.toString());
-						ec.setAttribute("vlan", vlan_count.toString());
-						vlan_count++;
+						e.setAttribute("vlan", searchNextVlan(vlan_count).toString());
+						ec.setAttribute("vlan", e.getAttribute("vlan"));
 					} else {e.setAttribute("vlan", ec.getAttribute("vlan"));}
 				} // If its any other device just set a new vlan to the edge
 				else {
-					e.setAttribute("vlan", vlan_count.toString());
-					vlan_count++;
+					e.setAttribute("vlan", searchNextVlan(vlan_count).toString());
 				}
 			}
 		}
 	}
+
+	//Walk through all existing edges
+	
+	edges.forEach(e => {
+	checkValue(e);
+	if (e.getAttribute("vlan") != undefined){
+		if (!vlans_in_use.hasOwnProperty(e.getAttribute("vlan"))){
+			vlans_in_use[e.getAttribute("vlan")]=true;
+		}
+	}});
+	
 	var count =0;
 	var parameters = {memory:"2048", vcpu:"1", network:undefined,kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
 	var config = "";
@@ -2905,14 +2948,14 @@ var EditMiniConfigDialog = function(editorUi,vertices)
 			var e = cell.getEdgeAt(i);
 			net += `${e.getAttribute("vlan")} `;
 		}
-		var tmp = `vm config net ${net} \n`;
+		var tmp = `vm config network ${net} \n`;
 		if (!prev_dev_config.includes(tmp)){
 			dev_config=tmp;
 			config += tmp;
 		}
 
 		for (const p in parameters) {
-			if (cell.getAttribute(p) != undefined) { 
+			if (cell.getAttribute(p) != undefined && cell.getAttribute(p) != "undefined") { 
 				tmp = `vm config ${p} ${cell.getAttribute(p)} \n`;
 				if(!prev_dev_config.includes(tmp)){
 					dev_config+=tmp;
@@ -2920,7 +2963,7 @@ var EditMiniConfigDialog = function(editorUi,vertices)
 				}
 			}
 			else {
-				if (parameters[p] != undefined && prev_dev_config.includes(`vm config ${p} ${parameters[p]} \n`)){
+				if (parameters[p] != undefined && !prev_dev_config.includes(`vm config ${p} ${parameters[p]} \n`)){
 					dev_config += `vm config ${p} ${parameters[p]} \n`;
 					config += `vm config ${p} ${parameters[p]} \n`;
 				}
@@ -2931,7 +2974,7 @@ var EditMiniConfigDialog = function(editorUi,vertices)
 		}
 		config+=`vm launch ${name}\n\n`
 	});
-	textarea.value = config;
+	textarea.value = config + "## Starting all VM's\nvm start all\n";
 	div.appendChild(textarea);
 	
 	this.init = function()
@@ -3008,4 +3051,3 @@ var EditMiniConfigDialog = function(editorUi,vertices)
  * 
  */
 EditMiniConfigDialog.showNewWindowOption = true;
-
