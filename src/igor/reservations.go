@@ -142,8 +142,8 @@ func (r *Reservations) Delete(id uint64) error {
 		return errors.New("invalid reservation ID")
 	}
 
-	// Only clear network and uninstall if this is an active, installed reservation
-	if res.IsActive(igor.Now) && res.Installed {
+	// Only clear network and uninstall if the reservation is installed
+	if res.Installed {
 		// clean up the network config
 		if err := networkClear(res.Hosts); err != nil {
 			return fmt.Errorf("error clearing network isolation: %v", err)
