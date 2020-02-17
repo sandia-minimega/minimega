@@ -119,6 +119,7 @@ func main() {
 		mux.HandleFunc("/console", mustAuth(consoleHandler))
 		mux.HandleFunc("/console/", mustAuth(consoleHandler))
 		mux.HandleFunc("/command", mustAuth(commandHandler))
+		mux.HandleFunc("/commands", mustAuth(commandsHandler))
 	} else {
 		disabled := func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "disabled, see -console flag", http.StatusNotImplemented)
@@ -126,6 +127,7 @@ func main() {
 		}
 		mux.HandleFunc("/console", disabled)
 		mux.HandleFunc("/command", disabled)
+		mux.HandleFunc("/commands", disabled)
 	}
 
 	server := &http.Server{

@@ -624,3 +624,35 @@ func minibuilderHandler(w http.ResponseWriter, r *http.Request) {
 	case "open":
 	}
 }
+
+func commandsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "must use POST", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ns := NewCommand(r).Namespace
+
+	cmds := []*Command{}
+	if err := json.NewDecoder(r.Body).Decode(&cmds); err != nil {
+		log.Error("unable to parse body: %v", err)
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	resps := []minicli.Responses{}
+	for _, cmd := range cmds {
+		if cmd.Command == "" {
+			log.Info("must specify command")
+			continue
+		}
+
+		cmd.Namespace = ns
+
+		for resp := range run(cmd) {
+			resps = append(resps, resp.Resp)
+		}
+	}
+
+	respondJSON(w, resps)
+}

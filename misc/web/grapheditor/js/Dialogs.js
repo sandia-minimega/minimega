@@ -3030,10 +3030,128 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		div.appendChild(cancelBtn);
 	}
 
-	var okBtn = mxUtils.button(mxResources.get('ok'), function()
+	var runBtn = mxUtils.button(mxResources.get('run'), function()
 	{
 		// Removes all illegal control characters before parsing
 		var data = Graph.zapGremlins(mxUtils.trim(textarea.value));
+
+		let cmds = data.split('\n').map(l => {
+		  return l.trim();
+		}).filter(l => {
+		  return !(l === '' || l.startsWith('#'));
+		}).map(l => {
+		  return {
+		    command: l
+		  };
+		});
+
+		var responseDlg = new MiniResponseDialog(editorUi);
+		$.post('/commands', JSON.stringify(cmds), function(resp){
+		  editorUi.showDialog(responseDlg.container, 820, 550, true, false);
+		  responseDlg.init();
+		  for (let i = 0; i < resp.length; i++) {
+		    let rs  = resp[i];
+		    let cmd  = cmds[i];
+		    responseDlg.appendRow(cmd.command, rs);
+		  }
+		}, "json");
+
+		editorUi.hideDialog();
+	});
+	runBtn.className = 'geBtn gePrimaryBtn';
+	div.appendChild(runBtn);
+
+	if (!editorUi.editor.cancelFirst)
+	{
+		div.appendChild(cancelBtn);
+	}
+
+	this.container = div;
+};
+
+/**
+ *
+ */
+EditMiniConfigDialog.showNewWindowOption = true;
+
+var MiniResponseDialog = function(editorUi)
+{
+	var div = document.createElement('div');
+
+	var header = document.createElement('h2');
+	header.textContent = "Minimega Response";
+
+	var table = document.createElement('table');
+	table.setAttribute('wrap', 'off');
+	table.setAttribute('spellcheck', 'false');
+	table.setAttribute('autocorrect', 'off');
+	table.setAttribute('autocomplete', 'off');
+	table.setAttribute('autocapitalize', 'off');
+	table.style.overflow = 'auto';
+	table.style.resize = 'none';
+	table.style.width = '800px';
+	table.style.height = '500px';
+	table.style.marginBottom = '16px';
+
+	div.appendChild(header);
+	div.appendChild(table);
+
+	let theader = document.createElement('tr');
+	theader.style.verticalAlign = 'top';
+	theader.style.fontWeight = 'bold';
+
+	let cmdTh = document.createElement('th');
+	cmdTh.textContent = "Command";
+	theader.appendChild(cmdTh);
+
+	let respTh = document.createElement('th');
+	respTh.textContent = "Response";
+	theader.appendChild(respTh);
+
+	table.appendChild(theader);
+
+	this.appendRow = function(cmd, resps) {
+	  let row = document.createElement('tr');
+	  row.style.verticalAlign = 'top';
+
+	  let cmdTd = document.createElement('td');
+	  let respTd = document.createElement('td');
+
+	  cmdTd.textContent = cmd;
+
+	  for (let r of resps){
+	    if (r.Error) {
+	      respTd.textContent = "Error: " + r.Error;
+	      respTd.style.color = "red";
+	      respTd.style.fontWeight = "bold";
+	    } else {
+	      respTd.textContent = r.Response ? r.Response : "-";
+	    }
+	  }
+
+	  table.appendChild(row);
+	  row.appendChild(cmdTd);
+	  row.appendChild(respTd);
+	}
+
+	this.init = function()
+	{
+		table.focus();
+	};
+
+	var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
+	{
+		editorUi.hideDialog();
+	});
+	cancelBtn.className = 'geBtn';
+
+	if (editorUi.editor.cancelFirst)
+	{
+		div.appendChild(cancelBtn);
+	}
+
+	var okBtn = mxUtils.button(mxResources.get('ok'), function()
+	{
 		editorUi.hideDialog();
 	});
 	okBtn.className = 'geBtn gePrimaryBtn';
@@ -3050,4 +3168,4 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 /**
  * 
  */
-EditMiniConfigDialog.showNewWindowOption = true;
+MiniResponseDialog.showNewWindowOption = true;

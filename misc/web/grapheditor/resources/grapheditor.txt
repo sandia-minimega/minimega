@@ -266,6 +266,7 @@ rotate=Rotate
 rotateTooltip=Click and drag to rotate, click to turn shape only by 90 degrees
 rotation=Rotation
 rounded=Rounded
+run=Run
 save=Save
 saveAs=Save as
 saved=Saved
