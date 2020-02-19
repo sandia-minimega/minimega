@@ -3192,9 +3192,12 @@ var MiniResponseDialog = function(editorUi)
 	      respTd.textContent = "Error: " + r.Error;
 	      respTd.style.color = "red";
 	      respTd.style.fontWeight = "bold";
+	    } else if (r.Response) {
+	      respTd.textContent = r.Response;
 	    } else {
-	      respTd.textContent = r.Response ? r.Response : "-";
-	    }
+              // blank response
+              respTd.innerHTML = "&#10004;"
+            }
 	  }
 
 	  table.appendChild(row);
