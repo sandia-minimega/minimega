@@ -3063,7 +3063,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		  };
 		});
 
-                var resetmm = [{command: "vm kill all"}, {command: "vm flush"}];
+                var resetmm = [{command: "clear all"}];
                 if (checkbox.checked) {
                   var tmp = [];
                   tmp.push(...resetmm);
