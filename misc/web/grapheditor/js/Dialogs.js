@@ -2923,6 +2923,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 	var parameters = {memory:"2048", vcpu:"1", network:undefined,kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
 	var config = "";
 	var prev_dev_config = "";
+	var prev_dev;
 	vertices.forEach(cell => {
 		var dev_config="";
 		var name = "";
@@ -2943,18 +2944,15 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 			name = `${cell.getAttribute("type")}_device_${count}`
 		}
 		count++;
-		var net ="";
-		for (var i =0; i< cell.getEdgeCount();i++){
-			var e = cell.getEdgeAt(i);
-			net += `${e.getAttribute("vlan")} `;
-		}
-		var tmp = `vm config network ${net} \n`;
-		if (!prev_dev_config.includes(tmp)){
-			dev_config=tmp;
-			config += tmp;
-		}
 
+		var clear ="";
+		// Generate configuration for parameters
 		for (const p in parameters) {
+			// If there is no configuration for a parameter and the previous device had one clear it
+			if ((cell.getAttribute(p) == undefined || cell.getAttribute(p) == "undefined") && prev_dev_config.includes(`vm config ${p}`)){
+				clear +=`clear vm config ${p}\n`;
+			}
+			// if it has a configuration for the parameter set it else issue a default value
 			if (cell.getAttribute(p) != undefined && cell.getAttribute(p) != "undefined") { 
 				tmp = `vm config ${p} ${cell.getAttribute(p)} \n`;
 				if(!prev_dev_config.includes(tmp)){
@@ -2969,10 +2967,26 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 				}
 			}
 		  }
-		if (dev_config != ""){
-			prev_dev_config = dev_config;
+		
+		config += clear;
+		var net ="";
+		for (var i =0; i< cell.getEdgeCount();i++){
+			var e = cell.getEdgeAt(i);
+			net += `${e.getAttribute("vlan")} `;
 		}
-		config+=`vm launch ${name}\n\n`
+
+		var tmp = `vm config network ${net} \n`;
+		if (!prev_dev_config.includes(tmp)){
+			dev_config+=tmp;
+			config += tmp;
+		}
+
+		if (dev_config != ""){
+			prev_dev_config += dev_config;
+		}
+
+		if (cell.getStyle().includes("container")){config+=`vm launch container ${name}\n\n`;}
+		else {config+=`vm launch kvm ${name}\n\n`;}
 	});
 	textarea.value = config + "## Starting all VM's\nvm start all\n";
 	div.appendChild(textarea);
