@@ -3124,6 +3124,7 @@ EditMiniConfigDialog.showNewWindowOption = true;
 var MiniResponseDialog = function(editorUi)
 {
 	var div = document.createElement('div');
+	div.style.overflow = 'auto';
 
 	var header = document.createElement('h2');
 	header.textContent = "Minimega Response";
