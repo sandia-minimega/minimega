@@ -2951,6 +2951,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 			// If there is no configuration for a parameter and the previous device had one clear it
 			if ((cell.getAttribute(p) == undefined || cell.getAttribute(p) == "undefined") && prev_dev.hasOwnProperty(p)){
 				if (p != "network"){
+					delete prev_dev[p];
 					clear +=`clear vm config ${p}\n`;
 				}
 			}
