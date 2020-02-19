@@ -2951,7 +2951,10 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		var net ="";
 				for (var i =0; i< cell.getEdgeCount();i++){
 					var e = cell.getEdgeAt(i);
-					net += `${e.getAttribute("vlan")} `;
+					net += `${e.getAttribute("vlan")}`;
+					if (i+1 < cell.getEdgeCount()){
+						net += ' ';
+					}
 				}
 				if (net == ""){
 					delete prev_dev["network"];
@@ -2961,7 +2964,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 					if (cell.getAttribute("network") != net){
 						cell.setAttribute("network",net);
 					}
-					if (!prev_dev["network"] != net){
+					if (prev_dev["network"] != net){
 					prev_dev["network"] = net
 					config += `vm config network ${net} \n`;
 					}
