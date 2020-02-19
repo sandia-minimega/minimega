@@ -2954,7 +2954,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 					net += `${e.getAttribute("vlan")} `;
 				}
 				if (net == ""){
-					delete prev_dev[p];
+					delete prev_dev["network"];
 					clear += "clear vm config network"
 				}
 				else {
