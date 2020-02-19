@@ -768,13 +768,13 @@ html td.mxWindowTitle {
 }
 
 #editor * {
-    -webkit-box-sizing: revert;
-    -moz-box-sizing: revert;
-    box-sizing: revert;
+    -webkit-box-sizing: initial;
+    -moz-box-sizing: initial;
+    box-sizing: initial;
 }
 
 .geDialog  {
-    -webkit-box-sizing: revert;
-    -moz-box-sizing: revert;
-    box-sizing: revert;
+    -webkit-box-sizing: initial;
+    -moz-box-sizing: initial;
+    box-sizing: initial;
 }
