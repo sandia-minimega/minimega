@@ -2948,7 +2948,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		if (cell.getStyle().includes("server")){cell.setAttribute("type","server");}
 		if (cell.getStyle().includes("mobile")){cell.setAttribute("type","mobile");}
 		if (cell.getAttribute("type") == "diagraming"){
-			continue;
+			return;
 		}
 		
 		if (cell.getAttribute("name") != undefined) {
