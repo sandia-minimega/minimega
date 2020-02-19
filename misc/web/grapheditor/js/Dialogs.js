@@ -2826,6 +2826,15 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 {
 	var div = document.createElement('div');
 	div.style.textAlign = 'right';
+
+	var header = document.createElement('h2');
+	header.textContent = "Minimega Script";
+        header.style.marginTop = "0";
+        header.style.marginBottom = "10px";
+	header.style.textAlign = 'left';
+
+        div.appendChild(header);
+
 	var textarea = document.createElement('textarea');
 	textarea.setAttribute('wrap', 'off');
 	textarea.setAttribute('spellcheck', 'false');
@@ -3097,7 +3106,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 
 		var responseDlg = new MiniResponseDialog(editorUi);
 		$.post('/commands', JSON.stringify(cmds), function(resp){
-		  editorUi.showDialog(responseDlg.container, 820, 550, true, false);
+		  editorUi.showDialog(responseDlg.container, 820, 600, true, false);
 		  responseDlg.init();
 		  for (let i = 0; i < resp.length; i++) {
 		    let rs  = resp[i];
@@ -3127,10 +3136,15 @@ EditMiniConfigDialog.showNewWindowOption = true;
 var MiniResponseDialog = function(editorUi)
 {
 	var div = document.createElement('div');
-	div.style.overflow = 'auto';
 
 	var header = document.createElement('h2');
 	header.textContent = "Minimega Response";
+        header.style.marginTop = "0";
+        header.style.marginBottom = "10px";
+
+	var tdiv = document.createElement('div');
+	tdiv.style.overflowY = 'scroll';
+	tdiv.style.height = '500px';
 
 	var table = document.createElement('table');
 	table.setAttribute('wrap', 'off');
@@ -3145,8 +3159,10 @@ var MiniResponseDialog = function(editorUi)
 	table.style.lineHeight = 'initial';
 	table.style.marginBottom = '16px';
 
+        tdiv.appendChild(table);
+
 	div.appendChild(header);
-	div.appendChild(table);
+	div.appendChild(tdiv);
 
 	let theader = document.createElement('tr');
 	theader.style.verticalAlign = 'top';
@@ -3193,6 +3209,7 @@ var MiniResponseDialog = function(editorUi)
 
         var formdiv = document.createElement('div');
         formdiv.style.textAlign = 'right';
+        formdiv.style.marginTop = '20px';
         div.appendChild(formdiv);
 
 	var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
