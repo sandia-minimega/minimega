@@ -3202,6 +3202,7 @@ var MiniResponseDialog = function(editorUi)
 	    } else {
               // blank response
               respTd.innerHTML = "&#10004;"
+              respTd.style.color = "green";
             }
 	  }
 
