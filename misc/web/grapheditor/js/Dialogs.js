@@ -2940,12 +2940,17 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		var name = "";
 		lookforvlan(cell);
 		// if vertex is a switch skip the device in config
+		cell.setAttribute("type","diagraming");
 		if (cell.getStyle().includes("switch")){return;}
 		if (cell.getStyle().includes("router")){cell.setAttribute("type","router");}
 		if (cell.getStyle().includes("firewall")){cell.setAttribute("type","firewall");}
 		if (cell.getStyle().includes("desktop")){cell.setAttribute("type","desktop");}
 		if (cell.getStyle().includes("server")){cell.setAttribute("type","server");}
 		if (cell.getStyle().includes("mobile")){cell.setAttribute("type","mobile");}
+		if (cell.getAttribute("type") == "diagraming"){
+			continue;
+		}
+		
 		if (cell.getAttribute("name") != undefined) {
 			config += `## Config for ${cell.getAttribute("name")}\n`;
 			name = cell.getAttribute("name");
