@@ -1,6 +1,7 @@
 /**
  * Copyright (c) 2006-2012, JGraph Ltd
  */
+
 /**
  * Constructs a new open dialog.
  */
@@ -2833,8 +2834,9 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 	textarea.setAttribute('autocapitalize', 'off');
 	textarea.style.overflow = 'auto';
 	textarea.style.resize = 'none';
-	textarea.style.width = '600px';
+	textarea.style.width = '100%';
 	textarea.style.height = '360px';
+	textarea.style.lineHeight = 'initial';
 	textarea.style.marginBottom = '16px';
 	var vlans_in_use = {};
 	var vlan_count =10;
@@ -3018,6 +3020,22 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		textarea.addEventListener('dragover', handleDragOver, false);
 		textarea.addEventListener('drop', handleDrop, false);
 	}
+
+        var formdiv = document.createElement('div');
+        div.appendChild(formdiv);
+
+        var cbdiv = document.createElement('div');
+        cbdiv.style.float = "left";
+        formdiv.appendChild(cbdiv);
+
+        var checkbox = document.createElement('input');
+        checkbox.type = "checkbox";
+
+        var checkboxLabel = document.createElement('label');
+        checkboxLabel.textContent = 'Clear previous experiment?';
+
+        cbdiv.appendChild(checkbox);
+        cbdiv.appendChild(checkboxLabel);
 	
 	var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
 	{
@@ -3027,7 +3045,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 	
 	if (editorUi.editor.cancelFirst)
 	{
-		div.appendChild(cancelBtn);
+		formdiv.appendChild(cancelBtn);
 	}
 
 	var runBtn = mxUtils.button(mxResources.get('run'), function()
@@ -3045,6 +3063,14 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		  };
 		});
 
+                var resetmm = [{command: "vm kill all"}, {command: "vm flush"}];
+                if (checkbox.checked) {
+                  var tmp = [];
+                  tmp.push(...resetmm);
+                  tmp.push(...cmds);
+                  cmds = tmp;
+                }
+
 		var responseDlg = new MiniResponseDialog(editorUi);
 		$.post('/commands', JSON.stringify(cmds), function(resp){
 		  editorUi.showDialog(responseDlg.container, 820, 550, true, false);
@@ -3059,11 +3085,11 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		editorUi.hideDialog();
 	});
 	runBtn.className = 'geBtn gePrimaryBtn';
-	div.appendChild(runBtn);
+	formdiv.appendChild(runBtn);
 
 	if (!editorUi.editor.cancelFirst)
 	{
-		div.appendChild(cancelBtn);
+		formdiv.appendChild(cancelBtn);
 	}
 
 	this.container = div;
@@ -3090,7 +3116,8 @@ var MiniResponseDialog = function(editorUi)
 	table.style.overflow = 'auto';
 	table.style.resize = 'none';
 	table.style.width = '800px';
-	table.style.height = '500px';
+	table.style.height = '100%';
+	table.style.lineHeight = 'initial';
 	table.style.marginBottom = '16px';
 
 	div.appendChild(header);
@@ -3139,6 +3166,10 @@ var MiniResponseDialog = function(editorUi)
 		table.focus();
 	};
 
+        var formdiv = document.createElement('div');
+        formdiv.style.textAlign = 'right';
+        div.appendChild(formdiv);
+
 	var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
 	{
 		editorUi.hideDialog();
@@ -3147,7 +3178,7 @@ var MiniResponseDialog = function(editorUi)
 
 	if (editorUi.editor.cancelFirst)
 	{
-		div.appendChild(cancelBtn);
+		formdiv.appendChild(cancelBtn);
 	}
 
 	var okBtn = mxUtils.button(mxResources.get('ok'), function()
@@ -3155,11 +3186,11 @@ var MiniResponseDialog = function(editorUi)
 		editorUi.hideDialog();
 	});
 	okBtn.className = 'geBtn gePrimaryBtn';
-	div.appendChild(okBtn);
+	formdiv.appendChild(okBtn);
 	
 	if (!editorUi.editor.cancelFirst)
 	{
-		div.appendChild(cancelBtn);
+		formdiv.appendChild(cancelBtn);
 	}
 
 	this.container = div;
