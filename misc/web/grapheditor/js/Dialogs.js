@@ -2946,6 +2946,24 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		count++;
 
 		var clear ="";
+		var net ="";
+				for (var i =0; i< cell.getEdgeCount();i++){
+					var e = cell.getEdgeAt(i);
+					net += `${e.getAttribute("vlan")} `;
+				}
+				if (net == ""){
+					delete prev_dev[p];
+					clear += "clear vm config network"
+				}
+				else {
+					if (cell.getAttribute("network") != net){
+						cell.setAttribute("network",net);
+					}
+					if (!prev_dev["network"] != net){
+					prev_dev["network"] = net
+					config += `vm config network ${net} \n`;
+					}
+				}
 
 		// Generate configuration for parameters
 		for (const p in parameters) {
@@ -2961,23 +2979,6 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 				if(prev_dev[p] != cell.getAttribute(p)){
 					prev_dev[p] = cell.getAttribute(p);
 					config += `vm config ${p} ${cell.getAttribute(p)} \n`;
-					continue;
-				}
-				var net ="";
-				for (var i =0; i< cell.getEdgeCount();i++){
-					var e = cell.getEdgeAt(i);
-					net += `${e.getAttribute("vlan")} `;
-				}
-				if (net == ""){
-					delete prev_dev[p];
-					clear += "clear vm config network"
-				}
-				else {
-					cell.setAttribute("network",net)
-					if (!prev_dev["network"] != net){
-					prev_dev["network"] = net
-					config += `vm config network ${net} \n`;
-					}
 				}
 			}
 			else {
