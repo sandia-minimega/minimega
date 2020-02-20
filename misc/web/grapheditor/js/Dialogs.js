@@ -2859,14 +2859,20 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 			c = vlanid.charCodeAt(vlanid.length-1);
 			if (c == 122){
 				index = v.length-1;
-				done = false;
+				carry = 0;
 				while (index > -1){
 					if (vlanid.charCodeAt(index) == 122){
 						vlanid = vlanid.substr(0, index) + "a"+ vlanid.substr(index + 1);
+						carry++;
+					}
+					else {
+						vlanid = vlanid.substr(0, index) + String.fromCharCode(vlanid.charCodeAt(index) + 1)+ vlanid.substr(index + 1);
 					}
 					index--;
 				}
-				vlanid += "a"
+				if (carry == vlanid.length){
+					vlanid += "a";
+				}
 			}
 			else {
 				vlanid = vlanid.substr(0, vlanid.length -1 ) + String.fromCharCode(c + 1);
