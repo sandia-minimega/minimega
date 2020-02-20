@@ -1621,7 +1621,7 @@ var EditDataDialog = function(ui, cell)
 				}
 				i++;
 			}
-			if (!found){
+			if (!found && cell.isVertex()){
 				temp.push({name: p, value: parameters[p]});
 			}
 		}
@@ -2849,18 +2849,37 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 	textarea.style.marginBottom = '16px';
 	var vlans_in_use = {};
 	var vlan_count =10;
+	var vlanid = "a";
 	function searchNextVlan(v){
 		if (!vlans_in_use.hasOwnProperty(v.toString())){
 			vlans_in_use[v.toString()]=true;
 			return v;
 		}
-		while (vlans_in_use.hasOwnProperty(vlan_count) && v<4090){
-			vlan_count++;
+		while (vlans_in_use.hasOwnProperty(vlanid)){
+			c = vlanid.charCodeAt(vlanid.length-1);
+			if (c == 122){
+				index = v.length-1;
+				carry = 0;
+				while (index > -1){
+					if (vlanid.charCodeAt(index) == 122){
+						vlanid = vlanid.substr(0, index) + "a"+ vlanid.substr(index + 1);
+						carry++;
+					}
+					else {
+						vlanid = vlanid.substr(0, index) + String.fromCharCode(vlanid.charCodeAt(index) + 1)+ vlanid.substr(index + 1);
+					}
+					index--;
+				}
+				if (carry == vlanid.length){
+					vlanid += "a";
+				}
+			}
+			else {
+				vlanid = vlanid.substr(0, vlanid.length -1 ) + String.fromCharCode(c + 1);
+			}
 		}
-		vlans_in_use[vlan_count.toString()]=true;
-		v = vlan_count;
-		vlan_count+=1;
-		return v;
+		vlans_in_use[vlanid]=true;
+		return vlanid;
 	}
 
 	// Standardizes all cells to ahve standard value object
@@ -2914,7 +2933,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 					} else {e.setAttribute("vlan", ec.getAttribute("vlan"));}
 				} // If its any other device just set a new vlan to the edge
 				else {
-					e.setAttribute("vlan", searchNextVlan(vlan_count).toString());
+					e.setAttribute("vlan", searchNextVlan(vlanid).toString());
 				}
 			}
 		}
@@ -2965,7 +2984,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		var net ="";
 				for (var i =0; i< cell.getEdgeCount();i++){
 					var e = cell.getEdgeAt(i);
-					net += `${e.getAttribute("vlan")}`;
+					net += `vlan-${e.getAttribute("vlan")}`;
 					if (i+1 < cell.getEdgeCount()){
 						net += ' ';
 					}
