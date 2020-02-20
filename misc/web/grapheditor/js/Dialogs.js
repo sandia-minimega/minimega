@@ -2862,7 +2862,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 				done = false;
 				while (index > -1){
 					if (vlanid.charCodeAt(index) == 122){
-						vlanid.replaceAt(index,"a");
+						vlanid.substr(0, index) + "a"+ vlanid.substr(index + 1);
 					}
 					index--;
 				}
@@ -2978,7 +2978,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		var net ="";
 				for (var i =0; i< cell.getEdgeCount();i++){
 					var e = cell.getEdgeAt(i);
-					net += `${e.getAttribute("vlan")}`;
+					net += `vlan-${e.getAttribute("vlan")}`;
 					if (i+1 < cell.getEdgeCount()){
 						net += ' ';
 					}
