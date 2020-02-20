@@ -1,6 +1,7 @@
 /**
  * Copyright (c) 2006-2012, JGraph Ltd
  */
+
 /**
  * Constructs a new open dialog.
  */
@@ -2825,6 +2826,15 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 {
 	var div = document.createElement('div');
 	div.style.textAlign = 'right';
+
+	var header = document.createElement('h2');
+	header.textContent = "Minimega Script";
+        header.style.marginTop = "0";
+        header.style.marginBottom = "10px";
+	header.style.textAlign = 'left';
+
+        div.appendChild(header);
+
 	var textarea = document.createElement('textarea');
 	textarea.setAttribute('wrap', 'off');
 	textarea.setAttribute('spellcheck', 'false');
@@ -2833,23 +2843,37 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 	textarea.setAttribute('autocapitalize', 'off');
 	textarea.style.overflow = 'auto';
 	textarea.style.resize = 'none';
-	textarea.style.width = '600px';
+	textarea.style.width = '100%';
 	textarea.style.height = '360px';
+	textarea.style.lineHeight = 'initial';
 	textarea.style.marginBottom = '16px';
 	var vlans_in_use = {};
 	var vlan_count =10;
+	var vlanid = "a";
 	function searchNextVlan(v){
 		if (!vlans_in_use.hasOwnProperty(v.toString())){
 			vlans_in_use[v.toString()]=true;
 			return v;
 		}
-		while (vlans_in_use.hasOwnProperty(vlan_count) && v<4090){
-			vlan_count++;
+		while (vlans_in_use.hasOwnProperty(vlanid)){
+			c = vlanid.charCodeAt(vlanid.length-1);
+			if (c == 122){
+				index = v.length-1;
+				done = false;
+				while (index > -1){
+					if (vlanid.charCodeAt(index) == 122){
+						vlanid.replaceAt(index,"a");
+					}
+					index--;
+				}
+				vlanid += "a"
+			}
+			else {
+				vlanid = String.fromCharCode(c + 1);
+			}
 		}
 		vlans_in_use[vlan_count.toString()]=true;
-		v = vlan_count;
-		vlan_count+=1;
-		return v;
+		return vlanid;
 	}
 
 	// Standardizes all cells to ahve standard value object
@@ -2903,7 +2927,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 					} else {e.setAttribute("vlan", ec.getAttribute("vlan"));}
 				} // If its any other device just set a new vlan to the edge
 				else {
-					e.setAttribute("vlan", searchNextVlan(vlan_count).toString());
+					e.setAttribute("vlan", searchNextVlan(vlanid).toString());
 				}
 			}
 		}
@@ -2929,12 +2953,17 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		var name = "";
 		lookforvlan(cell);
 		// if vertex is a switch skip the device in config
+		cell.setAttribute("type","diagraming");
 		if (cell.getStyle().includes("switch")){return;}
 		if (cell.getStyle().includes("router")){cell.setAttribute("type","router");}
 		if (cell.getStyle().includes("firewall")){cell.setAttribute("type","firewall");}
 		if (cell.getStyle().includes("desktop")){cell.setAttribute("type","desktop");}
 		if (cell.getStyle().includes("server")){cell.setAttribute("type","server");}
 		if (cell.getStyle().includes("mobile")){cell.setAttribute("type","mobile");}
+		if (cell.getAttribute("type") == "diagraming"){
+			return;
+		}
+		
 		if (cell.getAttribute("name") != undefined) {
 			config += `## Config for ${cell.getAttribute("name")}\n`;
 			name = cell.getAttribute("name");
@@ -2949,17 +2978,20 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		var net ="";
 				for (var i =0; i< cell.getEdgeCount();i++){
 					var e = cell.getEdgeAt(i);
-					net += `${e.getAttribute("vlan")} `;
+					net += `${e.getAttribute("vlan")}`;
+					if (i+1 < cell.getEdgeCount()){
+						net += ' ';
+					}
 				}
 				if (net == ""){
-					delete prev_dev[p];
+					delete prev_dev["network"];
 					clear += "clear vm config network"
 				}
 				else {
 					if (cell.getAttribute("network") != net){
 						cell.setAttribute("network",net);
 					}
-					if (!prev_dev["network"] != net){
+					if (prev_dev["network"] != net){
 					prev_dev["network"] = net
 					config += `vm config network ${net} \n`;
 					}
@@ -3039,6 +3071,22 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		textarea.addEventListener('dragover', handleDragOver, false);
 		textarea.addEventListener('drop', handleDrop, false);
 	}
+
+        var formdiv = document.createElement('div');
+        div.appendChild(formdiv);
+
+        var cbdiv = document.createElement('div');
+        cbdiv.style.float = "left";
+        formdiv.appendChild(cbdiv);
+
+        var checkbox = document.createElement('input');
+        checkbox.type = "checkbox";
+
+        var checkboxLabel = document.createElement('label');
+        checkboxLabel.textContent = 'Clear previous experiment?';
+
+        cbdiv.appendChild(checkbox);
+        cbdiv.appendChild(checkboxLabel);
 	
 	var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
 	{
@@ -3048,7 +3096,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 	
 	if (editorUi.editor.cancelFirst)
 	{
-		div.appendChild(cancelBtn);
+		formdiv.appendChild(cancelBtn);
 	}
 
 	var runBtn = mxUtils.button(mxResources.get('run'), function()
@@ -3066,9 +3114,17 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		  };
 		});
 
+                var resetmm = [{command: "clear all"}];
+                if (checkbox.checked) {
+                  var tmp = [];
+                  tmp.push(...resetmm);
+                  tmp.push(...cmds);
+                  cmds = tmp;
+                }
+
 		var responseDlg = new MiniResponseDialog(editorUi);
 		$.post('/commands', JSON.stringify(cmds), function(resp){
-		  editorUi.showDialog(responseDlg.container, 820, 550, true, false);
+		  editorUi.showDialog(responseDlg.container, 820, 600, true, false);
 		  responseDlg.init();
 		  for (let i = 0; i < resp.length; i++) {
 		    let rs  = resp[i];
@@ -3080,11 +3136,11 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 		editorUi.hideDialog();
 	});
 	runBtn.className = 'geBtn gePrimaryBtn';
-	div.appendChild(runBtn);
+	formdiv.appendChild(runBtn);
 
 	if (!editorUi.editor.cancelFirst)
 	{
-		div.appendChild(cancelBtn);
+		formdiv.appendChild(cancelBtn);
 	}
 
 	this.container = div;
@@ -3101,6 +3157,12 @@ var MiniResponseDialog = function(editorUi)
 
 	var header = document.createElement('h2');
 	header.textContent = "Minimega Response";
+        header.style.marginTop = "0";
+        header.style.marginBottom = "10px";
+
+	var tdiv = document.createElement('div');
+	tdiv.style.overflowY = 'scroll';
+	tdiv.style.height = '500px';
 
 	var table = document.createElement('table');
 	table.setAttribute('wrap', 'off');
@@ -3111,11 +3173,14 @@ var MiniResponseDialog = function(editorUi)
 	table.style.overflow = 'auto';
 	table.style.resize = 'none';
 	table.style.width = '800px';
-	table.style.height = '500px';
+	table.style.height = '100%';
+	table.style.lineHeight = 'initial';
 	table.style.marginBottom = '16px';
 
+        tdiv.appendChild(table);
+
 	div.appendChild(header);
-	div.appendChild(table);
+	div.appendChild(tdiv);
 
 	let theader = document.createElement('tr');
 	theader.style.verticalAlign = 'top';
@@ -3145,9 +3210,13 @@ var MiniResponseDialog = function(editorUi)
 	      respTd.textContent = "Error: " + r.Error;
 	      respTd.style.color = "red";
 	      respTd.style.fontWeight = "bold";
+	    } else if (r.Response) {
+	      respTd.textContent = r.Response;
 	    } else {
-	      respTd.textContent = r.Response ? r.Response : "-";
-	    }
+              // blank response
+              respTd.innerHTML = "&#10004;"
+              respTd.style.color = "green";
+            }
 	  }
 
 	  table.appendChild(row);
@@ -3160,6 +3229,11 @@ var MiniResponseDialog = function(editorUi)
 		table.focus();
 	};
 
+        var formdiv = document.createElement('div');
+        formdiv.style.textAlign = 'right';
+        formdiv.style.marginTop = '20px';
+        div.appendChild(formdiv);
+
 	var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
 	{
 		editorUi.hideDialog();
@@ -3168,7 +3242,7 @@ var MiniResponseDialog = function(editorUi)
 
 	if (editorUi.editor.cancelFirst)
 	{
-		div.appendChild(cancelBtn);
+		formdiv.appendChild(cancelBtn);
 	}
 
 	var okBtn = mxUtils.button(mxResources.get('ok'), function()
@@ -3176,11 +3250,11 @@ var MiniResponseDialog = function(editorUi)
 		editorUi.hideDialog();
 	});
 	okBtn.className = 'geBtn gePrimaryBtn';
-	div.appendChild(okBtn);
+	formdiv.appendChild(okBtn);
 	
 	if (!editorUi.editor.cancelFirst)
 	{
-		div.appendChild(cancelBtn);
+		formdiv.appendChild(cancelBtn);
 	}
 
 	this.container = div;
