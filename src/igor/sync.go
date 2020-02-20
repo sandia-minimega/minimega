@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	log "minilog"
+	"strconv"
 )
 
 var cmdSync = &Command{
@@ -14,23 +15,16 @@ var cmdSync = &Command{
 	Short:     "synchronize igor data",
 	Long: `
 Does an internal check to verify the integrity of the data file. Can report and attempt to clean.
-
 SYNOPSIS
 	igor sync <[-d] [-f]> [-q] WHAT
-
 OPTIONS
-
 	-f, -force
 	    Will force sync to fix inconsistencies found in addition to reporting
-
 	-d, -dry-run
 	    Does not attempt to make any corrections, only reports inconsistencies
-
 	-q, -quiet
 	    Suppress reports, only report errors
-
 Possible WHATs:
-
 arista: 	reconfigure switchports for active reservations
 	`,
 }
@@ -82,6 +76,11 @@ func runSync(cmd *Command, args []string) {
 }
 
 func syncArista() {
+	// first get ground truth
+	gt, err := networkVlan()
+	if err != nil {
+		log.Fatal("Unable to acquire VLAN ground truth from arista")
+	}
 	// TODO: probably shouldn't iteration over .M directly
 	for _, r := range igor.Reservations.M {
 		if !r.IsActive(igor.Now) {
@@ -89,7 +88,21 @@ func syncArista() {
 		}
 
 		if !quiet {
+			// print all nodes, Igor VLANs, and arista VLANs
+			for _, host := range r.Hosts {
+				vlan := strconv.Itoa(r.Vlan)
+				fmt.Printf("NODE %v - IGOR VLAN: %v    ARISTA VLAN: %v\n", host, vlan, gt[host])
+			}
+			// TODO: do we still need this?
 			fmt.Printf("set switchports for %v to %v\n", r.Hosts, r.Vlan)
+		} else {
+			// just print what's different
+			for _, host := range r.Hosts {
+				vlan := strconv.Itoa(r.Vlan)
+				if gt[host] != vlan {
+					fmt.Printf("DISCREPANCY IN NODE %v - IGOR VLAN: %v    ARISTA VLAN: %v\n", host, vlan, gt[host])
+				}
+			}
 		}
 		if !dryRun {
 			if err := networkSet(r.Hosts, r.Vlan); err != nil {
