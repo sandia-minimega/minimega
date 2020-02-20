@@ -2862,7 +2862,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 				done = false;
 				while (index > -1){
 					if (vlanid.charCodeAt(index) == 122){
-						vlanid.substr(0, index) + "a"+ vlanid.substr(index + 1);
+						vlanid = vlanid.substr(0, index) + "a"+ vlanid.substr(index + 1);
 					}
 					index--;
 				}
