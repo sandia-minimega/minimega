@@ -2872,7 +2872,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 				vlanid = String.fromCharCode(c + 1);
 			}
 		}
-		vlans_in_use[vlan_count.toString()]=true;
+		vlans_in_use[vlanid]=true;
 		return vlanid;
 	}
 
