@@ -1621,7 +1621,7 @@ var EditDataDialog = function(ui, cell)
 				}
 				i++;
 			}
-			if (!found){
+			if (!found && cell.isVertex()){
 				temp.push({name: p, value: parameters[p]});
 			}
 		}
