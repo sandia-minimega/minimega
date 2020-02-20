@@ -2923,6 +2923,9 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 				if (e.source.getId() != cell.getId()){
 					ec = e.source;
 				} else {ec = e.target;}
+				if (ec == null){
+					return;
+				}
 				checkValue(ec);
 
 				// if connected vertex is a switch get the vlan number or sets one for the switch and the edge
