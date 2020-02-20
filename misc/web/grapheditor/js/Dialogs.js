@@ -2869,7 +2869,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 				vlanid += "a"
 			}
 			else {
-				vlanid = String.fromCharCode(c + 1);
+				vlanid = vlanid.substr(0, index) + String.fromCharCode(c + 1);
 			}
 		}
 		vlans_in_use[vlanid]=true;
