@@ -1,0 +1,20 @@
+$ bin/miniweb -bootstrap -passwords minimega.passwd
+Configure /
+Username: jon
+Password:
+Confirm Password:
+
+Add additional users (Ctrl-D when finished):
+Path: /vm/fritz
+Username: fritz
+Password:
+Confirm Password:
+
+Add additional users (Ctrl-D when finished):
+Path: /vm/john
+Username: john
+Password:
+Confirm Password:
+
+Add additional users (Ctrl-D when finished):
+Path:
