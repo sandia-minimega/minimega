@@ -1,0 +1,237 @@
+Getting running
+The basics of running minimega
+
+The minimega miniclass series
+Sandia National Laboratories
+http://minimega.org/
+
+* Getting started
+minimega can be built from latest source or deployed from a release package.
+You can follow the instructions here to get up and running: [[/articles/installing.article][Installing minimega]]
+
+- There are lots of ways to run and interface with minimega! 
+-- on your local machine
+-- deployed over many nodes in a cluster
+
+minimega is designed to be simple to deploy, and fully automated by running minimega scripts (.mm files).
+
+A few optional command line switches are available, no config files!
+
+This allows you to use minimega directly or programmatically. Whatever fits your needs.
+More on that in the [[/articles/usage.article][Using minimega]] article.
+
+
+* starting minimega
+note: KVM requires special permissions and minimega must be run as root unless permissions are modified. All examples shown assume root permissions.
+
+- Launch interactively
+    bin/minimega
+
+- Launch daemon (recommended)
+    bin/minimega -nostdin &
+
+- Launch daemon on a cluster (more on this later)
+    bin/minimega -nostdin -context <contextName> -degree 3 &
+
+* There are multiple ways to interact with the daemon 
+
+- You can attach to the daemon using minimega's attach flag
+    bin/minimega -attach
+- Detach using 'disconnect' or ctrl-d
+    minimega$ disconnect
+- Execute a single command with the -e flag
+    bin/minimega -e vm config
+- Command Port
+-- There is also a unix domain socket that accepts JSON encoded commands located at <base>/minimega.
+-- For more information, visit minimega.org
+
+* Stopping minimega
+- minimega can be stopped gracefully using the 'quit' command
+-- note: when attached to the daemon, you will need to input quit twice
+    minimega$ quit
+    sh$ bin/minimega -e quit
+
+- If minimega proccesses are still running after the console has been killed, use pkill
+    pkill minimega
+
+- Finally, the minimega api documents a nuke command.
+-- After a crash, the VM state on the machine can be difficult to recover from. Nuke attempts to kill all instances of QEMU, remove all taps and bridges, and removes the temporary minimega state on the harddisk. This should be run with caution. 
+.mega module02_content/nuke.mm
+
+* CLI
+Now that you have minimega up and running let's get familiar with the CLI.
+
+- Help - the most important command in minimega
+.mega module02_content/help.mm
+- Use 'help <command>' for more information on particular commands
+- Tab expansion is your friend!
+- Tab expansion also works on local filesystem files
+
+* Output Rendering
+With minimega you can manipulate the way data is printed. 
+ 
+-- output in .csv format
+    .csv true
+-- output in json format
+    .json true
+-- set false to turn off
+    .csv false 
+    .json false
+
+If you only want to see certain columns or vms you can tell minimega to only print those.
+
+    .column name,state,ip vm info
+
+
+* Example Output
+
+    minimega:/tmp/minimega/minimega$ host
+    host   | name   | cpus | load           | memused | memtotal | bandwidth            | vms | vmsall
+    ubuntu | ubuntu | 1    | 0.00 0.00 0.00 | 190 MB  | 2000 MB  | 0.0/0.0 (rx/tx MB/s) | 0   | 0
+    minimega:/tmp/minimega/minimega$ .csv true host
+    host,name,cpus,load,memused,memtotal,bandwidth,vms,vmsall
+    ubuntu,ubuntu,1,0.00 0.00 0.00,190 MB,2000 MB,0.0/0.0 (rx/tx MB/s),0,0
+    minimega:/tmp/minimega/minimega$ host
+    host   | name   | cpus | load           | memused | memtotal | bandwidth            | vms | vmsall
+    ubuntu | ubuntu | 1    | 0.00 0.00 0.00 | 190 MB  | 2000 MB  | 0.0/0.0 (rx/tx MB/s) | 0   | 0
+    minimega:/tmp/minimega/minimega$ .csv true
+    minimega:/tmp/minimega/minimega$ host
+    host,name,cpus,load,memused,memtotal,bandwidth,vms,vmsall
+    ubuntu,ubuntu,1,0.00 0.00 0.00,190 MB,2000 MB,0.0/0.0 (rx/tx MB/s),0,0
+    minimega:/tmp/minimega/minimega$ .csv false
+    minimega:/tmp/minimega/minimega$ host
+    host   | name   | cpus | load           | memused | memtotal | bandwidth            | vms | vmsall
+    ubuntu | ubuntu | 1    | 0.00 0.00 0.00 | 190 MB  | 2000 MB  | 0.0/0.0 (rx/tx MB/s) | 0   | 0
+    minimega:/tmp/minimega/minimega$ .json true host
+    [{"Host":"ubuntu","Response":"","Header":["name","cpus","load","memused","memtotal","bandwidth","vms","vmsall"],"Tabular":[["ubuntu","1","0.00 0.00 0.00","190 MB","2000 MB","0.0/0.0 (rx/tx MB/s)","0","0"]],"Error":""}]
+    minimega:/tmp/minimega/minimega$ .columns memtotal,bandwidth host
+    host   | memtotal | bandwidth
+    ubuntu | 2000 MB  | 0.0/0.0 (rx/tx MB/s)
+
+* built-in commands
+
+the `vm`info` command is the primary way of seeing information about your VMs. However,
+there are many columns of information that get printed by default, and looking through
+all of that information can be cumbersome.
+
+minimega has a variety of built-in commands that allow you to shape the output as you need.
+Let's look at .column, .filter, .annotate, and .sort and see how you can leverage these
+commands individually and in conjunction with each other.
+
+
+* .column
+
+The .column command allows you to specify which columns you would like to see when running vm info
+
+Column names are comma-separated.
+
+For example, to display only the vm name and state, run:
+
+ .columns name,state vm info
+
+notice we appended vm info onto the command. .column must be run in conjunction with
+vm info or similar command.
+
+* .filter
+
+The .filter command filters tabular data based on the value in a particular column. 
+For example, to search for vms in a particular state use:
+
+ .filter state=running vm info
+
+Filters can also be inverted:
+
+        .filter state!=running vm info
+
+Filters are case insensitive and may be stacked:
+
+        .filter state=RUNNING .filter vcpus=4 vm info
+
+If the column value is a list or an object (i.e. "[...]", "{...}"), then
+.filter implicitly uses substring matching.
+
+Substring matching can be specified explicity:
+
+        .filter state~run vm info
+        .filter state!~run vm info
+
+* .sort and .annotate
+
+The .sort command allows you to set whether the returned tabular information is
+sorted by the value in the first column. .sort does not need to be run in conjunction
+with another command, and will affect all subsequent commands:
+
+ .sort true
+
+The .annnotate command will hide the host name in output when used.
+
+ .annotate false
+
+set to true to see the host name again.
+
+* Stacking built-in commands
+
+Built-in commands can be used in conjunction with eachother to further refine output.
+
+For example, to isolate the name and state of the VM and filter by a running state, run
+
+ .column name,state .filter state=running vm info
+
+However, these commands are not always interchangeable. For example, the following is
+acceptable:
+
+ .columns name,state .filter vcpus=4 vm info
+
+While the following is not:
+
+ .filter vcpus=4 .columns name,state vm info
+
+This is because .columns strips all columns except for name and state from the
+tabular data.
+
+* .alias (recommended for interactive mode only)
+.mega module02_content/dot.mm
+  
+* Setting and Unsetting Variables
+
+minimega uses variables and they can be set by calling the applicable command and setting the variable. 
+Notice how the 'Disk Paths' variable is not set: 
+
+    minimega$ vm config
+    VM configuration:
+    ...
+    Disk Paths:         []
+    ...
+
+Let's set it now.
+
+    minimega$ vm config disk mydisk.img
+    minimega$ vm config
+    VM configuration:
+    ...
+    Disk Paths:         [mydisk.img]
+    ...
+
+* 
+
+The disk path is now set in the vm configuration. Unset using the clear command.
+
+    minimega$ vm config disk
+    myhost: [mydisk.img]
+    minimega$ clear vm config disk
+    minimega$ vm config
+    VM configuration:
+    ...
+    Disk Paths:         []
+    ...
+
+- The clear command clears the value for any setting in any api:
+-- clear vm config
+-- clear cc filter
+-- clear router <vm>
+-- clear tap
+-- see 'help clear' for more
+
+* Next Up...
+
+[[module02_5.slide][Module 2.5: Better vmbetter]]

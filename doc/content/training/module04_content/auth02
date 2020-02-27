@@ -1,0 +1,18 @@
+$ cat minimega.passwd
+[
+    {
+        "path": "/",
+        "username": "jon",
+        "password": "JDJhJDEwJFZzSjNIRjFVbjc5Z2ZReUpxVmRZMS5WU2thaUNHS3RIczk5eExFMS5kdy5VUEQuY1pub1FT"
+    },
+    {
+        "path": "/vm/fritz",
+        "username": "fritz",
+        "password": "JDJhJDEwJGc0VC93YkNtWVZjMWlteXF1dldrRy5zRkZWVm5GSzMxSjdNZFgwdGp6eklnZmtVaHVuUmhh"
+    },
+    {
+        "path": "/vm/john",
+        "username": "john",
+        "password": "JDJhJDEwJGRLME5jVVM0bW1LNzBYOWQ2YmNPZ09LLk92NlVPZEJTdTdUT0tYSm84RzA1akZjRWxsbGwu"
+    }
+]
