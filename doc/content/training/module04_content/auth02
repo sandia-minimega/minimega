@@ -3,16 +3,16 @@ $ cat minimega.passwd
     {
         "path": "/",
         "username": "jon",
-        "password": "JDJhJDEwJFZzSjNIRjFVbjc5Z2ZReUpxVmRZMS5WU2thaUNHS3RIczk5eExFMS5kdy5VUEQuY1pub1FT"
+        "password": "<password_hash>"
     },
     {
         "path": "/vm/fritz",
         "username": "fritz",
-        "password": "JDJhJDEwJGc0VC93YkNtWVZjMWlteXF1dldrRy5zRkZWVm5GSzMxSjdNZFgwdGp6eklnZmtVaHVuUmhh"
+        "password": "<password_hash>"
     },
     {
         "path": "/vm/john",
         "username": "john",
-        "password": "JDJhJDEwJGRLME5jVVM0bW1LNzBYOWQ2YmNPZ09LLk92NlVPZEJTdTdUT0tYSm84RzA1akZjRWxsbGwu"
+        "password": "<password_hash>"
     }
 ]
