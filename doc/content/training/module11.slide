@@ -183,38 +183,41 @@ We can confirm this by running `tcpdump`-i`eth0` on the monitor VM while pinging
 
 .image module11_content/tcpdump.png
 
-* Zeek
+* Third-party tools
 
-Instead of using a simple VM as the monitor, we can replace it with one running [[https://www.zeek.org/][Zeek]].
-Note: Zeek is formerly known as 'Bro' and there are still elements of the old name in this tutorial. In time, all references will be converted.
+One option for instrumention is to use a third-party tool that suits your needs. 
 
-minimega includes a `vmbetter` config to build a VM that runs Zeek. By default, this VM listens on `eth0` and writes logs to `/bro`. 
+For example, we can install tools like [[https://www.zeek.org/][Zeek]], either while our experiment is running, or we can 'bake in' the tool during the process of building the image.
 
-In order to launch the Zeek VM, we use the following minimega commands
+minimega includes a tool called vmbetter that allows you to install programs in a number of ways (apt, dpkg, compiling directly, etc.) during the image creation process so that the vm is ready to go at launch.
+
+See [[module02_5.slide][module 2.5: better vmbetter]] for more details.
+
+Once we have an image (kernel/initrd, for example) built with Zeek installed, we can launch the Zeek VM using the following minimega commands
 (in place of the previous commands to launch the monitor):
 
     # create Zeek VM to monitor the network
-    disk create bro.qcow2 10G
+    disk create zeek.qcow2 10G
     vm config net 0
     vm config uuid 33333333-3333-3333-3333-333333333333
-    vm config kernel $images/bro.kernel
-    vm config initrd $images/bro.initrd
+    vm config kernel $images/zeek.kernel
+    vm config initrd $images/zeek.initrd
     vm config snapshot false
-    vm config disk bro.qcow2
+    vm config disk zeek.qcow2
     vm launch kvm monitor
 
 * 
 
-The Zeek(Bro) VM will format and mount any provided disk to `/bro` allowing users to extract the data after the experiment completes. 
+The Zeek VM will format and mount any provided disk to `/zeek` allowing users to extract the data after the experiment completes. 
 
 The VM must run with snapshot set to false so that any logs written to disk persist after the VM exits. 
 
-Each VM must have its own disk image. If a disk is not provided, `/bro` is stored in memory and may cause the VM to run out of memory if there are too many log messages.
+Each VM must have its own disk image. If a disk is not provided, `/zeek` is stored in memory and may cause the VM to run out of memory if there are too many log messages.
 
 To extract files from the QCOW2 after the VM exits, users can run the following bash commands as root:
 
     $ modprobe nbd # if not already loaded
-    $ qemu-nbd -c /dev/nbd0 /path/to/bro.qcow2
+    $ qemu-nbd -c /dev/nbd0 /path/to/zeek.qcow2
     $ mount /dev/nbd0 /mnt
     $ cp -a /mnt /path/to/dst/
     $ umount /mnt
