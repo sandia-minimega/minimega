@@ -3193,12 +3193,35 @@ Graph.prototype.getTooltipForCell = function(cell)
 				}
 			});
 
+			function shorten(str, maxlen)
+			{
+				if (str.length <= maxlen)
+				{
+					return str;
+				}
+
+				let result = '';
+				for (let i = 0; i < Math.floor(maxlen/3)-3; i++)
+				{
+					result += str[i];
+				}
+
+				result += '...';
+
+				for (let i = str.length - Math.floor(2*maxlen/3); i < str.length; i++)
+				{
+					result += str[i];
+				}
+				return result;
+
+			}
+
 			for (var i = 0; i < temp.length; i++)
 			{
 				if (temp[i].name != 'link' || !this.isCustomLink(temp[i].value))
 				{
 					tip += ((temp[i].name != 'link') ? '<b>' + temp[i].name + ':</b> ' : '') +
-						mxUtils.htmlEntities(temp[i].value) + '\n';
+						mxUtils.htmlEntities(shorten(String(temp[i].value), 42)) + '\n';
 				}
 			}
 			
