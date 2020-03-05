@@ -8,6 +8,7 @@ import (
 	"fmt"
 	log "minilog"
 	"strconv"
+	"text/tabwriter"
 )
 
 var cmdSync = &Command{
@@ -87,20 +88,25 @@ func syncArista() {
 			continue
 		}
 
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 		if !quiet {
 			// print all nodes, Igor VLANs, and arista VLANs
+			fmt.Fprintln(w, "NODE\tIGOR VLAN\tARISTA VLAN\n")
 			for _, host := range r.Hosts {
 				vlan := strconv.Itoa(r.Vlan)
-				fmt.Printf("NODE %v - IGOR VLAN: %v    ARISTA VLAN: %v\n", host, vlan, gt[host])
+				gtvlan := gt[host]
+				if gtvlan != vlan {
+					vlan = FgRed+vlan+Reset
+				}
+				fmt.Fprintf(w, "%v\t%v\t%v\n", host, vlan, gtvlan)
 			}
-			// TODO: do we still need this?
-			fmt.Printf("set switchports for %v to %v\n", r.Hosts, r.Vlan)
 		} else {
 			// just print what's different
 			for _, host := range r.Hosts {
 				vlan := strconv.Itoa(r.Vlan)
-				if gt[host] != vlan {
-					fmt.Printf("DISCREPANCY IN NODE %v - IGOR VLAN: %v    ARISTA VLAN: %v\n", host, vlan, gt[host])
+				gtvlan := gt[host]
+				if gtvlan != vlan {
+					fmt.Printf("DISCREPANCY IN NODE %v - IGOR VLAN: %v    ARISTA VLAN: %v\n", host, vlan, gtvlan)
 				}
 			}
 		}
