@@ -110,8 +110,6 @@ To learn how to build your own image to use for launching VMs, please see [[/tra
 
 If this is a guided class, we have provided you the kernel and initrd pair to launch this experiment.
 
-#TODO (cjsymon): How is this going to work?
-
 * Breaking it down pt. 2 - Networking
 
 .mega module01_content/vm_sandwich_p2.mm
