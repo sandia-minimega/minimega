@@ -124,11 +124,22 @@ func updateShow() {
 	igorLock.Lock()
 	defer igorLock.Unlock()
 
-	log.Debug("Updating reservations")
+	log.Debug("Updating reservations cache")
 
 	out, err := processWrapper(webE, "show", "-json")
 	if err != nil {
-		log.Warn("Error updating reservations")
+		log.Warn("Error updating reservations cache")
+
+		// Strip out ANSI colors
+		msg := regexp.MustCompile("\x1b\\[[0-9;]*m").ReplaceAllString(out, "")
+
+		// Strip off log header
+		msg = regexp.MustCompile("^.*\\.go:[0-9]+:").ReplaceAllString(msg, "")
+
+		showCache = &Show{
+			Error:       msg,
+			LastUpdated: time.Now(),
+		}
 		return
 	}
 
