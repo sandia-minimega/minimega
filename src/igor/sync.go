@@ -7,6 +7,7 @@ package main
 import (
 	"fmt"
 	log "minilog"
+	"os"
 	"strconv"
 	"text/tabwriter"
 )
@@ -91,12 +92,12 @@ func syncArista() {
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 		if !quiet {
 			// print all nodes, Igor VLANs, and arista VLANs
-			fmt.Fprintln(w, "NODE\tIGOR VLAN\tARISTA VLAN\n")
+			fmt.Fprintln(w, "NODE\tIGOR VLAN\tARISTA VLAN")
 			for _, host := range r.Hosts {
 				vlan := strconv.Itoa(r.Vlan)
 				gtvlan := gt[host]
 				if gtvlan != vlan {
-					vlan = FgRed+vlan+Reset
+					vlan = FgRed + vlan + Reset
 				}
 				fmt.Fprintf(w, "%v\t%v\t%v\n", host, vlan, gtvlan)
 			}
