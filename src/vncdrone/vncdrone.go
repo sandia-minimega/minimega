@@ -2,13 +2,13 @@
 // Pass it a directory containing recordings; these recroding filenames must
 // follow a strict naming scheme:
 // 	<vm prefix>_<pre,run,post>_<unique name>.kb
-// 
+//
 // The fields are as follows:
 // 	<vm prefix>: A string that must match the prefix of a VM at runtime.  Only
 // 	files that match to named VMs with the same prefix will be played on that VM.
 // 	For example, "foo_pre_1.kb" will play on VMs named "foobar" and "footothemoo",
 // 	but not "nofoo".
-// 
+//
 // 	<pre,run,post>: There are 3 groups of files, all of which are randomized within
 // 	each group. This is to facilitate actions like "login, do work, logout". The
 // 	typical usage for this would be to have a single "pre" file to login to the VM,
@@ -17,30 +17,30 @@
 // 	each VM and only transitions from pre->run->post->pre... which state
 // 	transitions happen. State transitions are randomized, so having multiple files
 // 	in each state group must support being played at random within the group (ie
-// 	return the desktop to a known "steady state"). 
+// 	return the desktop to a known "steady state").
 //	Special case: If only one "pre" or "post" file exists in their
 //	respective groups, then a state change happens after playing that file
 //	no matter what.
-// 
+//
 // 	<unique name>: The rest of the recording's filename.
 // Example usage:
 //         vncdrone -recordings ~/recordings/ -namespace foo
 package main
 
 import (
-	"math/rand"
 	"flag"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"miniclient"
 	log "minilog"
+	"path/filepath"
 	"strings"
 	"time"
 )
 
 var (
-	f_recordings = flag.String("recordings", "", "directory containing recordings")
-	f_namespace = flag.String("namespace", "", "namespace")
+	f_recordings = flag.String("recordings", "", "directory containing recordings - absolute path required")
 	f_base       = flag.String("base", "/tmp/minimega", "minimega base directory")
 )
 
@@ -55,14 +55,14 @@ const (
 )
 
 type Recordings struct {
-	Pre []string
-	Run []string
+	Pre  []string
+	Run  []string
 	Post []string
 }
 
 type VM struct {
-	State int
-	Runnable bool
+	State      int
+	Runnable   bool
 	NumInState int
 }
 
@@ -70,13 +70,15 @@ func main() {
 	flag.Parse()
 	log.Init()
 
+	log.Debugln("vncdrone start")
+
 	c, err := miniclient.Dial(*f_base)
 	if err != nil {
 		log.Fatal(err.Error())
 	}
 	// don't set a pager for the client
 	c.Pager = nil
-	
+
 	recordings := make(map[string]*Recordings)
 	vms := make(map[string]*VM)
 
@@ -91,6 +93,8 @@ func main() {
 			log.Error("%v does not follow naming convention, skipping", v)
 			continue
 		}
+
+		log.Debug("reading file: %v", v)
 
 		if _, ok := recordings[f[0]]; !ok {
 			recordings[f[0]] = &Recordings{}
@@ -111,8 +115,12 @@ func main() {
 	}
 
 	for {
+		time.Sleep(10 * time.Second)
+
 		// get all the VMs by name
 		cmd := ".annotate false .headers false .columns name vm info"
+		log.Debug("issuing command: %v", cmd)
+
 		namesChan := c.Run(cmd)
 
 		bachelorVMs := []string{}
@@ -130,7 +138,7 @@ func main() {
 					if strings.HasPrefix(name, prefix) {
 						bachelorVMs = append(bachelorVMs, name)
 					}
-				}			
+				}
 			}
 		}
 		log.Debug("got valid VMs: %v", bachelorVMs)
@@ -139,17 +147,19 @@ func main() {
 		nvms := make(map[string]*VM)
 		for _, name := range bachelorVMs {
 			if v, ok := vms[name]; !ok {
-				nvms[name] = &VM{ State: PRE }
-			 } else {
+				nvms[name] = &VM{State: PRE}
+			} else {
 				nvms[name] = v
 			}
 			nvms[name].Runnable = true
 		}
 		vms = nvms
-		
+
 		// figure out which VMs can take a new playback
 		cmd = ".annotate false .headers false .columns name vnc"
-		vncChan:= c.Run(cmd)
+		log.Debug("issuing command: %v", cmd)
+
+		vncChan := c.Run(cmd)
 
 		for v := range vncChan {
 			if v.Rendered == "" {
@@ -193,7 +203,7 @@ func main() {
 			}
 
 			rand.Seed(time.Now().UnixNano())
-			
+
 			// switch state?
 			if vm.NumInState > 0 || len(curr) == 0 {
 				if rand.Intn(STATE_PROBABILITY) == 0 || (vm.State == PRE && len(curr) == 1) || (vm.State == POST && len(curr) == 1) {
@@ -216,12 +226,14 @@ func main() {
 			// pick a file from the current state
 			if len(curr) > 0 {
 				file := curr[rand.Intn(len(curr))]
-				vm.NumInState++	
-				
-				cmd := fmt.Sprintf("vnc play %v %v", name, file)
+				vm.NumInState++
+
+				fullpath := filepath.Join(filepath.Dir(*f_recordings), file)
+				cmd := fmt.Sprintf("vnc play %v %v", name, fullpath)
+				log.Debug("issuing command: %v", cmd)
+
 				c.RunAndPrint(cmd, false)
 			}
 		}
 	}
 }
-
