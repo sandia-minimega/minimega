@@ -1605,8 +1605,9 @@ var EditDataDialog = function(ui, cell)
         var addTextArea = function(index, name, value)
         {
                 names[index] = name;
-                texts[index] = form.addTextarea(names[count] + ':', value, 2);
+                texts[index] = form.addText(names[count] + ':', value, 2);
                 texts[index].style.width = '100%';
+                texts[index].style.overflowX = 'visible';
 
                 addRemoveButton(texts[index], name);
         };
