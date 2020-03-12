@@ -3428,12 +3428,17 @@ var VariablesDialog = function(ui)
         top.appendChild(newProp);
         div.appendChild(top);
 
+        function varNameIsOK(name)
+        {
+                return name.match(/^[A-Z_0-9]+$/);
+        }
+
         var addBtn = mxUtils.button(mxResources.get('addProperty'), function()
         {
                 var name = nameInput.value;
 
                 // Avoid ':' in attribute names which seems to be valid in Chrome
-                if (name.length > 0 && name != 'label' && name != 'placeholders' && name.indexOf(':') < 0)
+                if (name.length > 0 && name != 'label' && name != 'placeholders' && name.indexOf(':') < 0 && varNameIsOK(name))
                 {
                         try
                         {
