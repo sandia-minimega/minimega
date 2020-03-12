@@ -1522,7 +1522,25 @@ var EditDataDialog = function(ui, cell)
         var graph = ui.editor.graph;
 
         var value = graph.getModel().getValue(cell);
-        var parameters = {memory:"2048", vcpu:"1", network:undefined,kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
+
+        var parameters = {
+                memory: "$DEFAULT_MEMORY",
+                vcpu: "$DEFAULT_VCPU",
+                network: undefined,  // This should really be "null" rather than undefined
+                snapshot:true,
+                cdrom:undefined,
+        };
+
+        if (cell.getStyle().includes("container"))
+        {
+                parameters.filesystem = "$IMAGEDIR/";
+        }
+        else
+        {
+                parameters.kernel = "$IMAGEDIR/";
+                parameters.initrd = "$IMAGEDIR/";
+                parameters.disk = "$IMAGEDIR/";
+        }
 
         // Converts the value to an XML node
         if (!mxUtils.isNode(value))
@@ -3296,7 +3314,11 @@ var VariablesDialog = function(ui)
 {
         var div = document.createElement('div');
 
-        var default_vars = [{name: "IMAGEDIR", value:"/images"}];
+        var default_vars = [
+                {name: "IMAGEDIR", value:"/images"},
+                {name: "DEFAULT_MEMORY", value:"2048"},
+                {name: "DEFAULT_VCPU", value:"1"},
+        ];
 
         // Creates the dialog contents
         var form = new mxForm('properties');
