@@ -87,6 +87,13 @@ Actions.prototype.init = function()
                 console.log(vertices)
         });
 
+        this.addAction('editVariables', function()
+        {
+                var dlg = new VariablesDialog(ui);
+                ui.showDialog(dlg.container, 480, 420, true, false, null, false);
+                dlg.init();
+        });
+
         // Edit actions
         this.addAction('undo', function() { ui.undo(); }, null, 'sprite-undo', Editor.ctrlKey + '+Z');
         this.addAction('redo', function() { ui.redo(); }, null, 'sprite-redo', (!mxClient.IS_WIN) ? Editor.ctrlKey + '+Shift+Z' : Editor.ctrlKey + '+Y');
