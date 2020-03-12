@@ -485,7 +485,7 @@ Editor.prototype.readGraphState = function(node)
         }
 
         var experiment_vars = node.getAttribute('experimentVars');
-        if (experiment_vars)
+        if (experiment_vars != undefined)
         {
                 window.experiment_vars = JSON.parse(experiment_vars);
         }
@@ -590,7 +590,7 @@ Editor.prototype.getGraphXml = function(ignoreSelection)
                 node.setAttribute('background', this.graph.background);
         }
 
-        if (window.experiment_vars)
+        if (window.experiment_vars != undefined)
         {
                 // JSON in an XML attribute? Yep.
                 //

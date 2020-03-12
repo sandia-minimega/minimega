@@ -3038,6 +3038,19 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                 else {config+=`vm launch kvm ${name}\n\n`;}
         });
         textarea.value = config + "## Starting all VM's\nvm start all\n";
+
+        // expand variables
+        if (window.experiment_vars != undefined)
+        {
+                for (var i = 0; i < window.experiment_vars.length; i++)
+                {
+                        var name = window.experiment_vars[i].name;
+                        var value = window.experiment_vars[i].value;
+
+                        var name = new RegExp('\\$'+name, 'g');
+                        textarea.value = textarea.value.replace(name, value);
+                }
+        }
         div.appendChild(textarea);
 
         this.init = function()
@@ -3515,7 +3528,10 @@ var VariablesDialog = function(ui)
                 var temp = [];
                 for (var i = 0; i < names.length; i++)
                 {
-                        temp.push({name: names[i], value: texts[i].value});
+                        if (texts[i])
+                        {
+                                temp.push({name: names[i], value: texts[i].value});
+                        }
                 }
                 window.experiment_vars = temp;
         });
