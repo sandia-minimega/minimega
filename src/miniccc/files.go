@@ -5,7 +5,6 @@
 package main
 
 import (
-	"io/ioutil"
 	log "minilog"
 	"os"
 	"path/filepath"
@@ -13,57 +12,44 @@ import (
 	"time"
 )
 
-// readFiles reads the contents of the specified files so that they can be sent
-// to the ron server.
-func readFiles(files []*ron.File) []*ron.File {
-	var res []*ron.File
-
+// sendFiles reads the files and sends them in multiple chunks to the server.
+func sendFiles(ID int, files []string) {
 	// expand and try to read each of the files
 	for _, f := range files {
-		log.Info("sending file %v", f.Name)
+		log.Info("sending file %v", f)
 
-		names, err := filepath.Glob(f.Name)
+		names, err := filepath.Glob(f)
 		if err != nil {
 			log.Errorln(err)
 			continue
 		}
 
 		for _, name := range names {
-			log.Debug("reading file %v", name)
-			d, err := ioutil.ReadFile(name)
-			if err != nil {
+			if err := sendFile(ID, name); err != nil {
 				log.Errorln(err)
 				continue
 			}
-
-			fi, err := os.Stat(name)
-			if err != nil {
-				log.Errorln(err)
-				continue
-			}
-			perm := fi.Mode() & os.ModePerm
-
-			res = append(res, &ron.File{
-				Name: name,
-				Perm: perm,
-				Data: d,
-			})
 		}
 	}
+}
 
-	return res
+func sendFile(ID int, filename string) error {
+	log.Debug("sendFile: %v for command %v", filename, ID)
+
+	// TODO: Change PART_SIZE based on memory size?
+	return ron.SendFile("/", filename, ID, ron.PART_SIZE, sendMessage)
 }
 
 // recvFiles retrieves a list of files from the ron server by requesting each
 // one individually.
-func recvFiles(files []*ron.File) {
+func recvFiles(files []string) {
 	start := time.Now()
 	var size int64
 
 	for _, v := range files {
 		log.Info("requesting file %v", v)
 
-		dst := filepath.Join(*f_path, "files", v.Name)
+		dst := filepath.Join(*f_path, "files", v)
 
 		if _, err := os.Stat(dst); err == nil {
 			// file exists (TODO: overwrite?)
@@ -72,9 +58,11 @@ func recvFiles(files []*ron.File) {
 		}
 
 		m := &ron.Message{
-			Type:     ron.MESSAGE_FILE,
-			UUID:     client.UUID,
-			Filename: v.Name,
+			Type: ron.MESSAGE_FILE,
+			UUID: client.UUID,
+			File: &ron.File{
+				Name: v,
+			},
 		}
 
 		if err := sendMessage(m); err != nil {
@@ -82,30 +70,31 @@ func recvFiles(files []*ron.File) {
 			return
 		}
 
-		resp := <-client.fileChan
-		if resp.Filename != v.Name {
-			log.Error("filename mismatch: %v != %v", resp.Filename, v.Name)
-			continue
+		// recv all parts of this file
+		for {
+			resp := <-client.fileChan
+			if resp.File.Name != v {
+				log.Error("filename mismatch: %v != %v", resp.File.Name, v)
+				break
+			}
+
+			// unable to retrieve this file
+			if resp.Error != "" {
+				log.Error("%v", resp.Error)
+				break
+			}
+
+			if err := resp.File.Recv(dst); err != nil {
+				log.Errorln(err)
+				break
+			}
+
+			size += int64(len(resp.File.Data))
+
+			if resp.File.EOF {
+				break
+			}
 		}
-
-		if resp.Error != "" {
-			log.Error("%v", resp.Error)
-			continue
-		}
-
-		dir := filepath.Dir(dst)
-
-		if err := os.MkdirAll(dir, os.FileMode(0770)); err != nil {
-			log.Errorln(err)
-			continue
-		}
-
-		if err := ioutil.WriteFile(dst, resp.File, v.Perm); err != nil {
-			log.Errorln(err)
-			continue
-		}
-
-		size += int64(len(resp.File))
 	}
 
 	d := time.Since(start)

@@ -86,6 +86,11 @@ type Config struct {
 
 	//Igor Notify Notice time (in minutes) is the amount of time before reservation expires users are notified
 	ExpirationLeadTime int
+
+	// Pause is set by administrators to prevent users from
+	// creating new reservations or extending current
+	// reservations. If the value is not "", igor is paused.
+	Pause string
 }
 
 // Read in the configuration from the specified path. Checks to make sure that
@@ -166,7 +171,7 @@ func (c Config) checkTimeLimit(nodes int, d time.Duration) error {
 	}
 
 	if d > max {
-		return fmt.Errorf("max allowable duration for %v nodes is %v", nodes, max)
+		return fmt.Errorf("max allowable duration for %v nodes is %v (you requested %v)", nodes, max, d)
 	}
 
 	return nil

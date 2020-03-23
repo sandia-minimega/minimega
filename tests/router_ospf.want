@@ -102,7 +102,8 @@ Network: 0: [10.1.0.2/24]
 Network: 1: [192.168.1.1/24]
 
 Named Static Routes:
-defaultroute	0.0.0.0/0	192.168.1.2
+defaultroute
+	0.0.0.0/0	192.168.1.2
 
 OSPF Area:	0
 Interfaces:
@@ -120,7 +121,8 @@ Network: 0: [10.1.0.2/24]
 Network: 1: [192.168.1.1/24]
 
 Named Static Routes:
-defaultroute	0.0.0.0/0	192.168.1.2
+defaultroute
+	0.0.0.0/0	192.168.1.2
 
 OSPF Area:	0
 Interfaces:

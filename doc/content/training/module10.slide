@@ -1,0 +1,221 @@
+VNC - VM interaction and scripting
+How to connect to your experiment through the VNC console
+
+The minimega miniclass series
+Sandia National Laboratories
+http://minimega.org/
+
+* Introduction
+
+As we discussed in [[module04.slide][Module 04]], The VNC console is a NoVNC session which lets you control the keyboard, mouse, and see the video in your browser.
+
+miniweb supports VNC for KVM VMs and xterm.js for containers. These are both accessed via the /vm/<name>/<connect> path.
+
+The container's web console allows multiple users to view the same console at the same time. minimega stores some "scrollback" from the container's console, so when a new console connects it can re-play recent output rather than present a blank screen. 
+
+minimega allows a user to record and playback mouse and keyboard actions in the VNC console.
+
+* VNC Console
+
+.image module04_content/mw_vnc.png _ 900
+
+* VNC Record
+
+* Recording - Introduction
+
+minimega supports recording and playback of both the framebuffer and keyboard and mouse interactions with VMs. 
+
+Framebuffer recordings contain VNC/RFB data at 10 frames per second and can be played back in a browser or transcoded to video, such as mp4, using the rfbplay tool. 
+
+Keyboard/mouse recordings are stored in a plaintext file format and can be played back to any running VM. 
+
+All VNC operations are namespace aware, and users must only specify the name of the virtual machine and minimega will automatically locate the host where the virtual machine resides. 
+
+* 
+
+minimega supports recording framebuffer and keyboard/mouse data with the vnc API. 
+
+All recording files are stored on the host where the virtual machine is currently running. 
+
+There are a few caveats to recording data using minimega, depending on on what data you are recording, described later in the module.
+
+To view current recordings of any kind, simply issue the vnc command with no arguments. 
+
+* Framebuffer
+
+minimega records VM framebuffers (video) by connecting to the target VM using a built-in VNC/RFB client. 
+
+minimega can record the framebuffer of VMs running on any minimega node, so long as it can lookup the VM using vm info, and the remote VM's VNC port is accessible from the minimega node you are issuing the command from. 
+
+There is no need to have the web service running, or to be connected to the VM in order to record framebuffer data. 
+
+minimega records framebuffer data at 10 frames per second. 
+
+* 
+
+For example, to record the framebuffer on VM bar, and save to recording.fb: 
+
+    # record the framebuffer of VM bar
+    vnc record fb bar recording.fb
+
+To stop recording, use the stop keyword: 
+
+    # stop fb recording on vm bar
+    vnc stop fb bar
+
+* Keyboard/mouse
+
+Keyboard and mouse data is recorded in much the same way, with one caveat - keyboard and mouse data can only be recorded for connections made over the web interface. 
+
+This means that you need to connect to a VM using the minimega web interface, and record keyboard/mouse data from the same node running the web service. 
+
+For example, to record keyboard/mouse data on node foo, VM bar, and save to recording.kb on node foo: 
+
+    # record the keyboard/mouse data of VM bar to file recording.kb
+    vnc record kb bar recording.kb
+
+To stop recording: 
+
+    # stop recording on vm bar
+    vnc stop kb bar
+
+* The Record File
+
+The recorded file format uses the following schema: 
+
+    <time delta>:PointerEvent,<mask>,<x>,<y>
+    <time delta>:KeyEvent,<press>,<key>
+
+The time delta is the time, in nanoseconds, between the previous record and this one. 
+
+For pointer events, a button mask of 0 is no buttons, 1 is left mouse, 2 right, and 3 both left and right. 
+
+For keyboard events, there is an event for a key press (press is true in the schema), and a key release. 
+
+For code points not represented by ASCII, the key value is one of the codepoints defined in the minimega [[https://github.com/sandia-minimega/minimega/blob/master/src/vnc/keysymdef.go][keydef file]]. 
+
+* Example
+
+For example, the following shows several mouse movements, and someone typing foo: 
+
+    178759303:PointerEvent,0,606,44 130044895:PointerEvent,1,606,44
+    97711488:PointerEvent,0,606,44 578412037:KeyEvent,true,f
+    8141459:KeyEvent,false,f 111708110:KeyEvent,true,o
+    10379962:KeyEvent,false,o 69607950:KeyEvent,true,o
+    102641640:KeyEvent,false,o 436817511:PointerEvent,0,606,43
+    54109:PointerEvent,0,606,41 4740247:PointerEvent,0,607,38
+    39063:PointerEvent,0,607,17
+
+* VNC Playback
+
+* Framebuffer
+
+Playback of framebuffer data uses a seperate tool, available in the minimega distribution, rfbplay. 
+
+rfbplay can serve a directory of framebuffer files, and can playback in a MJPEG supported web browser (Firefox currently supports MJPEG, Chrome no longer does). 
+
+Additionally, rfbplay can transcode framebuffer data, using ffmpeg, to any format supported by ffmpeg, such as mp4. 
+
+* Using a browser
+
+To playback a framebuffer recording in a web browser that supports MJPEG (not Chrome), start rfbplay and supply a directory to serve: 
+
+    rfbplay <directory>
+
+Then simply browse to the rfbplay service, port 9004 by default, and select the framebuffer recording you want to play. 
+
+* Transcoding to video
+
+To transcode a framebuffer recording, you must have ffmpeg in your path. 
+
+Simply invoke rfbplay with a source framebuffer file and output video. 
+
+ffmpeg will infer the video type based on the filename extension. 
+
+For example, to transcode a file foo.fb to an mp4 file named bar.mp4, make sure you suffix the output filename with .mp4: 
+
+    rfbplay foo.fb bar.mp4
+
+Files are transcoded in real time, so a one hour framebuffer recording will take at least one hour to transcode. 
+
+You can see ffmpeg transcoding details by running rfbplay with debug logging. 
+
+* Keyboard/mouse
+
+minimega supports playing and interacting with recorded keyboard/mouse data to any running VM, not just the one it was recorded on. 
+
+Unlike recording keyboard/mouse data, to playback data you do not need the web service running, as minimega uses a built-in VNC/RFB client to playback data. 
+
+To playback data to a VM on a node other than the node you are issuing the command on, minimega must be able to directly connect to the VNC server of the VM on that node. 
+
+* Examples
+
+To playback a recording to VM bar: 
+
+    # playback the keyboard/mouse data to VM bar
+    vnc play bar recording.fb
+
+Similarly, to stop playback: 
+
+    # stop kb/mouse event playback 
+    vnc stop bar
+
+To pause a running playback: 
+
+    # pause a running playback on vm foo
+    vnc pause foo
+
+* 
+
+To resume a paused playback: 
+
+    # resume a paused playback on vm foo
+    vnc continue foo
+
+To get the vnc event the playback is currently on: 
+
+    # get the current vnc event of vm foo's playback
+    vnc getstep foo
+
+To advance the playback to the next vnc event: 
+
+    # advance to the next keyboard/mouse event on vm foo
+    vnc step foo
+
+* 
+
+The playback API also supports injecting arbitrary vnc events into a VM. 
+
+If a playback is currently running, the event will immediately be delivered through the existing vnc connection. 
+
+If no playback exists for the specified VM, a short lived vnc connection will be created to deliver the vnc event. 
+
+The format of the events is identical to the recording format except with the time delta removed. 
+
+To inject the string foo string to VM bar: 
+
+    # inject the string `foo` to vm bar
+    vnc inject bar KeyEvent,true,f 
+    vnc inject bar KeyEvent,true,o 
+    vnc inject bar KeyEvent,true,o 
+
+* LoadFile
+
+The inject API also supports the unique event LoadFile. 
+
+LoadFile will take an existing vnc keyboard/mouse recording and, if a playback is currently running, preempt the running playback and play the specified playback file to completion. 
+
+After the LoadFile playback completes, the previously running playback will resume and continue playing. 
+
+If LoadFile is invoked with no playback currently running it will start a new vnc playback with the specified playback file. 
+
+To inject the playback file playback.kbr to VM foo: 
+
+    # inject the LoadFile event to vm foo to play the playback bar.kbr
+    vnc inject foo LoadFile,bar.kbr
+
+
+
+* Next up…
+
+[[module11.slide][Module 11: Instrumentation]]

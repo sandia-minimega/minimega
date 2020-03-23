@@ -442,6 +442,8 @@ func cliLocal(input *liner.State) {
 			break
 		}
 
+		line = strings.TrimSpace(line)
+
 		log.Debug("got line from stdin: `%v`", line)
 
 		// skip blank lines
@@ -450,6 +452,9 @@ func cliLocal(input *liner.State) {
 		}
 
 		input.AppendHistory(line)
+
+		// expand aliases
+		line = minicli.ExpandAliases(line)
 
 		cmd, err := minicli.Compile(line)
 		if err != nil {

@@ -395,10 +395,7 @@ func (r *Router) Commit(ns *Namespace) error {
 		Prefix: prefix,
 		Filter: filter,
 	}
-	cmd.FilesSend = append(cmd.FilesSend, &ron.File{
-		Name: prefix,
-		Perm: 0644,
-	})
+	cmd.FilesSend = append(cmd.FilesSend, prefix)
 	ns.ccServer.NewCommand(cmd)
 
 	cmd = &ron.Command{
