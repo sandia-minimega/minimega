@@ -3013,7 +3013,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                                 }
                                 if (net == ""){
                                         delete prev_dev["network"];
-                                        clear += "clear vm config network"
+                                        clear += "clear vm config network \n"
                                 }
                                 else {
                                         if (cell.getAttribute("network") != net){
