@@ -101,6 +101,7 @@ editImage=Edit Image
 editLink=Edit Link
 editStyle=Edit Style
 editTooltip=Edit Tooltip
+editVariables=Edit Variables
 enterGroup=Enter Group
 enterValue=Enter Value
 enterName=Enter Name

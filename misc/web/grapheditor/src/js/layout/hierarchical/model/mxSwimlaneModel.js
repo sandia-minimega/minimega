@@ -28,83 +28,83 @@
  */
 function mxSwimlaneModel(layout, vertices, roots, parent, tightenToSource)
 {
-	var graph = layout.getGraph();
-	this.tightenToSource = tightenToSource;
-	this.roots = roots;
-	this.parent = parent;
+        var graph = layout.getGraph();
+        this.tightenToSource = tightenToSource;
+        this.roots = roots;
+        this.parent = parent;
 
-	// map of cells to internal cell needed for second run through
-	// to setup the sink of edges correctly
-	this.vertexMapper = new mxDictionary();
-	this.edgeMapper = new mxDictionary();
-	this.maxRank = 0;
-	var internalVertices = [];
+        // map of cells to internal cell needed for second run through
+        // to setup the sink of edges correctly
+        this.vertexMapper = new mxDictionary();
+        this.edgeMapper = new mxDictionary();
+        this.maxRank = 0;
+        var internalVertices = [];
 
-	if (vertices == null)
-	{
-		vertices = this.graph.getChildVertices(parent);
-	}
+        if (vertices == null)
+        {
+                vertices = this.graph.getChildVertices(parent);
+        }
 
-	this.maxRank = this.SOURCESCANSTARTRANK;
-	// map of cells to internal cell needed for second run through
-	// to setup the sink of edges correctly. Guess size by number
-	// of edges is roughly same as number of vertices.
-	this.createInternalCells(layout, vertices, internalVertices);
+        this.maxRank = this.SOURCESCANSTARTRANK;
+        // map of cells to internal cell needed for second run through
+        // to setup the sink of edges correctly. Guess size by number
+        // of edges is roughly same as number of vertices.
+        this.createInternalCells(layout, vertices, internalVertices);
 
-	// Go through edges set their sink values. Also check the
-	// ordering if and invert edges if necessary
-	for (var i = 0; i < vertices.length; i++)
-	{
-		var edges = internalVertices[i].connectsAsSource;
+        // Go through edges set their sink values. Also check the
+        // ordering if and invert edges if necessary
+        for (var i = 0; i < vertices.length; i++)
+        {
+                var edges = internalVertices[i].connectsAsSource;
 
-		for (var j = 0; j < edges.length; j++)
-		{
-			var internalEdge = edges[j];
-			var realEdges = internalEdge.edges;
+                for (var j = 0; j < edges.length; j++)
+                {
+                        var internalEdge = edges[j];
+                        var realEdges = internalEdge.edges;
 
-			// Only need to process the first real edge, since
-			// all the edges connect to the same other vertex
-			if (realEdges != null && realEdges.length > 0)
-			{
-				var realEdge = realEdges[0];
-				var targetCell = layout.getVisibleTerminal(
-						realEdge, false);
-				var internalTargetCell = this.vertexMapper.get(targetCell);
+                        // Only need to process the first real edge, since
+                        // all the edges connect to the same other vertex
+                        if (realEdges != null && realEdges.length > 0)
+                        {
+                                var realEdge = realEdges[0];
+                                var targetCell = layout.getVisibleTerminal(
+                                                realEdge, false);
+                                var internalTargetCell = this.vertexMapper.get(targetCell);
 
-				if (internalVertices[i] == internalTargetCell)
-				{
-					// If there are parallel edges going between two vertices and not all are in the same direction
-					// you can have navigated across one direction when doing the cycle reversal that isn't the same
-					// direction as the first real edge in the array above. When that happens the if above catches
-					// that and we correct the target cell before continuing.
-					// This branch only detects this single case
-					targetCell = layout.getVisibleTerminal(
-							realEdge, true);
-					internalTargetCell = this.vertexMapper.get(targetCell);
-				}
+                                if (internalVertices[i] == internalTargetCell)
+                                {
+                                        // If there are parallel edges going between two vertices and not all are in the same direction
+                                        // you can have navigated across one direction when doing the cycle reversal that isn't the same
+                                        // direction as the first real edge in the array above. When that happens the if above catches
+                                        // that and we correct the target cell before continuing.
+                                        // This branch only detects this single case
+                                        targetCell = layout.getVisibleTerminal(
+                                                        realEdge, true);
+                                        internalTargetCell = this.vertexMapper.get(targetCell);
+                                }
 
-				if (internalTargetCell != null
-						&& internalVertices[i] != internalTargetCell)
-				{
-					internalEdge.target = internalTargetCell;
+                                if (internalTargetCell != null
+                                                && internalVertices[i] != internalTargetCell)
+                                {
+                                        internalEdge.target = internalTargetCell;
 
-					if (internalTargetCell.connectsAsTarget.length == 0)
-					{
-						internalTargetCell.connectsAsTarget = [];
-					}
+                                        if (internalTargetCell.connectsAsTarget.length == 0)
+                                        {
+                                                internalTargetCell.connectsAsTarget = [];
+                                        }
 
-					if (mxUtils.indexOf(internalTargetCell.connectsAsTarget, internalEdge) < 0)
-					{
-						internalTargetCell.connectsAsTarget.push(internalEdge);
-					}
-				}
-			}
-		}
+                                        if (mxUtils.indexOf(internalTargetCell.connectsAsTarget, internalEdge) < 0)
+                                        {
+                                                internalTargetCell.connectsAsTarget.push(internalEdge);
+                                        }
+                                }
+                        }
+                }
 
-		// Use the temp variable in the internal nodes to mark this
-		// internal vertex as having been visited.
-		internalVertices[i].temp[0] = 1;
-	}
+                // Use the temp variable in the internal nodes to mark this
+                // internal vertex as having been visited.
+                internalVertices[i].temp[0] = 1;
+        }
 };
 
 /**
@@ -194,95 +194,95 @@ mxSwimlaneModel.prototype.ranksPerGroup = null;
  */
 mxSwimlaneModel.prototype.createInternalCells = function(layout, vertices, internalVertices)
 {
-	var graph = layout.getGraph();
-	var swimlanes = layout.swimlanes;
+        var graph = layout.getGraph();
+        var swimlanes = layout.swimlanes;
 
-	// Create internal edges
-	for (var i = 0; i < vertices.length; i++)
-	{
-		internalVertices[i] = new mxGraphHierarchyNode(vertices[i]);
-		this.vertexMapper.put(vertices[i], internalVertices[i]);
-		internalVertices[i].swimlaneIndex = -1;
+        // Create internal edges
+        for (var i = 0; i < vertices.length; i++)
+        {
+                internalVertices[i] = new mxGraphHierarchyNode(vertices[i]);
+                this.vertexMapper.put(vertices[i], internalVertices[i]);
+                internalVertices[i].swimlaneIndex = -1;
 
-		for (var ii = 0; ii < swimlanes.length; ii++)
-		{
-			if (graph.model.getParent(vertices[i]) == swimlanes[ii])
-			{
-				internalVertices[i].swimlaneIndex = ii;
-				break;
-			}
-		}
+                for (var ii = 0; ii < swimlanes.length; ii++)
+                {
+                        if (graph.model.getParent(vertices[i]) == swimlanes[ii])
+                        {
+                                internalVertices[i].swimlaneIndex = ii;
+                                break;
+                        }
+                }
 
-		// If the layout is deterministic, order the cells
-		//List outgoingCells = graph.getNeighbours(vertices[i], deterministic);
-		var conns = layout.getEdges(vertices[i]);
-		internalVertices[i].connectsAsSource = [];
+                // If the layout is deterministic, order the cells
+                //List outgoingCells = graph.getNeighbours(vertices[i], deterministic);
+                var conns = layout.getEdges(vertices[i]);
+                internalVertices[i].connectsAsSource = [];
 
-		// Create internal edges, but don't do any rank assignment yet
-		// First use the information from the greedy cycle remover to
-		// invert the leftward edges internally
-		for (var j = 0; j < conns.length; j++)
-		{
-			var cell = layout.getVisibleTerminal(conns[j], false);
+                // Create internal edges, but don't do any rank assignment yet
+                // First use the information from the greedy cycle remover to
+                // invert the leftward edges internally
+                for (var j = 0; j < conns.length; j++)
+                {
+                        var cell = layout.getVisibleTerminal(conns[j], false);
 
-			// Looking for outgoing edges only
-			if (cell != vertices[i] && layout.graph.model.isVertex(cell) &&
-					!layout.isVertexIgnored(cell))
-			{
-				// We process all edge between this source and its targets
-				// If there are edges going both ways, we need to collect
-				// them all into one internal edges to avoid looping problems
-				// later. We assume this direction (source -> target) is the 
-				// natural direction if at least half the edges are going in
-				// that direction.
+                        // Looking for outgoing edges only
+                        if (cell != vertices[i] && layout.graph.model.isVertex(cell) &&
+                                        !layout.isVertexIgnored(cell))
+                        {
+                                // We process all edge between this source and its targets
+                                // If there are edges going both ways, we need to collect
+                                // them all into one internal edges to avoid looping problems
+                                // later. We assume this direction (source -> target) is the
+                                // natural direction if at least half the edges are going in
+                                // that direction.
 
-				// The check below for edges[0] being in the vertex mapper is
-				// in case we've processed this the other way around
-				// (target -> source) and the number of edges in each direction
-				// are the same. All the graph edges will have been assigned to
-				// an internal edge going the other way, so we don't want to 
-				// process them again
-				var undirectedEdges = layout.getEdgesBetween(vertices[i],
-						cell, false);
-				var directedEdges = layout.getEdgesBetween(vertices[i],
-						cell, true);
-				
-				if (undirectedEdges != null &&
-						undirectedEdges.length > 0 &&
-						this.edgeMapper.get(undirectedEdges[0]) == null &&
-						directedEdges.length * 2 >= undirectedEdges.length)
-				{
-					var internalEdge = new mxGraphHierarchyEdge(undirectedEdges);
+                                // The check below for edges[0] being in the vertex mapper is
+                                // in case we've processed this the other way around
+                                // (target -> source) and the number of edges in each direction
+                                // are the same. All the graph edges will have been assigned to
+                                // an internal edge going the other way, so we don't want to
+                                // process them again
+                                var undirectedEdges = layout.getEdgesBetween(vertices[i],
+                                                cell, false);
+                                var directedEdges = layout.getEdgesBetween(vertices[i],
+                                                cell, true);
 
-					for (var k = 0; k < undirectedEdges.length; k++)
-					{
-						var edge = undirectedEdges[k];
-						this.edgeMapper.put(edge, internalEdge);
+                                if (undirectedEdges != null &&
+                                                undirectedEdges.length > 0 &&
+                                                this.edgeMapper.get(undirectedEdges[0]) == null &&
+                                                directedEdges.length * 2 >= undirectedEdges.length)
+                                {
+                                        var internalEdge = new mxGraphHierarchyEdge(undirectedEdges);
 
-						// Resets all point on the edge and disables the edge style
-						// without deleting it from the cell style
-						graph.resetEdge(edge);
+                                        for (var k = 0; k < undirectedEdges.length; k++)
+                                        {
+                                                var edge = undirectedEdges[k];
+                                                this.edgeMapper.put(edge, internalEdge);
 
-					    if (layout.disableEdgeStyle)
-					    {
-					    	layout.setEdgeStyleEnabled(edge, false);
-					    	layout.setOrthogonalEdge(edge,true);
-					    }
-					}
+                                                // Resets all point on the edge and disables the edge style
+                                                // without deleting it from the cell style
+                                                graph.resetEdge(edge);
 
-					internalEdge.source = internalVertices[i];
+                                            if (layout.disableEdgeStyle)
+                                            {
+                                                layout.setEdgeStyleEnabled(edge, false);
+                                                layout.setOrthogonalEdge(edge,true);
+                                            }
+                                        }
 
-					if (mxUtils.indexOf(internalVertices[i].connectsAsSource, internalEdge) < 0)
-					{
-						internalVertices[i].connectsAsSource.push(internalEdge);
-					}
-				}
-			}
-		}
+                                        internalEdge.source = internalVertices[i];
 
-		// Ensure temp variable is cleared from any previous use
-		internalVertices[i].temp[0] = 0;
-	}
+                                        if (mxUtils.indexOf(internalVertices[i].connectsAsSource, internalEdge) < 0)
+                                        {
+                                                internalVertices[i].connectsAsSource.push(internalEdge);
+                                        }
+                                }
+                        }
+                }
+
+                // Ensure temp variable is cleared from any previous use
+                internalVertices[i].temp[0] = 0;
+        }
 };
 
 /**
@@ -294,160 +294,160 @@ mxSwimlaneModel.prototype.createInternalCells = function(layout, vertices, inter
 */
 mxSwimlaneModel.prototype.initialRank = function()
 {
-	this.ranksPerGroup = [];
-	
-	var startNodes = [];
-	var seen = new Object();
+        this.ranksPerGroup = [];
 
-	if (this.roots != null)
-	{
-		for (var i = 0; i < this.roots.length; i++)
-		{
-			var internalNode = this.vertexMapper.get(this.roots[i]);
-			this.maxChainDfs(null, internalNode, null, seen, 0);
+        var startNodes = [];
+        var seen = new Object();
 
-			if (internalNode != null)
-			{
-				startNodes.push(internalNode);
-			}
-		}
-	}
+        if (this.roots != null)
+        {
+                for (var i = 0; i < this.roots.length; i++)
+                {
+                        var internalNode = this.vertexMapper.get(this.roots[i]);
+                        this.maxChainDfs(null, internalNode, null, seen, 0);
 
-	// Calculate the lower and upper rank bounds of each swimlane
-	var lowerRank = [];
-	var upperRank = [];
-	
-	for (var i = this.ranksPerGroup.length - 1; i >= 0; i--)
-	{
-		if (i == this.ranksPerGroup.length - 1)
-		{
-			lowerRank[i] = 0;
-		}
-		else
-		{
-			lowerRank[i] = upperRank[i+1] + 1;
-		}
-		
-		upperRank[i] = lowerRank[i] + this.ranksPerGroup[i];
-	}
-	
-	this.maxRank = upperRank[0];
+                        if (internalNode != null)
+                        {
+                                startNodes.push(internalNode);
+                        }
+                }
+        }
 
-	var internalNodes = this.vertexMapper.getValues();
-	
-	for (var i=0; i < internalNodes.length; i++)
-	{
-		// Mark the node as not having had a layer assigned
-		internalNodes[i].temp[0] = -1;
-	}
+        // Calculate the lower and upper rank bounds of each swimlane
+        var lowerRank = [];
+        var upperRank = [];
 
-	var startNodesCopy = startNodes.slice();
-	
-	while (startNodes.length > 0)
-	{
-		var internalNode = startNodes[0];
-		var layerDeterminingEdges;
-		var edgesToBeMarked;
+        for (var i = this.ranksPerGroup.length - 1; i >= 0; i--)
+        {
+                if (i == this.ranksPerGroup.length - 1)
+                {
+                        lowerRank[i] = 0;
+                }
+                else
+                {
+                        lowerRank[i] = upperRank[i+1] + 1;
+                }
 
-		layerDeterminingEdges = internalNode.connectsAsTarget;
-		edgesToBeMarked = internalNode.connectsAsSource;
+                upperRank[i] = lowerRank[i] + this.ranksPerGroup[i];
+        }
 
-		// flag to keep track of whether or not all layer determining
-		// edges have been scanned
-		var allEdgesScanned = true;
+        this.maxRank = upperRank[0];
 
-		// Work out the layer of this node from the layer determining
-		// edges. The minimum layer number of any node connected by one of
-		// the layer determining edges variable
-		var minimumLayer = upperRank[0];
+        var internalNodes = this.vertexMapper.getValues();
 
-		for (var i = 0; i < layerDeterminingEdges.length; i++)
-		{
-			var internalEdge = layerDeterminingEdges[i];
+        for (var i=0; i < internalNodes.length; i++)
+        {
+                // Mark the node as not having had a layer assigned
+                internalNodes[i].temp[0] = -1;
+        }
 
-			if (internalEdge.temp[0] == 5270620)
-			{
-				// This edge has been scanned, get the layer of the
-				// node on the other end
-				var otherNode = internalEdge.source;
-				minimumLayer = Math.min(minimumLayer, otherNode.temp[0] - 1);
-			}
-			else
-			{
-				allEdgesScanned = false;
+        var startNodesCopy = startNodes.slice();
 
-				break;
-			}
-		}
+        while (startNodes.length > 0)
+        {
+                var internalNode = startNodes[0];
+                var layerDeterminingEdges;
+                var edgesToBeMarked;
 
-		// If all edge have been scanned, assign the layer, mark all
-		// edges in the other direction and remove from the nodes list
-		if (allEdgesScanned)
-		{
-			if (minimumLayer > upperRank[internalNode.swimlaneIndex])
-			{
-				minimumLayer = upperRank[internalNode.swimlaneIndex];
-			}
+                layerDeterminingEdges = internalNode.connectsAsTarget;
+                edgesToBeMarked = internalNode.connectsAsSource;
 
-			internalNode.temp[0] = minimumLayer;
+                // flag to keep track of whether or not all layer determining
+                // edges have been scanned
+                var allEdgesScanned = true;
 
-			if (edgesToBeMarked != null)
-			{
-				for (var i = 0; i < edgesToBeMarked.length; i++)
-				{
-					var internalEdge = edgesToBeMarked[i];
+                // Work out the layer of this node from the layer determining
+                // edges. The minimum layer number of any node connected by one of
+                // the layer determining edges variable
+                var minimumLayer = upperRank[0];
 
-					// Assign unique stamp ( y/m/d/h )
-					internalEdge.temp[0] = 5270620;
+                for (var i = 0; i < layerDeterminingEdges.length; i++)
+                {
+                        var internalEdge = layerDeterminingEdges[i];
 
-					// Add node on other end of edge to LinkedList of
-					// nodes to be analysed
-					var otherNode = internalEdge.target;
+                        if (internalEdge.temp[0] == 5270620)
+                        {
+                                // This edge has been scanned, get the layer of the
+                                // node on the other end
+                                var otherNode = internalEdge.source;
+                                minimumLayer = Math.min(minimumLayer, otherNode.temp[0] - 1);
+                        }
+                        else
+                        {
+                                allEdgesScanned = false;
 
-					// Only add node if it hasn't been assigned a layer
-					if (otherNode.temp[0] == -1)
-					{
-						startNodes.push(otherNode);
+                                break;
+                        }
+                }
 
-						// Mark this other node as neither being
-						// unassigned nor assigned so it isn't
-						// added to this list again, but it's
-						// layer isn't used in any calculation.
-						otherNode.temp[0] = -2;
-					}
-				}
-			}
+                // If all edge have been scanned, assign the layer, mark all
+                // edges in the other direction and remove from the nodes list
+                if (allEdgesScanned)
+                {
+                        if (minimumLayer > upperRank[internalNode.swimlaneIndex])
+                        {
+                                minimumLayer = upperRank[internalNode.swimlaneIndex];
+                        }
 
-			startNodes.shift();
-		}
-		else
-		{
-			// Not all the edges have been scanned, get to the back of
-			// the class and put the dunces cap on
-			var removedCell = startNodes.shift();
-			startNodes.push(internalNode);
+                        internalNode.temp[0] = minimumLayer;
 
-			if (removedCell == internalNode && startNodes.length == 1)
-			{
-				// This is an error condition, we can't get out of
-				// this loop. It could happen for more than one node
-				// but that's a lot harder to detect. Log the error
-				// TODO make log comment
-				break;
-			}
-		}
-	}
+                        if (edgesToBeMarked != null)
+                        {
+                                for (var i = 0; i < edgesToBeMarked.length; i++)
+                                {
+                                        var internalEdge = edgesToBeMarked[i];
 
-	// Normalize the ranks down from their large starting value to place
-	// at least 1 sink on layer 0
+                                        // Assign unique stamp ( y/m/d/h )
+                                        internalEdge.temp[0] = 5270620;
+
+                                        // Add node on other end of edge to LinkedList of
+                                        // nodes to be analysed
+                                        var otherNode = internalEdge.target;
+
+                                        // Only add node if it hasn't been assigned a layer
+                                        if (otherNode.temp[0] == -1)
+                                        {
+                                                startNodes.push(otherNode);
+
+                                                // Mark this other node as neither being
+                                                // unassigned nor assigned so it isn't
+                                                // added to this list again, but it's
+                                                // layer isn't used in any calculation.
+                                                otherNode.temp[0] = -2;
+                                        }
+                                }
+                        }
+
+                        startNodes.shift();
+                }
+                else
+                {
+                        // Not all the edges have been scanned, get to the back of
+                        // the class and put the dunces cap on
+                        var removedCell = startNodes.shift();
+                        startNodes.push(internalNode);
+
+                        if (removedCell == internalNode && startNodes.length == 1)
+                        {
+                                // This is an error condition, we can't get out of
+                                // this loop. It could happen for more than one node
+                                // but that's a lot harder to detect. Log the error
+                                // TODO make log comment
+                                break;
+                        }
+                }
+        }
+
+        // Normalize the ranks down from their large starting value to place
+        // at least 1 sink on layer 0
 //	for (var key in this.vertexMapper)
 //	{
 //		var internalNode = this.vertexMapper[key];
 //		// Mark the node as not having had a layer assigned
 //		internalNode.temp[0] -= this.maxRank;
 //	}
-	
-	// Tighten the rank 0 nodes as far as possible
+
+        // Tighten the rank 0 nodes as far as possible
 //	for ( var i = 0; i < startNodesCopy.length; i++)
 //	{
 //		var internalNode = startNodesCopy[i];
@@ -485,42 +485,42 @@ mxSwimlaneModel.prototype.initialRank = function()
  */
 mxSwimlaneModel.prototype.maxChainDfs = function(parent, root, connectingEdge, seen, chainCount)
 {
-	if (root != null)
-	{
-		var rootId = mxCellPath.create(root.cell);
+        if (root != null)
+        {
+                var rootId = mxCellPath.create(root.cell);
 
-		if (seen[rootId] == null)
-		{
-			seen[rootId] = root;
-			var slIndex = root.swimlaneIndex;
-			
-			if (this.ranksPerGroup[slIndex] == null || this.ranksPerGroup[slIndex] < chainCount)
-			{
-				this.ranksPerGroup[slIndex] = chainCount;
-			}
+                if (seen[rootId] == null)
+                {
+                        seen[rootId] = root;
+                        var slIndex = root.swimlaneIndex;
 
-			// Copy the connects as source list so that visitors
-			// can change the original for edge direction inversions
-			var outgoingEdges = root.connectsAsSource.slice();
+                        if (this.ranksPerGroup[slIndex] == null || this.ranksPerGroup[slIndex] < chainCount)
+                        {
+                                this.ranksPerGroup[slIndex] = chainCount;
+                        }
 
-			for (var i = 0; i < outgoingEdges.length; i++)
-			{
-				var internalEdge = outgoingEdges[i];
-				var targetNode = internalEdge.target;
+                        // Copy the connects as source list so that visitors
+                        // can change the original for edge direction inversions
+                        var outgoingEdges = root.connectsAsSource.slice();
 
-				// Only navigate in source->target direction within the same
-				// swimlane, or from a lower index swimlane to a higher one
-				if (root.swimlaneIndex < targetNode.swimlaneIndex)
-				{
-					this.maxChainDfs(root, targetNode, internalEdge, mxUtils.clone(seen, null , true), 0);
-				}
-				else if (root.swimlaneIndex == targetNode.swimlaneIndex)
-				{
-					this.maxChainDfs(root, targetNode, internalEdge, mxUtils.clone(seen, null , true), chainCount + 1);
-				}
-			}
-		}
-	}
+                        for (var i = 0; i < outgoingEdges.length; i++)
+                        {
+                                var internalEdge = outgoingEdges[i];
+                                var targetNode = internalEdge.target;
+
+                                // Only navigate in source->target direction within the same
+                                // swimlane, or from a lower index swimlane to a higher one
+                                if (root.swimlaneIndex < targetNode.swimlaneIndex)
+                                {
+                                        this.maxChainDfs(root, targetNode, internalEdge, mxUtils.clone(seen, null , true), 0);
+                                }
+                                else if (root.swimlaneIndex == targetNode.swimlaneIndex)
+                                {
+                                        this.maxChainDfs(root, targetNode, internalEdge, mxUtils.clone(seen, null , true), chainCount + 1);
+                                }
+                        }
+                }
+        }
 };
 
 /**
@@ -531,69 +531,69 @@ mxSwimlaneModel.prototype.maxChainDfs = function(parent, root, connectingEdge, s
  */
 mxSwimlaneModel.prototype.fixRanks = function()
 {
-	var rankList = [];
-	this.ranks = [];
+        var rankList = [];
+        this.ranks = [];
 
-	for (var i = 0; i < this.maxRank + 1; i++)
-	{
-		rankList[i] = [];
-		this.ranks[i] = rankList[i];
-	}
+        for (var i = 0; i < this.maxRank + 1; i++)
+        {
+                rankList[i] = [];
+                this.ranks[i] = rankList[i];
+        }
 
-	// Perform a DFS to obtain an initial ordering for each rank.
-	// Without doing this you would end up having to process
-	// crossings for a standard tree.
-	var rootsArray = null;
+        // Perform a DFS to obtain an initial ordering for each rank.
+        // Without doing this you would end up having to process
+        // crossings for a standard tree.
+        var rootsArray = null;
 
-	if (this.roots != null)
-	{
-		var oldRootsArray = this.roots;
-		rootsArray = [];
+        if (this.roots != null)
+        {
+                var oldRootsArray = this.roots;
+                rootsArray = [];
 
-		for (var i = 0; i < oldRootsArray.length; i++)
-		{
-			var cell = oldRootsArray[i];
-			var internalNode = this.vertexMapper.get(cell);
-			rootsArray[i] = internalNode;
-		}
-	}
+                for (var i = 0; i < oldRootsArray.length; i++)
+                {
+                        var cell = oldRootsArray[i];
+                        var internalNode = this.vertexMapper.get(cell);
+                        rootsArray[i] = internalNode;
+                }
+        }
 
-	this.visit(function(parent, node, edge, layer, seen)
-	{
-		if (seen == 0 && node.maxRank < 0 && node.minRank < 0)
-		{
-			rankList[node.temp[0]].push(node);
-			node.maxRank = node.temp[0];
-			node.minRank = node.temp[0];
+        this.visit(function(parent, node, edge, layer, seen)
+        {
+                if (seen == 0 && node.maxRank < 0 && node.minRank < 0)
+                {
+                        rankList[node.temp[0]].push(node);
+                        node.maxRank = node.temp[0];
+                        node.minRank = node.temp[0];
 
-			// Set temp[0] to the nodes position in the rank
-			node.temp[0] = rankList[node.maxRank].length - 1;
-		}
+                        // Set temp[0] to the nodes position in the rank
+                        node.temp[0] = rankList[node.maxRank].length - 1;
+                }
 
-		if (parent != null && edge != null)
-		{
-			var parentToCellRankDifference = parent.maxRank - node.maxRank;
+                if (parent != null && edge != null)
+                {
+                        var parentToCellRankDifference = parent.maxRank - node.maxRank;
 
-			if (parentToCellRankDifference > 1)
-			{
-				// There are ranks in between the parent and current cell
-				edge.maxRank = parent.maxRank;
-				edge.minRank = node.maxRank;
-				edge.temp = [];
-				edge.x = [];
-				edge.y = [];
+                        if (parentToCellRankDifference > 1)
+                        {
+                                // There are ranks in between the parent and current cell
+                                edge.maxRank = parent.maxRank;
+                                edge.minRank = node.maxRank;
+                                edge.temp = [];
+                                edge.x = [];
+                                edge.y = [];
 
-				for (var i = edge.minRank + 1; i < edge.maxRank; i++)
-				{
-					// The connecting edge must be added to the
-					// appropriate ranks
-					rankList[i].push(edge);
-					edge.setGeneralPurposeVariable(i, rankList[i]
-							.length - 1);
-				}
-			}
-		}
-	}, rootsArray, false, null);
+                                for (var i = edge.minRank + 1; i < edge.maxRank; i++)
+                                {
+                                        // The connecting edge must be added to the
+                                        // appropriate ranks
+                                        rankList[i].push(edge);
+                                        edge.setGeneralPurposeVariable(i, rankList[i]
+                                                        .length - 1);
+                                }
+                        }
+                }
+        }, rootsArray, false, null);
 };
 
 /**
@@ -609,38 +609,38 @@ mxSwimlaneModel.prototype.fixRanks = function()
  */
 mxSwimlaneModel.prototype.visit = function(visitor, dfsRoots, trackAncestors, seenNodes)
 {
-	// Run dfs through on all roots
-	if (dfsRoots != null)
-	{
-		for (var i = 0; i < dfsRoots.length; i++)
-		{
-			var internalNode = dfsRoots[i];
+        // Run dfs through on all roots
+        if (dfsRoots != null)
+        {
+                for (var i = 0; i < dfsRoots.length; i++)
+                {
+                        var internalNode = dfsRoots[i];
 
-			if (internalNode != null)
-			{
-				if (seenNodes == null)
-				{
-					seenNodes = new Object();
-				}
+                        if (internalNode != null)
+                        {
+                                if (seenNodes == null)
+                                {
+                                        seenNodes = new Object();
+                                }
 
-				if (trackAncestors)
-				{
-					// Set up hash code for root
-					internalNode.hashCode = [];
-					internalNode.hashCode[0] = this.dfsCount;
-					internalNode.hashCode[1] = i;
-					this.extendedDfs(null, internalNode, null, visitor, seenNodes,
-							internalNode.hashCode, i, 0);
-				}
-				else
-				{
-					this.dfs(null, internalNode, null, visitor, seenNodes, 0);
-				}
-			}
-		}
+                                if (trackAncestors)
+                                {
+                                        // Set up hash code for root
+                                        internalNode.hashCode = [];
+                                        internalNode.hashCode[0] = this.dfsCount;
+                                        internalNode.hashCode[1] = i;
+                                        this.extendedDfs(null, internalNode, null, visitor, seenNodes,
+                                                        internalNode.hashCode, i, 0);
+                                }
+                                else
+                                {
+                                        this.dfs(null, internalNode, null, visitor, seenNodes, 0);
+                                }
+                        }
+                }
 
-		this.dfsCount++;
-	}
+                this.dfsCount++;
+        }
 };
 
 /**
@@ -661,35 +661,35 @@ mxSwimlaneModel.prototype.visit = function(visitor, dfsRoots, trackAncestors, se
  */
 mxSwimlaneModel.prototype.dfs = function(parent, root, connectingEdge, visitor, seen, layer)
 {
-	if (root != null)
-	{
-		var rootId = root.id;
+        if (root != null)
+        {
+                var rootId = root.id;
 
-		if (seen[rootId] == null)
-		{
-			seen[rootId] = root;
-			visitor(parent, root, connectingEdge, layer, 0);
+                if (seen[rootId] == null)
+                {
+                        seen[rootId] = root;
+                        visitor(parent, root, connectingEdge, layer, 0);
 
-			// Copy the connects as source list so that visitors
-			// can change the original for edge direction inversions
-			var outgoingEdges = root.connectsAsSource.slice();
-			
-			for (var i = 0; i< outgoingEdges.length; i++)
-			{
-				var internalEdge = outgoingEdges[i];
-				var targetNode = internalEdge.target;
+                        // Copy the connects as source list so that visitors
+                        // can change the original for edge direction inversions
+                        var outgoingEdges = root.connectsAsSource.slice();
 
-				// Root check is O(|roots|)
-				this.dfs(root, targetNode, internalEdge, visitor, seen,
-						layer + 1);
-			}
-		}
-		else
-		{
-			// Use the int field to indicate this node has been seen
-			visitor(parent, root, connectingEdge, layer, 1);
-		}
-	}
+                        for (var i = 0; i< outgoingEdges.length; i++)
+                        {
+                                var internalEdge = outgoingEdges[i];
+                                var targetNode = internalEdge.target;
+
+                                // Root check is O(|roots|)
+                                this.dfs(root, targetNode, internalEdge, visitor, seen,
+                                                layer + 1);
+                        }
+                }
+                else
+                {
+                        // Use the int field to indicate this node has been seen
+                        visitor(parent, root, connectingEdge, layer, 1);
+                }
+        }
 };
 
 /**
@@ -714,88 +714,88 @@ mxSwimlaneModel.prototype.dfs = function(parent, root, connectingEdge, visitor, 
  */
 mxSwimlaneModel.prototype.extendedDfs = function(parent, root, connectingEdge, visitor, seen, ancestors, childHash, layer)
 {
-	// Explanation of custom hash set. Previously, the ancestors variable
-	// was passed through the dfs as a HashSet. The ancestors were copied
-	// into a new HashSet and when the new child was processed it was also
-	// added to the set. If the current node was in its ancestor list it
-	// meant there is a cycle in the graph and this information is passed
-	// to the visitor.visit() in the seen parameter. The HashSet clone was
-	// very expensive on CPU so a custom hash was developed using primitive
-	// types. temp[] couldn't be used so hashCode[] was added to each node.
-	// Each new child adds another int to the array, copying the prefix
-	// from its parent. Child of the same parent add different ints (the
-	// limit is therefore 2^32 children per parent...). If a node has a
-	// child with the hashCode already set then the child code is compared
-	// to the same portion of the current nodes array. If they match there
-	// is a loop.
-	// Note that the basic mechanism would only allow for 1 use of this
-	// functionality, so the root nodes have two ints. The second int is
-	// incremented through each node root and the first is incremented
-	// through each run of the dfs algorithm (therefore the dfs is not
-	// thread safe). The hash code of each node is set if not already set,
-	// or if the first int does not match that of the current run.
-	if (root != null)
-	{
-		if (parent != null)
-		{
-			// Form this nodes hash code if necessary, that is, if the
-			// hashCode variable has not been initialized or if the
-			// start of the parent hash code does not equal the start of
-			// this nodes hash code, indicating the code was set on a
-			// previous run of this dfs.
-			if (root.hashCode == null ||
-				root.hashCode[0] != parent.hashCode[0])
-			{
-				var hashCodeLength = parent.hashCode.length + 1;
-				root.hashCode = parent.hashCode.slice();
-				root.hashCode[hashCodeLength - 1] = childHash;
-			}
-		}
+        // Explanation of custom hash set. Previously, the ancestors variable
+        // was passed through the dfs as a HashSet. The ancestors were copied
+        // into a new HashSet and when the new child was processed it was also
+        // added to the set. If the current node was in its ancestor list it
+        // meant there is a cycle in the graph and this information is passed
+        // to the visitor.visit() in the seen parameter. The HashSet clone was
+        // very expensive on CPU so a custom hash was developed using primitive
+        // types. temp[] couldn't be used so hashCode[] was added to each node.
+        // Each new child adds another int to the array, copying the prefix
+        // from its parent. Child of the same parent add different ints (the
+        // limit is therefore 2^32 children per parent...). If a node has a
+        // child with the hashCode already set then the child code is compared
+        // to the same portion of the current nodes array. If they match there
+        // is a loop.
+        // Note that the basic mechanism would only allow for 1 use of this
+        // functionality, so the root nodes have two ints. The second int is
+        // incremented through each node root and the first is incremented
+        // through each run of the dfs algorithm (therefore the dfs is not
+        // thread safe). The hash code of each node is set if not already set,
+        // or if the first int does not match that of the current run.
+        if (root != null)
+        {
+                if (parent != null)
+                {
+                        // Form this nodes hash code if necessary, that is, if the
+                        // hashCode variable has not been initialized or if the
+                        // start of the parent hash code does not equal the start of
+                        // this nodes hash code, indicating the code was set on a
+                        // previous run of this dfs.
+                        if (root.hashCode == null ||
+                                root.hashCode[0] != parent.hashCode[0])
+                        {
+                                var hashCodeLength = parent.hashCode.length + 1;
+                                root.hashCode = parent.hashCode.slice();
+                                root.hashCode[hashCodeLength - 1] = childHash;
+                        }
+                }
 
-		var rootId = root.id;
+                var rootId = root.id;
 
-		if (seen[rootId] == null)
-		{
-			seen[rootId] = root;
-			visitor(parent, root, connectingEdge, layer, 0);
+                if (seen[rootId] == null)
+                {
+                        seen[rootId] = root;
+                        visitor(parent, root, connectingEdge, layer, 0);
 
-			// Copy the connects as source list so that visitors
-			// can change the original for edge direction inversions
-			var outgoingEdges = root.connectsAsSource.slice();
-			var incomingEdges = root.connectsAsTarget.slice();
+                        // Copy the connects as source list so that visitors
+                        // can change the original for edge direction inversions
+                        var outgoingEdges = root.connectsAsSource.slice();
+                        var incomingEdges = root.connectsAsTarget.slice();
 
-			for (var i = 0; i < outgoingEdges.length; i++)
-			{
-				var internalEdge = outgoingEdges[i];
-				var targetNode = internalEdge.target;
-				
-				// Only navigate in source->target direction within the same
-				// swimlane, or from a lower index swimlane to a higher one
-				if (root.swimlaneIndex <= targetNode.swimlaneIndex)
-				{
-					this.extendedDfs(root, targetNode, internalEdge, visitor, seen,
-							root.hashCode, i, layer + 1);
-				}
-			}
-			
-			for (var i = 0; i < incomingEdges.length; i++)
-			{
-				var internalEdge = incomingEdges[i];
-				var targetNode = internalEdge.source;
+                        for (var i = 0; i < outgoingEdges.length; i++)
+                        {
+                                var internalEdge = outgoingEdges[i];
+                                var targetNode = internalEdge.target;
 
-				// Only navigate in target->source direction from a lower index 
-				// swimlane to a higher one
-				if (root.swimlaneIndex < targetNode.swimlaneIndex)
-				{
-					this.extendedDfs(root, targetNode, internalEdge, visitor, seen,
-							root.hashCode, i, layer + 1);
-				}
-			}
-		}
-		else
-		{
-			// Use the int field to indicate this node has been seen
-			visitor(parent, root, connectingEdge, layer, 1);
-		}
-	}
+                                // Only navigate in source->target direction within the same
+                                // swimlane, or from a lower index swimlane to a higher one
+                                if (root.swimlaneIndex <= targetNode.swimlaneIndex)
+                                {
+                                        this.extendedDfs(root, targetNode, internalEdge, visitor, seen,
+                                                        root.hashCode, i, layer + 1);
+                                }
+                        }
+
+                        for (var i = 0; i < incomingEdges.length; i++)
+                        {
+                                var internalEdge = incomingEdges[i];
+                                var targetNode = internalEdge.source;
+
+                                // Only navigate in target->source direction from a lower index
+                                // swimlane to a higher one
+                                if (root.swimlaneIndex < targetNode.swimlaneIndex)
+                                {
+                                        this.extendedDfs(root, targetNode, internalEdge, visitor, seen,
+                                                        root.hashCode, i, layer + 1);
+                                }
+                        }
+                }
+                else
+                {
+                        // Use the int field to indicate this node has been seen
+                        visitor(parent, root, connectingEdge, layer, 1);
+                }
+        }
 };

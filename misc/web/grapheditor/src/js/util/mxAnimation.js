@@ -5,20 +5,20 @@
 /**
  *
  * Class: mxAnimation
- * 
+ *
  * Implements a basic animation in JavaScript.
- * 
+ *
  * Constructor: mxAnimation
- * 
+ *
  * Constructs an animation.
- * 
+ *
  * Parameters:
- * 
+ *
  * graph - Reference to the enclosing <mxGraph>.
  */
 function mxAnimation(delay)
 {
-	this.delay = (delay != null) ? delay : 20;
+        this.delay = (delay != null) ? delay : 20;
 };
 
 /**
@@ -29,26 +29,26 @@ mxAnimation.prototype.constructor = mxAnimation;
 
 /**
  * Variable: delay
- * 
+ *
  * Specifies the delay between the animation steps. Defaul is 30ms.
  */
 mxAnimation.prototype.delay = null;
 
 /**
  * Variable: thread
- * 
+ *
  * Reference to the thread while the animation is running.
  */
 mxAnimation.prototype.thread = null;
 
 /**
  * Function: isRunning
- * 
+ *
  * Returns true if the animation is running.
  */
 mxAnimation.prototype.isRunning = function()
 {
-	return this.thread != null;
+        return this.thread != null;
 };
 
 /**
@@ -58,10 +58,10 @@ mxAnimation.prototype.isRunning = function()
  */
 mxAnimation.prototype.startAnimation = function()
 {
-	if (this.thread == null)
-	{
-		this.thread = window.setInterval(mxUtils.bind(this, this.updateAnimation), this.delay);
-	}
+        if (this.thread == null)
+        {
+                this.thread = window.setInterval(mxUtils.bind(this, this.updateAnimation), this.delay);
+        }
 };
 
 /**
@@ -73,7 +73,7 @@ mxAnimation.prototype.startAnimation = function()
  */
 mxAnimation.prototype.updateAnimation = function()
 {
-	this.fireEvent(new mxEventObject(mxEvent.EXECUTE));
+        this.fireEvent(new mxEventObject(mxEvent.EXECUTE));
 };
 
 /**
@@ -83,10 +83,10 @@ mxAnimation.prototype.updateAnimation = function()
  */
 mxAnimation.prototype.stopAnimation = function()
 {
-	if (this.thread != null)
-	{
-		window.clearInterval(this.thread);
-		this.thread = null;
-		this.fireEvent(new mxEventObject(mxEvent.DONE));
-	}
+        if (this.thread != null)
+        {
+                window.clearInterval(this.thread);
+                this.thread = null;
+                this.fireEvent(new mxEventObject(mxEvent.DONE));
+        }
 };
