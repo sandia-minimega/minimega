@@ -765,6 +765,26 @@ var TextareaDialog = function(editorUi, title, url, fn, cancelFn, cancelTitle, w
 	this.container = table;
 };
 
+var topoJsonToXmlDialog = function (json) {
+
+	var div = document.createElement('div');
+	div.style.textAlign = 'right';
+	var textarea = document.createElement('textarea');
+	textarea.setAttribute('wrap', 'off');
+	textarea.setAttribute('spellcheck', 'false');
+	textarea.setAttribute('autocorrect', 'off');
+	textarea.setAttribute('autocomplete', 'off');
+	textarea.setAttribute('autocapitalize', 'off');
+	textarea.style.overflow = 'auto';
+	textarea.style.resize = 'none';
+	textarea.style.width = '600px';
+	textarea.style.height = '360px';
+	textarea.style.marginBottom = '16px';
+
+
+
+};
+
 /**
  * Constructs a new edit file dialog.
  */
@@ -1522,7 +1542,7 @@ var EditDataDialog = function(ui, cell)
 	var graph = ui.editor.graph;
 	
 	var value = graph.getModel().getValue(cell);
-	var parameters = {memory:"2048", vcpu:"1", network:undefined,kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
+	var parameters = {memory:"2048", vcpu:"1", network:undefined, kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
 	
 	// Converts the value to an XML node
 	if (!mxUtils.isNode(value))

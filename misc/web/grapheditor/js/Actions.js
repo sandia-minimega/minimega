@@ -24,6 +24,38 @@ Actions.prototype.init = function()
 		return Action.prototype.isEnabled.apply(this, arguments) && graph.isEnabled();
 	};
 
+	this.addAction('openTopographer', function(evt){
+		var tmp = document.createElement('div');
+		tmp.id = 'topographer';
+
+	  	tmp.innerHTML = ''
+
+		var wnd = new mxWindow('Topographer JSON Editor', tmp, 200, 200, 500, 600, true, true);
+		wnd.setMaximizable(true);
+		wnd.setResizable(true);
+		wnd.setVisible(true);
+		wnd.setClosable(true);
+		
+		ui.topographerOpen = true;
+		ui.updateActionStates();
+
+		wnd.addListener(mxEvent.ACTIVATE, function(e){
+			console.log(e);
+			// var tmp = document.getElementById('topographer');
+			// console.log(tmp);
+		 //  	var ajax = new XMLHttpRequest();
+			// ajax.open("GET", "../resources/help.html", false);
+			// ajax.send();
+			// tmp.innerHTML += 'hello';
+		});
+
+		wnd.addListener(mxEvent.CLOSE, function(e){
+		  	ui.topographerOpen = false;
+			ui.updateActionStates();
+		});
+
+	}, null, null, null);
+
 	// File actions
 	this.addAction('new...', function() { graph.openLink(ui.getUrl()); });
 	this.addAction('open...', function()
@@ -77,6 +109,25 @@ Actions.prototype.init = function()
 	this.addAction('preview', function() { mxUtils.show(graph, null, 10, 10); });
 	this.addAction('generateConfig', function() 
 	{
+		// var obj =  {
+		//   "nodes": [
+		//     {
+		//       "type": "VirtualMachine",
+		//       "general": {
+		//         "hostname": "test1"
+		//       },
+		//       "hardware": {
+		//         "os_type": "linux",
+		//         "drives": []
+		//       }
+		//     }
+		//   ]
+		// };
+		// var encoder = new mxCodec();
+		// var node = encoder.encode(obj);
+		// mxUtils.popup(mxUtils.getXml(node));
+		// console.log(node);
+		console.log(graph);
 		var filter = function(cell) {return graph.model.isVertex(cell);}
 		var vertices = graph.model.filterDescendants(filter);
 		filter = function(cell) {return graph.model.isVertex(cell);}
@@ -84,7 +135,7 @@ Actions.prototype.init = function()
 		var dlg = new EditMiniConfigDialog(ui,vertices,edges);
 		ui.showDialog(dlg.container, 620, 450, true, false);
 		dlg.init();
-		console.log(vertices)
+		console.log(vertices), console.log(edges);
 	});
 	
 	// Edit actions
@@ -240,7 +291,7 @@ Actions.prototype.init = function()
 			}
 		}
 	};
-	
+
 	this.addAction('delete', function(evt)
 	{
 		deleteCells(evt != null && mxEvent.isShiftDown(evt));

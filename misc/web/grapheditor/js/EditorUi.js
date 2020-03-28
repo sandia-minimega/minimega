@@ -11,6 +11,7 @@ EditorUi = function(editor, container, lightbox)
 	this.destroyFunctions = [];
 	this.editor = editor || new Editor();
 	this.container = container || document.body;
+	this.topographerOpen = false;
 	
 	var graph = this.editor.graph;
 	graph.lightbox = lightbox;
@@ -3103,13 +3104,15 @@ EditorUi.prototype.updateActionStates = function()
 	               'editStyle', 'editTooltip', 'editLink', 'backgroundColor', 'borderColor',
 	               'edit', 'toFront', 'toBack', 'lockUnlock', 'solid', 'dashed', 'pasteSize',
 	               'dotted', 'fillColor', 'gradientColor', 'shadow', 'fontColor',
-	               'formattedText', 'rounded', 'toggleRounded', 'sharp', 'strokeColor'];
+	               'formattedText', 'rounded', 'toggleRounded', 'sharp', 'strokeColor', 'openTopographer'];
 	
 	for (var i = 0; i < actions.length; i++)
 	{
 		this.actions.get(actions[i]).setEnabled(selected);
 	}
 	
+	this.actions.get('openTopographer').setEnabled(!this.topographerOpen); // enable/disable Open Topographer button
+
 	this.actions.get('setAsDefaultStyle').setEnabled(graph.getSelectionCount() == 1);
 	this.actions.get('clearWaypoints').setEnabled(!graph.isSelectionEmpty());
 	this.actions.get('copySize').setEnabled(graph.getSelectionCount() == 1);

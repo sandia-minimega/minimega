@@ -298,6 +298,7 @@ subscript=Subscript
 superscript=Superscript
 table=Table
 targetSpacing=Target Spacing
+openTopographer=Open Topographer
 text=Text
 textAlignment=Text Alignment
 textOpacity=Text Opacity

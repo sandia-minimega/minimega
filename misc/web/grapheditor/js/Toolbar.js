@@ -112,7 +112,7 @@ Toolbar.prototype.init = function()
 	if (sw >= 320)
 	{
 		var elts = this.addItems(['-', 'delete']);
-		elts[1].setAttribute('title', mxResources.get('delete') + ' (' + this.editorUi.actions.get('delete').shortcut + ')');
+		elts[0].setAttribute('title', mxResources.get('delete') + ' (' + this.editorUi.actions.get('delete').shortcut + ')');
 	}
 	
 	if (sw >= 550)
@@ -171,6 +171,10 @@ Toolbar.prototype.init = function()
 
 	var insertMenu = this.addMenu('', mxResources.get('insert') + ' (' + mxResources.get('doubleClickTooltip') + ')', true, 'insert', null, true);
 	this.addDropDownArrow(insertMenu, 'geSprite-plus', 38, 48, -4, -3, 36, -8);
+
+	var elts = this.addItems(['-', 'openTopographer']);
+	elts[0].setAttribute('title', mxResources.get('openTopographer'));
+	console.log('adding test action as placeholder for topographer JSON editor');
 };
 
 /**
