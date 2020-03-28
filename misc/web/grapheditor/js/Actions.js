@@ -28,7 +28,7 @@ Actions.prototype.init = function()
 		var tmp = document.createElement('div');
 		tmp.id = 'topographer';
 
-	  	tmp.innerHTML = ''
+	  	tmp.innerHTML += 'test';
 
 		var wnd = new mxWindow('Topographer JSON Editor', tmp, 200, 200, 500, 600, true, true);
 		wnd.setMaximizable(true);
@@ -43,7 +43,7 @@ Actions.prototype.init = function()
 			console.log(e);
 			// var tmp = document.getElementById('topographer');
 			// console.log(tmp);
-		 //  	var ajax = new XMLHttpRequest();
+			// var ajax = new XMLHttpRequest();
 			// ajax.open("GET", "../resources/help.html", false);
 			// ajax.send();
 			// tmp.innerHTML += 'hello';
