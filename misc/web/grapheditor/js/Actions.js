@@ -25,16 +25,24 @@ Actions.prototype.init = function()
     };
 
     this.addAction('openTopographer', function(evt){
-        var tmp = document.createElement('div');
-        tmp.id = 'topographer';
 
-        var ajax = new XMLHttpRequest();
-        ajax.open("GET", window.RESOURCES_PATH + "/help.html", false);
-        ajax.send();
-        console.log(ajax);
-        tmp.innerHTML += ajax.responseText;
+        // var tmp = document.createElement('div');
+        // tmp.id = 'topographer';
 
-        var wnd = new mxWindow('Topographer JSON Editor', tmp, 200, 200, 500, 600, true, true);
+        var frame = document.createElement('iframe');
+        frame.setAttribute('width', '100%');
+        frame.setAttribute('height', '100%');
+        frame.setAttribute('src', window.UTILS + "/topographer/index.html");
+        frame.style.backgroundColor = 'white';
+
+        // var ajax = new XMLHttpRequest();
+        // ajax.open("GET", window.UTILS + "/topographer/index.html", false);
+        // ajax.send();
+        // console.log(ajax);
+        // tmp.innerHTML += ajax.responseText;
+
+
+        var wnd = new mxWindow('Topographer JSON Editor', frame, 200, 200, 1200, 800, true, true);
         wnd.setMaximizable(true);
         wnd.setResizable(true);
         wnd.setVisible(true);
