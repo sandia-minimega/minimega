@@ -29,6 +29,10 @@ Actions.prototype.init = function()
         // var tmp = document.createElement('div');
         // tmp.id = 'topographer';
 
+        window.ui = ui;
+        window.graph = graph;
+        window.editor = editor;
+
         var frame = document.createElement('iframe');
         frame.setAttribute('width', '100%');
         frame.setAttribute('height', '100%');
@@ -42,7 +46,7 @@ Actions.prototype.init = function()
         // tmp.innerHTML += ajax.responseText;
 
 
-        var wnd = new mxWindow('Topographer JSON Editor', frame, 200, 200, 1200, 800, true, true);
+        var wnd = new mxWindow('Topographer JSON Editor', frame, 300, 80, 1200, 900, true, true);
         wnd.setMaximizable(true);
         wnd.setResizable(true);
         wnd.setVisible(true);

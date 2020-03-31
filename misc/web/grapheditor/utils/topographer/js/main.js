@@ -521,11 +521,11 @@ function surprise() {
   }
 }
 
-document.getElementById('sceptre').addEventListener('click', function (e) {
-  if (e.shiftKey) {
-    surprise();
-  }
-});
+// document.getElementById('sceptre').addEventListener('click', function (e) {
+//   if (e.shiftKey) {
+//     surprise();
+//   }
+// });
 
 var console = document.getElementById("content7");
 

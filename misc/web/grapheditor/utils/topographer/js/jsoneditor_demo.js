@@ -8,6 +8,11 @@
  * @example see README.md for requirements, examples and usage info
  */
 
+console.log(parent);
+console.log(parent.editor);
+console.log(parent.ui);
+console.log(parent.graph);
+
 // value -> CSS/JavaScript mapping for external files
 var mapping = {
   jsoneditor: {
@@ -823,18 +828,18 @@ var createIframeContent = function (code) {
     '};',
     'try{',
     code,
-    'var updateOutput = function() {window.top.iframeOutputCatcher(jseditor.getValue(), jseditor.validate()); };',
+    'var updateOutput = function() {parent.iframeOutputCatcher(jseditor.getValue(), jseditor.validate()); };',
     // Send form output and validation errors to top window
     'if (jseditor instanceof window.JSONEditor && !jseditor.destroyed) {',
     // 'jseditor.on("ready", catcher);',
     'jseditor.on("change",updateOutput);',
     '} else {',
-    'window.top.iframeOutputCatcher(null, null, 1);',
+    'parent.iframeOutputCatcher(null, null, 1);',
     '}',
     '}',
     // Send iframe errors to top window
     'catch(err){',
-    'if (window.top.iframeErrorCatcher) window.top.iframeErrorCatcher(err);else console.log(err);',
+    'if (parent.iframeErrorCatcher) parent.iframeErrorCatcher(err);else console.log(err);',
     '};',
     '<\/script>',
     '</body>',
@@ -923,40 +928,41 @@ var downloadExampleHandler = function () {
 
 // save topo file to server
 var fileSaveHandler = function (e) {
-  var overwrite = e.shiftKey;
-  var append = overwrite ? "\n    * OVERWRITE ENABLED!" : "\n    * Overwrite disabled (cancel and hold SHIFT to overwrite)";
-  var title = prompt('Enter a name for the topology:' + append, 'mytopo');
-  if (title === null) return;
-  filename = (title || 'mytopo').toLowerCase().replace(/[\s<>:"\\|*]/g, '-') + '.json';
-  var json;
-  try {
-    json = JSON.parse(aceOutputEditor.getValue().trim());
-  } catch (err) {
-    jeModalContent.innerText = "ERROR: Output contains invalid JSON.";
-    toggleModal();
-  }
-  var data = JSON.stringify({"filename": filename, "data": json, "overwrite": overwrite});
-  var xmlhttp = new XMLHttpRequest();
-  xmlhttp.onreadystatechange = function() {
-    if (xmlhttp.readyState === 4 && xmlhttp.status === 200) {
-      if (xmlhttp.responseText.includes('topology already exists')) {
-        jeModalContent.innerText = 'Sorry, topology already exists.';
-        toggleModal()
-//        errorNotification({message: xmlhttp.responseText});
-      } else if (xmlhttp.responseText.includes('Sorry')) {
-        jeModalContent.innerText = xmlhttp.responseText;
-        toggleModal()
-//        errorNotification({message: xmlhttp.responseText});
-      } else {
-        jeModalContent.innerText = xmlhttp.responseText;
-        toggleModal()
-//        successNotification({message: xmlhttp.responseText});
-      }
-    }
-  }
-  xmlhttp.open("POST", "handler.php", true);
-  xmlhttp.setRequestHeader("Content-type", "application/json");
-  xmlhttp.send(data);
+//   var overwrite = e.shiftKey;
+//   var append = overwrite ? "\n    * OVERWRITE ENABLED!" : "\n    * Overwrite disabled (cancel and hold SHIFT to overwrite)";
+//   var title = prompt('Enter a name for the topology:' + append, 'mytopo');
+//   if (title === null) return;
+//   filename = (title || 'mytopo').toLowerCase().replace(/[\s<>:"\\|*]/g, '-') + '.json';
+//   var json;
+//   try {
+//     json = JSON.parse(aceOutputEditor.getValue().trim());
+//   } catch (err) {
+//     jeModalContent.innerText = "ERROR: Output contains invalid JSON.";
+//     toggleModal();
+//   }
+//   var data = JSON.stringify({"filename": filename, "data": json, "overwrite": overwrite});
+//   var xmlhttp = new XMLHttpRequest();
+//   xmlhttp.onreadystatechange = function() {
+//     if (xmlhttp.readyState === 4 && xmlhttp.status === 200) {
+//       if (xmlhttp.responseText.includes('topology already exists')) {
+//         jeModalContent.innerText = 'Sorry, topology already exists.';
+//         toggleModal()
+// //        errorNotification({message: xmlhttp.responseText});
+//       } else if (xmlhttp.responseText.includes('Sorry')) {
+//         jeModalContent.innerText = xmlhttp.responseText;
+//         toggleModal()
+// //        errorNotification({message: xmlhttp.responseText});
+//       } else {
+//         jeModalContent.innerText = xmlhttp.responseText;
+//         toggleModal()
+// //        successNotification({message: xmlhttp.responseText});
+//       }
+//     }
+//   }
+//   xmlhttp.open("POST", "handler.php", true);
+//   xmlhttp.setRequestHeader("Content-type", "application/json");
+//   xmlhttp.send(data);
+  window.top.ui.saveFile(true);
 }
 
 // import topo from server
@@ -1353,7 +1359,7 @@ jeDownloadExample.addEventListener('click', downloadExampleHandler, false)
 jeUploadExample.addEventListener('click', eventClickFire.bind(null, jeFileUpload), false)
 jeFileUpload.addEventListener('change', uploadExampleHandler, false)
 jeFileSave.addEventListener('click', fileSaveHandler, false)
-jeFileImport.addEventListener('click', fileImportHandler, false)
+// jeFileImport.addEventListener('click', fileImportHandler, false)
 
 // Set event handler for details/summary tags
 // jeCfg.addEventListener('click', summaryOpenHandler, false);
