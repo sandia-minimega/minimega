@@ -82,19 +82,21 @@ func syncArista() {
 	fmt.Println("Retrieving Arista data, this may take a few moments...")
 	gt, err := networkVlan()
 	if err != nil {
-		log.Fatal("Something went wrong or Unable to acquire VLAN ground truth from arista")
+		log.Fatal("Error gathering VLAN data from Arista")
 	}
-	// create writer and pring non-quiet header
+	// create writer
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 0, 0, 1, ' ', 0)
+	// print header if not quiet
 	if !quiet {
+		// need to print column labels as variables for format/alignment consistency
 		n := "NODE"
 		i := "IGOR"
 		a := "ARISTA"
 		fmt.Println("")
 		fmt.Fprintln(w, n, "\t", i, "  ", a)
 	}
-	// TODO: probably shouldn't iteration over .M directly
+	// TODO: probably shouldn't iterate over .M directly
 	for _, r := range igor.Reservations.M {
 		if !r.IsActive(igor.Now) {
 			continue
