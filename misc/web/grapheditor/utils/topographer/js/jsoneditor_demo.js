@@ -7,11 +7,71 @@
  * @license MIT
  * @example see README.md for requirements, examples and usage info
  */
+var encoder = new parent.mxCodec();
+var graph = parent.graph;
+var result = encoder.encode(graph.getModel());
+var xml = parent.mxUtils.getXml(result);
+var prettyXml = parent.mxUtils.getPrettyXml(result);
+// console.log(parent);
+// console.log(parent.editor);
+// console.log(parent.ui);
+// console.log(graph.getModel());
+// console.log(xml);
+// console.log(prettyXml);
 
-console.log(parent);
-console.log(parent.editor);
-console.log(parent.ui);
-console.log(parent.graph);
+function builderToJSON(vertices, edges) {
+
+  var filter = function(cell) {return graph.model.isVertex(cell);}
+  var vertices = graph.model.filterDescendants(filter);
+  filter = function(cell) {return graph.model.isEdge(cell);}
+  var edges = graph.model.filterDescendants(filter);
+
+  var parameters = {memory:"2048", vcpu:"1", network:undefined, kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
+
+  edges.forEach(e => {
+    if (e.getAttribute("vlan") != undefined){
+        if (!vlans_in_use.hasOwnProperty(e.getAttribute("vlan"))){
+            vlans_in_use[e.getAttribute("vlan")]=true;
+        }
+    }
+  });
+
+  vertices.forEach(cell => {
+    console.log(cell);
+    // if(typeof cell.value !== 'object'){
+    //   cell.value = {};
+    // }
+    var value = graph.getModel().getValue(cell);
+    
+    // Converts the value to an XML node
+    if (!parent.mxUtils.isNode(value))
+    {
+        var doc = parent.mxUtils.createXmlDocument();
+        var obj = doc.createElement('object');
+        obj.setAttribute('label', value || '');
+        value = obj;
+    }
+
+    graph.getModel().setValue(cell, value);
+
+    cell.setAttribute("type","diagraming");
+    if (cell.getStyle().includes("switch")){return;}
+    if (cell.getStyle().includes("router")){cell.setAttribute("type","router");}
+    if (cell.getStyle().includes("firewall")){cell.setAttribute("type","firewall");}
+    if (cell.getStyle().includes("desktop")){console.log('contains desktop'); cell.setAttribute("type","desktop"); console.log(cell);}
+    if (cell.getStyle().includes("server")){cell.setAttribute("type","server");}
+    if (cell.getStyle().includes("mobile")){cell.setAttribute("type","mobile");}
+    if (cell.getAttribute("type") == "diagraming"){
+        return;
+    }
+
+  });
+
+  console.log(vertices), console.log(edges);
+
+}
+
+builderToJSON();
 
 // value -> CSS/JavaScript mapping for external files
 var mapping = {

@@ -86,34 +86,40 @@ class GraphX {
       }
   }
   
-  render(dataModel) {
+  jsonToGraph(dataModel) {
  
     const jsonEncoder = new JsonCodec();
 
     this._vertices = [];
     this._edges = {};
-    this._dataModelObjects = dataModel;
-    console.log(this._dataModelObjects);
-    this._dataModelVLANS = dataModel;
+    this._dataModel = dataModel;
+    console.log(this._dataModel);
 
     const parent = this._graph.getDefaultParent();
     this._graph.getModel().beginUpdate(); // Adds cells to the model in a single step
     var i = 1; // id iterator;
+    var forceGeometry = 0; // flag to force organic geometry if new nodes added in topographer
     try {
-      this._dataModelObjects.nodes.map(
+      this._dataModel.nodes.map(
         (node, idx)=> {
           if (node.type) {
             node.id = idx + 1;
+            node.type = (node.type).toLowerCase();
+            node.edge = false;
+            node.vertex = true;
+            node.visible = true;
+            node.collapsed = false;
+            node.value = {};
+            if (!('geometry' in node)) {
+              forceGeometry = 1;
+              node.geometry = {
+                width: 80,
+                height: 80
+              };
+            }
             if ('mxGraphID' in node){
               node.id = node.mxGraphID; // mxGraphID is custom attribute to persist ID between applications
             }
-            node.type = (node.type).toLowerCase();
-            node.edge = false;
-            node.value = {};
-            node.geometry = {
-              width: 80,
-              height: 80
-            };
             if (node.type === 'virtualmachine' && !('mxType' in node)) {
               node.value.type = 'desktop';
             }
@@ -144,7 +150,8 @@ class GraphX {
             node.value.label = node.general.hostname;
             if ('hardware' in node) {
               node.value.vcpu = node.hardware.vcpu;
-              node.value.memory = node.value.memory;
+              node.value.memory = node.hardware.memory;
+              node.value.kernel = node.hardware.os_type;
             }
             if ('network' in node) {
               node.value.network = 'vlan-' + node.network.interfaces[0].vlan; // can have multiple interfaces, so need to figure this out
@@ -194,7 +201,7 @@ class GraphX {
           }
         }
       );
-      this._dataModelVLANS.vlans.map(
+      this._dataModel.vlans.map(
         (node, idx)=> {
           node.value = {};
           if (!('mxType' in node)) node.value.type = 'diagraming'; // mxType is custom attribute to persist type across applications
@@ -202,6 +209,9 @@ class GraphX {
           node.value.label = node.name;
           node.value.vlan = node.id;
           node.edge = true;
+          node.vertex = false;
+          node.visible = true;
+          node.collapsed = false;
           const xmlNode = jsonEncoder.encode(node.value);
           var sources = [];
           var targets = [];
@@ -229,13 +239,19 @@ class GraphX {
         }
       );
 
-      var layout = new mxFastOrganicLayout(this._graph);
-      layout.execute(this._graph.getDefaultParent());
+      if (forceGeometry) {
+        var layout = new mxFastOrganicLayout(this._graph);
+        layout.execute(this._graph.getDefaultParent());
+      }
 
     } finally { 
       this._graph.getModel().endUpdate(); // Updates the display
     }
   }  
+}
+
+function builderToJSON(vertices, edges) {
+
 }
 
 /******************************************************************
@@ -246,7 +262,7 @@ const graphX = new GraphX(document.getElementById('graphContainer'));
 
 document.getElementById('buttons').appendChild(mxUtils.button('to minimega', () => {
   const dataModel = JSON.parse(document.getElementById('from').innerHTML);
-  graphX.render(dataModel);
+  graphX.jsonToGraph(dataModel);
 }));
 
 document.getElementById('buttons').appendChild(mxUtils.button('to phenix', () => {

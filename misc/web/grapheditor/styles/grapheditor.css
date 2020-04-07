@@ -530,9 +530,9 @@ div.mxWindow .geButton {
 }
 /* custom icon for topographer */
 .geSprite-opentopographer {
-    background:url(../images/tree_node.png) no-repeat !important;
-    width:21px;
-    height:21px;
+    background:url(../images/topographer.png) no-repeat !important;
+    width:22px;
+    height:22px;
 }
 .geBaseButton {
         padding:10px;

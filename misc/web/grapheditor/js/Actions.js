@@ -45,7 +45,6 @@ Actions.prototype.init = function()
         // console.log(ajax);
         // tmp.innerHTML += ajax.responseText;
 
-
         var wnd = new mxWindow('Topographer JSON Editor', frame, 300, 80, 1200, 900, true, true);
         wnd.setMaximizable(true);
         wnd.setResizable(true);
@@ -143,15 +142,13 @@ Actions.prototype.init = function()
         // var node = encoder.encode(obj);
         // mxUtils.popup(mxUtils.getXml(node));
         // console.log(node);
-        console.log(graph);
         var filter = function(cell) {return graph.model.isVertex(cell);}
         var vertices = graph.model.filterDescendants(filter);
-        filter = function(cell) {return graph.model.isVertex(cell);}
+        filter = function(cell) {return graph.model.isEdge(cell);}
         var edges = graph.model.filterDescendants(filter);
         var dlg = new EditMiniConfigDialog(ui,vertices,edges);
         ui.showDialog(dlg.container, 620, 450, true, false);
         dlg.init();
-        console.log(vertices), console.log(edges);
     });
     
     // Edit actions

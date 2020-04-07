@@ -1,6 +1,6 @@
 {
   "type": "object",
-  "title": "SCEPTRE Topology",
+  "title": "Topology",
   "required": [
     "nodes"
   ],
