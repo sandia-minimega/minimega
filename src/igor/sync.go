@@ -79,9 +79,20 @@ func runSync(cmd *Command, args []string) {
 
 func syncArista() {
 	// first get ground truth
+	fmt.Println("Retrieving Arista data, this may take a few moments...")
 	gt, err := networkVlan()
 	if err != nil {
-		log.Fatal("Unable to acquire VLAN ground truth from arista")
+		log.Fatal("Something went wrong or Unable to acquire VLAN ground truth from arista")
+	}
+	// create writer and pring non-quiet header
+	w := new(tabwriter.Writer)
+	w.Init(os.Stdout, 0, 0, 1, ' ', 0)
+	if !quiet {
+		n := "NODE"
+		i := "IGOR"
+		a := "ARISTA"
+		fmt.Println("")
+		fmt.Fprintln(w, n, "\t", i, "  ", a)
 	}
 	// TODO: probably shouldn't iteration over .M directly
 	for _, r := range igor.Reservations.M {
@@ -89,25 +100,31 @@ func syncArista() {
 			continue
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 		if !quiet {
 			// print all nodes, Igor VLANs, and arista VLANs
-			fmt.Fprintln(w, "NODE\tIGOR VLAN\tARISTA VLAN")
+			// associated with this reservation
 			for _, host := range r.Hosts {
 				vlan := strconv.Itoa(r.Vlan)
 				gtvlan := gt[host]
+				if gtvlan == "" {
+					gtvlan = "(none)"
+				}
 				if gtvlan != vlan {
 					vlan = FgRed + vlan + Reset
 				}
-				fmt.Fprintf(w, "%v\t%v\t%v\n", host, vlan, gtvlan)
+				fmt.Fprintln(w, host, "\t", vlan, "  ", gtvlan)
+
 			}
 		} else {
 			// just print what's different
 			for _, host := range r.Hosts {
 				vlan := strconv.Itoa(r.Vlan)
 				gtvlan := gt[host]
+				if gtvlan == "" {
+					gtvlan = "(none)"
+				}
 				if gtvlan != vlan {
-					fmt.Printf("DISCREPANCY IN NODE %v - IGOR VLAN: %v    ARISTA VLAN: %v\n", host, vlan, gtvlan)
+					fmt.Fprintln(w, "DISCREPANCY IN NODE: ", host, "\tIGOR VLAN: ", vlan, "\tARISTA VLAN: ", gtvlan)
 				}
 			}
 		}
@@ -117,4 +134,5 @@ func syncArista() {
 			}
 		}
 	}
+	w.Flush()
 }
