@@ -1,7 +1,9 @@
 //------------------------
 //       GENERAL
 //------------------------
-var viewerTopo = {}, viewerSchema = {};
+var viewerTopo = parent.ui.topoJSON || {}, viewerSchema = {};
+
+console.log('this is viewTopo'), console.log(viewerTopo);
 
 //function loadJson() {
 //  var xhr = new XMLHttpRequest();

@@ -1555,6 +1555,7 @@ var EditDataDialog = function(ui, cell)
             "$id": "#/properties/nodes/items/properties/id",
             "type": "string",
             "title": "Id",
+            "readOnly": true,
             "minLength": 1,
             "default": "",
             "examples": [
@@ -2773,11 +2774,15 @@ var EditDataDialog = function(ui, cell)
     var value = graph.getModel().getValue(cell);
     var nodes = ui.topoJSON.nodes;
 
-    var cellId = cell.id;
+    var id = (EditDataDialog.getDisplayIdForCell != null) ?
+        EditDataDialog.getDisplayIdForCell(ui, cell) : null;
+
+    // var cellId = cell.id;
     var result = nodes.filter(obj => {
-      return obj.id === cellId;
+      return obj.id === id;
     });
     console.log(result);
+    console.log(result.length);
 
     var node = null;
     if(result.length > 0){
@@ -2785,6 +2790,7 @@ var EditDataDialog = function(ui, cell)
     }
     else{
         node = {};
+        node.id = id;
     }
     console.log(node);
 
@@ -2843,9 +2849,6 @@ var EditDataDialog = function(ui, cell)
     var names = [];
     var texts = [];
     var count = 0;
-
-    var id = (EditDataDialog.getDisplayIdForCell != null) ?
-        EditDataDialog.getDisplayIdForCell(ui, cell) : null;
     
     var addRemoveButton = function(text, name)
     {
@@ -3113,15 +3116,17 @@ var EditDataDialog = function(ui, cell)
             graph.getModel().setValue(cell, value);
 
             // TODO: Update the global JSON topology
-            var node = editor.getEditor('root').value; // get current node's JSON
+            var updatedNode = editor.getEditor('root').value; // get current node's JSON
+            console.log(updatedNode);
             
             console.log('ui.topoJSON before updates'), console.log(JSON.stringify(ui.topoJSON));
-            var idx = nodes.map(function(e) { return e.id; }).indexOf(node.id);
-            if(idx > 0) {
-                ui.topoJSON.nodes[idx] = node;
+            var idx = nodes.map(function(e) { return e.id; }).indexOf(updatedNode.id);
+            console.log(idx);
+            if(idx >= 0) {
+                ui.topoJSON.nodes[idx] = updatedNode;
             }
             else {
-                ui.topoJSON.nodes.push(node);
+                ui.topoJSON.nodes.push(updatedNode);
             }
             console.log('ui.topoJSON afte updates'), console.log(ui.topoJSON);
 
