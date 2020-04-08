@@ -15,11 +15,23 @@
         "title": "Node",
         "headerTemplate": "{{i1}} - {{self.general.hostname}}",
         "required": [
+          "id",
           "type",
           "general",
           "hardware"
         ],
         "properties": {
+          "id": {
+            "$id": "#/properties/nodes/items/properties/id",
+            "type": "string",
+            "title": "Id",
+            "minLength": 1,
+            "default": "",
+            "examples": [
+              "101"
+            ],
+            "pattern": "^(.*)$"
+          },
           "type": {
             "$id": "#/properties/nodes/items/properties/type",
             "type": "string",
