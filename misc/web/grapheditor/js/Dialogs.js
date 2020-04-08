@@ -2768,8 +2768,29 @@ var EditDataDialog = function(ui, cell)
         }
 }
 
+
+    var graph = ui.editor.graph;
+    var value = graph.getModel().getValue(cell);
+    var nodes = ui.topoJSON.nodes;
+
+    var cellId = cell.id;
+    var result = nodes.filter(obj => {
+      return obj.id === cellId;
+    });
+    console.log(result);
+
+    var node = null;
+    if(result.length > 0){
+        node = result[0];
+    }
+    else{
+        node = {};
+    }
+    console.log(node);
+
     const options = {
         schema: schema,
+        startval: node,
         // schemaRefs: {"job": job},
         ajax: true,
         mode: 'tree',
@@ -2798,14 +2819,12 @@ var EditDataDialog = function(ui, cell)
 
     // create the editor
     // const container = document.getElementById('jsoneditor')
-    const editor = new JSONEditor(editorContainer, options)
+    const editor = new JSONEditor(editorContainer, options);
 
     var div = document.createElement('div');
     div.style['overflow-y'] = 'auto';
-    var graph = ui.editor.graph;
     
-    var value = graph.getModel().getValue(cell);
-    var parameters = {memory:"2048", vcpu:"1", network:undefined, kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
+    var parameters = {memory:"2048", vcpu:"1", network:{name:'eth1', ip:'127.0.0.1'}, kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
     
     // Converts the value to an XML node
     if (!mxUtils.isNode(value))
@@ -3077,6 +3096,7 @@ var EditDataDialog = function(ui, cell)
                 }
                 else
                 {
+                    // if(typeof )
                     value.setAttribute(names[i], texts[i].value);
                     removeLabel = removeLabel || (names[i] == 'placeholder' &&
                         value.getAttribute('placeholders') == '1');
@@ -3091,6 +3111,20 @@ var EditDataDialog = function(ui, cell)
             
             // Updates the value of the cell (undoable)
             graph.getModel().setValue(cell, value);
+
+            // TODO: Update the global JSON topology
+            var node = editor.getEditor('root').value; // get current node's JSON
+            
+            console.log('ui.topoJSON before updates'), console.log(JSON.stringify(ui.topoJSON));
+            var idx = nodes.map(function(e) { return e.id; }).indexOf(node.id);
+            if(idx > 0) {
+                ui.topoJSON.nodes[idx] = node;
+            }
+            else {
+                ui.topoJSON.nodes.push(node);
+            }
+            console.log('ui.topoJSON afte updates'), console.log(ui.topoJSON);
+
         }
         catch (e)
         {

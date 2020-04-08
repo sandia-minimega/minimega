@@ -12,6 +12,8 @@ EditorUi = function(editor, container, lightbox)
     this.editor = editor || new Editor();
     this.container = container || document.body;
     this.topographerOpen = false;
+
+    this.topoJSON = {nodes:[], edges:[]};
     
     var graph = this.editor.graph;
     graph.lightbox = lightbox;
