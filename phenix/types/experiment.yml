@@ -1,0 +1,8 @@
+version: v0
+kind: Experiment
+metadata:
+  name: foobar
+spec:
+  schedules:
+  - hostname: suckafish
+    clusterNode: compute1
