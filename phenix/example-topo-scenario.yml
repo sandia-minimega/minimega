@@ -1,0 +1,88 @@
+--- # this first section is just your typical (now boring) topology definition
+nodes:
+- type: VirtualMachine
+  general:
+    hostname: turbine-01
+  hardware:
+    os_type: linux
+    drives:
+    - image: bennu.qc2
+  network:
+    interfaces:
+    - name: IF0
+      vlan: ot
+      address: 192.168.10.1
+      mask: 24
+      gateway: 192.168.10.254
+      proto: static
+      type: ethernet
+    - name: mgmt
+      vlan: MGMT
+      address: 172.16.10.1
+      mask: 16
+      proto: static
+      type: ethernet
+- type: VirtualMachine
+  general:
+    hostname: turbine-02
+  hardware:
+    os_type: linux
+    drives:
+    - image: bennu.qc2
+  network:
+    interfaces:
+    - name: IF0
+      vlan: ot
+      address: 192.168.10.2
+      mask: 24
+      gateway: 192.168.10.254
+      proto: static
+      type: ethernet
+    - name: mgmt
+      vlan: MGMT
+      address: 172.16.10.2
+      mask: 16
+      proto: static
+      type: ethernet
+--- # this section represents a new "scenario" schema to apply specific apps to a topology
+apps:
+  # There may not be enough of a difference between "infrastructure" and
+  # "experiment" apps to constitute separate config sections. If not,
+  # I'd suggest just going with the "experiment" section.
+  infrastructure:
+  - name: sink
+    # The map associated w/ the app name here would contain any
+    # configuration details needed to configure the app.
+    metadata: {}
+  experiment:
+  - name: crash
+    # The map associated w/ the app name here would contain any
+    # configuration details needed to configure the app.
+    metadata: {}
+  host:
+  - name: sceptre # app name
+    hosts:
+    - name: turbine-01 # hostname of topology node to apply it to
+      metadata:
+        # sceptre app metadata for this topology node
+        infrastructure: power-transmission
+        provider: power-provider
+        protocols:
+          sunspec:
+          - type: inverter
+            name: generator-1_bus-2100
+    - name: turbine-02
+      metadata:
+        # sceptre app metadata for this topology node
+        infrastructure: power-transmission
+        provider: power-provider
+        protocols:
+          sunspec:
+          - type: inverter
+            name: generator-2_bus-2100
+  - name: protonuke
+    hosts:
+    - name: turbine-01 # hostname of topology node to apply it to
+      metadata:
+        # protonuke app metadata for this topology node
+        args: -logfile /var/log/protonuke.log -level debug -http -https -smtp -ssh 192.168.100.100

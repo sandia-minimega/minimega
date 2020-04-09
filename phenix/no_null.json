@@ -1,0 +1,28 @@
+{
+  "nodes": [
+    {
+      "type": "VirtualMachine",
+      "general": {
+        "hostname": "test01",
+        "description": "Test VM"
+      },
+      "hardware": {
+        "os_type": "Linux",
+        "vcpus": 1,
+        "memory": "512"
+      }
+    },
+    {
+      "type": "Router",
+      "general": {
+        "hostname": "test02",
+        "description": "Test Router"
+      },
+      "hardware": {
+        "os_type": "Linux",
+        "vcpus": 1,
+        "memory": "512"
+      }
+    }
+  ]
+}
