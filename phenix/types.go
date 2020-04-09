@@ -198,17 +198,17 @@ type Apps struct {
 	Hosts           []Host           `json:"host" yaml:"host"`
 }
 
-type Infrastructure []struct {
+type Infrastructure struct {
 	Name     string                 `json:"name" yaml:"name"`
 	Metadata map[string]interface{} `json:"metadata" yaml:"metadata"`
 }
 
-type Experiment []struct {
+type Experiment struct {
 	Name     string                 `json:"name" yaml:"name"`
 	Metadata map[string]interface{} `json:"metadata" yaml:"metadata"`
 }
 
-type Host []struct {
+type Host struct {
 	Name  string `json:"name" yaml:"name"`
 	Hosts []struct {
 		Name     string                 `json:"name" yaml:"name"`
