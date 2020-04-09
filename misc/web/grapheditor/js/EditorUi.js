@@ -2653,7 +2653,14 @@ EditorUi.prototype.undo = function()
         }
         else
         {
+
+            console.log('graph before undo:'), console.log(JSON.stringify(graph.getModel().getCell(2)));
             this.editor.undoManager.undo();
+            console.log(graph.getModel().getCell(2));
+            // var cells = graph.getCells();
+            // for (var i = 0; i < cells.length; i++){
+            //     this.undoTopoJSON(cells[i]);
+            // }
         }
     }
     catch (e)
@@ -2853,6 +2860,43 @@ EditorUi.prototype.setPageVisible = function(value)
     }
     
     this.fireEvent(new mxEventObject('pageViewChanged'));
+};
+
+// undo changes to this.topoJSON
+EditorUi.prototype.undoChangesTopoJSON = function(cell)
+{
+    var id = cell.getId();
+    var type = cell.isVertex() ? 'nodes' : 'edges';
+    var idx = this.topoJSON[type].map(function(e) { return e.id; }).indexOf(cell.id);
+    if(idx >= 0) {
+        this.topoJSON[type][idx] = cell;
+    }
+    else {
+        this.topoJSON[type].push(cell);
+    }
+};
+
+// delete cells from this.topoJSON
+EditorUi.prototype.removeFromTopoJSON = function(cell)
+{
+    var id = cell.getId();
+    var type = cell.isVertex() ? 'nodes' : 'edges';
+    this.topoJSON[type] = this.topoJSON[type].filter(obj => {
+      return obj.id !== id;
+    });
+};
+
+// update this.topoJSON
+EditorUi.prototype.updateTopoJSON = function(cell, isVertex)
+{
+    var type = isVertex ? 'nodes' : 'edges';
+    var idx = this.topoJSON[type].map(function(e) { return e.id; }).indexOf(cell.id);
+    if(idx >= 0) {
+        this.topoJSON[type][idx] = cell;
+    }
+    else {
+        this.topoJSON[type].push(cell);
+    }
 };
 
 /**

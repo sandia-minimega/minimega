@@ -282,9 +282,16 @@ Actions.prototype.init = function()
         
         if (cells != null && cells.length > 0)
         {
+
+            for (var i = 0; i < cells.length; i++){
+                ui.removeFromTopoJSON(cells[i]);
+            }
+
+            console.log('topoJSON after removing cells: '), console.log(ui.topoJSON);
+
             var parents = (graph.selectParentAfterDelete) ? graph.model.getParents(cells) : null;
             graph.removeCells(cells, includeEdges);
-            
+
             // Selects parents for easier editing of groups
             if (parents != null)
             {

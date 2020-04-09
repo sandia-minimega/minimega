@@ -2772,7 +2772,8 @@ var EditDataDialog = function(ui, cell)
 
     var graph = ui.editor.graph;
     var value = graph.getModel().getValue(cell);
-    var nodes = ui.topoJSON.nodes;
+    const type = cell.isVertex() ? 'nodes' : 'edges';
+    var nodes = ui.topoJSON[type];
 
     var id = (EditDataDialog.getDisplayIdForCell != null) ?
         EditDataDialog.getDisplayIdForCell(ui, cell) : null;
@@ -2782,7 +2783,6 @@ var EditDataDialog = function(ui, cell)
       return obj.id === id;
     });
     console.log(result);
-    console.log(result.length);
 
     var node = null;
     if(result.length > 0){
@@ -2806,7 +2806,7 @@ var EditDataDialog = function(ui, cell)
         //     css: 'utils/topographer/downloads/jsoneditor.min.css',
         //     js: 'utils/topographer/downloads/jsoneditor.js'
         // },
-        theme: 'spectre',
+        theme: 'bootstrap3',
         iconlib: 'spectre',
         // template: {
         // },
@@ -2821,7 +2821,17 @@ var EditDataDialog = function(ui, cell)
     editorContainer.setAttribute('id', 'jsoneditor');
     editorContainer.style.height = '100%';
     editorContainer.style.position = 'relative';
-    editorContainer.style['max-width'] ="480px";
+    editorContainer.style['max-width'] ="600px";
+
+    // var css = document.createElement('style');
+    // css.setAttribute('scoped', 'scoped');
+    // css.innerHTML = '@import "grapheditor/utils/topographer/downloads/spectre.min.css"';
+    // editorContainer.appendChild(css);
+
+    // css = document.createElement('style');
+    // css.setAttribute('scoped', 'scoped');
+    // css.innerHTML = '@import "grapheditor/utils/topographer/downloads/spectre-exp.min.css"';
+    // editorContainer.appendChild(css);
 
     // create the editor
     // const container = document.getElementById('jsoneditor')
@@ -3077,6 +3087,7 @@ var EditDataDialog = function(ui, cell)
     var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
     {
         ui.hideDialog.apply(ui, arguments);
+        editor.destroy();
     });
     
     cancelBtn.className = 'geBtn';
@@ -3115,19 +3126,20 @@ var EditDataDialog = function(ui, cell)
             // Updates the value of the cell (undoable)
             graph.getModel().setValue(cell, value);
 
-            // TODO: Update the global JSON topology
+            // Updates the global ui.topoJSON
             var updatedNode = editor.getEditor('root').value; // get current node's JSON
             console.log(updatedNode);
             
             console.log('ui.topoJSON before updates'), console.log(JSON.stringify(ui.topoJSON));
-            var idx = nodes.map(function(e) { return e.id; }).indexOf(updatedNode.id);
-            console.log(idx);
-            if(idx >= 0) {
-                ui.topoJSON.nodes[idx] = updatedNode;
-            }
-            else {
-                ui.topoJSON.nodes.push(updatedNode);
-            }
+            // var idx = nodes.map(function(e) { return e.id; }).indexOf(updatedNode.id);
+            // console.log(idx);
+            // if(idx >= 0) {
+            //     ui.topoJSON[type][idx] = updatedNode;
+            // }
+            // else {
+            //     ui.topoJSON[type].push(updatedNode);
+            // }
+            ui.updateTopoJSON(updatedNode, cell.isVertex());
             console.log('ui.topoJSON afte updates'), console.log(ui.topoJSON);
 
         }
@@ -3135,7 +3147,11 @@ var EditDataDialog = function(ui, cell)
         {
             mxUtils.alert(e);
         }
+
+        editor.destroy();
+
     });
+
     applyBtn.className = 'geBtn gePrimaryBtn';
     
     function updateAddBtn()
