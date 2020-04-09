@@ -1,13 +1,13 @@
 package types
 
 import (
+	"phenix/types/version"
 	"testing"
 
-	"github.com/mitchellh/mapstructure"
 	"gopkg.in/yaml.v3"
 )
 
-var config = `
+var experiment = `
 version: v0
 kind: Experiment
 metadata:
@@ -18,28 +18,52 @@ spec:
     clusterNode: compute1
 `
 
+var topology = `
+version: v0
+kind: Topology
+metadata:
+  name: foobar
+spec:
+  nodes:
+  - type: VirtualMachine
+    general:
+      hostname: turbine-01
+    hardware:
+      os_type: linux
+      drives:
+      - image: bennu.qc2
+    network:
+      interfaces:
+      - name: IF0
+        vlan: ot
+        address: 192.168.10.1
+        mask: 24
+        gateway: 192.168.10.254
+        proto: static
+        type: ethernet
+      - name: mgmt
+        vlan: MGMT
+        address: 172.16.10.1
+        mask: 16
+        proto: static
+        type: ethernet
+`
+
 func TestConfig(t *testing.T) {
 	var c Config
 
-	if err := yaml.Unmarshal([]byte(config), &c); err != nil {
+	if err := yaml.Unmarshal([]byte(experiment), &c); err != nil {
 		t.Log(err)
 		t.FailNow()
 	}
 
 	t.Logf("%+v", c)
 
-	switch c.Kind {
-	case "Experiment":
-		var e ExperimentSpec
-
-		if err := mapstructure.Decode(c.Spec, &e); err != nil {
-			t.Log(err)
-			t.FailNow()
-		}
-
-		t.Logf("%+v", e)
-	default:
-		t.Log("unknown config kind")
+	spec, err := version.GetVersionForKind(c.Kind, c.Version)
+	if err != nil {
+		t.Log(err)
 		t.FailNow()
 	}
+
+	t.Logf("%+v", spec)
 }

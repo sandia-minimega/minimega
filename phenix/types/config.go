@@ -7,6 +7,7 @@ type Config struct {
 	Kind     string                 `json:"kind" yaml:"kind"`
 	Metadata ConfigMetadata         `json:"metadata" yaml:"metadata"`
 	Spec     map[string]interface{} `json:"spec" yaml:"spec"`
+	Status   map[string]interface{} `json:"status,omitempty" yaml:"status,omitempty"`
 }
 
 type ConfigMetadata struct {
