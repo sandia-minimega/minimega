@@ -3,10 +3,13 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"gopkg.in/yaml.v3"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"phenix"
+
+	"gopkg.in/yaml.v3"
 )
 
 func main() {
@@ -17,7 +20,7 @@ func main() {
 		return
 	}
 
-	var prop Property
+	var prop phenix.Property
 	extension := filepath.Ext(os.Args[1])
 
 	if extension == ".json" {

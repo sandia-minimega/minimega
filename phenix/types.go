@@ -1,4 +1,4 @@
-package main
+package phenix
 
 type Property struct {
 	Node []Node `json:"nodes" yaml:"nodes"`
