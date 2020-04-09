@@ -21,28 +21,23 @@ func main() {
 	}
 
 	var prop phenix.Property
-	extension := filepath.Ext(os.Args[1])
+	//	extension := filepath.Ext(os.Args[1])
 
-	if extension == ".json" {
+	if filepath.Ext(os.Args[1]) == ".json" {
 		err = json.Unmarshal(file, &prop)
 		if err != nil {
 			fmt.Println(err)
 		}
-		fmt.Println(prop)
-	} else if extension == ".yml" {
+	} else if filepath.Ext(os.Args[1]) == ".yml" || filepath.Ext(os.Args[1]) == ".yaml" {
 		err = yaml.Unmarshal(file, &prop)
 		if err != nil {
 			fmt.Println(err)
 		}
-		fmt.Println(prop)
-	} else if extension == ".yaml" {
-		err = yaml.Unmarshal(file, &prop)
-		if err != nil {
-			fmt.Println(err)
-		}
-		fmt.Println(prop)
 	} else {
-		fmt.Println("You need to pass a file with JSON or YAML extension.")
+		fmt.Println("You need to pass a file with an appropriate JSON or YAML extension.")
+		return
 	}
+
+	fmt.Println(prop)
 
 }
