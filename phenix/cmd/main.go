@@ -21,7 +21,6 @@ func main() {
 	}
 
 	var prop phenix.Property
-	//	extension := filepath.Ext(os.Args[1])
 
 	if filepath.Ext(os.Args[1]) == ".json" {
 		err = json.Unmarshal(file, &prop)
@@ -39,5 +38,5 @@ func main() {
 	}
 
 	fmt.Println(prop)
-
+	
 }
