@@ -1,0 +1,140 @@
+{
+  "nodes": [
+    {
+      "type": "VirtualMachine",
+      "general": {
+        "hostname": "test",
+        "description": "Testing unit",
+        "snapshot": false,
+        "do_not_boot": false
+      },
+      "hardware": {
+        "os_type": "linux",
+        "drives": [],
+        "cpu": "Broadwell",
+        "vcpus": "1",
+        "memory": "1024"
+      },
+      "network": {
+        "interfaces": [
+          {
+            "name": "lan",
+            "vlan": "lan",
+            "address": "10.0.0.10",
+            "mask": 24,
+            "type": "ethernet",
+            "proto": "static",
+            "autostart": true,
+            "mac": "07:ed:f1:69:29:9c",
+            "mtu": 1500,
+            "gateway": "10.0.0.1",
+            "ruleset_out": "test-out",
+            "ruleset_in": "test-in"
+          }
+        ],
+        "rulesets": [
+          {
+            "name": "test-in",
+            "default": "deny",
+            "rules": [
+              {
+                "id": "test-in-01",
+                "action": "accept",
+                "protocol": "tcp",
+                "source": {
+                  "address": "any",
+                  "port": "any"
+                },
+                "destination": {
+                  "address": "10.0.0.10",
+                  "port": "any"
+                },
+                "description": "Testing rule"
+              },
+              {
+                "id": "test-out-02",
+                "action": "accept",
+                "protocol": "tcp",
+                "description": "Testing rule",
+                "source": {
+                  "address": "10.0.0.10"
+                },
+                "destination": {
+                  "address": "any"
+                }
+              }
+            ],
+            "description": "Testing rule"
+          }
+        ],
+        "routes": [
+          {
+            "destination": "0.0.0.0",
+            "next": "10.0.0.1",
+            "cost": "1"
+          }
+        ],
+        "ospf": {
+          "router_id": "Foo",
+          "areas": [
+            {
+              "area_id": "Bar",
+              "area_networks": [
+                {
+                  "network": "lan"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "injections": [
+        {
+          "src": "10.0.0.1",
+          "dst": "10.0.0.10",
+          "description": "Testing injection"
+        }
+      ],
+      "metadata": {
+        "infrastructure": "power-transmission",
+        "provider": "power-provider",
+        "simulator": "PowerWorld",
+        "publish_endpoint": "udp://*;239.0.0.1:40000",
+        "cycle_time": "500",
+        "dnp3": [
+          {
+            "type": "Foo",
+            "name": "Bar"
+          }
+        ],
+        "dnp3-serial": [
+          {
+            "type": "Foo",
+            "name": "Bar"
+          }
+        ],
+        "modbus": [
+          {
+            "type": "Foo",
+            "name": "Bar"
+          }
+        ],
+        "logic": "Testing",
+        "connected_rtus": [
+          "testing02"
+        ],
+        "connect_to_scada": false
+      }
+    }
+  ],
+  "vlans": [
+    {
+      "name": "lan",
+      "id": "101"
+    },
+    {
+      "name": "mgmt",
+      "id": "102"
+    }
+  ]
+}
