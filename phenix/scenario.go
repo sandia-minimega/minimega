@@ -9,11 +9,11 @@ import (
 
 type Property struct {
 	Nodes []Node `yaml:"nodes"`
-	Apps  []App  `yaml:"apps"`
+	Apps  App    `yaml:"apps"`
 }
 
 type Node struct {
-	Type    string `yaml:type`
+	Type    string `yaml:"type"`
 	General struct {
 		Hostname string `yaml:"hostname"`
 	} `yaml:"general"`
@@ -27,17 +27,17 @@ type Node struct {
 }
 
 type App struct {
-	Infrastructure struct {
+	Infrastructure []struct {
 		Name     string                 `yaml:"name"`
 		Metadata map[string]interface{} `yaml:"metadata"`
 	} `yaml:"infrstructure"`
-	Experiment struct {
+	Experiment []struct {
 		Name     string                 `yaml:"name"`
 		Metadata map[string]interface{} `yaml:"metadata"`
 	} `yaml:"experiment"`
-	Host struct {
+	Host []struct {
 		Name  string `yaml:"name"`
-		Hosts struct {
+		Hosts []struct {
 			Name     string                 `yaml:"name"`
 			Metadata map[string]interface{} `yaml:"metadata"`
 		}
@@ -61,5 +61,3 @@ func main() {
 
 	fmt.Println(prop)
 }
-
-//looking at your structs in scenario.go -- remember that the items under infrastructure, experiment, and host are lists of apps. so your App struct needs to expect slices of structs for them
