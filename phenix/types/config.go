@@ -13,4 +13,5 @@ type Config struct {
 type ConfigMetadata struct {
 	Name    string    `json:"name" yaml:"name"`
 	Created time.Time `json:"created" yaml:"created"`
+	Updated time.Time `json:"updated" yaml:"updated"`
 }
