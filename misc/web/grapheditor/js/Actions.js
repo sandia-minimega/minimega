@@ -155,8 +155,10 @@ Actions.prototype.init = function()
     this.addAction('undo', function() { ui.undo(); }, null, 'sprite-undo', Editor.ctrlKey + '+Z');
     this.addAction('redo', function() { ui.redo(); }, null, 'sprite-redo', (!mxClient.IS_WIN) ? Editor.ctrlKey + '+Shift+Z' : Editor.ctrlKey + '+Y');
     this.addAction('cut', function() {
-        var cells = mxClipboard.getCells();
+        var cells = mxClipboard.copy(graph);
         mxClipboard.cut(graph); 
+        // var cells = mxClipboard.getCells();
+        console.log('cut cells: '), console.log(cells);
         // update ui.topoJSON (initially delete from topoJSON); recover at/if paste
         for(var i = 0; i < cells.length; i++) {
             ui.removeFromTopoJSON(cells[i]);
@@ -183,8 +185,8 @@ Actions.prototype.init = function()
             console.log(pastedCells);
             // recovers if removed during cut; otherwise, adds clipboard (copy) with updated id
             for(var i = 0; i < pastedCells.length; i++) {
-                pastedCells[i].copiedId = cells[i].id;
-                ui.updateTopoJSON(pastedCells[i], true);
+                // pastedCells[i].copiedId = cells[i].id;
+                ui.updateTopoJSON(pastedCells[i], true, cells[i]);
             }
         }
     }, false, 'sprite-paste', Editor.ctrlKey + '+V');

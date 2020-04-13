@@ -2771,8 +2771,8 @@ var EditDataDialog = function(ui, cell)
 
 
     var graph = ui.editor.graph;
-    var value = graph.getModel().getValue(cell);
-    console.log('this is cell and  getValue(cell):'), console.log(cell), console.log(value);
+    // var value = graph.getModel().getValue(cell);
+    // console.log('this is cell and  getValue(cell):'), console.log(cell), console.log(value);
     const type = cell.isVertex() ? 'nodes' : 'edges';
     var nodes = ui.topoJSON[type];
 
@@ -2880,13 +2880,13 @@ var EditDataDialog = function(ui, cell)
     }
     
     // Converts the value to an XML node
-    if (!mxUtils.isNode(value))
-    {
-        var doc = mxUtils.createXmlDocument();
-        var obj = doc.createElement('object');
-        // obj.setAttribute('label', value || '');
-        value = obj;
-    }
+    // if (!mxUtils.isNode(value))
+    // {
+    //     var doc = mxUtils.createXmlDocument();
+    //     var obj = doc.createElement('object');
+    //     // obj.setAttribute('label', value || '');
+    //     value = obj;
+    // }
 
     div.appendChild(editorContainer);
 
@@ -2905,8 +2905,8 @@ var EditDataDialog = function(ui, cell)
             ui.hideDialog.apply(ui, arguments);
             
             // Clones and updates the value
-            value = value.cloneNode(true);
-            console.log('this is value in apply'), console.log(value);
+            // value = value.cloneNode(true);
+            // console.log('this is value in apply'), console.log(value);
             // value = traverse(obj, value);
             
             // for (var i = 0; i < names.length; i++)
@@ -2933,11 +2933,12 @@ var EditDataDialog = function(ui, cell)
 
             // Updates the global ui.topoJSON
             var updatedNode = editor.getEditor('root').value; // get current node's JSON
-            console.log('updated node'), console.log(updatedNode);
-            value.attributes.topo = {};
-            value.attributes.topo.value = updatedNode;
-            graph.getModel().setValue(cell, value);
-            console.log('value after updated Node'), console.log(value), console.log(cell);
+            // console.log('updated node'), console.log(updatedNode);
+            // value.attributes.topo = {};
+            // value.attributes.topo.value = updatedNode;
+            cell.topo = Object.assign({}, updatedNode);
+            // graph.getModel().setValue(cell, value);
+            // console.log('value after updated Node'), console.log(value), console.log(cell);
             
             console.log('ui.topoJSON before updates'), console.log(JSON.stringify(ui.topoJSON));
             ui.updateTopoJSON(cell);

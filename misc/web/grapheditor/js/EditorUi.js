@@ -2889,29 +2889,46 @@ EditorUi.prototype.removeFromTopoJSON = function(cell)
 };
 
 // update this.topoJSON
-EditorUi.prototype.updateTopoJSON = function(cell, paste=false)
+EditorUi.prototype.updateTopoJSON = function(cell, paste=false, mapping=null)
 {
-    console.log(cell), console.log(cell.getValue());
+    console.log(cell), console.log(cell.getValue()), console.log(mapping);
     var type = cell.isVertex() ? 'nodes' : 'edges';
-    var cellId = !paste ? cell.getId() : cell.copiedId;
+    var cellId = !paste ? cell.getId() : mapping.getId();
     var idx = this.topoJSON[type].map(function(e) { return e.id; }).indexOf(cellId);
     var value;
     if(idx >= 0 && !paste) {
-        value = cell.value.attributes.topo.value;
+        console.log('idx >= 0 and !paste');
+        value = cell.topo;
         this.topoJSON[type][idx] = value;
     }
     else if(idx >= 0 && paste){
-        if(typeof cell.value.attributes !== 'undefined') {
-            cell.value.attributes.topo = {};
-            cell.value.attributes.topo.value = Object.assign({}, this.topoJSON[type][idx]);
-            cell.value.attributes.topo.value.id = cell.getId();
+        console.log('idx >= 0 and paste');
+        if(typeof cell.topo !== 'undefined') {
+            // cell.value.attributes.topo = {};
+            cell.topo = Object.assign({}, this.topoJSON[type][idx]);
+            cell.topo.id = cell.getId(); // assign id of pasted cell
             console.log('pushed cell from paste: '), console.log(cell);
-            this.topoJSON[type].push(cell.value.attributes.topo.value);
+            this.topoJSON[type].push(cell.topo);
         }
         // TODO: add default value to this.topoJSON on add cell (node/edge)???
     }
     else {
-        value = typeof cell.value.attributes !== 'undefined' ? cell.value.attributes.topo.value : {id:maxId};
+        console.log('idx < 0');
+        console.log('cellId: ' + cell.getId());
+        // if(mapping) {
+        //     var obj = Object.assign({}, mapping.topo);
+        //     obj.id = cell.getId();
+        //     value = Object.assign({}, obj);
+        // }
+        // else{
+            if(paste){
+                if(typeof cell.topo !== 'undefined'){
+                    cell.topo.id = cell.getId();
+                }
+            }
+            value = typeof cell.topo !== 'undefined' ? cell.topo : {id:cell.getId()};
+        // }
+
         this.topoJSON[type].push(value);
     }
 };
