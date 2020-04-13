@@ -11,7 +11,7 @@ EditorUi = function(editor, container, lightbox)
     this.destroyFunctions = [];
     this.editor = editor || new Editor();
     this.container = container || document.body;
-    this.topographerOpen = false;
+    this.topographerOpen = false; // toggle topographer button on toolbar
 
     this.topoJSON = {nodes:[], edges:[]};
     
@@ -2661,6 +2661,8 @@ EditorUi.prototype.undo = function()
             // for (var i = 0; i < cells.length; i++){
             //     this.undoTopoJSON(cells[i]);
             // }
+            // TODO: need to update this.topoJSON when an undo event occurs
+            // TODO: parsing JSON to mxGraph value attributes needs to be implemented first
         }
     }
     catch (e)
@@ -2887,15 +2889,30 @@ EditorUi.prototype.removeFromTopoJSON = function(cell)
 };
 
 // update this.topoJSON
-EditorUi.prototype.updateTopoJSON = function(cell, isVertex)
+EditorUi.prototype.updateTopoJSON = function(cell, paste=false)
 {
-    var type = isVertex ? 'nodes' : 'edges';
-    var idx = this.topoJSON[type].map(function(e) { return e.id; }).indexOf(cell.id);
-    if(idx >= 0) {
-        this.topoJSON[type][idx] = cell;
+    console.log(cell), console.log(cell.getValue());
+    var type = cell.isVertex() ? 'nodes' : 'edges';
+    var cellId = !paste ? cell.getId() : cell.copiedId;
+    var idx = this.topoJSON[type].map(function(e) { return e.id; }).indexOf(cellId);
+    var value;
+    if(idx >= 0 && !paste) {
+        value = cell.value.attributes.topo.value;
+        this.topoJSON[type][idx] = value;
+    }
+    else if(idx >= 0 && paste){
+        if(typeof cell.value.attributes !== 'undefined') {
+            cell.value.attributes.topo = {};
+            cell.value.attributes.topo.value = Object.assign({}, this.topoJSON[type][idx]);
+            cell.value.attributes.topo.value.id = cell.getId();
+            console.log('pushed cell from paste: '), console.log(cell);
+            this.topoJSON[type].push(cell.value.attributes.topo.value);
+        }
+        // TODO: add default value to this.topoJSON on add cell (node/edge)???
     }
     else {
-        this.topoJSON[type].push(cell);
+        value = typeof cell.value.attributes !== 'undefined' ? cell.value.attributes.topo.value : {id:maxId};
+        this.topoJSON[type].push(value);
     }
 };
 

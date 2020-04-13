@@ -154,7 +154,14 @@ Actions.prototype.init = function()
     // Edit actions
     this.addAction('undo', function() { ui.undo(); }, null, 'sprite-undo', Editor.ctrlKey + '+Z');
     this.addAction('redo', function() { ui.redo(); }, null, 'sprite-redo', (!mxClient.IS_WIN) ? Editor.ctrlKey + '+Shift+Z' : Editor.ctrlKey + '+Y');
-    this.addAction('cut', function() { mxClipboard.cut(graph); }, null, 'sprite-cut', Editor.ctrlKey + '+X');
+    this.addAction('cut', function() {
+        var cells = mxClipboard.getCells();
+        mxClipboard.cut(graph); 
+        // update ui.topoJSON (initially delete from topoJSON); recover at/if paste
+        for(var i = 0; i < cells.length; i++) {
+            ui.removeFromTopoJSON(cells[i]);
+        }
+    }, null, 'sprite-cut', Editor.ctrlKey + '+X');
     this.addAction('copy', function()
     {
         try
@@ -170,7 +177,15 @@ Actions.prototype.init = function()
     {
         if (graph.isEnabled() && !graph.isCellLocked(graph.getDefaultParent()))
         {
-            mxClipboard.paste(graph);
+            var cells = mxClipboard.getCells();
+            console.log(cells);
+            var pastedCells = mxClipboard.paste(graph);
+            console.log(pastedCells);
+            // recovers if removed during cut; otherwise, adds clipboard (copy) with updated id
+            for(var i = 0; i < pastedCells.length; i++) {
+                pastedCells[i].copiedId = cells[i].id;
+                ui.updateTopoJSON(pastedCells[i], true);
+            }
         }
     }, false, 'sprite-paste', Editor.ctrlKey + '+V');
     this.addAction('pasteHere', function(evt)
