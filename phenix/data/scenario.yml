@@ -1,4 +1,4 @@
-apiVersion: v1
+apiVersion: phenix.sandia.gov/v1
 kind: Scenario
 metadata:
   name: Foo Bar Scenario

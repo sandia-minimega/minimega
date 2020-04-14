@@ -5,6 +5,10 @@ import (
 	"time"
 )
 
+const API_GROUP = "phenix.sandia.gov"
+
+type Configs []Config
+
 type Config struct {
 	Version  string                 `json:"apiVersion" yaml:"apiVersion"`
 	Kind     string                 `json:"kind" yaml:"kind"`
@@ -26,7 +30,7 @@ func (this Config) APIGroup() string {
 		return ""
 	}
 
-	return s[1]
+	return s[0]
 }
 
 func (this Config) APIVersion() string {

@@ -36,11 +36,45 @@ func (this BoltDB) Close() error {
 	return this.db.Close()
 }
 
-func (this BoltDB) Get(c *types.Config) error {
-	if err := this.ensureBucket(c.Kind); err != nil {
-		return err
+func (this BoltDB) List(kinds ...string) (types.Configs, error) {
+	var configs types.Configs
+
+	for _, kind := range kinds {
+		if err := this.ensureBucket(kind); err != nil {
+			return nil, err
+		}
+
+		err := this.db.View(func(tx *bbolt.Tx) error {
+			b := tx.Bucket([]byte(kind))
+
+			err := b.ForEach(func(_, v []byte) error {
+				var c types.Config
+
+				if err := json.Unmarshal(v, &c); err != nil {
+					return fmt.Errorf("unmarshaling config JSON: %w", err)
+				}
+
+				configs = append(configs, c)
+
+				return nil
+			})
+
+			if err != nil {
+				return fmt.Errorf("iterating %s bucket: %w", kind, err)
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			return nil, fmt.Errorf("getting configs from store: %w", err)
+		}
 	}
 
+	return configs, nil
+}
+
+func (this BoltDB) Get(c *types.Config) error {
 	v, err := this.get(c.Kind, c.Metadata.Name)
 	if err != nil {
 		return fmt.Errorf("getting config: %w", err)
@@ -54,6 +88,10 @@ func (this BoltDB) Get(c *types.Config) error {
 }
 
 func (this BoltDB) Create(c *types.Config) error {
+	if _, err := this.get(c.Kind, c.Metadata.Name); err == nil {
+		return fmt.Errorf("config %s/%s already exists", c.Kind, c.Metadata.Name)
+	}
+
 	c.Metadata.Created = time.Now()
 	c.Metadata.Updated = time.Now()
 

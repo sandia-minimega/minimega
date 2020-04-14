@@ -1,4 +1,4 @@
-apiVersion: v1
+apiVersion: phenix.sandia.gov/v1
 kind: Topology
 metadata:
   name: Foo Bar Topo

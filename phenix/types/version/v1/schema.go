@@ -29,6 +29,28 @@ definitions:
         type: array
         items:
           $ref: "#/definitions/VLAN"
+  Scenario:
+    type: object
+    required:
+    - topology
+    - apps
+    properties:
+      topology:
+        type: string
+        minLength: 1
+      apps:
+        type: object
+        properties:
+          experiment:
+            type: array
+            items:
+              type: object
+              required:
+              - name
+              properties:
+                name:
+                  type: string
+                  minLength: 1
   Node:
     type: object
     required:
