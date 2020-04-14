@@ -1540,6 +1540,8 @@ var EditDataDialog = function(ui, cell)
 {
     const graph = ui.editor.graph;
     const type = cell.isVertex() ? 'nodes' : 'edges'; // get type to load specific schema
+    const schema = ui.schemas[type]; // set schema
+    console.log('this is schema'), console.log(schema);
     const nodes = ui.topoJSON[type]; // get nodes array to determine add or update
 
     var id = (EditDataDialog.getDisplayIdForCell != null) ?
@@ -1562,47 +1564,12 @@ var EditDataDialog = function(ui, cell)
     node.id = id;
     console.log(node);
 
-    // Load schema
-    var loadFile = function (file, mimeType, callback) {
-        if (window.fetch && window.File && window.FileReader && window.FileList && window.Blob) {
-            fetch(file, {mode: 'no-cors'})
-            .then(function (response) {
-                if (!response.ok) {
-                    jeModalContent.innerText = "Sorry, there was an error loading the file: " + file;
-                    toggleModal()
-                }
-                return response.blob()
-            }).then(function (blob) {
-                var reader = new FileReader()
-                reader.onload = function (e) {
-                    callback(e.target.result)
-                }
-                reader.readAsText(blob)
-            })
-            .catch(function () {
-                callback('')
-            });
-        } else {
-        // IOS Safari and other crappy browsers :D
-        var xobj = new XMLHttpRequest()
-        xobj.overrideMimeType(mimeType)
-        xobj.open('GET', file, true)
-        xobj.onreadystatechange = function () {
-            if (xobj.readyState == 4) {
-                if (xobj.status == '200') callback(xobj.responseText)
-                else callback('')
-            }
-        }
-        xobj.send(null)
-        }
-    };
-
     // Set JSONEditor and config options based on schema and cell type
-    var loadConfig = function (response) {
-        this.schema = JSON.parse(response); // cell schema
+    var loadConfig = function () {
+        // this.schema = JSON.parse(response); // cell schema
         // JSONEditor config options
         this.config = {
-            schema: this.schema,
+            schema: schema,
             startval: node,
             ajax: true,
             mode: 'tree',
@@ -1683,10 +1650,6 @@ var EditDataDialog = function(ui, cell)
     };
 
     var createEditor = function() {
-        // var graph = ui.editor.graph;
-        // // var value = graph.getModel().getValue(cell);
-        // // console.log('this is cell and  getValue(cell):'), console.log(cell), console.log(value);
-        // const type = cell.isVertex() ? 'nodes' : 'edges';
 
         var editorContainer = document.createElement('div');
         editorContainer.setAttribute('id', 'jsoneditor');
@@ -1694,34 +1657,10 @@ var EditDataDialog = function(ui, cell)
         editorContainer.style.position = 'relative';
         editorContainer.style['max-width'] ="600px";
 
-        // var css = document.createElement('style');
-        // css.setAttribute('scoped', 'scoped');
-        // css.innerHTML = '@import "grapheditor/utils/topographer/downloads/spectre.min.css"';
-        // editorContainer.appendChild(css);
-
-        // css = document.createElement('style');
-        // css.setAttribute('scoped', 'scoped');
-        // css.innerHTML = '@import "grapheditor/utils/topographer/downloads/spectre-exp.min.css"';
-        // editorContainer.appendChild(css);
-
-        // create the editor
-        // const container = document.getElementById('jsoneditor')
         const editor = new JSONEditor(editorContainer, this.config);
 
         var div = document.createElement('div');
         div.style['overflow-y'] = 'auto';
-        
-        // var parameters = {memory:"2048", vcpu:"1", network:{name:'eth1', ip:'127.0.0.1'}, kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
-        
-        // Converts the value to an XML node
-        // if (!mxUtils.isNode(value))
-        // {
-        //     var doc = mxUtils.createXmlDocument();
-        //     var obj = doc.createElement('object');
-        //     // obj.setAttribute('label', value || '');
-        //     value = obj;
-        // }
-
         div.appendChild(editorContainer);
 
         var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
@@ -1737,42 +1676,10 @@ var EditDataDialog = function(ui, cell)
             try
             {
                 ui.hideDialog.apply(ui, arguments);
-                
-                // Clones and updates the value
-                // value = value.cloneNode(true);
-                // console.log('this is value in apply'), console.log(value);
-                // value = traverse(obj, value);
-                
-                // for (var i = 0; i < names.length; i++)
-                // {
-                //     if (texts[i] == null)
-                //     {
-                //         value.removeAttribute(names[i]);
-                //     }
-                //     else
-                //     {
-                //         value.setAttribute(names[i], texts[i].value);
-                //         removeLabel = removeLabel || (names[i] == 'placeholder' &&
-                //             value.getAttribute('placeholders') == '1');
-
-                //         // TEST
-                //         // value.attributes.network = {};
-                //         // value.attributes.network.value = {a:1,b:2};
-                //     }
-                // }
-                
-                // Updates the value of the cell (undoable)
-                // console.log('value after traverse'), console.log(value);
-                // graph.getModel().setValue(cell, value);
-
+    
                 // Updates the global ui.topoJSON
                 var updatedNode = editor.getEditor('root').value; // get current node's JSON
-                // console.log('updated node'), console.log(updatedNode);
-                // value.attributes.topo = {};
-                // value.attributes.topo.value = updatedNode;
                 cell.topo = Object.assign({}, updatedNode);
-                // graph.getModel().setValue(cell, value);
-                // console.log('value after updated Node'), console.log(value), console.log(cell);
                 
                 console.log('ui.topoJSON before updates'), console.log(JSON.stringify(ui.topoJSON));
                 ui.updateTopoJSON(cell);
@@ -1810,13 +1717,12 @@ var EditDataDialog = function(ui, cell)
         // show dialog only after editor is created
         ui.showDialog(this.container, 480, 420, true, false, null, false); 
 
-    }
+    };
 
     this.init = function()
     {
         console.log('init');
-        // load schema by type (node/edge)
-        loadFile(window.UTILS_PATH + '/topographer/json/'+type+'_schema.json', 'application/json', loadConfig);
+        loadConfig();
     };
 
 };

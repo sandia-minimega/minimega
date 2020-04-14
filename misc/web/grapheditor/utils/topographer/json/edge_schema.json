@@ -7,17 +7,6 @@
     "name"
   ],
   "properties": {
-    "name": {
-      "$id": "#/properties/vlans/items/properties/name",
-      "type": "string",
-      "title": "Name",
-      "minLength": 1,
-      "default": "",
-      "examples": [
-        "SCADAPWR"
-      ],
-      "pattern": "^(.*)$"
-    },
     "id": {
       "$id": "#/properties/vlans/items/properties/id",
       "type": "string",
@@ -27,6 +16,17 @@
       "default": "",
       "examples": [
         "101"
+      ],
+      "pattern": "^(.*)$"
+    },
+    "name": {
+      "$id": "#/properties/vlans/items/properties/name",
+      "type": "string",
+      "title": "Name",
+      "minLength": 1,
+      "default": "",
+      "examples": [
+        "SCADAPWR"
       ],
       "pattern": "^(.*)$"
     }

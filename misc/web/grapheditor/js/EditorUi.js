@@ -13,7 +13,56 @@ EditorUi = function(editor, container, lightbox)
     this.container = container || document.body;
     this.topographerOpen = false; // toggle topographer button on toolbar
 
-    this.topoJSON = {nodes:[], edges:[]};
+    this.topoJSON = {nodes:[], edges:[]}; // global topography object
+    this.schemas = {}; // store default schemas
+
+    var self = this; // to access member variables in scope of local functions/callbacks
+
+    // Load schema
+    var loadSchema = function (file, mimeType, schemaType, callback) {
+        if (window.fetch && window.File && window.FileReader && window.FileList && window.Blob) {
+            fetch(file, {mode: 'no-cors'})
+            .then(function (response) {
+                if (!response.ok) {
+                    jeModalContent.innerText = "Sorry, there was an error loading the file: " + file;
+                    toggleModal()
+                }
+                return response.blob()
+            }).then(function (blob) {
+                var reader = new FileReader()
+                reader.onload = function (e) {
+                    setSchema(e.target.result, schemaType)
+                }
+                reader.readAsText(blob)
+            })
+            .catch(function (stder) {
+                console.log(stder)
+            });
+        } else {
+        // IOS Safari and other crappy browsers :D
+        var xobj = new XMLHttpRequest()
+        xobj.overrideMimeType(mimeType)
+        xobj.open('GET', file, true)
+        xobj.onreadystatechange = function () {
+            if (xobj.readyState == 4) {
+                if (xobj.status == '200') setSchema(xobj.responseText, schemaType)
+                else console.log(xobj.status)
+            }
+        }
+        xobj.send(null)
+        }
+    };
+
+    var setSchema = function(response, schemaType) {
+        console.log(this.schemas);
+        console.log(self.schemas);
+        self.schemas[schemaType] = JSON.parse(response);
+    }
+
+    // set default node schema
+    loadSchema(window.UTILS_PATH + '/topographer/json/node_schema.json', 'application/json', 'nodes', setSchema);
+    // set default edge schema
+    loadSchema(window.UTILS_PATH + '/topographer/json/edge_schema.json', 'application/json', 'edges', setSchema);
     
     var graph = this.editor.graph;
     graph.lightbox = lightbox;
@@ -2924,6 +2973,7 @@ EditorUi.prototype.updateTopoJSON = function(cell, paste=false, mapping=null)
         // updated cells
         console.log('idx >= 0 and !paste');
         value = cell.topo;
+        cell.topo.id = cell.getId(); // assign id of pasted cell; protects if user overrides id value
         this.topoJSON[type][idx] = value;
     }
     else if(idx >= 0 && paste){
@@ -2942,20 +2992,15 @@ EditorUi.prototype.updateTopoJSON = function(cell, paste=false, mapping=null)
         // new cells (nodes/edges) and/or cells that are cut/paste
         console.log('idx < 0');
         console.log('cellId: ' + cell.getId());
-        // if(mapping) {
-        //     var obj = Object.assign({}, mapping.topo);
-        //     obj.id = cell.getId();
-        //     value = Object.assign({}, obj);
-        // }
-        // else{
-            if(paste){
-                if(typeof cell.topo !== 'undefined'){
-                    cell.topo.id = cell.getId();
-                }
-            }
-            value = typeof cell.topo !== 'undefined' ? cell.topo : {id:cell.getId()};
-        // }
 
+        if(typeof cell.topo !== 'undefined'){
+            cell.topo.id = cell.getId(); // paste events caught here; assign pasted cell id
+        }
+        else{
+            cell.topo = {}; // new cell default object (TODO: implement default add)
+            cell.topo.id = cell.getId();
+        }
+        value = cell.topo;
         this.topoJSON[type].push(value);
     }
 };
