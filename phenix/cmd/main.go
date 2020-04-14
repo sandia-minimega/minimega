@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
 	"phenix/types"
 	"phenix/types/version"
 
@@ -14,11 +15,15 @@ import (
 )
 
 func main() {
+	if len(os.Args) < 2 {
+		fmt.Println("must provide path to config file")
+		os.Exit(1)
+	}
 
 	file, err := ioutil.ReadFile(os.Args[1])
 	if err != nil {
 		fmt.Println("Cannot read file: ", os.Args[1], " -- Error: ", err)
-		return
+		os.Exit(1)
 	}
 
 	var config types.Config
