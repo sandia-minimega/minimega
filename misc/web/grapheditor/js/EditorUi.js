@@ -2621,6 +2621,9 @@ EditorUi.prototype.redo = function()
         else
         {
             this.editor.undoManager.redo();
+            var cells = graph.getModel().cells; // cells captured post redo command
+            console.log('cells in redo'), console.log(cells);
+            this.undoRedoChangesTopoJSON(cells); // persist redo to this.topoJSON
         }
     }
     catch (e)
@@ -2653,16 +2656,10 @@ EditorUi.prototype.undo = function()
         }
         else
         {
-
-            console.log('graph before undo:'), console.log(JSON.stringify(graph.getModel().getCell(2)));
             this.editor.undoManager.undo();
-            console.log(graph.getModel().getCell(2));
-            // var cells = graph.getCells();
-            // for (var i = 0; i < cells.length; i++){
-            //     this.undoTopoJSON(cells[i]);
-            // }
-            // TODO: need to update this.topoJSON when an undo event occurs
-            // TODO: parsing JSON to mxGraph value attributes needs to be implemented first
+            var cells = graph.getModel().cells; // cells captured post undo command
+            console.log('cells in undo'), console.log(cells);
+            this.undoRedoChangesTopoJSON(cells); // persist undo to this.topoJSON
         }
     }
     catch (e)
@@ -2864,21 +2861,48 @@ EditorUi.prototype.setPageVisible = function(value)
     this.fireEvent(new mxEventObject('pageViewChanged'));
 };
 
-// undo changes to this.topoJSON
-EditorUi.prototype.undoChangesTopoJSON = function(cell)
+// persist undo/redo model (cell) changes to this.topoJSON
+EditorUi.prototype.undoRedoChangesTopoJSON = function(cells)
 {
-    var id = cell.getId();
-    var type = cell.isVertex() ? 'nodes' : 'edges';
-    var idx = this.topoJSON[type].map(function(e) { return e.id; }).indexOf(cell.id);
-    if(idx >= 0) {
-        this.topoJSON[type][idx] = cell;
+    var types = ['nodes', 'edges'];
+    // add/update cells during undo
+    for(var i = 0; i < types.length; i++) {
+        var type = types[i];
+        Object.entries(cells).forEach(([key, value]) => {
+            console.log('loop cells:');
+            console.log(value);
+            if(typeof value.topo !== 'undefined' ) {
+                var cellId = value.id;
+                var idx = this.topoJSON[type].map(function(e) { return e.id; }).indexOf(cellId);
+                console.log('add/update after undo: cellId= ' + cellId + ', idx=' + idx);
+                // if(idx >= 0) {
+                    console.log('value to update:'), console.log(value);
+                    this.updateTopoJSON(value);
+                // }
+            }
+        });
     }
-    else {
-        this.topoJSON[type].push(cell);
+    // remove cells during undo
+    for(var i = 0; i < types.length; i++) {
+        var type = types[i];
+        Object.entries(this.topoJSON[type]).forEach(([key, value]) => {
+            console.log('loop topoJSON');
+            console.log(value);
+            var cellId = value.id;
+            var idx = typeof cells[cellId] === 'undefined' ? -1 : 0;
+            console.log('remove after undo: cellId= ' + cellId + ', idx=' + idx);
+            if(idx < 0) {
+                console.log('value to remove:'), console.log(value);
+                this.topoJSON[type] = this.topoJSON[type].filter(obj => {
+                    return obj.id !== cellId;
+                });
+            }
+        });
     }
+    console.log('this is this.topoJSON after undo:'), console.log(this.topoJSON);
 };
 
-// delete cells from this.topoJSON
+// remove cells (nodes/edges) from this.topoJSON (persist model deletions)
 EditorUi.prototype.removeFromTopoJSON = function(cell)
 {
     var id = cell.getId();
@@ -2888,7 +2912,7 @@ EditorUi.prototype.removeFromTopoJSON = function(cell)
     });
 };
 
-// update this.topoJSON
+// update this.topoJSON nodes/edges (persist model additions/updates)
 EditorUi.prototype.updateTopoJSON = function(cell, paste=false, mapping=null)
 {
     console.log(cell), console.log(cell.getValue()), console.log(mapping);
@@ -2897,11 +2921,13 @@ EditorUi.prototype.updateTopoJSON = function(cell, paste=false, mapping=null)
     var idx = this.topoJSON[type].map(function(e) { return e.id; }).indexOf(cellId);
     var value;
     if(idx >= 0 && !paste) {
+        // updated cells
         console.log('idx >= 0 and !paste');
         value = cell.topo;
         this.topoJSON[type][idx] = value;
     }
     else if(idx >= 0 && paste){
+        // copy/pasted cells
         console.log('idx >= 0 and paste');
         if(typeof cell.topo !== 'undefined') {
             // cell.value.attributes.topo = {};
@@ -2913,6 +2939,7 @@ EditorUi.prototype.updateTopoJSON = function(cell, paste=false, mapping=null)
         // TODO: add default value to this.topoJSON on add cell (node/edge)???
     }
     else {
+        // new cells (nodes/edges) and/or cells that are cut/paste
         console.log('idx < 0');
         console.log('cellId: ' + cell.getId());
         // if(mapping) {

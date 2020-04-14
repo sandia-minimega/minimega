@@ -188,6 +188,7 @@ Actions.prototype.init = function()
                 // pastedCells[i].copiedId = cells[i].id;
                 ui.updateTopoJSON(pastedCells[i], true, cells[i]);
             }
+            console.log('this is ui.topoJSON after paste:'), console.log(ui.topoJSON);
         }
     }, false, 'sprite-paste', Editor.ctrlKey + '+V');
     this.addAction('pasteHere', function(evt)
