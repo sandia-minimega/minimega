@@ -1538,1254 +1538,21 @@ ExportDialog.saveLocalFile = function(editorUi, data, filename, format)
  */
 var EditDataDialog = function(ui, cell)
 {
-
-    const schema = {
-        "$id": "#/properties/nodes",
-        "type": "object",
-        "title": "Node",
-        // "headerTemplate": "{{i1}} - {{self.general.hostname}}",
-        "required": [
-          "id",
-          "type",
-          "general",
-          "hardware"
-        ],
-        "properties": {
-          "id": {
-            "$id": "#/properties/nodes/items/properties/id",
-            "type": "string",
-            "title": "Id",
-            "readOnly": true,
-            "minLength": 1,
-            "default": "",
-            "examples": [
-              "101"
-            ],
-            "pattern": "^(.*)$"
-          },
-          "type": {
-            "$id": "#/properties/nodes/items/properties/type",
-            "type": "string",
-            "title": "Type",
-            "enum": [
-              "Firewall",
-              "Printer",
-              "Server",
-              "Switch",
-              "Router",
-              "SCEPTRE",
-              "VirtualMachine"
-            ],
-            "default": "VirtualMachine",
-            "examples": [
-              "Firewall",
-              "Printer",
-              "Server",
-              "Switch",
-              "Router",
-              "SCEPTRE",
-              "VirtualMachine"
-            ],
-            "pattern": "^(.*)$"
-          },
-          "general": {
-            "$id": "#/properties/nodes/items/properties/general",
-            "type": "object",
-            "title": "General",
-            "required": [
-              "hostname"
-            ],
-            "properties": {
-              "hostname": {
-                "$id": "#/properties/nodes/items/properties/general/properties/hostname",
-                "type": "string",
-                "title": "Hostname",
-                "minLength": 1,
-                "default": "",
-                "examples": [
-                  "power-provider"
-                ],
-                "pattern": "^[\\w-]+$"
-              },
-              "description": {
-                "$id": "#/properties/nodes/items/properties/general/properties/description",
-                "type": "string",
-                "title": "description",
-                "default": "",
-                "examples": [
-                  "SCEPTRE power solver"
-                ],
-                "pattern": "^(.*)$"
-              },
-              "snapshot": {
-                "$id": "#/properties/nodes/items/properties/general/properties/snapshot",
-                "type": "boolean",
-                "title": "snapshot",
-                "default": false,
-                "examples": [
-                  false
-                ]
-              },
-              "do_not_boot": {
-                "$id": "#/properties/nodes/items/properties/general/properties/do_not_boot",
-                "type": "boolean",
-                "title": "do_not_boot",
-                "default": false,
-                "examples": [
-                  false
-                ]
-              }
-            }
-          },
-          "hardware": {
-            "$id": "#/properties/nodes/items/properties/hardware",
-            "type": "object",
-            "title": "Hardware",
-            "required": [
-              "os_type",
-              "drives"
-            ],
-            "properties": {
-              "cpu": {
-                "$id": "#/properties/nodes/items/properties/hardware/properties/cpu",
-                "type": "string",
-                "title": "cpu",
-                "default": "Broadwell",
-                "examples": [
-                  "Broadwell",
-                  "Haswell",
-                  "core2duo",
-                  "pentium3"
-                ],
-                "pattern": "^(.*)$"
-              },
-              "vcpus": {
-                "$id": "#/properties/nodes/items/properties/hardware/properties/vcpus",
-                "type": "string",
-                "title": "vcpus",
-                "default": "1",
-                "examples": [
-                  "4"
-                ],
-                "pattern": "^(.*)$"
-              },
-              "memory": {
-                "$id": "#/properties/nodes/items/properties/hardware/properties/memory",
-                "type": "string",
-                "title": "memory",
-                "default": "1024",
-                "examples": [
-                  "8192"
-                ],
-                "pattern": "^(.*)$"
-              },
-              "os_type": {
-                "$id": "#/properties/nodes/items/properties/hardware/properties/os_type",
-                "type": "string",
-                "title": "os_type",
-                "enum": ["windows", "linux", "rhel", "centos"],
-                "default": "linux",
-                "examples": [
-                  "windows",
-                  "linux",
-                  "rhel",
-                  "centos"
-                ],
-                "pattern": "^(.*)$"
-              },
-              "drives": {
-                "$id": "#/properties/nodes/items/properties/hardware/properties/drives",
-                "type": "array",
-                "title": "Drives",
-                "items": {
-                  "$id": "#/properties/nodes/items/properties/hardware/properties/drives/items",
-                  "type": "object",
-                  "title": "Drive",
-                  "required": [
-                    "image"
-                  ],
-                  "properties": {
-                    "image": {
-                      "$id": "#/properties/nodes/items/properties/hardware/properties/drives/items/properties/image",
-                      "type": "string",
-                      "title": "Image",
-                      "minLength": 1,
-                      "default": "",
-                      "examples": [
-                        "win10provider.qc2"
-                      ],
-                      "pattern": "^(.*)$"
-                    },
-                    "interface": {
-                      "$id": "#/properties/nodes/items/properties/hardware/properties/drives/items/properties/interface",
-                      "type": "string",
-                      "title": "interface",
-                      "enum": ["ahci", "ide", "scsi", "sd", "mtd", "floppy", "pflash", "virtio"],
-                      "default": "ide",
-                      "examples": [
-                        "ide"
-                      ],
-                      "pattern": "^(.*)$"
-                    },
-                    "cache_mode": {
-                      "$id": "#/properties/nodes/items/properties/hardware/properties/drives/items/properties/cache_mode",
-                      "type": "string",
-                      "title": "cache_mode",
-                      "enum": ["none", "writeback", "unsafe", "directsync", "writethrough"],
-                      "default": "writeback",
-                      "examples": [
-                        "writeback"
-                      ],
-                      "pattern": "^(.*)$"
-                    },
-                    "inject_partition": {
-                      "$id": "#/properties/nodes/items/properties/hardware/properties/drives/items/properties/inject_partition",
-                      "type": "string",
-                      "title": "inject_partition",
-                      "default": "1",
-                      "examples": [
-                        "2"
-                      ],
-                      "pattern": "^(.*)$"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "network": {
-            "$id": "#/properties/nodes/items/properties/network",
-            "type": "object",
-            "title": "Network",
-            "required": [
-              "interfaces"
-            ],
-            "properties": {
-              "interfaces": {
-                "$id": "#/properties/nodes/items/properties/network/properties/interfaces",
-                "type": "array",
-                "title": "Interfaces",
-                "items": {
-                  "$id": "#/properties/nodes/items/properties/network/properties/interfaces/items",
-                  "type": "object",
-                  "title": "Interface",
-                  "oneOf": [
-                    {
-                      "$ref": "#/definitions/static_iface",
-                      "title": "Static"
-                    },
-                    {
-                      "$ref": "#/definitions/dhcp_iface",
-                      "title": "DHCP"
-                    },
-                    {
-                      "$ref": "#/definitions/serial_iface",
-                      "title": "Serial"
-                    }
-                  ]
-                }
-              },
-              "routes": {
-                "$id": "#/properties/nodes/items/properties/network/properties/routes",
-                "type": "array",
-                "items": {
-                  "$id": "#/properties/nodes/items/properties/network/properties/routes/items",
-                  "type": "object",
-                  "title": "Route",
-                  "required": [
-                    "destination",
-                    "next",
-                    "cost"
-                  ],
-                  "properties": {
-                    "destination": {
-                      "$id": "#/properties/nodes/items/properties/network/properties/routes/items/properties/destination",
-                      "type": "string",
-                      "title": "Destination",
-                      "minLength": 1,
-                      "default": "",
-                      "examples": [
-                        "192.168.0.0/24"
-                      ],
-                      "pattern": "^(.*)$"
-                    },
-                    "next": {
-                      "$id": "#/properties/nodes/items/properties/network/properties/routes/items/properties/next",
-                      "type": "string",
-                      "title": "Next",
-                      "minLength": 1,
-                      "default": "",
-                      "examples": [
-                        "192.168.1.254"
-                      ],
-                      "pattern": "^(.*)$"
-                    },
-                    "cost": {
-                      "$id": "#/properties/nodes/items/properties/network/properties/routes/items/properties/cost",
-                      "type": "string",
-                      "title": "Cost",
-                      "minLength": 1,
-                      "default": "1",
-                      "examples": [
-                        "1"
-                      ],
-                      "pattern": "^(.*)$"
-                    }
-                  }
-                }
-              },
-              "ospf": {
-                "$id": "#/properties/nodes/items/properties/network/properties/ospf",
-                "type": "object",
-                "title": "Ospf",
-                "required": [
-                  "router_id",
-                  "areas"
-                ],
-                "properties": {
-                  "router_id": {
-                    "$id": "#/properties/nodes/items/properties/network/properties/ospf/properties/router_id",
-                    "type": "string",
-                    "title": "Router_id",
-                    "default": "",
-                    "examples": [
-                      "0.0.0.1"
-                    ],
-                    "pattern": "^(.*)$"
-                  },
-                  "areas": {
-                    "$id": "#/properties/nodes/items/properties/network/properties/ospf/properties/areas",
-                    "type": "array",
-                    "title": "Areas",
-                    "items": {
-                      "$id": "#/properties/nodes/items/properties/network/properties/ospf/properties/areas/items",
-                      "type": "object",
-                      "title": "Area",
-                      "required": [
-                        "area_id",
-                        "area_networks"
-                      ],
-                      "properties": {
-                        "area_id": {
-                          "$id": "#/properties/nodes/items/properties/network/properties/ospf/properties/areas/items/properties/area_id",
-                          "type": "string",
-                          "title": "Area_id",
-                          "default": "",
-                          "examples": [
-                            "0"
-                          ],
-                          "pattern": "^(.*)$"
-                        },
-                        "area_networks": {
-                          "$id": "#/properties/nodes/items/properties/network/properties/ospf/properties/areas/items/properties/area_networks",
-                          "type": "array",
-                          "title": "Area_networks",
-                          "items": {
-                            "$id": "#/properties/nodes/items/properties/network/properties/ospf/properties/areas/items/properties/area_networks/items",
-                            "type": "object",
-                            "title": "Area Network",
-                            "required": [
-                              "network"
-                            ],
-                            "properties": {
-                              "network": {
-                                "$id": "#/properties/nodes/items/properties/network/properties/ospf/properties/areas/items/properties/area_networks/items/properties/network",
-                                "type": "string",
-                                "title": "Network",
-                                "default": "",
-                                "examples": [
-                                  "10.1.25.0/24"
-                                ],
-                                "pattern": "^(.*)$"
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              "rulesets": {
-                "$id": "#/properties/nodes/items/properties/network/properties/rulesets",
-                "type": "array",
-                "title": "Rulesets",
-                "items": {
-                  "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items",
-                  "type": "object",
-                  "title": "Ruleset",
-                  "required": [
-                    "name",
-                    "default",
-                    "rules"
-                  ],
-                  "properties": {
-                    "name": {
-                      "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items/properties/name",
-                      "type": "string",
-                      "title": "Name",
-                      "minLength": 1,
-                      "default": "",
-                      "examples": [
-                        "OutToDMZ"
-                      ],
-                      "pattern": "^(.*)$"
-                    },
-                    "description": {
-                      "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items/properties/description",
-                      "type": "string",
-                      "title": "Description",
-                      "default": "",
-                      "examples": [
-                        "From ICS to the DMZ network"
-                      ],
-                      "pattern": "^(.*)$"
-                    },
-                    "default": {
-                      "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items/properties/default",
-                      "type": "string",
-                      "title": "Default",
-                      "minLength": 1,
-                      "default": "",
-                      "examples": [
-                        "drop"
-                      ],
-                      "pattern": "^(.*)$"
-                    },
-                    "rules": {
-                      "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items/properties/rules",
-                      "type": "array",
-                      "title": "Rules",
-                      "items": {
-                        "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items/properties/rules/items",
-                        "type": "object",
-                        "title": "Rule",
-                        "required": [
-                          "id",
-                          "action",
-                          "protocol"
-                        ],
-                        "properties": {
-                          "id": {
-                            "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items/properties/rules/items/properties/id",
-                            "type": "string",
-                            "title": "Id",
-                            "minLength": 1,
-                            "default": "",
-                            "examples": [
-                              "10"
-                            ],
-                            "pattern": "^(.*)$"
-                          },
-                          "description": {
-                            "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items/properties/rules/items/properties/description",
-                            "type": "string",
-                            "title": "Description",
-                            "default": "",
-                            "examples": [
-                              "Allow UDP 10.1.26.80 ==> 10.2.25.0/24:123"
-                            ],
-                            "pattern": "^(.*)$"
-                          },
-                          "action": {
-                            "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items/properties/rules/items/properties/action",
-                            "type": "string",
-                            "title": "Action",
-                             "enum": [
-                              "accept",
-                              "drop",
-                              "reject"
-                            ],
-                            "default": "drop",
-                            "examples": [
-                              "accept",
-                              "drop",
-                              "reject"
-                            ],
-                            "pattern": "^(.*)$"
-                          },
-                          "protocol": {
-                            "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items/properties/rules/items/properties/protocol",
-                            "type": "string",
-                            "title": "Protocol",
-                            "enum": [
-                              "tcp",
-                              "udp",
-                              "icmp",
-                              "all"
-                            ],
-                            "default": "tcp",
-                            "examples": [
-                              "tcp",
-                              "udp",
-                              "icmp",
-                              "all"
-                            ],
-                            "pattern": "^(.*)$"
-                          },
-                          "source": {
-                            "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items/properties/rules/items/properties/source",
-                            "type": "object",
-                            "title": "Source",
-                            "required": [
-                              "address"
-                            ],
-                            "properties": {
-                              "address": {
-                                "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items/properties/rules/items/properties/source/properties/address",
-                                "type": "string",
-                                "title": "Address",
-                                "default": "",
-                                "examples": [
-                                  "10.1.24.0/24",
-                                  "10.1.24.60"
-                                ],
-                                "pattern": "^(.*)$"
-                              },
-                              "port": {
-                                "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items/properties/rules/items/properties/source/properties/port",
-                                "type": "string",
-                                "title": "Port",
-                                "default": "",
-                                "examples": [
-                                  "3389"
-                                ],
-                                "pattern": "^(.*)$"
-                              }
-                            }
-                          },
-                          "destination": {
-                            "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items/properties/rules/items/properties/destination",
-                            "type": "object",
-                            "title": "Destination",
-                            "required": [
-                              "address"
-                            ],
-                            "properties": {
-                              "address": {
-                                "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items/properties/rules/items/properties/source/properties/address",
-                                "type": "string",
-                                "title": "Address",
-                                "default": "",
-                                "examples": [
-                                  "10.1.24.0/24",
-                                  "10.1.24.60"
-                                ],
-                                "pattern": "^(.*)$"
-                              },
-                              "port": {
-                                "$id": "#/properties/nodes/items/properties/network/properties/rulesets/items/properties/rules/items/properties/destination/properties/port",
-                                "type": "string",
-                                "title": "Port",
-                                "default": "",
-                                "examples": [
-                                  "3389"
-                                ],
-                                "pattern": "^(.*)$"
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "injections": {
-            "$id": "#/properties/nodes/items/properties/injections",
-            "type": "array",
-            "title": "Injections",
-            "items": {
-              "$id": "#/properties/nodes/items/properties/injections/items",
-              "type": "object",
-              "title": "Injection",
-              "required": [
-                "src",
-                "dst"
-              ],
-              "properties": {
-                "src": {
-                  "$id": "#/properties/nodes/items/properties/injections/properties/src",
-                  "type": "string",
-                  "title": "Src",
-                  "minLength": 1,
-                  "default": "",
-                  "examples": [
-                    "ACTIVSg2000.PWB"
-                  ],
-                  "pattern": "^(.*)$"
-                },
-                "dst": {
-                  "$id": "#/properties/nodes/items/properties/injections/properties/dst",
-                  "type": "string",
-                  "title": "Dst",
-                  "minLength": 1,
-                  "default": "",
-                  "examples": [
-                    "sceptre/ACTIVSg2000.PWB"
-                  ],
-                  "pattern": "^(.*)$"
-                },
-                "description": {
-                  "$id": "#/properties/nodes/items/properties/injections/properties/description",
-                  "type": "string",
-                  "title": "description",
-                  "default": "",
-                  "examples": [
-                    "PowerWorld case binary data"
-                  ],
-                  "pattern": "^(.*)$"
-                }
-              }
-            }
-          },
-          "metadata": {
-            "$id": "#/properties/nodes/items/properties/metadata",
-            "type": "object",
-            "title": "Metadata",
-            "properties": {
-              "infrastructure": {
-                "$id": "#/properties/nodes/items/properties/metadata/properties/infrastructure",
-                "type": "string",
-                "title": "Infrastructure",
-                "enum": ["power-transmission", "batch-process"],
-                "default": "power-transmission",
-                "examples": [
-                  "power-transmission",
-                  "batch-process"
-                ],
-                "pattern": "^(.*)$"
-              },
-              "provider": {
-                "$id": "#/properties/nodes/items/properties/metadata/properties/provider",
-                "type": "string",
-                "title": "Provider",
-                "default": "power-provider",
-                "examples": [
-                  "power-provider",
-                  "simulink-provider"
-                ],
-                "pattern": "^(.*)$"
-              },
-              "simulator": {
-                "$id": "#/properties/nodes/items/properties/metadata/properties/simulator",
-                "type": "string",
-                "title": "Simulator",
-                "enum": ["Dummy", "PSSE", "PyPower", "PowerWorld", "PowerWorldDynamics", "OpenDSS", "Simulink"],
-                "default": "PowerWorld",
-                "examples": [
-                  "PowerWorld"
-                ],
-                "pattern": "^(.*)$"
-              },
-              "publish_endpoint": {
-                "$id": "#/properties/nodes/items/properties/metadata/properties/publish_endpoint",
-                "type": "string",
-                "title": "Publish_endpoint",
-                "default": "udp://*;239.0.0.1:40000",
-                "examples": [
-                  "udp://*;239.0.0.1:40000"
-                ],
-                "pattern": "^(.*)$"
-              },
-              "cycle_time": {
-                "$id": "#/properties/nodes/items/properties/metadata/properties/cycle_time",
-                "type": "string",
-                "title": "Cycle_time",
-                "default": "500",
-                "examples": [
-                  "1000"
-                ],
-                "pattern": "^(.*)$"
-              },
-              "dnp3": {
-                "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3",
-                "type": "array",
-                "title": "Dnp3",
-                "items": {
-                  "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3/items",
-                  "type": "object",
-                  "title": "DNP3 Metadata",
-                  "required": [
-                    "type",
-                    "name"
-                  ],
-                  "properties": {
-                    "type": {
-                      "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3/items/properties/type",
-                      "type": "string",
-                      "title": "Type",
-                      "default": "",
-                      "examples": [
-                        "bus"
-                      ],
-                      "pattern": "^(.*)$"
-                    },
-                    "name": {
-                      "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3/items/properties/name",
-                      "type": "string",
-                      "title": "Name",
-                      "default": "",
-                      "examples": [
-                        "bus-2052"
-                      ],
-                      "pattern": "^(.*)$"
-                    },"analog-read": {
-                      "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3/items/properties/analog-read",
-                      "type": "array",
-                      "title": "The Analog-read Schema",
-                      "items": {
-                        "$id": "#/properties/metadata/properties/dnp3/items/properties/analog-read/items",
-                        "type": "object",
-                        "title": "The Items Schema",
-                        "required": [
-                          "field",
-                          "register_number",
-                          "register_type"
-                        ],
-                        "properties": {
-                          "field": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3/items/properties/analog-read/items/properties/field",
-                            "type": "string",
-                            "title": "The Field Schema",
-                            "default": "",
-                            "examples": [
-                              "voltage"
-                            ],
-                            "pattern": "^(.*)$"
-                          },
-                          "register_number": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3/items/properties/analog-read/items/properties/register_number",
-                            "type": "integer",
-                            "title": "The Register_number Schema",
-                            "default": 0,
-                            "examples": [
-                              0
-                            ]
-                          },
-                          "register_type": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3/items/properties/analog-read/items/properties/register_type",
-                            "type": "string",
-                            "title": "The Register_type Schema",
-                            "default": "",
-                            "examples": [
-                              "analog-input"
-                            ],
-                            "pattern": "^(.*)$"
-                          }
-                        }
-                      }
-                    },
-                    "binary-read": {
-                      "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3/items/properties/binary-read",
-                      "type": "array",
-                      "title": "The Binary-read Schema",
-                      "items": {
-                        "$id": "#/properties/metadata/properties/dnp3/items/properties/binary-read/items",
-                        "type": "object",
-                        "title": "The Items Schema",
-                        "required": [
-                          "field",
-                          "register_number",
-                          "register_type"
-                        ],
-                        "properties": {
-                          "field": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3/items/properties/binary-read/items/properties/field",
-                            "type": "string",
-                            "title": "The Field Schema",
-                            "default": "",
-                            "examples": [
-                              "active"
-                            ],
-                            "pattern": "^(.*)$"
-                          },
-                          "register_number": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3/items/properties/binary-read/items/properties/register_number",
-                            "type": "integer",
-                            "title": "The Register_number Schema",
-                            "default": 0,
-                            "examples": [
-                              7
-                            ]
-                          },
-                          "register_type": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3/items/properties/binary-read/items/properties/register_type",
-                            "type": "string",
-                            "title": "The Register_type Schema",
-                            "default": "",
-                            "examples": [
-                              "binary-input"
-                            ],
-                            "pattern": "^(.*)$"
-                          }
-                        }
-                      }
-                    },
-                    "binary-read-write": {
-                      "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3/items/properties/binary-read-write",
-                      "type": "array",
-                      "title": "The Binary-read-write Schema",
-                      "items": {
-                        "$id": "#/properties/metadata/properties/dnp3/items/properties/binary-read-write/items",
-                        "type": "object",
-                        "title": "The Items Schema",
-                        "required": [
-                          "field",
-                          "register_number",
-                          "register_type"
-                        ],
-                        "properties": {
-                          "field": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3/items/properties/binary-read-write/items/properties/field",
-                            "type": "string",
-                            "title": "The Field Schema",
-                            "default": "",
-                            "examples": [
-                              "active"
-                            ],
-                            "pattern": "^(.*)$"
-                          },
-                          "register_number": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3/items/properties/binary-read-write/items/properties/register_number",
-                            "type": "integer",
-                            "title": "The Register_number Schema",
-                            "default": 0,
-                            "examples": [
-                              9
-                            ]
-                          },
-                          "register_type": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3/items/properties/binary-read-write/items/properties/register_type",
-                            "type": "string",
-                            "title": "The Register_type Schema",
-                            "default": "",
-                            "examples": [
-                              "binary-output"
-                            ],
-                            "pattern": "^(.*)$"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              "dnp3-serial": {
-                "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial",
-                "type": "array",
-                "title": "Dnp3-serial",
-                "items": {
-                  "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial/items",
-                  "type": "object",
-                  "title": "DNP3-serial Metadata",
-                  "required": [
-                    "type",
-                    "name"
-                  ],
-                  "properties": {
-                    "type": {
-                      "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial/items/properties/type",
-                      "type": "string",
-                      "title": "Type",
-                      "default": "",
-                      "examples": [
-                        "bus"
-                      ],
-                      "pattern": "^(.*)$"
-                    },
-                    "name": {
-                      "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial/items/properties/name",
-                      "type": "string",
-                      "title": "Name",
-                      "default": "",
-                      "examples": [
-                        "bus-2052"
-                      ],
-                      "pattern": "^(.*)$"
-                    },"analog-read": {
-                      "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial/items/properties/analog-read",
-                      "type": "array",
-                      "title": "The Analog-read Schema",
-                      "items": {
-                        "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/analog-read/items",
-                        "type": "object",
-                        "title": "The Items Schema",
-                        "required": [
-                          "field",
-                          "register_number",
-                          "register_type"
-                        ],
-                        "properties": {
-                          "field": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial/items/properties/analog-read/items/properties/field",
-                            "type": "string",
-                            "title": "The Field Schema",
-                            "default": "",
-                            "examples": [
-                              "voltage"
-                            ],
-                            "pattern": "^(.*)$"
-                          },
-                          "register_number": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial/items/properties/analog-read/items/properties/register_number",
-                            "type": "integer",
-                            "title": "The Register_number Schema",
-                            "default": 0,
-                            "examples": [
-                              0
-                            ]
-                          },
-                          "register_type": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial/items/properties/analog-read/items/properties/register_type",
-                            "type": "string",
-                            "title": "The Register_type Schema",
-                            "default": "",
-                            "examples": [
-                              "analog-input"
-                            ],
-                            "pattern": "^(.*)$"
-                          }
-                        }
-                      }
-                    },
-                    "binary-read": {
-                      "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial/items/properties/binary-read",
-                      "type": "array",
-                      "title": "The Binary-read Schema",
-                      "items": {
-                        "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/binary-read/items",
-                        "type": "object",
-                        "title": "The Items Schema",
-                        "required": [
-                          "field",
-                          "register_number",
-                          "register_type"
-                        ],
-                        "properties": {
-                          "field": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial/items/properties/binary-read/items/properties/field",
-                            "type": "string",
-                            "title": "The Field Schema",
-                            "default": "",
-                            "examples": [
-                              "active"
-                            ],
-                            "pattern": "^(.*)$"
-                          },
-                          "register_number": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial/items/properties/binary-read/items/properties/register_number",
-                            "type": "integer",
-                            "title": "The Register_number Schema",
-                            "default": 0,
-                            "examples": [
-                              7
-                            ]
-                          },
-                          "register_type": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial/items/properties/binary-read/items/properties/register_type",
-                            "type": "string",
-                            "title": "The Register_type Schema",
-                            "default": "",
-                            "examples": [
-                              "binary-input"
-                            ],
-                            "pattern": "^(.*)$"
-                          }
-                        }
-                      }
-                    },
-                    "binary-read-write": {
-                      "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial/items/properties/binary-read-write",
-                      "type": "array",
-                      "title": "The Binary-read-write Schema",
-                      "items": {
-                        "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/binary-read-write/items",
-                        "type": "object",
-                        "title": "The Items Schema",
-                        "required": [
-                          "field",
-                          "register_number",
-                          "register_type"
-                        ],
-                        "properties": {
-                          "field": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial/items/properties/binary-read-write/items/properties/field",
-                            "type": "string",
-                            "title": "The Field Schema",
-                            "default": "",
-                            "examples": [
-                              "active"
-                            ],
-                            "pattern": "^(.*)$"
-                          },
-                          "register_number": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial/items/properties/binary-read-write/items/properties/register_number",
-                            "type": "integer",
-                            "title": "The Register_number Schema",
-                            "default": 0,
-                            "examples": [
-                              9
-                            ]
-                          },
-                          "register_type": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/dnp3-serial/items/properties/binary-read-write/items/properties/register_type",
-                            "type": "string",
-                            "title": "The Register_type Schema",
-                            "default": "",
-                            "examples": [
-                              "binary-output"
-                            ],
-                            "pattern": "^(.*)$"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              "modbus": {
-                "$id": "#/properties/nodes/items/properties/metadata/properties/modbus",
-                "type": "array",
-                "title": "Modbus",
-                "items": {
-                  "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items",
-                  "type": "object",
-                  "title": "Modbus Metadata",
-                  "required": [
-                    "type",
-                    "name"
-                  ],
-                  "properties": {
-                    "type": {
-                      "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items/properties/type",
-                      "type": "string",
-                      "title": "Type",
-                      "default": "",
-                      "examples": [
-                        "bus"
-                      ],
-                      "pattern": "^(.*)$"
-                    },
-                    "name": {
-                      "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items/properties/name",
-                      "type": "string",
-                      "title": "Name",
-                      "default": "",
-                      "examples": [
-                        "bus-2052"
-                      ],
-                      "pattern": "^(.*)$"
-                    },
-                    "analog-read": {
-                      "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items/properties/analog-read",
-                      "type": "array",
-                      "title": "The Analog-read Schema",
-                      "items": {
-                        "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items/properties/analog-read/items",
-                        "type": "object",
-                        "title": "The Items Schema",
-                        "required": [
-                          "field",
-                          "register_number",
-                          "register_type"
-                        ],
-                        "properties": {
-                          "field": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items/properties/analog-read/items/properties/field",
-                            "type": "string",
-                            "title": "The Field Schema",
-                            "default": "",
-                            "examples": [
-                              "voltage"
-                            ],
-                            "pattern": "^(.*)$"
-                          },
-                          "register_number": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items/properties/analog-read/items/properties/register_number",
-                            "type": "integer",
-                            "title": "The Register_number Schema",
-                            "default": 0,
-                            "examples": [
-                              30000
-                            ]
-                          },
-                          "register_type": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items/properties/analog-read/items/properties/register_type",
-                            "type": "string",
-                            "title": "The Register_type Schema",
-                            "default": "",
-                            "examples": [
-                              "input-register"
-                            ],
-                            "pattern": "^(.*)$"
-                          }
-                        }
-                      }
-                    },
-                    "binary-read": {
-                      "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items/properties/binary-read",
-                      "type": "array",
-                      "title": "The Binary-read Schema",
-                      "items": {
-                        "$id": "#/properties/metadata/properties/modbus/items/properties/binary-read/items",
-                        "type": "object",
-                        "title": "The Items Schema",
-                        "required": [
-                          "field",
-                          "register_number",
-                          "register_type"
-                        ],
-                        "properties": {
-                          "field": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items/properties/binary-read/items/properties/field",
-                            "type": "string",
-                            "title": "The Field Schema",
-                            "default": "",
-                            "examples": [
-                              "active"
-                            ],
-                            "pattern": "^(.*)$"
-                          },
-                          "register_number": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items/properties/binary-read/items/properties/register_number",
-                            "type": "integer",
-                            "title": "The Register_number Schema",
-                            "default": 0,
-                            "examples": [
-                              10000
-                            ]
-                          },
-                          "register_type": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items/properties/binary-read/items/properties/register_type",
-                            "type": "string",
-                            "title": "The Register_type Schema",
-                            "default": "",
-                            "examples": [
-                              "discrete-input"
-                            ],
-                            "pattern": "^(.*)$"
-                          }
-                        }
-                      }
-                    },
-                    "binary-read-write": {
-                      "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items/properties/binary-read-write",
-                      "type": "array",
-                      "title": "The Binary-read-write Schema",
-                      "items": {
-                        "$id": "#/properties/metadata/properties/modbus/items/properties/binary-read-write/items",
-                        "type": "object",
-                        "title": "The Items Schema",
-                        "required": [
-                          "field",
-                          "register_number",
-                          "register_type"
-                        ],
-                        "properties": {
-                          "field": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items/properties/binary-read-write/items/properties/field",
-                            "type": "string",
-                            "title": "The Field Schema",
-                            "default": "",
-                            "examples": [
-                              "active"
-                            ],
-                            "pattern": "^(.*)$"
-                          },
-                          "register_number": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items/properties/binary-read-write/items/properties/register_number",
-                            "type": "integer",
-                            "title": "The Register_number Schema",
-                            "default": 0,
-                            "examples": [
-                              0
-                            ]
-                          },
-                          "register_type": {
-                            "$id": "#/properties/nodes/items/properties/metadata/properties/modbus/items/properties/binary-read-write/items/properties/register_type",
-                            "type": "string",
-                            "title": "The Register_type Schema",
-                            "default": "",
-                            "examples": [
-                              "coil"
-                            ],
-                            "pattern": "^(.*)$"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              },
-              "logic": {
-                "$id": "#/properties/nodes/items/properties/metadata/properties/logic",
-                "type": "string",
-                "title": "Logic",
-                "default": "",
-                "examples": [
-                  "Tank1.fill_control = Tank1.tank_volume < Tank1.level_setpoint || (Tank1.tank_volume < 1.5*Tank1.level_setpoint && Tank1.fill_control == 1); Pump1.control = ! FillingStation1.request == 0 && Tank1.tank_volume>0; Pump1.active = 1==1"
-                ],
-                "pattern": "^(.*)$"
-              },
-              "connected_rtus": {
-                "$id": "#/properties/nodes/items/properties/metadata/properties/connected_rtus",
-                "type": "array",
-                "title": "Connected RTUs",
-                "items": {
-                  "$id": "#/properties/nodes/items/properties/metadata/properties/connected_rtus/items",
-                  "type": "string",
-                  "title": "RTU",
-                  "default": "",
-                  "examples": [
-                    "rtu-1",
-                    "fuel-rtu-2"
-                  ],
-                  "pattern": "^(.*)$"
-                }
-              },
-              "connect_to_scada": {
-                "type": "boolean",
-                "title": "connect_to_scada",
-                "default": false,
-                "examples": [
-                  true,
-                  false
-                ]
-              },
-              "manual_register_config": {
-                "$id": "#/properties/nodes/items/properties/metadata/properties/manual_register_config",
-                "type": "string",
-                "title": "Manual register configuration",
-                "default": "false",
-                "examples": [
-                  "false"
-                ]
-              }
-            }
-          }
-        }
-}
-
-
-    var graph = ui.editor.graph;
-    // var value = graph.getModel().getValue(cell);
-    // console.log('this is cell and  getValue(cell):'), console.log(cell), console.log(value);
-    const type = cell.isVertex() ? 'nodes' : 'edges';
-    var nodes = ui.topoJSON[type];
+    const graph = ui.editor.graph;
+    const type = cell.isVertex() ? 'nodes' : 'edges'; // get type to load specific schema
+    const nodes = ui.topoJSON[type]; // get nodes array to determine add or update
 
     var id = (EditDataDialog.getDisplayIdForCell != null) ?
         EditDataDialog.getDisplayIdForCell(ui, cell) : null;
 
-    // var cellId = cell.id;
+    // get node if exists in global ui.topoJSON
     var result = nodes.filter(obj => {
       return obj.id === id;
     });
     console.log(result);
 
     var node = null;
+    // set node if exists in global ui.topoJSON
     if(result.length > 0){
         node = result[0];
     }
@@ -2795,187 +1562,261 @@ var EditDataDialog = function(ui, cell)
     node.id = id;
     console.log(node);
 
-    const options = {
-        schema: schema,
-        startval: node,
-        // schemaRefs: {"job": job},
-        ajax: true,
-        mode: 'tree',
-        modes: ['code', 'text', 'tree'],
-        show_errors: 'always',
-        // jsoneditor: {
-        //     css: 'utils/topographer/downloads/jsoneditor.min.css',
-        //     js: 'utils/topographer/downloads/jsoneditor.js'
-        // },
-        theme: 'bootstrap3',
-        iconlib: 'spectre',
-        // template: {
-        // },
-        ext_lib: {
-            lib_dompurify: {
-                js: 'utils/topographer/downloads/purify.min.js'
+    // Load schema
+    var loadFile = function (file, mimeType, callback) {
+        if (window.fetch && window.File && window.FileReader && window.FileList && window.Blob) {
+            fetch(file, {mode: 'no-cors'})
+            .then(function (response) {
+                if (!response.ok) {
+                    jeModalContent.innerText = "Sorry, there was an error loading the file: " + file;
+                    toggleModal()
+                }
+                return response.blob()
+            }).then(function (blob) {
+                var reader = new FileReader()
+                reader.onload = function (e) {
+                    callback(e.target.result)
+                }
+                reader.readAsText(blob)
+            })
+            .catch(function () {
+                callback('')
+            });
+        } else {
+        // IOS Safari and other crappy browsers :D
+        var xobj = new XMLHttpRequest()
+        xobj.overrideMimeType(mimeType)
+        xobj.open('GET', file, true)
+        xobj.onreadystatechange = function () {
+            if (xobj.readyState == 4) {
+                if (xobj.status == '200') callback(xobj.responseText)
+                else callback('')
             }
         }
-    }
-
-    var editorContainer = document.createElement('div');
-    editorContainer.setAttribute('id', 'jsoneditor');
-    editorContainer.style.height = '100%';
-    editorContainer.style.position = 'relative';
-    editorContainer.style['max-width'] ="600px";
-
-    // var css = document.createElement('style');
-    // css.setAttribute('scoped', 'scoped');
-    // css.innerHTML = '@import "grapheditor/utils/topographer/downloads/spectre.min.css"';
-    // editorContainer.appendChild(css);
-
-    // css = document.createElement('style');
-    // css.setAttribute('scoped', 'scoped');
-    // css.innerHTML = '@import "grapheditor/utils/topographer/downloads/spectre-exp.min.css"';
-    // editorContainer.appendChild(css);
-
-    // create the editor
-    // const container = document.getElementById('jsoneditor')
-    const editor = new JSONEditor(editorContainer, options);
-
-    var div = document.createElement('div');
-    div.style['overflow-y'] = 'auto';
-    
-    // var parameters = {memory:"2048", vcpu:"1", network:{name:'eth1', ip:'127.0.0.1'}, kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
-
-    function traverse(json, xmlNode) {
-        console.log(xmlNode);
-        if( json !== null && typeof json == "object" ) {
-            Object.entries(json).forEach(([key, value]) => {
-                // key is either an array index or object key
-                console.log(key);
-                console.log(value);
-                // var doc = mxUtils.createXmlDocument();
-                // var obj = doc.createElement('object');
-                if(typeof value === 'object') {
-                    xmlNode.setAttribute(key, '');
-                    Object.keys(value).forEach(([k, v]) => {
-                        var doc = mxUtils.createXmlDocument();
-                        var obj = doc.createElement('object');
-                        if(typeof v !== 'object') {
-                            xmlNode.getElementsByTagName(key).appendChild(obj.setAttribute(k,v));
-                        }
-                        else{
-                            xmlNode.getElementsByTagName(key).appendChild(obj.setAttribute(k,''));
-                            traverse(v, xmlNode.getElementsByTagName(key).getElementsByTagName(k));
-                        }
-                    });
-                }
-                else {
-                    xmlNode.setAttribute(key, value);
-                    traverse(value, xmlNode);
-                }
-            });
+        xobj.send(null)
         }
-        else {
-            // jsonObj is a number or string
-            console.log('string'), console.log(json);
-        }
-        return xmlNode;
-    }
-    
-    // Converts the value to an XML node
-    // if (!mxUtils.isNode(value))
-    // {
-    //     var doc = mxUtils.createXmlDocument();
-    //     var obj = doc.createElement('object');
-    //     // obj.setAttribute('label', value || '');
-    //     value = obj;
-    // }
+    };
 
-    div.appendChild(editorContainer);
-
-    var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
-    {
-        ui.hideDialog.apply(ui, arguments);
-        editor.destroy();
-    });
-    
-    cancelBtn.className = 'geBtn';
-    
-    var applyBtn = mxUtils.button(mxResources.get('apply'), function()
-    {
-        try
-        {
-            ui.hideDialog.apply(ui, arguments);
-            
-            // Clones and updates the value
-            // value = value.cloneNode(true);
-            // console.log('this is value in apply'), console.log(value);
-            // value = traverse(obj, value);
-            
-            // for (var i = 0; i < names.length; i++)
-            // {
-            //     if (texts[i] == null)
-            //     {
-            //         value.removeAttribute(names[i]);
-            //     }
-            //     else
-            //     {
-            //         value.setAttribute(names[i], texts[i].value);
-            //         removeLabel = removeLabel || (names[i] == 'placeholder' &&
-            //             value.getAttribute('placeholders') == '1');
-
-            //         // TEST
-            //         // value.attributes.network = {};
-            //         // value.attributes.network.value = {a:1,b:2};
+    // Set JSONEditor and config options based on schema and cell type
+    var loadConfig = function (response) {
+        this.schema = JSON.parse(response); // cell schema
+        // JSONEditor config options
+        this.config = {
+            schema: this.schema,
+            startval: node,
+            ajax: true,
+            mode: 'tree',
+            modes: ['code', 'text', 'tree'],
+            show_errors: 'always',
+            // jsoneditor: {
+            //     css: 'utils/topographer/downloads/jsoneditor.min.css',
+            //     js: 'utils/topographer/downloads/jsoneditor.js'
+            // },
+            theme: 'bootstrap3',
+            iconlib: 'spectre',
+            // template: {
+            // },
+            // ext_lib: {
+            //     lib_dompurify: {
+            //         js: 'utils/topographer/downloads/purify.min.js'
             //     }
             // }
-            
-            // Updates the value of the cell (undoable)
-            // console.log('value after traverse'), console.log(value);
-            // graph.getModel().setValue(cell, value);
+        };
+        // editorConfig is statically set in this file, so 'response' should only be the schema
+        // var data = JSON.parse(response),
+        //     schema = JSON.stringify(data, null, 2),
+        //     startval = Object.keys(editorConfig.startval).length !== 0 ? JSON.stringify(editorConfig.startval, null, 2) : '',
+        //     cfg = editorConfig.config,
+        //     code = editorConfig.code,
+        //     style = editorConfig.style,
+        //     desc = editorConfig.desc
 
-            // Updates the global ui.topoJSON
-            var updatedNode = editor.getEditor('root').value; // get current node's JSON
-            // console.log('updated node'), console.log(updatedNode);
-            // value.attributes.topo = {};
-            // value.attributes.topo.value = updatedNode;
-            cell.topo = Object.assign({}, updatedNode);
-            // graph.getModel().setValue(cell, value);
-            // console.log('value after updated Node'), console.log(value), console.log(cell);
-            
-            console.log('ui.topoJSON before updates'), console.log(JSON.stringify(ui.topoJSON));
-            ui.updateTopoJSON(cell);
-            console.log('ui.topoJSON afte updates'), console.log(ui.topoJSON);
+        // // Clear include external library checkboxes
+        // Array.from(jeExtlib.querySelectorAll('input')).forEach(function (el) { // from() unsupported in IE
+        //     el.checked = false
+        // });
 
-        }
-        catch (e)
+        // jeExampleDesc.innerHTML = ''
+        // clearOutput()
+
+        // // Add description of example to help page
+        // if (desc !== '' && desc != 'Add optional description here. (HTML format)') {
+        //     jeModalContent.innerHTML = jeExampleDesc.innerHTML = '<h3>Info about "' + editorConfig.title + '" Example</h3>' + desc
+        //     toggleModal()
+        // }
+
+        // // Update ACE Editor instances
+        // aceSchemaEditor.setValue(schema)
+        // aceSchemaEditor.session.getSelection().clearSelection()
+        // aceSchemaEditor.resize()
+
+        // aceStartvalEditor.setValue(startval)
+        // aceStartvalEditor.session.getSelection().clearSelection()
+        // aceStartvalEditor.resize()
+
+        // aceCodeEditor.setValue(code)
+        // aceCodeEditor.session.getSelection().clearSelection()
+        // aceCodeEditor.resize()
+        // lockText()
+
+        // aceStyleEditor.setValue(style)
+        // aceStyleEditor.session.getSelection().clearSelection()
+        // aceStyleEditor.resize()
+
+        // aceOutputEditor.resize()
+        // aceValidateEditor.resize()
+
+        // // Set config options
+        // for (var id in cfg) {
+        //     if (cfg.hasOwnProperty(id)) {
+        //         var el = jeCfg.querySelector('#' + id)
+        //         if (el) {
+        //             if (el.nodeName == 'INPUT' && el.type == 'checkbox') el.checked = cfg[id] || 0
+        //             else if (el.nodeName == 'SELECT') el.value = cfg[id]
+        //         }
+        //     }
+        // }
+
+        // // Trigger generation of form
+        // eventFire(jeExec, 'click');
+        createEditor();
+    };
+
+    var createEditor = function() {
+        // var graph = ui.editor.graph;
+        // // var value = graph.getModel().getValue(cell);
+        // // console.log('this is cell and  getValue(cell):'), console.log(cell), console.log(value);
+        // const type = cell.isVertex() ? 'nodes' : 'edges';
+
+        var editorContainer = document.createElement('div');
+        editorContainer.setAttribute('id', 'jsoneditor');
+        editorContainer.style.height = '100%';
+        editorContainer.style.position = 'relative';
+        editorContainer.style['max-width'] ="600px";
+
+        // var css = document.createElement('style');
+        // css.setAttribute('scoped', 'scoped');
+        // css.innerHTML = '@import "grapheditor/utils/topographer/downloads/spectre.min.css"';
+        // editorContainer.appendChild(css);
+
+        // css = document.createElement('style');
+        // css.setAttribute('scoped', 'scoped');
+        // css.innerHTML = '@import "grapheditor/utils/topographer/downloads/spectre-exp.min.css"';
+        // editorContainer.appendChild(css);
+
+        // create the editor
+        // const container = document.getElementById('jsoneditor')
+        const editor = new JSONEditor(editorContainer, this.config);
+
+        var div = document.createElement('div');
+        div.style['overflow-y'] = 'auto';
+        
+        // var parameters = {memory:"2048", vcpu:"1", network:{name:'eth1', ip:'127.0.0.1'}, kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
+        
+        // Converts the value to an XML node
+        // if (!mxUtils.isNode(value))
+        // {
+        //     var doc = mxUtils.createXmlDocument();
+        //     var obj = doc.createElement('object');
+        //     // obj.setAttribute('label', value || '');
+        //     value = obj;
+        // }
+
+        div.appendChild(editorContainer);
+
+        var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
         {
-            mxUtils.alert(e);
+            ui.hideDialog.apply(ui, arguments);
+            editor.destroy();
+        });
+        
+        cancelBtn.className = 'geBtn';
+        
+        var applyBtn = mxUtils.button(mxResources.get('apply'), function()
+        {
+            try
+            {
+                ui.hideDialog.apply(ui, arguments);
+                
+                // Clones and updates the value
+                // value = value.cloneNode(true);
+                // console.log('this is value in apply'), console.log(value);
+                // value = traverse(obj, value);
+                
+                // for (var i = 0; i < names.length; i++)
+                // {
+                //     if (texts[i] == null)
+                //     {
+                //         value.removeAttribute(names[i]);
+                //     }
+                //     else
+                //     {
+                //         value.setAttribute(names[i], texts[i].value);
+                //         removeLabel = removeLabel || (names[i] == 'placeholder' &&
+                //             value.getAttribute('placeholders') == '1');
+
+                //         // TEST
+                //         // value.attributes.network = {};
+                //         // value.attributes.network.value = {a:1,b:2};
+                //     }
+                // }
+                
+                // Updates the value of the cell (undoable)
+                // console.log('value after traverse'), console.log(value);
+                // graph.getModel().setValue(cell, value);
+
+                // Updates the global ui.topoJSON
+                var updatedNode = editor.getEditor('root').value; // get current node's JSON
+                // console.log('updated node'), console.log(updatedNode);
+                // value.attributes.topo = {};
+                // value.attributes.topo.value = updatedNode;
+                cell.topo = Object.assign({}, updatedNode);
+                // graph.getModel().setValue(cell, value);
+                // console.log('value after updated Node'), console.log(value), console.log(cell);
+                
+                console.log('ui.topoJSON before updates'), console.log(JSON.stringify(ui.topoJSON));
+                ui.updateTopoJSON(cell);
+                console.log('ui.topoJSON afte updates'), console.log(ui.topoJSON);
+
+            }
+            catch (e)
+            {
+                mxUtils.alert(e);
+            }
+
+            editor.destroy();
+
+        });
+
+        applyBtn.className = 'geBtn gePrimaryBtn';
+        
+        var buttons = document.createElement('div');
+        buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:15px;height:40px;border-top:1px solid #ccc;padding-top:20px;'
+        
+        if (ui.editor.cancelFirst)
+        {
+            buttons.appendChild(cancelBtn);
+            buttons.appendChild(applyBtn);
+        }
+        else
+        {
+            buttons.appendChild(applyBtn);
+            buttons.appendChild(cancelBtn);
         }
 
-        editor.destroy();
+        div.appendChild(buttons);
+        this.container = div;
 
-    });
+        // show dialog only after editor is created
+        ui.showDialog(this.container, 480, 420, true, false, null, false); 
 
-    applyBtn.className = 'geBtn gePrimaryBtn';
-    
-    var buttons = document.createElement('div');
-    buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:15px;height:40px;border-top:1px solid #ccc;padding-top:20px;'
-    
-    if (ui.editor.cancelFirst)
-    {
-        buttons.appendChild(cancelBtn);
-        buttons.appendChild(applyBtn);
     }
-    else
-    {
-        buttons.appendChild(applyBtn);
-        buttons.appendChild(cancelBtn);
-    }
-
-    div.appendChild(buttons);
-    this.container = div;
 
     this.init = function()
     {
         console.log('init');
+        // load schema by type (node/edge)
+        loadFile(window.UTILS_PATH + '/topographer/json/'+type+'_schema.json', 'application/json', loadConfig);
     };
 
 };

@@ -36,11 +36,11 @@ Actions.prototype.init = function()
         var frame = document.createElement('iframe');
         frame.setAttribute('width', '100%');
         frame.setAttribute('height', '100%');
-        frame.setAttribute('src', window.UTILS + "/topographer/index.html");
+        frame.setAttribute('src', window.UTILS_PATH + "/topographer/index.html");
         frame.style.backgroundColor = 'white';
 
         // var ajax = new XMLHttpRequest();
-        // ajax.open("GET", window.UTILS + "/topographer/index.html", false);
+        // ajax.open("GET", window.UTILS_PATH + "/topographer/index.html", false);
         // ajax.send();
         // console.log(ajax);
         // tmp.innerHTML += ajax.responseText;

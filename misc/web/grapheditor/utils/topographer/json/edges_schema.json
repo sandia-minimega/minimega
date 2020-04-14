@@ -1,0 +1,274 @@
+{
+  "$id": "#/properties/vlans",
+  "type": "object",
+  "title": "VLAN",
+  "required": [
+    "id",
+    "name"
+  ],
+  "properties": {
+    "name": {
+      "$id": "#/properties/vlans/items/properties/name",
+      "type": "string",
+      "title": "Name",
+      "minLength": 1,
+      "default": "",
+      "examples": [
+        "SCADAPWR"
+      ],
+      "pattern": "^(.*)$"
+    },
+    "id": {
+      "$id": "#/properties/vlans/items/properties/id",
+      "type": "string",
+      "title": "Id",
+      "minLength": 1,
+      "readOnly":true,
+      "default": "",
+      "examples": [
+        "101"
+      ],
+      "pattern": "^(.*)$"
+    }
+  },
+  "definitions": {
+    "iface": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "title": "Name",
+          "default": "",
+          "examples": [
+            "eth0"
+          ],
+          "pattern": "^[\\w-]+$"
+        },
+        "vlan": {
+          "type": "string",
+          "title": "VLAN",
+          "default": "",
+          "examples": [
+            "SCADAPWR"
+          ],
+          "pattern": "^[\\w-]+$"
+        },
+        "autostart": {
+          "type": "boolean",
+          "title": "autostart",
+          "default": true,
+          "examples": [
+            true,
+            false
+          ]
+        },
+        "mac": {
+          "type": "string",
+          "title": "mac",
+          "default": "",
+          "examples": [
+            "00:11:22:33:44:55:66"
+          ],
+          "pattern": "^([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]){2}$"
+        },
+        "mtu": {
+          "type": "integer",
+          "title": "mtu",
+          "default": 1500,
+          "examples": [
+            1500
+          ]
+        }
+      },
+      "required": ["name", "vlan"]
+    },
+    "iface_address": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string",
+          "title": "address",
+          "default": "",
+          "examples": [
+            "192.168.1.100"
+          ],
+          "pattern": "^(?!0)(?!.*\\.$)((1?\\d?\\d|25[0-5]|2[0-4]\\d)(\\.|$)){4}$"
+        },
+        "mask": {
+          "type": "integer",
+          "title": "mask",
+          "default": 24,
+          "minimum": 0,
+          "maximum": 32,
+          "examples": [
+            24
+          ]
+        },
+        "gateway": {
+          "type": "string",
+          "title": "gateway",
+          "default": "",
+          "examples": [
+            "192.168.1.1"
+          ],
+          "pattern": "^(?!0)(?!.*\\.$)((1?\\d?\\d|25[0-5]|2[0-4]\\d)(\\.|$)){4}$"
+        }
+      },
+      "required": ["address", "mask"]
+    },
+    "iface_rulesets": {
+      "type": "object",
+      "properties": {
+        "ruleset_out": {
+          "type": "string",
+          "title": "ruleset_out",
+          "default": "",
+          "examples": [
+            "OutToICS"
+          ],
+          "pattern": "^[\\w-]+$"
+        },
+        "ruleset_in": {
+          "type": "string",
+          "title": "ruleset_in",
+          "default": "",
+          "examples": [
+            "InFromSCADA"
+          ],
+          "pattern": "^[\\w-]+$"
+        }
+      }
+    },
+    "static_iface": {
+      "allOf": [{
+          "$ref": "#/definitions/iface"
+        },
+        {
+          "$ref": "#/definitions/iface_address"
+        },
+        {
+          "$ref": "#/definitions/iface_rulesets"
+        },
+        {
+          "properties": {
+            "type": {
+              "type": "string",
+              "title": "type",
+              "enum": ["ethernet"],
+              "default": "ethernet",
+              "examples": [
+                "ethernet"
+              ]
+            },
+            "proto": {
+              "type": "string",
+              "title": "proto",
+              "enum": ["static", "ospf"],
+              "default": "static",
+              "examples": [
+                "static",
+                "ospf"
+              ]
+            }
+          },
+          "required": ["type", "proto"]
+        }
+      ]
+    },
+    "dhcp_iface": {
+      "allOf": [{
+          "$ref": "#/definitions/iface"
+        },
+        {
+          "$ref": "#/definitions/iface_rulesets"
+        },
+        {
+          "properties": {
+            "type": {
+              "type": "string",
+              "title": "type",
+              "enum": ["ethernet"],
+              "default": "ethernet",
+              "examples": [
+                "ethernet"
+              ]
+            },
+            "proto": {
+              "type": "string",
+              "title": "proto",
+              "enum": ["dhcp"],
+              "default": "dhcp",
+              "examples": [
+                "dhcp"
+              ]
+            }
+          },
+          "required": ["type", "proto"]
+        }
+      ]
+    },
+    "serial_iface": {
+      "allOf": [{
+          "$ref": "#/definitions/iface"
+        },
+        {
+          "$ref": "#/definitions/iface_address"
+        },
+        {
+          "$ref": "#/definitions/iface_rulesets"
+        },
+        {
+          "properties": {
+            "type": {
+              "type": "string",
+              "title": "type",
+              "enum": ["serial"],
+              "default": "serial",
+              "examples": [
+                "serial"
+              ]
+            },
+            "proto": {
+              "type": "string",
+              "title": "proto",
+              "enum": ["static"],
+              "default": "static",
+              "examples": [
+                "static"
+              ]
+            },
+            "udp_port": {
+              "type": "integer",
+              "title": "udp_port",
+              "default": 8989,
+              "minimum": 0,
+              "maximum": 65535,
+              "examples": [
+                8989
+              ]
+            },
+            "baud_rate": {
+              "type": "integer",
+              "title": "baud_rate",
+              "enum": [110, 300, 600, 1200, 2400, 4800, 9600, 14400, 19200, 38400, 57600, 115200, 128000, 256000],
+              "default": 9600,
+              "examples": [
+                9600
+              ]
+            },
+            "device": {
+              "type": "string",
+              "title": "device",
+              "default": "/dev/ttyS0",
+              "examples": [
+                "/dev/ttyS0"
+              ],
+              "pattern": "^[\\w\\/]+\\w+$"
+            }
+          },
+          "required": ["type", "proto", "udp_port", "baud_rate", "device"]
+        }
+      ]
+    }
+  }
+}

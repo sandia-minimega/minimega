@@ -260,6 +260,19 @@ th {
     border: 1px solid #ddd !important;
   }
 }
+/* JSONEditor theme styles */
+div[data-theme="bootstrap3"] .required::after {
+  content: " *";
+  color: red;
+  font: inherit;
+}
+div[data-theme="bootstrap3"] .btn-group > .btn {
+  margin:0 3px !important;
+}
+div[data-theme="bootstrap3"] .radio label, div[data-theme="bootstrap3"] .checkbox label {
+  font-size:14px !important;
+}
+/* end JSONEditor theme style */
 @font-face {
   font-family: 'Glyphicons Halflings';
 

@@ -25,6 +25,7 @@
             "$id": "#/properties/nodes/items/properties/id",
             "type": "string",
             "title": "Id",
+            "readOnly": true,
             "minLength": 1,
             "default": "",
             "examples": [
