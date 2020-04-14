@@ -23,21 +23,20 @@ func main() {
 
 	var config types.Config
 
-	if filepath.Ext(os.Args[1]) == ".json" {
-		err = json.Unmarshal(file, &config)
-		if err != nil {
+	switch filepath.Ext(os.Args[1]) {
+	case ".json":
+		if err := json.Unmarshal(file, &config); err != nil {
 			fmt.Println(err)
-			return
+			os.Exit(1)
 		}
-	} else if filepath.Ext(os.Args[1]) == ".yml" || filepath.Ext(os.Args[1]) == ".yaml" {
-		err = yaml.Unmarshal(file, &config)
-		if err != nil {
+	case ".yaml", ".yml":
+		if err := yaml.Unmarshal(file, &config); err != nil {
 			fmt.Println(err)
-			return
+			os.Exit(1)
 		}
-	} else {
+	default:
 		fmt.Println("You need to pass a file with an appropriate JSON or YAML extension.")
-		return
+		os.Exit(1)
 	}
 
 	if err := types.ValidateConfigSpec(config); err != nil {
