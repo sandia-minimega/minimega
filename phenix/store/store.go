@@ -12,11 +12,3 @@ type Store interface {
 	Patch(string, string, map[string]interface{}) error
 	Delete(string, string) error
 }
-
-type TopologyStore interface {
-	GetTopology(string, interface{}) error
-	CreateTopology(string, interface{}) error
-	UpdateTopology(string, interface{}) error
-	PatchTopology(string, interface{}) error
-	DeleteTopology(string)
-}

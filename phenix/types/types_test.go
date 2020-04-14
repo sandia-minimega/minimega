@@ -8,7 +8,7 @@ import (
 )
 
 var experiment = `
-version: v0
+apiVersion: v1
 kind: Experiment
 metadata:
   name: foobar
@@ -19,7 +19,7 @@ spec:
 `
 
 var topology = `
-version: v0
+apiVersion: v1
 kind: Topology
 metadata:
   name: foobar
@@ -59,7 +59,7 @@ func TestConfig(t *testing.T) {
 
 	t.Logf("%+v", c)
 
-	spec, err := version.GetVersionForKind(c.Kind, c.Version)
+	spec, err := version.GetVersionForKind(c.Kind, c.APIVersion())
 	if err != nil {
 		t.Log(err)
 		t.FailNow()

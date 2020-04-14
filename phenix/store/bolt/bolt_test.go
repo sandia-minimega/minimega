@@ -12,7 +12,7 @@ import (
 )
 
 var topology = `
-version: v0
+apiVersion: v1
 kind: Topology
 metadata:
   name: foobar
@@ -94,7 +94,7 @@ func TestConfigCreate(t *testing.T) {
 		t.FailNow()
 	}
 
-	if err := b.Create(c); err != nil {
+	if err := b.Create(&c); err != nil {
 		t.Log(err)
 		t.FailNow()
 	}
@@ -123,7 +123,7 @@ func TestConfigCreateAndGet(t *testing.T) {
 		t.FailNow()
 	}
 
-	if err := b.Create(c); err != nil {
+	if err := b.Create(&c); err != nil {
 		t.Log(err)
 		t.FailNow()
 	}
