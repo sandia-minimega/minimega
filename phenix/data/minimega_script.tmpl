@@ -1,0 +1,40 @@
+namespace {{ .ExperimentName }}
+ns queueing true
+
+# How do we track `runlocal`
+{{ if runlocal }}
+ns del-host all
+ns add-host localhost
+{{ end }}
+
+{{ range .Nodes }}
+
+# bool
+{{ if .General.Snapshot }}
+# need to complete SNAPSHOT_NAME & INJECT
+disk snapshot {{ .Drive.Image }} SNAPSHOT_NAME=HOSTNAME_{{ .ExperimentName }}_{{ .General.Hostname }} }}_snapshot 
+disk inject SNAPSHOT_NAME:{{ .Drive.InjectPartition }} files INJECT
+{{ end }}
+clear vm config
+{{ if .Schedule.Hostname }}
+vm config schedule {{ .Schedule.ClusterNode }}
+{{ end }}
+vm config vcpus {{ .Hardware.VCPU }}
+vm config cpu {{ .Hardware.CPU }}
+vm config memory {{ .Hardware.Memory }}
+vm config snapshot {{ .General.Snapshot }}
+{{ if .General.Snapshot }}
+# need to complete SNAPSHOT_NAME & VM_DISK_REST
+vm config disk SNAPSHOT_NAME VM_DISK_REST
+{{ else }}
+# not sure what the split() in vm_disk is for
+vm config disk {{ .Drive.Image }} VM_DISK_REST
+{{ end }}
+# does linux need ""
+{{ if .Hardware.OSType eq "linux" }}
+vm config qemu-append -vga qxl
+{{ end }}
+vm config net {{ .VLAN.Name }}
+# need VM_TYPE (i.e., kvm)
+vm launch VM_TYPE {{ .General.Hostname }}
+{{ end }}
