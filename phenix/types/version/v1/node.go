@@ -1,6 +1,36 @@
 package v1
 
-import "strings"
+import (
+	"strings"
+)
+
+type VMType string
+
+const (
+	VMType_NotSet    VMType = ""
+	VMType_KVM       VMType = "kvm"
+	VMType_Container VMType = "container"
+)
+
+type CPU string
+
+const (
+	CPU_NotSet    CPU = ""
+	CPU_Broadwell CPU = "Broadwell"
+	CPU_Haswell   CPU = "Haswell"
+	CPU_Core2Duo  CPU = "core2duo"
+	CPU_Pentium3  CPU = "pentium3"
+)
+
+type OSType string
+
+const (
+	OSType_NotSet  OSType = ""
+	OSType_Windows OSType = "windows"
+	OSType_Linux   OSType = "linux"
+	OSType_RHEL    OSType = "rhel"
+	OSType_CentOS  OSType = "centos"
+)
 
 type Node struct {
 	Type       string      `json:"type" yaml:"type"`
@@ -14,16 +44,16 @@ type Node struct {
 type General struct {
 	Hostname    string `json:"hostname" yaml:"hostname"`
 	Description string `json:"description" yaml:"description"`
-	VMType      string `json:"vm_type" yaml:"vm_type"`
+	VMType      VMType `json:"vm_type" yaml:"vm_type"`
 	Snapshot    bool   `json:"snapshot" yaml:"snapshot"`
 	DoNotBoot   bool   `json:"do_not_boot" yaml:"do_not_boot"`
 }
 
 type Hardware struct {
-	CPU    string  `json:"cpu" yaml:"cpu"`
+	CPU    CPU     `json:"cpu" yaml:"cpu"`
 	VCPU   int     `json:"vcpus" yaml:"vcpus"`
 	Memory int     `json:"memory" yaml:"memory"`
-	OSType string  `json:"os_type" yaml:"os_type"`
+	OSType OSType  `json:"os_type" yaml:"os_type"`
 	Drives []Drive `json:"drives" yaml:"drives"`
 }
 
@@ -38,6 +68,28 @@ type Injection struct {
 	Src         string `json:"src" yaml:"src"`
 	Dst         string `json:"dst" yaml:"dst"`
 	Description string `json:"description" yaml:"description"`
+}
+
+func (this *Node) SetDefaults() {
+	if this.General.VMType == VMType_NotSet {
+		this.General.VMType = VMType_KVM
+	}
+
+	if this.Hardware.CPU == CPU_NotSet {
+		this.Hardware.CPU = CPU_Broadwell
+	}
+
+	if this.Hardware.VCPU == 0 {
+		this.Hardware.VCPU = 1
+	}
+
+	if this.Hardware.Memory == 0 {
+		this.Hardware.Memory = 512
+	}
+
+	if this.Hardware.OSType == OSType_NotSet {
+		this.Hardware.OSType = OSType_Linux
+	}
 }
 
 func (this Node) FileInjects() string {

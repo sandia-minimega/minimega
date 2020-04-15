@@ -1,9 +1,9 @@
 apiVersion: phenix.sandia.gov/v1
 kind: Scenario
 metadata:
-  name: Foo Bar Scenario
+  name: foo-bar-scenario
 spec:
-  topology: Foo Bar Topo
+  topology: foo-bar-topo
   apps:
     experiment:
     - name: sink

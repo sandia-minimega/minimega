@@ -3,6 +3,7 @@ module phenix
 go 1.14
 
 require (
+	github.com/activeshadow/structs v1.1.1-0.20200415222148-5362ca528a5d // indirect
 	github.com/fatih/structs v1.1.0
 	github.com/getkin/kin-openapi v0.3.1
 	github.com/go-openapi/errors v0.19.4 // indirect

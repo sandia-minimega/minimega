@@ -10,10 +10,15 @@ import (
 
 	"phenix/store"
 	"phenix/store/bolt"
+	"phenix/tmpl"
 	"phenix/types"
+	"phenix/types/version"
+	v1 "phenix/types/version/v1"
 	"phenix/util"
 	"phenix/util/envflag"
 
+	"github.com/activeshadow/structs"
+	"github.com/mitchellh/mapstructure"
 	"gopkg.in/yaml.v3"
 )
 
@@ -22,8 +27,9 @@ var (
 
 	f_storePath string
 
-	f_topologyFile string
-	f_scenarioFile string
+	f_topologyFile   string
+	f_scenarioFile   string
+	f_experimentName string
 )
 
 func init() {
@@ -31,6 +37,7 @@ func init() {
 	flag.StringVar(&f_storePath, "store", "phenix.bdb", "path to Bolt store file")
 	flag.StringVar(&f_topologyFile, "topology", "", "path to topology config file")
 	flag.StringVar(&f_scenarioFile, "scenario", "", "path to scenario config file")
+	flag.StringVar(&f_experimentName, "experiment", "", "create experiment with given name if provided")
 }
 
 func main() {
@@ -56,19 +63,89 @@ func main() {
 		os.Exit(1)
 	}
 
+	var (
+		topo     *v1.TopologySpec
+		scenario *v1.ScenarioSpec
+	)
+
 	if f_topologyFile != "" {
-		if err := createConfig(s, f_topologyFile); err != nil {
+		c, err := createConfig(s, f_topologyFile)
+		if err != nil {
 			fmt.Println("Error creating topology config:", err)
 		}
+
+		spec, err := version.GetVersionedSpecForKind(c.Kind, c.APIVersion())
+		if err != nil {
+			panic(err)
+		}
+
+		if err := mapstructure.Decode(c.Spec, spec); err != nil {
+			panic(err)
+		}
+
+		topo = spec.(*v1.TopologySpec)
+
+		exp := &v1.ExperimentSpec{
+			ExperimentName: c.Metadata.Name,
+			Topology:       topo,
+		}
+
+		exp.SetDefaults()
 	}
 
 	if f_scenarioFile != "" {
-		if err := createConfig(s, f_scenarioFile); err != nil {
+		c, err := createConfig(s, f_scenarioFile)
+		if err != nil {
 			fmt.Println("Error creating scenario config:", err)
+		}
+
+		spec, err := version.GetVersionedSpecForKind(c.Kind, c.APIVersion())
+		if err != nil {
+			panic(err)
+		}
+
+		if err := mapstructure.Decode(c.Spec, spec); err != nil {
+			panic(err)
+		}
+
+		scenario = spec.(*v1.ScenarioSpec)
+	}
+
+	if f_experimentName != "" {
+		exp := &v1.ExperimentSpec{
+			ExperimentName: f_experimentName,
+			Topology:       topo,
+			Scenario:       scenario,
+		}
+
+		exp.SetDefaults()
+
+		fmt.Printf("%+v\n", structs.MapDefaultSnakeCase(topo))
+
+		spec := structs.MapDefaultSnakeCase(exp)
+
+		expConfig := types.Config{
+			Version: "phenix.sandia.gov/v1",
+			Kind:    "Experiment",
+			Metadata: types.ConfigMetadata{
+				Name: f_experimentName,
+			},
+			Spec: spec,
+		}
+
+		m, _ := yaml.Marshal(expConfig)
+		fmt.Println(string(m))
+
+		if err := s.Create(&expConfig); err != nil {
+			panic(err)
+		}
+
+		if err := tmpl.GenerateFromTemplate("minimega_script.tmpl", exp, os.Stdout); err != nil {
+			panic(err)
 		}
 	}
 
-	configs, err := s.List("Topology", "Scenario")
+	configs, err := s.List("Topology", "Scenario", "Experiment")
 	if err != nil {
 		panic(err)
 	}
@@ -76,25 +153,12 @@ func main() {
 	fmt.Println()
 	util.PrintTableOfConfigs(os.Stdout, configs)
 	fmt.Println()
-
-	/*
-		spec, err := version.GetVersionedSpecForKind(config.Kind, config.APIVersion())
-		if err != nil {
-			panic(err)
-		}
-
-		if err := mapstructure.Decode(config.Spec, spec); err != nil {
-			panic(err)
-		}
-
-		fmt.Printf("%+v\n", spec)
-	*/
 }
 
-func createConfig(s store.Store, path string) error {
+func createConfig(s store.Store, path string) (*types.Config, error) {
 	file, err := ioutil.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("cannot read config: %w", err)
+		return nil, fmt.Errorf("cannot read config: %w", err)
 	}
 
 	var config types.Config
@@ -102,25 +166,25 @@ func createConfig(s store.Store, path string) error {
 	switch filepath.Ext(path) {
 	case ".json":
 		if err := json.Unmarshal(file, &config); err != nil {
-			return fmt.Errorf("unmarshaling config: %w", err)
+			return nil, fmt.Errorf("unmarshaling config: %w", err)
 		}
 	case ".yaml", ".yml":
 		if err := yaml.Unmarshal(file, &config); err != nil {
-			return fmt.Errorf("unmarshaling config: %w", err)
+			return nil, fmt.Errorf("unmarshaling config: %w", err)
 		}
 	default:
-		return fmt.Errorf("invalid config extension")
+		return nil, fmt.Errorf("invalid config extension")
 	}
 
 	if err := types.ValidateConfigSpec(config); err != nil {
-		return fmt.Errorf("validating config: %w", err)
+		return nil, fmt.Errorf("validating config: %w", err)
 	}
 
 	if err := s.Create(&config); err != nil {
-		return fmt.Errorf("storing config: %w", err)
+		return nil, fmt.Errorf("storing config: %w", err)
 	}
 
-	return nil
+	return &config, nil
 }
 
 func usage() {
