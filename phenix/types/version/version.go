@@ -1,14 +1,12 @@
 package version
 
 import (
+	"context"
 	"fmt"
 
 	v1 "phenix/types/version/v1"
 
-	"github.com/go-openapi/loads"
-	"github.com/go-openapi/spec"
-	"github.com/go-openapi/strfmt"
-	"github.com/go-openapi/validate"
+	"github.com/getkin/kin-openapi/openapi3"
 )
 
 func GetVersionedSpecForKind(kind, version string) (interface{}, error) {
@@ -39,29 +37,24 @@ func GetVersionedSpecForKind(kind, version string) (interface{}, error) {
 	}
 }
 
-func GetVersionedValidatorForKind(kind, version string) (*spec.Schema, error) {
+func GetVersionedValidatorForKind(kind, version string) (*openapi3.Schema, error) {
 	switch version {
 	case "v1":
-		schema, err := loads.Analyzed(v1.OpenAPI, "")
+		s, err := openapi3.NewSwaggerLoader().LoadSwaggerFromData(v1.OpenAPI)
 		if err != nil {
 			return nil, fmt.Errorf("loading OpenAPI schema for version %s: %w", version, err)
 		}
 
-		if schema, err = schema.Expanded(); err != nil {
-			return nil, fmt.Errorf("expanding OpenAPI schema for version %s: %w", version, err)
-		}
-
-		if err := validate.Spec(schema, strfmt.Default); err != nil {
+		if err := s.Validate(context.Background()); err != nil {
 			return nil, fmt.Errorf("validating OpenAPI schema for version %s: %w", version, err)
 		}
 
-		for _, d := range schema.Analyzer.AllDefinitions() {
-			if d.Name == kind {
-				return d.Schema, nil
-			}
+		ref, ok := s.Components.Schemas[kind]
+		if !ok {
+			return nil, fmt.Errorf("no schema definition found for version %s of %s", version, kind)
 		}
 
-		return nil, fmt.Errorf("no schema definition found for version %s of %s", version, kind)
+		return ref.Value, nil
 	default:
 		return nil, fmt.Errorf("unknown version %s", version)
 	}

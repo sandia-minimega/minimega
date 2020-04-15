@@ -1,8 +1,9 @@
 package types
 
 import (
-	"phenix/types/version"
 	"testing"
+
+	"phenix/types/version"
 
 	"gopkg.in/yaml.v3"
 )
@@ -37,14 +38,14 @@ spec:
       - name: IF0
         vlan: ot
         address: 192.168.10.1
-        mask: 24
+        mask: 24.
         gateway: 192.168.10.254
         proto: static
         type: ethernet
       - name: mgmt
         vlan: MGMT
         address: 172.16.10.1
-        mask: 16
+        mask: 16.
         proto: static
         type: ethernet
 `
@@ -59,7 +60,7 @@ func TestConfig(t *testing.T) {
 
 	t.Logf("%+v", c)
 
-	spec, err := version.GetVersionForKind(c.Kind, c.APIVersion())
+	spec, err := version.GetVersionedSpecForKind(c.Kind, c.APIVersion())
 	if err != nil {
 		t.Log(err)
 		t.FailNow()

@@ -1,0 +1,44 @@
+namespace {{ .ExperimentName }}
+ns queueing true
+
+{{ if .RunLocal }}
+ns del-host all
+ns add-host localhost
+{{ end }}
+
+{{ $hostname, _ := os.Hostname() }}
+
+{{ range .Nodes }}
+{{ $snapshotName := {{ $hostname }}_{{ $.ExperimentName }}_{{ .General.Hostname }}_snapshot }}
+
+{{ if .General.Snapshot }}
+{{ $firstDrive := index .Drives 0 }}
+disk snapshot {{ $firstDrive.Image }} {{ $snapshotName }} 
+disk inject {{ $snapshotName }}:{{ $firstDrive.InjectPartition }} files {{ .FileInjects() }}
+{{ end }}
+
+clear vm config
+
+{{ if ne (index $.Schedules .General.Hostname) "" }}
+vm config schedule {{ index $.Schedules .General.Hostname }}
+{{ end }}
+
+vm config vcpus {{ .Hardware.VCPU }}
+vm config cpu {{ .Hardware.CPU }}
+vm config memory {{ .Hardware.Memory }}
+vm config snapshot {{ .General.Snapshot }}
+
+{{ if .General.Snapshot }}
+vm config disk {{ .Hardware.DiskConfig($snapshotName) }}
+{{ else }}
+vm config disk {{ .Hardware.DiskConfig("") }}
+{{ end }}
+
+{{ if eq .Hardware.OSType "linux" }}
+vm config qemu-append -vga qxl
+{{ end }}
+
+# TODO
+vm config net {{ .Network.InterfaceConfig() }}
+vm launch {{ .General.VMType }} {{ .General.Hostname }}
+{{ end }}

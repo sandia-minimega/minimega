@@ -16,14 +16,14 @@ spec:
       - name: IF0
         vlan: ot
         address: 192.168.10.1
-        mask: 24
+        mask: 24.
         gateway: 192.168.10.254
         proto: static
         type: ethernet
       - name: mgmt
         vlan: MGMT
         address: 172.16.10.1
-        mask: 16
+        mask: 16.
         proto: static
         type: ethernet
   - type: VirtualMachine
@@ -38,13 +38,13 @@ spec:
       - name: IF0
         vlan: ot
         address: 192.168.10.2
-        mask: 24
+        mask: 24.
         gateway: 192.168.10.254
         proto: static
         type: ethernet
       - name: mgmt
         vlan: MGMT
         address: 172.16.10.2
-        mask: 16
+        mask: 16.
         proto: static
         type: ethernet
