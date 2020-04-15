@@ -3,6 +3,8 @@ module phenix
 go 1.14
 
 require (
+	github.com/fatih/structs v1.1.0
+	github.com/getkin/kin-openapi v0.3.1
 	github.com/go-openapi/errors v0.19.4 // indirect
 	github.com/go-openapi/loads v0.19.5
 	github.com/go-openapi/runtime v0.19.15 // indirect

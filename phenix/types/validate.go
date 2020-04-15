@@ -4,9 +4,6 @@ import (
 	"fmt"
 
 	"phenix/types/version"
-
-	"github.com/go-openapi/strfmt"
-	"github.com/go-openapi/validate"
 )
 
 func ValidateConfigSpec(c Config) error {
@@ -19,7 +16,7 @@ func ValidateConfigSpec(c Config) error {
 		return fmt.Errorf("getting validator for config: %w", err)
 	}
 
-	if err := validate.AgainstSchema(v, c.Spec, strfmt.Default); err != nil {
+	if err := v.VisitJSON(c.Spec); err != nil {
 		return fmt.Errorf("validating config spec against schema: %w", err)
 	}
 

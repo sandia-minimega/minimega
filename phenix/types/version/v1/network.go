@@ -1,5 +1,7 @@
 package v1
 
+import "strings"
+
 type Network struct {
 	Interfaces []Interface `json:"interfaces" yaml:"interfaces"`
 	Routes     []Route     `json:"routes" yaml:"routes"`
@@ -64,4 +66,20 @@ type Rule struct {
 type AddrPort struct {
 	Address string `json:"address" yaml:"address"`
 	Port    int    `json:"port" yaml:"port"`
+}
+
+func (this Network) InterfaceConfig() string {
+	configs := make([]string, len(this.Interfaces))
+
+	for i, iface := range this.Interfaces {
+		config := []string{iface.VLAN}
+
+		if iface.MAC != "" {
+			config = append(config, iface.MAC)
+		}
+
+		configs[i] = strings.Join(config, ",")
+	}
+
+	return strings.Join(configs, " ")
 }
