@@ -1541,27 +1541,36 @@ var EditDataDialog = function(ui, cell)
     const graph = ui.editor.graph;
     const type = cell.isVertex() ? 'nodes' : 'edges'; // get type to load specific schema
     const schema = ui.schemas[type]; // set schema
-    console.log('this is schema'), console.log(schema);
+    // console.log('this is schema'), console.log(schema);
     const nodes = ui.topoJSON[type]; // get nodes array to determine add or update
 
     var id = (EditDataDialog.getDisplayIdForCell != null) ?
         EditDataDialog.getDisplayIdForCell(ui, cell) : null;
 
     // get node if exists in global ui.topoJSON
-    var result = nodes.filter(obj => {
-      return obj.id === id;
-    });
-    console.log(result);
+    // var result = nodes.filter(obj => {
+    //   return obj.id === id;
+    // });
+    // console.log(result);
 
-    var node = null;
+    var node = typeof cell.topo !== 'undefined' ? cell.topo : {id:id};
+    var value = graph.getModel().getValue(cell);
+    if (!mxUtils.isNode(value))
+    {
+        var doc = mxUtils.createXmlDocument();
+        var obj = doc.createElement('object');
+        obj.setAttribute('label', value || '');
+        value = obj;
+    }
+
     // set node if exists in global ui.topoJSON
-    if(result.length > 0){
-        node = result[0];
-    }
-    else{
-        node = {};
-    }
-    node.id = id;
+    // if(result.length > 0){
+    //     node = result[0];
+    // }
+    // else{
+    //     node = {};
+    // }
+    // node.id = id;
     console.log(node);
 
     // Set JSONEditor and config options based on schema and cell type
@@ -1676,11 +1685,13 @@ var EditDataDialog = function(ui, cell)
             try
             {
                 ui.hideDialog.apply(ui, arguments);
-    
+                value.setAttribute('label', 'test');
+                
                 // Updates the global ui.topoJSON
                 var updatedNode = editor.getEditor('root').value; // get current node's JSON
-                cell.topo = Object.assign({}, updatedNode);
-                
+                // cell.topo = Object.assign({}, updatedNode);
+                graph.getModel().setTopo(cell, updatedNode);
+                // graph.getModel().setValue(cell, value);
                 console.log('ui.topoJSON before updates'), console.log(JSON.stringify(ui.topoJSON));
                 ui.updateTopoJSON(cell);
                 console.log('ui.topoJSON afte updates'), console.log(ui.topoJSON);
@@ -1690,6 +1701,9 @@ var EditDataDialog = function(ui, cell)
             {
                 mxUtils.alert(e);
             }
+
+            console.log('this is graphModel after update:');
+            console.log(graph.getModel().cells);
 
             editor.destroy();
 

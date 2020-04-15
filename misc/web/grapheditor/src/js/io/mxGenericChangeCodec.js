@@ -62,3 +62,5 @@ mxCodecRegistry.register(mxGenericChangeCodec(new mxGeometryChange(), 'geometry'
 mxCodecRegistry.register(mxGenericChangeCodec(new mxCollapseChange(), 'collapsed'));
 mxCodecRegistry.register(mxGenericChangeCodec(new mxVisibleChange(), 'visible'));
 mxCodecRegistry.register(mxGenericChangeCodec(new mxCellAttributeChange(), 'value'));
+// FORK change added to register changes to topo object
+mxCodecRegistry.register(mxGenericChangeCodec(new mxTopoChange(), 'topo'));

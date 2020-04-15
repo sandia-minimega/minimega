@@ -54,8 +54,6 @@ EditorUi = function(editor, container, lightbox)
     };
 
     var setSchema = function(response, schemaType) {
-        console.log(this.schemas);
-        console.log(self.schemas);
         self.schemas[schemaType] = JSON.parse(response);
     }
 

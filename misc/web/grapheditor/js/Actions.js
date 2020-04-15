@@ -185,7 +185,6 @@ Actions.prototype.init = function()
             console.log(pastedCells);
             // recovers if removed during cut; otherwise, adds clipboard (copy) with updated id
             for(var i = 0; i < pastedCells.length; i++) {
-                // pastedCells[i].copiedId = cells[i].id;
                 ui.updateTopoJSON(pastedCells[i], true, cells[i]);
             }
             console.log('this is ui.topoJSON after paste:'), console.log(ui.topoJSON);
