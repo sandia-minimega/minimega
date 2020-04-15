@@ -10,17 +10,20 @@ ns add-host localhost
 {{ range .Nodes }}
 
 {{ $vm_name := {{ .ExperimentName }}_{{ .General.Hostname }} }}
-# guessing on net.LookupHost
-{{ $hostname := net.LookupHost(hostname) }}
+# guessing on referencing a built in function Hostname()
+{{ $hostname := .Hostname }}
 {{ $snapshot_name := {{ $hostname }}_{{ .ExperimentName }}_{{ .General.Hostname }}_snapshot }}
-{{ $vm_type := COMPLETE_ME }}
+{{ $vm_type := KVM_OR_CONTAINER }}
 
 # need to deal with vm_disk and vm_disk_image and vm_disk_rest
-# maybe reference to example
-# vm config disk linux_disk.qcow2,ide storage_disk.qcow2
+# <path>,<interface>,<cache mode>
+{{ $vm_disk := COMPLETE_ME }}
+{{ $vm_disk_image := COMPLETE_ME }}
+{{ $vm_disk_rest := COMPLETE_ME }}
 
+# does vm_inject need to be included in if statement
 {{ if .General.Snapshot }}
-disk snapshot {{ .Drive.Image }} {{ $snapshot_name }} 
+disk snapshot {{ $vm_disk_image }} {{ $snapshot_name }} 
 disk inject {{ $snapshot_name }}:{{ .Drive.InjectPartition }} files {{ .Injection.Src }}:{{ .Injection.Dst }}
 {{ end }}
 clear vm config
@@ -31,12 +34,11 @@ vm config vcpus {{ .Hardware.VCPU }}
 vm config cpu {{ .Hardware.CPU }}
 vm config memory {{ .Hardware.Memory }}
 vm config snapshot {{ .General.Snapshot }}
+# does vm_inject need to be included in if statement
 {{ if .General.Snapshot }}
-# need to complete VM_DISK_REST
-vm config disk {{ $snapshot_name }} VM_DISK_REST
+vm config disk {{ $snapshot_name }} {{ $vm_disk_rest }}
 {{ else }}
-# not sure what the split() in vm_disk is for
-vm config disk {{ .Drive.Image }} VM_DISK_REST
+vm config disk {{ $vm_disk }} {{ $vm_disk_rest }}
 {{ end }}
 # does linux need ""
 {{ if .Hardware.OSType eq "linux" }}
