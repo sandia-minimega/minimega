@@ -1,11 +1,10 @@
-package bolt
+package store
 
 import (
 	"encoding/json"
 	"fmt"
 	"time"
 
-	"phenix/store"
 	"phenix/types"
 
 	"go.etcd.io/bbolt"
@@ -15,12 +14,12 @@ type BoltDB struct {
 	db *bbolt.DB
 }
 
-func NewBoltDB() store.Store {
+func NewBoltDB() Store {
 	return new(BoltDB)
 }
 
-func (this *BoltDB) Init(opts ...store.Option) error {
-	options := store.NewOptions(opts...)
+func (this *BoltDB) Init(opts ...Option) error {
+	options := NewOptions(opts...)
 
 	var err error
 
@@ -92,8 +91,10 @@ func (this BoltDB) Create(c *types.Config) error {
 		return fmt.Errorf("config %s/%s already exists", c.Kind, c.Metadata.Name)
 	}
 
-	c.Metadata.Created = time.Now()
-	c.Metadata.Updated = time.Now()
+	now := time.Now()
+
+	c.Metadata.Created = now
+	c.Metadata.Updated = now
 
 	v, err := json.Marshal(c)
 	if err != nil {

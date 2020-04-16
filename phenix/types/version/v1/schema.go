@@ -5,16 +5,7 @@ openapi: "3.0.0"
 info:
   title: phenix
   version: "1.0"
-paths:
-  /topologies:
-    get:
-      responses:
-        "200":
-          description: array of topologies
-          schema:
-            type: array
-            items:
-              $ref: "#/components/schemas/Topology"
+paths: {}
 components:
   schemas:
     Topology:
@@ -36,12 +27,8 @@ components:
     Scenario:
       type: object
       required:
-      - topology
       - apps
       properties:
-        topology:
-          type: string
-          minLength: 1
         apps:
           type: object
           properties:
@@ -55,6 +42,14 @@ components:
                   name:
                     type: string
                     minLength: 1
+    Experiment:
+      type: object
+      required:
+      - experimentName
+      properties:
+        experimentName:
+          type: string
+          minLength: 1
     VLAN:
       type: object
       title: VLAN

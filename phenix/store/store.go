@@ -1,6 +1,8 @@
 package store
 
-import "phenix/types"
+import (
+	"phenix/types"
+)
 
 type Store interface {
 	Init(...Option) error

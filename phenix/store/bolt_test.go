@@ -1,11 +1,10 @@
-package bolt
+package store
 
 import (
 	"io/ioutil"
 	"os"
 	"testing"
 
-	"phenix/store"
 	"phenix/types"
 
 	"gopkg.in/yaml.v3"
@@ -53,7 +52,7 @@ func TestConfigGet(t *testing.T) {
 
 	b := NewBoltDB()
 
-	if err := b.Init(store.Path(f.Name())); err != nil {
+	if err := b.Init(Path(f.Name())); err != nil {
 		t.Log(err)
 		t.FailNow()
 	}
@@ -82,7 +81,7 @@ func TestConfigCreate(t *testing.T) {
 
 	b := NewBoltDB()
 
-	if err := b.Init(store.Path(f.Name())); err != nil {
+	if err := b.Init(Path(f.Name())); err != nil {
 		t.Log(err)
 		t.FailNow()
 	}
@@ -111,7 +110,7 @@ func TestConfigCreateAndGet(t *testing.T) {
 
 	b := NewBoltDB()
 
-	if err := b.Init(store.Path(f.Name())); err != nil {
+	if err := b.Init(Path(f.Name())); err != nil {
 		t.Log(err)
 		t.FailNow()
 	}
@@ -152,7 +151,7 @@ func TestConfigDelete(t *testing.T) {
 
 	b := NewBoltDB()
 
-	if err := b.Init(store.Path(f.Name())); err != nil {
+	if err := b.Init(Path(f.Name())); err != nil {
 		t.Log(err)
 		t.FailNow()
 	}

@@ -1,43 +1,29 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"path/filepath"
+	"strings"
 
+	"phenix/api/experiment"
 	"phenix/store"
-	"phenix/store/bolt"
-	"phenix/tmpl"
 	"phenix/types"
-	"phenix/types/version"
-	v1 "phenix/types/version/v1"
 	"phenix/util"
+	"phenix/util/editor"
 	"phenix/util/envflag"
 
-	"github.com/activeshadow/structs"
-	"github.com/mitchellh/mapstructure"
 	"gopkg.in/yaml.v3"
 )
 
 var (
-	f_help bool
-
+	f_help      bool
 	f_storePath string
-
-	f_topologyFile   string
-	f_scenarioFile   string
-	f_experimentName string
 )
 
 func init() {
 	flag.BoolVar(&f_help, "help", false, "show this help message")
 	flag.StringVar(&f_storePath, "store", "phenix.bdb", "path to Bolt store file")
-	flag.StringVar(&f_topologyFile, "topology", "", "path to topology config file")
-	flag.StringVar(&f_scenarioFile, "scenario", "", "path to scenario config file")
-	flag.StringVar(&f_experimentName, "experiment", "", "create experiment with given name if provided")
 }
 
 func main() {
@@ -49,142 +35,154 @@ func main() {
 		return
 	}
 
-	/*
-		if flag.NArg() < 1 {
-			usage()
-			os.Exit(1)
-		}
-	*/
+	if flag.NArg() < 1 {
+		usage()
+		os.Exit(1)
+	}
 
-	s := bolt.NewBoltDB()
-
-	if err := s.Init(store.Path(f_storePath)); err != nil {
+	if err := store.Init(store.Path(f_storePath)); err != nil {
 		fmt.Println("error initializing Bolt store:", err)
 		os.Exit(1)
 	}
 
-	var (
-		topo     *v1.TopologySpec
-		scenario *v1.ScenarioSpec
-	)
+	switch flag.Arg(0) {
+	case "list":
+		var (
+			configs types.Configs
+			err     error
+		)
 
-	if f_topologyFile != "" {
-		c, err := createConfig(s, f_topologyFile)
-		if err != nil {
-			fmt.Println("Error creating topology config:", err)
+		switch flag.Arg(1) {
+		case "", "all":
+			configs, err = store.List("Topology", "Scenario", "Experiment")
+		case "topology":
+			configs, err = store.List("Topology")
+		case "scenario":
+			configs, err = store.List("Scenario")
+		case "experiment":
+			configs, err = store.List("Experiment")
+		default:
+			err = fmt.Errorf("unknown config kind provided")
 		}
 
-		spec, err := version.GetVersionedSpecForKind(c.Kind, c.APIVersion())
-		if err != nil {
-			panic(err)
-		}
-
-		if err := mapstructure.Decode(c.Spec, spec); err != nil {
-			panic(err)
-		}
-
-		topo = spec.(*v1.TopologySpec)
-
-		exp := &v1.ExperimentSpec{
-			ExperimentName: c.Metadata.Name,
-			Topology:       topo,
-		}
-
-		exp.SetDefaults()
-	}
-
-	if f_scenarioFile != "" {
-		c, err := createConfig(s, f_scenarioFile)
-		if err != nil {
-			fmt.Println("Error creating scenario config:", err)
-		}
-
-		spec, err := version.GetVersionedSpecForKind(c.Kind, c.APIVersion())
 		if err != nil {
 			panic(err)
 		}
 
-		if err := mapstructure.Decode(c.Spec, spec); err != nil {
+		fmt.Println()
+		util.PrintTableOfConfigs(os.Stdout, configs)
+		fmt.Println()
+	case "get":
+		n := strings.Split(flag.Arg(1), "/")
+
+		if len(n) != 2 {
+			panic("invalid config kind/name provided")
+		}
+
+		c := types.NewConfig(strings.Title(n[0]), n[1])
+
+		if err := store.Get(c); err != nil {
 			panic(err)
 		}
 
-		scenario = spec.(*v1.ScenarioSpec)
-	}
-
-	if f_experimentName != "" {
-		exp := &v1.ExperimentSpec{
-			ExperimentName: f_experimentName,
-			Topology:       topo,
-			Scenario:       scenario,
+		m, err := yaml.Marshal(c)
+		if err != nil {
+			panic(err)
 		}
 
-		exp.SetDefaults()
-
-		fmt.Printf("%+v\n", structs.MapDefaultSnakeCase(topo))
-
-		spec := structs.MapDefaultSnakeCase(exp)
-
-		expConfig := types.Config{
-			Version: "phenix.sandia.gov/v1",
-			Kind:    "Experiment",
-			Metadata: types.ConfigMetadata{
-				Name: f_experimentName,
-			},
-			Spec: spec,
-		}
-
-		m, _ := yaml.Marshal(expConfig)
 		fmt.Println(string(m))
+	case "create":
+		if flag.Arg(1) == "" {
+			panic("no config file provided")
+		}
 
-		if err := s.Create(&expConfig); err != nil {
+		c, err := types.NewConfigFromFile(flag.Arg(1))
+		if err != nil {
 			panic(err)
 		}
 
-		if err := tmpl.GenerateFromTemplate("minimega_script.tmpl", exp, os.Stdout); err != nil {
+		if c.Kind == "Experiment" && c.Spec == nil {
+			if err := experiment.CreateConfigSpec(c); err != nil {
+				panic(err)
+			}
+		}
+
+		if err := types.ValidateConfigSpec(*c); err != nil {
+			panic(fmt.Errorf("validating config: %w", err))
+		}
+
+		if err := store.Create(c); err != nil {
+			panic(fmt.Errorf("storing config: %w", err))
+		}
+
+		fmt.Printf("%s/%s config created\n", c.Kind, c.Metadata.Name)
+	case "edit":
+		n := strings.Split(flag.Arg(1), "/")
+
+		if len(n) != 2 {
+			panic("invalid config kind/name provided")
+		}
+
+		c := types.NewConfig(strings.Title(n[0]), n[1])
+
+		if err := store.Get(c); err != nil {
 			panic(err)
 		}
-	}
 
-	configs, err := s.List("Topology", "Scenario", "Experiment")
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println()
-	util.PrintTableOfConfigs(os.Stdout, configs)
-	fmt.Println()
-}
-
-func createConfig(s store.Store, path string) (*types.Config, error) {
-	file, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("cannot read config: %w", err)
-	}
-
-	var config types.Config
-
-	switch filepath.Ext(path) {
-	case ".json":
-		if err := json.Unmarshal(file, &config); err != nil {
-			return nil, fmt.Errorf("unmarshaling config: %w", err)
+		body, err := yaml.Marshal(c.Spec)
+		if err != nil {
+			panic(err)
 		}
-	case ".yaml", ".yml":
-		if err := yaml.Unmarshal(file, &config); err != nil {
-			return nil, fmt.Errorf("unmarshaling config: %w", err)
+
+		body, err = editor.EditData(body)
+		if err != nil {
+			if err == editor.ErrNoChange {
+				fmt.Printf("no changes made to %s/%s\n", c.Kind, c.Metadata.Name)
+				os.Exit(0)
+			}
+
+			panic(err)
+		}
+
+		var spec map[string]interface{}
+
+		if err := yaml.Unmarshal(body, &spec); err != nil {
+			panic(err)
+		}
+
+		c.Spec = spec
+
+		if err := store.Update(c); err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("%s/%s config updated\n", c.Kind, c.Metadata.Name)
+	case "delete":
+		n := strings.Split(flag.Arg(1), "/")
+
+		if len(n) != 2 {
+			panic("invalid config kind/name provided")
+		}
+
+		if err := store.Delete(strings.Title(n[0]), n[1]); err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("%s deleted\n", flag.Arg(1))
+	case "experiment":
+		switch flag.Arg(1) {
+		case "start":
+			if err := experiment.Start(flag.Arg(2)); err != nil {
+				panic(err)
+			}
+		default:
+			panic("unknown experiment command")
 		}
 	default:
-		return nil, fmt.Errorf("invalid config extension")
+		panic("unknown command")
 	}
 
-	if err := types.ValidateConfigSpec(config); err != nil {
-		return nil, fmt.Errorf("validating config: %w", err)
-	}
-
-	if err := s.Create(&config); err != nil {
-		return nil, fmt.Errorf("storing config: %w", err)
-	}
-
-	return &config, nil
+	os.Exit(0)
 }
 
 func usage() {
@@ -197,14 +195,14 @@ func usage() {
 
 	fmt.Fprintln(flag.CommandLine.Output(), "")
 
-	/*
-		fmt.Fprintln(flag.CommandLine.Output(), "Subcommands:")
-		fmt.Fprintln(flag.CommandLine.Output(), "  experiment")
-		fmt.Fprintln(flag.CommandLine.Output(), "  vm")
-		fmt.Fprintln(flag.CommandLine.Output(), "  vlan")
-		fmt.Fprintln(flag.CommandLine.Output(), "  image")
-		fmt.Fprintln(flag.CommandLine.Output(), "  help <cmd> - print help message for subcommand")
+	fmt.Fprintln(flag.CommandLine.Output(), "Subcommands:")
+	fmt.Fprintln(flag.CommandLine.Output(), "  list [all, topology, scenario, experiment] - get a list of configs")
+	fmt.Fprintln(flag.CommandLine.Output(), "  get <kind/name>                            - get an existing config")
+	fmt.Fprintln(flag.CommandLine.Output(), "  create <path/to/config>                    - create a new config")
+	fmt.Fprintln(flag.CommandLine.Output(), "  edit <kind/name>                           - edit an existing config")
+	fmt.Fprintln(flag.CommandLine.Output(), "  delete <kind/name>                         - delete a config")
+	fmt.Fprintln(flag.CommandLine.Output(), "  experiment <start> <name>                  - start an existing experiment")
+	// fmt.Fprintln(flag.CommandLine.Output(), "  help <cmd> - print help message for subcommand")
 
-		fmt.Fprintln(flag.CommandLine.Output(), "")
-	*/
+	fmt.Fprintln(flag.CommandLine.Output(), "")
 }
