@@ -765,26 +765,6 @@ var TextareaDialog = function(editorUi, title, url, fn, cancelFn, cancelTitle, w
     this.container = table;
 };
 
-var topoJsonToXmlDialog = function (json) {
-
-    var div = document.createElement('div');
-    div.style.textAlign = 'right';
-    var textarea = document.createElement('textarea');
-    textarea.setAttribute('wrap', 'off');
-    textarea.setAttribute('spellcheck', 'false');
-    textarea.setAttribute('autocorrect', 'off');
-    textarea.setAttribute('autocomplete', 'off');
-    textarea.setAttribute('autocapitalize', 'off');
-    textarea.style.overflow = 'auto';
-    textarea.style.resize = 'none';
-    textarea.style.width = '600px';
-    textarea.style.height = '360px';
-    textarea.style.marginBottom = '16px';
-
-
-
-};
-
 /**
  * Constructs a new edit file dialog.
  */
@@ -1534,7 +1514,7 @@ ExportDialog.saveLocalFile = function(editorUi, data, filename, format)
 };
 
 /**
- * Constructs a new metadata dialog.
+ * Constructs a new JSONEditor for cell JSON
  */
 var EditDataDialog = function(ui, cell)
 {
@@ -1542,7 +1522,6 @@ var EditDataDialog = function(ui, cell)
     const type = cell.isVertex() ? 'nodes' : 'edges'; // get type to load specific schema
     const schema = ui.schemas[type]; // set schema
     // console.log('this is schema'), console.log(schema);
-    const nodes = ui.topoJSON[type]; // get nodes array to determine add or update
 
     var id = (EditDataDialog.getDisplayIdForCell != null) ?
         EditDataDialog.getDisplayIdForCell(ui, cell) : null;
@@ -1553,16 +1532,6 @@ var EditDataDialog = function(ui, cell)
     // });
     // console.log(result);
 
-    var node = typeof cell.topo !== 'undefined' ? cell.topo : {id:id};
-    var value = graph.getModel().getValue(cell);
-    if (!mxUtils.isNode(value))
-    {
-        var doc = mxUtils.createXmlDocument();
-        var obj = doc.createElement('object');
-        obj.setAttribute('label', value || '');
-        value = obj;
-    }
-
     // set node if exists in global ui.topoJSON
     // if(result.length > 0){
     //     node = result[0];
@@ -1571,7 +1540,20 @@ var EditDataDialog = function(ui, cell)
     //     node = {};
     // }
     // node.id = id;
+
+    var node = typeof cell.topo !== 'undefined' ? cell.topo : {id:id};
+    var value = graph.getModel().getValue(cell);
+    if (!mxUtils.isNode(value))
+    {
+        var doc = mxUtils.createXmlDocument();
+        var obj = doc.createElement('object');
+        // obj.setAttribute('label', value || '');
+        value = obj;
+    }
     console.log(node);
+
+    var startval = value.hasAttribute('schemaVars') ? JSON.parse(value.getAttribute('schemaVars')) : {};
+    console.log('this is startval:'), console.log(startval);
 
     // Set JSONEditor and config options based on schema and cell type
     var loadConfig = function () {
@@ -1579,7 +1561,7 @@ var EditDataDialog = function(ui, cell)
         // JSONEditor config options
         this.config = {
             schema: schema,
-            startval: node,
+            startval: startval,
             ajax: true,
             mode: 'tree',
             modes: ['code', 'text', 'tree'],
@@ -1685,17 +1667,9 @@ var EditDataDialog = function(ui, cell)
             try
             {
                 ui.hideDialog.apply(ui, arguments);
-                value.setAttribute('label', 'test');
-                
-                // Updates the global ui.topoJSON
-                var updatedNode = editor.getEditor('root').value; // get current node's JSON
-                // cell.topo = Object.assign({}, updatedNode);
-                graph.getModel().setTopo(cell, updatedNode);
-                // graph.getModel().setValue(cell, value);
-                console.log('ui.topoJSON before updates'), console.log(JSON.stringify(ui.topoJSON));
-                ui.updateTopoJSON(cell);
-                console.log('ui.topoJSON afte updates'), console.log(ui.topoJSON);
-
+                var updatedNode = editor.getEditor('root').value; // get current node's JSON (from JSONEditor)
+                value.setAttribute('schemaVars', JSON.stringify(updatedNode));
+                graph.getModel().setValue(cell, value);
             }
             catch (e)
             {
@@ -1710,6 +1684,218 @@ var EditDataDialog = function(ui, cell)
         });
 
         applyBtn.className = 'geBtn gePrimaryBtn';
+        
+        var buttons = document.createElement('div');
+        buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:15px;height:40px;border-top:1px solid #ccc;padding-top:20px;'
+        
+        if (ui.editor.cancelFirst)
+        {
+            buttons.appendChild(cancelBtn);
+            buttons.appendChild(applyBtn);
+        }
+        else
+        {
+            buttons.appendChild(applyBtn);
+            buttons.appendChild(cancelBtn);
+        }
+
+        div.appendChild(buttons);
+        this.container = div;
+
+        // show dialog only after editor is created
+        ui.showDialog(this.container, 480, 420, true, false, null, false); 
+
+    };
+
+    this.init = function()
+    {
+        console.log('init');
+        loadConfig();
+    };
+
+};
+
+/**
+ * Constructs a new JSONEditor dialog for model JSON
+ */
+var topoJSONDialog = function(ui)
+{
+    const graph = ui.editor.graph;
+   
+    var filter = function(cell) {return graph.model.isVertex(cell);}
+    var vertices = graph.model.filterDescendants(filter);
+    filter = function(cell) {return graph.model.isEdge(cell);}
+    var edges = graph.model.filterDescendants(filter);
+
+    console.log(vertices);
+    const schema = {}; // set schema
+    // console.log('this is schema'), console.log(schema);
+    var nodeArray = [];
+    var edgeArray = [];
+    for(var i = 0; i < vertices.length; i++) {
+        var value = graph.getModel().getValue(vertices[i]);
+        if (mxUtils.isNode(value)) {
+            var schemaVars = vertices[i].hasAttribute('schemaVars') ? JSON.parse(vertices[i].getAttribute('schemaVars')) : null;
+            if(schemaVars) nodeArray.push(schemaVars);
+        }
+    };
+    for(var i = 0; i < edges.length; i++) {
+        var value = graph.getModel().getValue(edges[i]);
+        if (mxUtils.isNode(value)) {
+            var schemaVars = edges[i].hasAttribute('schemaVars') ? JSON.parse(edges[i].getAttribute('schemaVars')) : null;
+            if(schemaVars) edgeArray.push(schemaVars);
+        }
+    };
+    const json = {nodes: nodeArray, edges: edgeArray}; // global model JSON
+    console.log(json);
+
+    // Set JSONEditor and config options based on schema and cell type
+    var loadConfig = function () {
+        // this.schema = JSON.parse(response); // cell schema
+        // JSONEditor config options
+        this.config = {
+            schema: schema,
+            startval: json,
+            ajax: true,
+            mode: 'text',
+            modes: ['code', 'text', 'tree'],
+            // show_errors: 'always',
+            // jsoneditor: {
+            //     css: 'utils/topographer/downloads/jsoneditor.min.css',
+            //     js: 'utils/topographer/downloads/jsoneditor.js'
+            // },
+            theme: 'bootstrap3',
+            iconlib: 'spectre',
+            // template: {
+            // },
+            // ext_lib: {
+            //     lib_dompurify: {
+            //         js: 'utils/topographer/downloads/purify.min.js'
+            //     }
+            // }
+        };
+        // editorConfig is statically set in this file, so 'response' should only be the schema
+        // var data = JSON.parse(response),
+        //     schema = JSON.stringify(data, null, 2),
+        //     startval = Object.keys(editorConfig.startval).length !== 0 ? JSON.stringify(editorConfig.startval, null, 2) : '',
+        //     cfg = editorConfig.config,
+        //     code = editorConfig.code,
+        //     style = editorConfig.style,
+        //     desc = editorConfig.desc
+
+        // // Clear include external library checkboxes
+        // Array.from(jeExtlib.querySelectorAll('input')).forEach(function (el) { // from() unsupported in IE
+        //     el.checked = false
+        // });
+
+        // jeExampleDesc.innerHTML = ''
+        // clearOutput()
+
+        // // Add description of example to help page
+        // if (desc !== '' && desc != 'Add optional description here. (HTML format)') {
+        //     jeModalContent.innerHTML = jeExampleDesc.innerHTML = '<h3>Info about "' + editorConfig.title + '" Example</h3>' + desc
+        //     toggleModal()
+        // }
+
+        // // Update ACE Editor instances
+        // aceSchemaEditor.setValue(schema)
+        // aceSchemaEditor.session.getSelection().clearSelection()
+        // aceSchemaEditor.resize()
+
+        // aceStartvalEditor.setValue(startval)
+        // aceStartvalEditor.session.getSelection().clearSelection()
+        // aceStartvalEditor.resize()
+
+        // aceCodeEditor.setValue(code)
+        // aceCodeEditor.session.getSelection().clearSelection()
+        // aceCodeEditor.resize()
+        // lockText()
+
+        // aceStyleEditor.setValue(style)
+        // aceStyleEditor.session.getSelection().clearSelection()
+        // aceStyleEditor.resize()
+
+        // aceOutputEditor.resize()
+        // aceValidateEditor.resize()
+
+        // // Set config options
+        // for (var id in cfg) {
+        //     if (cfg.hasOwnProperty(id)) {
+        //         var el = jeCfg.querySelector('#' + id)
+        //         if (el) {
+        //             if (el.nodeName == 'INPUT' && el.type == 'checkbox') el.checked = cfg[id] || 0
+        //             else if (el.nodeName == 'SELECT') el.value = cfg[id]
+        //         }
+        //     }
+        // }
+
+        // // Trigger generation of form
+        // eventFire(jeExec, 'click');
+        createEditor();
+    };
+
+    var createEditor = function() {
+
+        var editorContainer = document.createElement('div');
+        editorContainer.setAttribute('id', 'jsoneditor');
+        editorContainer.style.height = '100%';
+        editorContainer.style.position = 'relative';
+        // editorContainer.style['max-width'] ="600px";
+
+        var textarea = document.createElement('textarea');
+        textarea.setAttribute('readonly', 'readonly');
+        textarea.value = JSON.stringify(json, null, 2);
+        textarea.setAttribute('id', 'jsonString');
+        textarea.style.width = '100%';
+        textarea.style.height = '100%';
+        textarea.style.resize = 'none';
+        textarea.setAttribute('onkeyup', 'autoHeight(this)');
+
+        var textareaScript = document.createElement('script');
+        var code = 'var autoHeight = function(o) {o.style.height = "1px";o.style.height = (25+o.scrollHeight)+"px";}; autoHeight(document.getElementById("jsonString"));document.getElementById("copyJSON").onclick = function(){document.getElementById("jsonString").select();document.execCommand("copy");}';
+        textareaScript.innerText = code;
+
+
+        editorContainer.append(textareaScript);
+        editorContainer.append(textarea);
+
+        // const editor = new JSONEditor(editorContainer, this.config);
+
+        var div = document.createElement('div');
+        div.style['overflow-y'] = 'auto';
+        div.appendChild(editorContainer);
+
+        var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
+        {
+            ui.hideDialog.apply(ui, arguments);
+            // editor.destroy();
+        });
+        
+        cancelBtn.className = 'geBtn';
+        cancelBtn.innerHTML = 'Close';
+        
+        var applyBtn = mxUtils.button(mxResources.get('apply'), function()
+        {
+            try
+            {
+                console.log('do something here');
+
+            }
+            catch (e)
+            {
+                mxUtils.alert(e);
+            }
+
+            console.log('this is graphModel after update:');
+            console.log(graph.getModel().cells);
+
+            // editor.destroy();
+
+        });
+
+        applyBtn.className = 'geBtn gePrimaryBtn';
+        applyBtn.innerHTML = 'Copy';
+        applyBtn.setAttribute('id', 'copyJSON');
         
         var buttons = document.createElement('div');
         buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:15px;height:40px;border-top:1px solid #ccc;padding-top:20px;'
@@ -2719,7 +2905,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         return vlanid;
     }
 
-    // Standardizes all cells to ahve standard value object
+    // Standardizes all cells to have standard value object
     function checkValue(cell){
         var value = cell.getValue();
         if (!mxUtils.isNode(value)){

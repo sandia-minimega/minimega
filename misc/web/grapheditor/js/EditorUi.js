@@ -11,9 +11,7 @@ EditorUi = function(editor, container, lightbox)
     this.destroyFunctions = [];
     this.editor = editor || new Editor();
     this.container = container || document.body;
-    this.topographerOpen = false; // toggle topographer button on toolbar
 
-    this.topoJSON = {nodes:[], edges:[]}; // global topography object
     this.schemas = {}; // store default schemas
 
     var self = this; // to access member variables in scope of local functions/callbacks
@@ -2668,9 +2666,6 @@ EditorUi.prototype.redo = function()
         else
         {
             this.editor.undoManager.redo();
-            var cells = graph.getModel().cells; // cells captured post redo command
-            console.log('cells in redo'), console.log(cells);
-            this.undoRedoChangesTopoJSON(cells); // persist redo to this.topoJSON
         }
     }
     catch (e)
@@ -2704,9 +2699,6 @@ EditorUi.prototype.undo = function()
         else
         {
             this.editor.undoManager.undo();
-            var cells = graph.getModel().cells; // cells captured post undo command
-            console.log('cells in undo'), console.log(cells);
-            this.undoRedoChangesTopoJSON(cells); // persist undo to this.topoJSON
         }
     }
     catch (e)
@@ -2906,101 +2898,6 @@ EditorUi.prototype.setPageVisible = function(value)
     }
     
     this.fireEvent(new mxEventObject('pageViewChanged'));
-};
-
-// persist undo/redo model (cell) changes to this.topoJSON
-EditorUi.prototype.undoRedoChangesTopoJSON = function(cells)
-{
-    var types = ['nodes', 'edges'];
-    // add/update cells during undo
-    for(var i = 0; i < types.length; i++) {
-        var type = types[i];
-        Object.entries(cells).forEach(([key, value]) => {
-            console.log('loop cells:');
-            console.log(value);
-            if(typeof value.topo !== 'undefined' ) {
-                var cellId = value.id;
-                var idx = this.topoJSON[type].map(function(e) { return e.id; }).indexOf(cellId);
-                console.log('add/update after undo: cellId= ' + cellId + ', idx=' + idx);
-                // if(idx >= 0) {
-                    console.log('value to update:'), console.log(value);
-                    this.updateTopoJSON(value);
-                // }
-            }
-        });
-    }
-    // remove cells during undo
-    for(var i = 0; i < types.length; i++) {
-        var type = types[i];
-        Object.entries(this.topoJSON[type]).forEach(([key, value]) => {
-            console.log('loop topoJSON');
-            console.log(value);
-            var cellId = value.id;
-            var idx = typeof cells[cellId] === 'undefined' ? -1 : 0;
-            console.log('remove after undo: cellId= ' + cellId + ', idx=' + idx);
-            if(idx < 0) {
-                console.log('value to remove:'), console.log(value);
-                this.topoJSON[type] = this.topoJSON[type].filter(obj => {
-                    return obj.id !== cellId;
-                });
-            }
-        });
-    }
-    console.log('this is this.topoJSON after undo:'), console.log(this.topoJSON);
-};
-
-// remove cells (nodes/edges) from this.topoJSON (persist model deletions)
-EditorUi.prototype.removeFromTopoJSON = function(cell)
-{
-    var id = cell.getId();
-    var type = cell.isVertex() ? 'nodes' : 'edges';
-    this.topoJSON[type] = this.topoJSON[type].filter(obj => {
-      return obj.id !== id;
-    });
-};
-
-// update this.topoJSON nodes/edges (persist model additions/updates)
-EditorUi.prototype.updateTopoJSON = function(cell, paste=false, mapping=null)
-{
-    console.log(cell), console.log(cell.getValue()), console.log(mapping);
-    var type = cell.isVertex() ? 'nodes' : 'edges';
-    var cellId = !paste ? cell.getId() : mapping.getId();
-    var idx = this.topoJSON[type].map(function(e) { return e.id; }).indexOf(cellId);
-    var value;
-    if(idx >= 0 && !paste) {
-        // updated cells
-        console.log('idx >= 0 and !paste');
-        value = cell.topo;
-        cell.topo.id = cell.getId(); // assign id of pasted cell; protects if user overrides id value
-        this.topoJSON[type][idx] = value;
-    }
-    else if(idx >= 0 && paste){
-        // copy/pasted cells
-        console.log('idx >= 0 and paste');
-        if(typeof cell.topo !== 'undefined') {
-            // cell.value.attributes.topo = {};
-            cell.topo = Object.assign({}, this.topoJSON[type][idx]);
-            cell.topo.id = cell.getId(); // assign id of pasted cell
-            console.log('pushed cell from paste: '), console.log(cell);
-            this.topoJSON[type].push(cell.topo);
-        }
-        // TODO: add default value to this.topoJSON on add cell (node/edge)???
-    }
-    else {
-        // new cells (nodes/edges) and/or cells that are cut/paste
-        console.log('idx < 0');
-        console.log('cellId: ' + cell.getId());
-
-        if(typeof cell.topo !== 'undefined'){
-            cell.topo.id = cell.getId(); // paste events caught here; assign pasted cell id
-        }
-        else{
-            cell.topo = {}; // new cell default object (TODO: implement default add)
-            cell.topo.id = cell.getId();
-        }
-        value = cell.topo;
-        this.topoJSON[type].push(value);
-    }
 };
 
 /**
@@ -3254,15 +3151,13 @@ EditorUi.prototype.updateActionStates = function()
                    'editStyle', 'editTooltip', 'editLink', 'backgroundColor', 'borderColor',
                    'edit', 'toFront', 'toBack', 'lockUnlock', 'solid', 'dashed', 'pasteSize',
                    'dotted', 'fillColor', 'gradientColor', 'shadow', 'fontColor',
-                   'formattedText', 'rounded', 'toggleRounded', 'sharp', 'strokeColor', 'openTopographer'];
+                   'formattedText', 'rounded', 'toggleRounded', 'sharp', 'strokeColor'];
     
     for (var i = 0; i < actions.length; i++)
     {
         this.actions.get(actions[i]).setEnabled(selected);
     }
     
-    this.actions.get('openTopographer').setEnabled(!this.topographerOpen); // enable/disable Open Topographer button
-
     this.actions.get('setAsDefaultStyle').setEnabled(graph.getSelectionCount() == 1);
     this.actions.get('clearWaypoints').setEnabled(!graph.isSelectionEmpty());
     this.actions.get('copySize').setEnabled(graph.getSelectionCount() == 1);

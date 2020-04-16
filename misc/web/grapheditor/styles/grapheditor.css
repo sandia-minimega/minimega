@@ -310,7 +310,7 @@
 }
 .geToolbarContainer .geButton {
         float:left;
-        width:20px;
+        /*width:20px;*/
         height:20px;
         padding:0px 2px 4px 2px;
         margin:2px;
@@ -533,11 +533,11 @@ div.mxWindow .geButton {
         width:21px;
         height:21px;
 }
-/* custom icon for topographer */
-.geSprite-opentopographer {
-    background:url(../images/topographer.png) no-repeat !important;
-    width:22px;
-    height:22px;
+/* custom icon for view json */
+.geSprite-viewjson {
+    background:url(../images/json_icon.png) no-repeat !important;
+    width:33px;
+    height:21px;
 }
 .geBaseButton {
         padding:10px;

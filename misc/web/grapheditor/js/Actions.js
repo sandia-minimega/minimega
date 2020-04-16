@@ -24,50 +24,54 @@ Actions.prototype.init = function()
         return Action.prototype.isEnabled.apply(this, arguments) && graph.isEnabled();
     };
 
-    this.addAction('openTopographer', function(evt){
+    this.addAction('viewJSON', function(evt){
 
-        // var tmp = document.createElement('div');
-        // tmp.id = 'topographer';
+        // // var tmp = document.createElement('div');
+        // // tmp.id = 'topographer';
 
-        window.ui = ui;
-        window.graph = graph;
-        window.editor = editor;
+        // window.ui = ui;
+        // window.graph = graph;
+        // window.editor = editor;
 
-        var frame = document.createElement('iframe');
-        frame.setAttribute('width', '100%');
-        frame.setAttribute('height', '100%');
-        frame.setAttribute('src', window.UTILS_PATH + "/topographer/index.html");
-        frame.style.backgroundColor = 'white';
+        // var frame = document.createElement('iframe');
+        // frame.setAttribute('width', '100%');
+        // frame.setAttribute('height', '100%');
+        // frame.setAttribute('src', window.UTILS_PATH + "/topographer/index.html");
+        // frame.style.backgroundColor = 'white';
 
-        // var ajax = new XMLHttpRequest();
-        // ajax.open("GET", window.UTILS_PATH + "/topographer/index.html", false);
-        // ajax.send();
-        // console.log(ajax);
-        // tmp.innerHTML += ajax.responseText;
+        // // var ajax = new XMLHttpRequest();
+        // // ajax.open("GET", window.UTILS_PATH + "/topographer/index.html", false);
+        // // ajax.send();
+        // // console.log(ajax);
+        // // tmp.innerHTML += ajax.responseText;
 
-        var wnd = new mxWindow('Topographer JSON Editor', frame, 300, 80, 1200, 900, true, true);
-        wnd.setMaximizable(true);
-        wnd.setResizable(true);
-        wnd.setVisible(true);
-        wnd.setClosable(true);
+        // var wnd = new mxWindow('Topographer JSON Editor', frame, 300, 80, 1200, 900, true, true);
+        // wnd.setMaximizable(true);
+        // wnd.setResizable(true);
+        // wnd.setVisible(true);
+        // wnd.setClosable(true);
         
-        ui.topographerOpen = true;
-        ui.updateActionStates();
+        // ui.topographerOpen = true;
+        // ui.updateActionStates();
 
-        wnd.addListener(mxEvent.ACTIVATE, function(e){
-            console.log(e);
-            // var tmp = document.getElementById('topographer');
-            // console.log(tmp);
-            // var ajax = new XMLHttpRequest();
-            // ajax.open("GET", "../resources/help.html", false);
-            // ajax.send();
-            // tmp.innerHTML += 'hello';
-        });
+        // wnd.addListener(mxEvent.ACTIVATE, function(e){
+        //     console.log(e);
+        //     // var tmp = document.getElementById('topographer');
+        //     // console.log(tmp);
+        //     // var ajax = new XMLHttpRequest();
+        //     // ajax.open("GET", "../resources/help.html", false);
+        //     // ajax.send();
+        //     // tmp.innerHTML += 'hello';
+        // });
 
-        wnd.addListener(mxEvent.CLOSE, function(e){
-            ui.topographerOpen = false;
-            ui.updateActionStates();
-        });
+        // wnd.addListener(mxEvent.CLOSE, function(e){
+        //     ui.topographerOpen = false;
+        //     ui.updateActionStates();
+        // });
+
+        var dlg = new topoJSONDialog(ui);
+        // ui.showDialog(dlg.container, 620, 450, true, false);
+        dlg.init();
 
     }, null, null, null);
 
@@ -154,16 +158,7 @@ Actions.prototype.init = function()
     // Edit actions
     this.addAction('undo', function() { ui.undo(); }, null, 'sprite-undo', Editor.ctrlKey + '+Z');
     this.addAction('redo', function() { ui.redo(); }, null, 'sprite-redo', (!mxClient.IS_WIN) ? Editor.ctrlKey + '+Shift+Z' : Editor.ctrlKey + '+Y');
-    this.addAction('cut', function() {
-        var cells = mxClipboard.copy(graph);
-        mxClipboard.cut(graph); 
-        // var cells = mxClipboard.getCells();
-        console.log('cut cells: '), console.log(cells);
-        // update ui.topoJSON (initially delete from topoJSON); recover at/if paste
-        for(var i = 0; i < cells.length; i++) {
-            ui.removeFromTopoJSON(cells[i]);
-        }
-    }, null, 'sprite-cut', Editor.ctrlKey + '+X');
+    this.addAction('cut', function() { mxClipboard.cut(graph); }, null, 'sprite-cut', Editor.ctrlKey + '+X');
     this.addAction('copy', function()
     {
         try
@@ -179,15 +174,7 @@ Actions.prototype.init = function()
     {
         if (graph.isEnabled() && !graph.isCellLocked(graph.getDefaultParent()))
         {
-            var cells = mxClipboard.getCells();
-            console.log(cells);
-            var pastedCells = mxClipboard.paste(graph);
-            console.log(pastedCells);
-            // recovers if removed during cut; otherwise, adds clipboard (copy) with updated id
-            for(var i = 0; i < pastedCells.length; i++) {
-                ui.updateTopoJSON(pastedCells[i], true, cells[i]);
-            }
-            console.log('this is ui.topoJSON after paste:'), console.log(ui.topoJSON);
+            mxClipboard.paste(graph);
         }
     }, false, 'sprite-paste', Editor.ctrlKey + '+V');
     this.addAction('pasteHere', function(evt)
@@ -299,12 +286,6 @@ Actions.prototype.init = function()
         
         if (cells != null && cells.length > 0)
         {
-
-            for (var i = 0; i < cells.length; i++){
-                ui.removeFromTopoJSON(cells[i]);
-            }
-
-            console.log('topoJSON after removing cells: '), console.log(ui.topoJSON);
 
             var parents = (graph.selectParentAfterDelete) ? graph.model.getParents(cells) : null;
             graph.removeCells(cells, includeEdges);

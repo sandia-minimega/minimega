@@ -246,48 +246,6 @@ mxCell.prototype.valueChanged = function(newValue)
 };
 
 /**
- * Function: getTopo
- *
- * FORK change to persist topo object (for JSONEditor)
- *
- * Returns the topo object of the cell. 
- */
-mxCell.prototype.getTopo = function()
-{
-	return this.topo;
-};
-
-/**
- * Function: setTopo
- *
- * FORK change to persist topo object (for JSONEditor)
- *
- * Sets the topo object of the cell.
- */
-mxCell.prototype.setTopo = function(topo)
-{
-	this.topo = topo;
-};
-
-/**
- * Function: topoChanged
- *
- * FORK change to persist topo object (for JSONEditor)
- *
- * Changes the topo object after an in-place edit
- * and returns the previous topo. This implementation
- * replaces the topo object with the given topo and
- * returns the old topo object.
- */
-mxCell.prototype.topoChanged = function(newTopo)
-{
-	var previous = this.getTopo();
-	this.setTopo(newTopo);
-	
-	return previous;
-};
-
-/**
  * Function: getGeometry
  *
  * Returns the <mxGeometry> that describes the <geometry>.

@@ -1638,41 +1638,6 @@ mxGraphModel.prototype.valueForCellChanged = function(cell, value)
 };
 
 /**
- * Function: setTopo
- * 
- * FORK change to persist topo object (for JSONEditor)
- *
- * Sets the user object of then given <mxCell> using <mxTopoChange>
- * and adds the change to the current transaction.
- *
- * Parameters:
- * 
- * cell - <mxCell> whose user object should be changed.
- * topo - Object that defines the new JSONEditor topo object.
- */
-mxGraphModel.prototype.setTopo = function(cell, topo)
-{
-	this.execute(new mxTopoChange(this, cell, topo));
-	
-	return topo;
-};
-
-/**
- * Function: topoForCellChanged
- *
- * FORK change to persist topo object (for JSONEditor)
- *
- * Inner callback to update the user object of the given <mxCell>
- * using <mxCell.topovalueChanged> and return the previous topo object,
- * that is, the return value of <mxCell.topoChanged>.
- * 
- */
-mxGraphModel.prototype.topoForCellChanged = function(cell, topo)
-{
-	return cell.topoChanged(topo);
-};
-
-/**
  * Function: getGeometry
  * 
  * Returns the <mxGeometry> of the given <mxCell>.
@@ -2531,44 +2496,6 @@ mxValueChange.prototype.execute = function()
 	{
 		this.value = this.previous;
 		this.previous = this.model.valueForCellChanged(
-			this.cell, this.previous);
-	}
-};
-
-/**
- * Class: mxTopoChange
- *
- * FORK change to persist topo object (for JSONEditor)
- *
- * Action to change cell topo object in model.
- *
- * Constructor: mxTopoChange
- * 
- * Constructs a change of the topo object in the 
- * specified model.
- */
-function mxTopoChange(model, cell, topo)
-{
-	this.model = model;
-	this.cell = cell;
-	this.topo = topo;
-	this.previous = topo;
-};
-
-/**
- * Function: execute
- * 
- * FORK change to persist topo object (for JSONEditor)
- *
- * Changes the topo of <cell> to <previous> using
- * <mxGraphModel.topoForCellChanged>.
- */
-mxTopoChange.prototype.execute = function()
-{
-	if (this.cell != null)
-	{
-		this.topo = this.previous;
-		this.previous = this.model.topoForCellChanged(
 			this.cell, this.previous);
 	}
 };

@@ -3,24 +3,11 @@
   "type": "object",
   "title": "Node",
   "required": [
-    "id",
     "type",
     "general",
     "hardware"
   ],
   "properties": {
-    "id": {
-      "$id": "#/properties/nodes/items/properties/id",
-      "type": "string",
-      "title": "Id",
-      "readOnly": true,
-      "minLength": 1,
-      "default": "",
-      "examples": [
-        "101"
-      ],
-      "pattern": "^(.*)$"
-    },
     "type": {
       "$id": "#/properties/nodes/items/properties/type",
       "type": "string",
@@ -1222,6 +1209,32 @@
           "examples": [
             "false"
           ]
+        }
+      }
+    },
+    "miniccc_commands": {
+      "$id": "#/properties/nodes/items/properties/miniccc_commands",
+      "type": "array",
+      "title": "miniccc Commands",
+      "items": {
+        "$id": "#/properties/nodes/items/properties/miniccc_commands/items",
+        "type": "string",
+        "title": "Command",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "$id": "#/properties/nodes/items/properties/miniccc_commands/items/command",
+            "type": "string",
+            "title": "Command",
+            "minLength": 1,
+            "default": "",
+            "examples": [
+              ""
+            ],
+            "pattern": ""
+          }
         }
       }
     }
