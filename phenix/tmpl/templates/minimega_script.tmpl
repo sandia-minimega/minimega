@@ -6,15 +6,15 @@ ns del-host all
 ns add-host localhost
 {{ end }}
 
-{{ $hostname, _ := os.Hostname() }}
+{{ $hostname := "foobar" }}
 
-{{ range .Nodes }}
-{{ $snapshotName := {{ $hostname }}_{{ $.ExperimentName }}_{{ .General.Hostname }}_snapshot }}
-
+{{ range .Topology.Nodes }}
 {{ if .General.Snapshot }}
-{{ $firstDrive := index .Drives 0 }}
-disk snapshot {{ $firstDrive.Image }} {{ $snapshotName }} 
-disk inject {{ $snapshotName }}:{{ $firstDrive.InjectPartition }} files {{ .FileInjects() }}
+{{ $firstDrive := index .Hardware.Drives 0 }}
+disk snapshot {{ $firstDrive.Image }} {{ $.SnapshotName .General.Hostname }} 
+{{ if gt (len .Injections) 0 }}
+disk inject {{ $.SnapshotName .General.Hostname  }}:{{ $firstDrive.InjectPartition }} files {{ .FileInjects }}
+{{ end }}
 {{ end }}
 
 clear vm config
@@ -29,16 +29,15 @@ vm config memory {{ .Hardware.Memory }}
 vm config snapshot {{ .General.Snapshot }}
 
 {{ if .General.Snapshot }}
-vm config disk {{ .Hardware.DiskConfig($snapshotName) }}
+vm config disk {{ .Hardware.DiskConfig ($.SnapshotName .General.Hostname) }}
 {{ else }}
-vm config disk {{ .Hardware.DiskConfig("") }}
+vm config disk {{ .Hardware.DiskConfig "" }}
 {{ end }}
 
 {{ if eq .Hardware.OSType "linux" }}
 vm config qemu-append -vga qxl
 {{ end }}
 
-# TODO
-vm config net {{ .Network.InterfaceConfig() }}
+vm config net {{ .Network.InterfaceConfig }}
 vm launch {{ .General.VMType }} {{ .General.Hostname }}
 {{ end }}

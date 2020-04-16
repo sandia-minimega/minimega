@@ -1,12 +1,13 @@
 apiVersion: phenix.sandia.gov/v1
 kind: Topology
 metadata:
-  name: Foo Bar Topo
+  name: foo-bar-topo
 spec:
   nodes:
   - type: VirtualMachine
     general:
       hostname: turbine-01
+      snapshot: true
     hardware:
       os_type: linux
       drives:
@@ -29,6 +30,7 @@ spec:
   - type: VirtualMachine
     general:
       hostname: turbine-02
+      snapshot: true
     hardware:
       os_type: linux
       drives:
