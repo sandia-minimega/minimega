@@ -30,10 +30,10 @@ func Update(config *types.Config) error {
 	return DefaultStore.Update(config)
 }
 
-func Patch(kind, name string, data map[string]interface{}) error {
-	return DefaultStore.Patch(kind, name, data)
+func Patch(config *types.Config, data map[string]interface{}) error {
+	return DefaultStore.Patch(config, data)
 }
 
-func Delete(kind, name string) error {
-	return DefaultStore.Delete(kind, name)
+func Delete(config *types.Config) error {
+	return DefaultStore.Delete(config)
 }

@@ -91,7 +91,7 @@ func (this BoltDB) Create(c *types.Config) error {
 		return fmt.Errorf("config %s/%s already exists", c.Kind, c.Metadata.Name)
 	}
 
-	now := time.Now()
+	now := time.Now().Format(time.RFC3339)
 
 	c.Metadata.Created = now
 	c.Metadata.Updated = now
@@ -113,7 +113,7 @@ func (this BoltDB) Update(c *types.Config) error {
 		return fmt.Errorf("config does not exist")
 	}
 
-	c.Metadata.Updated = time.Now()
+	c.Metadata.Updated = time.Now().Format(time.RFC3339)
 
 	v, err := json.Marshal(c)
 	if err != nil {
@@ -127,22 +127,22 @@ func (this BoltDB) Update(c *types.Config) error {
 	return nil
 }
 
-func (this BoltDB) Patch(string, string, map[string]interface{}) error {
+func (this BoltDB) Patch(*types.Config, map[string]interface{}) error {
 	return fmt.Errorf("BoltDB.Patch not implemented")
 }
 
-func (this BoltDB) Delete(kind, name string) error {
-	if err := this.ensureBucket(kind); err != nil {
+func (this BoltDB) Delete(c *types.Config) error {
+	if err := this.ensureBucket(c.Kind); err != nil {
 		return nil
 	}
 
 	err := this.db.Update(func(tx *bbolt.Tx) error {
-		b := tx.Bucket([]byte(kind))
-		return b.Delete([]byte(name))
+		b := tx.Bucket([]byte(c.Kind))
+		return b.Delete([]byte(c.Metadata.Name))
 	})
 
 	if err != nil {
-		return fmt.Errorf("deleting key %s in bucket %s: %w", name, kind, err)
+		return fmt.Errorf("deleting key %s in bucket %s: %w", c.Metadata.Name, c.Kind, err)
 	}
 
 	return nil

@@ -6,47 +6,16 @@ import (
 	"io/ioutil"
 	"path/filepath"
 	"strings"
-	"time"
 
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 const API_GROUP = "phenix.sandia.gov"
 
-type Configs []Config
-
-func NewConfig(kind, name string) *Config {
-	return &Config{
-		Kind: kind,
-		Metadata: ConfigMetadata{
-			Name: name,
-		},
-	}
-}
-
-func NewConfigFromFile(path string) (*Config, error) {
-	file, err := ioutil.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("cannot read config: %w", err)
-	}
-
-	var config Config
-
-	switch filepath.Ext(path) {
-	case ".json":
-		if err := json.Unmarshal(file, &config); err != nil {
-			return nil, fmt.Errorf("unmarshaling config: %w", err)
-		}
-	case ".yaml", ".yml":
-		if err := yaml.Unmarshal(file, &config); err != nil {
-			return nil, fmt.Errorf("unmarshaling config: %w", err)
-		}
-	default:
-		return nil, fmt.Errorf("invalid config extension")
-	}
-
-	return &config, nil
-}
+type (
+	Configs     []Config
+	Annotations map[string]string
+)
 
 type Config struct {
 	Version  string                 `json:"apiVersion" yaml:"apiVersion"`
@@ -58,12 +27,53 @@ type Config struct {
 
 type ConfigMetadata struct {
 	Name        string      `json:"name" yaml:"name"`
-	Created     time.Time   `json:"created" yaml:"created"`
-	Updated     time.Time   `json:"updated" yaml:"updated"`
+	Created     string      `json:"created" yaml:"created"`
+	Updated     string      `json:"updated" yaml:"updated"`
 	Annotations Annotations `json:"annotations,omitempty" yaml:"annotations,omitempty"`
 }
 
-type Annotations map[string]string
+func NewConfig(name string) (*Config, error) {
+	n := strings.Split(name, "/")
+
+	if len(n) != 2 {
+		return nil, fmt.Errorf("invalid config name provided: %s", name)
+	}
+
+	kind, name := n[0], n[1]
+
+	c := Config{
+		Kind: strings.Title(kind),
+		Metadata: ConfigMetadata{
+			Name: name,
+		},
+	}
+
+	return &c, nil
+}
+
+func NewConfigFromFile(path string) (*Config, error) {
+	file, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("cannot read config: %w", err)
+	}
+
+	var c Config
+
+	switch filepath.Ext(path) {
+	case ".json":
+		if err := json.Unmarshal(file, &c); err != nil {
+			return nil, fmt.Errorf("unmarshaling config: %w", err)
+		}
+	case ".yaml", ".yml":
+		if err := yaml.Unmarshal(file, &c); err != nil {
+			return nil, fmt.Errorf("unmarshaling config: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("invalid config extension")
+	}
+
+	return &c, nil
+}
 
 func (this Config) APIGroup() string {
 	s := strings.Split(this.Version, "/")

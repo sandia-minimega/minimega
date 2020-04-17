@@ -41,35 +41,6 @@ spec:
         type: ethernet
 `
 
-func TestConfigGet(t *testing.T) {
-	f, err := ioutil.TempFile("/tmp", "phenix")
-	if err != nil {
-		t.Log(err)
-		t.FailNow()
-	}
-
-	defer os.Remove(f.Name())
-
-	b := NewBoltDB()
-
-	if err := b.Init(Path(f.Name())); err != nil {
-		t.Log(err)
-		t.FailNow()
-	}
-
-	c := types.Config{
-		Kind: "Topology",
-		Metadata: types.ConfigMetadata{
-			Name: "foobar",
-		},
-	}
-
-	if err := b.Get(&c); err != nil {
-		t.Log(err)
-		t.FailNow()
-	}
-}
-
 func TestConfigCreate(t *testing.T) {
 	f, err := ioutil.TempFile("/tmp", "phenix")
 	if err != nil {
@@ -156,7 +127,9 @@ func TestConfigDelete(t *testing.T) {
 		t.FailNow()
 	}
 
-	if err := b.Delete("Topology", "foobar"); err != nil {
+	c, _ := types.NewConfig("topology/foobar")
+
+	if err := b.Delete(c); err != nil {
 		t.Log(err)
 		t.FailNow()
 	}

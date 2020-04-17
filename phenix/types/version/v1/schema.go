@@ -50,6 +50,8 @@ components:
         experimentName:
           type: string
           minLength: 1
+        baseDir:
+          type: string
     VLAN:
       type: object
       title: VLAN

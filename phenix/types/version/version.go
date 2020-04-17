@@ -15,6 +15,15 @@ var StoredVersion = map[string]string{
 	"Experiment": "v1",
 }
 
+func GetStoredSpecForKind(kind string) (interface{}, error) {
+	version, ok := StoredVersion[kind]
+	if !ok {
+		return nil, fmt.Errorf("unknown kind %s", kind)
+	}
+
+	return GetVersionedSpecForKind(kind, version)
+}
+
 func GetVersionedSpecForKind(kind, version string) (interface{}, error) {
 	switch kind {
 	case "Topology":

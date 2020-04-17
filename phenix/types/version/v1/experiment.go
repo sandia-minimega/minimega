@@ -3,13 +3,13 @@ package v1
 import (
 	"fmt"
 	"os"
-	"time"
 )
 
 type Schedule map[string]string
 
 type ExperimentSpec struct {
 	ExperimentName string        `json:"experimentName" yaml:"experimentName" structs:"experimentName"`
+	BaseDir        string        `json:"baseDir" yaml:"baseDir" structs:"baseDir"`
 	Topology       *TopologySpec `json:"topology" yaml:"topology"`
 	Scenario       *ScenarioSpec `json:"scenario" yaml:"scenario"`
 	Schedules      Schedule      `json:"schedules" yaml:"schedules"`
@@ -19,10 +19,14 @@ type ExperimentSpec struct {
 }
 
 type ExperimentStatus struct {
-	StartTime time.Time `json:"startTime" yaml:"startTime"`
+	StartTime string `json:"startTime" yaml:"startTime"`
 }
 
 func (this *ExperimentSpec) SetDefaults() {
+	if this.BaseDir == "" {
+		this.BaseDir = "/phenix/experiments"
+	}
+
 	this.Topology.SetDefaults()
 }
 
@@ -52,4 +56,8 @@ func (this ExperimentSpec) SnapshotName(node string) string {
 	hostname, _ := os.Hostname()
 
 	return fmt.Sprintf("%s_%s_%s_snapshot", hostname, this.ExperimentName, node)
+}
+
+func (this ExperimentStatus) Running() bool {
+	return this.StartTime != ""
 }
