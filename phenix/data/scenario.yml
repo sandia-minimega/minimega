@@ -11,31 +11,7 @@ spec:
       # The map associated w/ the app name here would contain any
       # configuration details needed to configure the app.
       metadata: {}
-    - name: crash
-      # The map associated w/ the app name here would contain any
-      # configuration details needed to configure the app.
-      metadata: {}
     host:
-    - name: sceptre # app name
-      hosts:
-      - hostname: turbine-01 # hostname of topology node to apply it to
-        metadata:
-          # sceptre app metadata for this topology node
-          infrastructure: power-transmission
-          provider: power-provider
-          protocols:
-            sunspec:
-            - type: inverter
-              name: generator-1_bus-2100
-      - hostname: turbine-02
-        metadata:
-          # sceptre app metadata for this topology node
-          infrastructure: power-transmission
-          provider: power-provider
-          protocols:
-            sunspec:
-            - type: inverter
-              name: generator-2_bus-2100
     - name: protonuke
       hosts:
       - hostname: turbine-01 # hostname of topology node to apply it to
