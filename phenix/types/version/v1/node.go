@@ -44,7 +44,7 @@ type Node struct {
 type General struct {
 	Hostname    string `json:"hostname" yaml:"hostname"`
 	Description string `json:"description" yaml:"description"`
-	VMType      VMType `json:"vm_type" yaml:"vm_type"`
+	VMType      VMType `json:"vm_type" yaml:"vm_type" mapstructure:"vm_type"`
 	Snapshot    bool   `json:"snapshot" yaml:"snapshot"`
 	DoNotBoot   bool   `json:"do_not_boot" yaml:"do_not_boot"`
 }
@@ -53,7 +53,7 @@ type Hardware struct {
 	CPU    CPU     `json:"cpu" yaml:"cpu"`
 	VCPU   int     `json:"vcpus" yaml:"vcpus"`
 	Memory int     `json:"memory" yaml:"memory"`
-	OSType OSType  `json:"os_type" yaml:"os_type"`
+	OSType OSType  `json:"os_type" yaml:"os_type" mapstructure:"os_type"`
 	Drives []Drive `json:"drives" yaml:"drives"`
 }
 
