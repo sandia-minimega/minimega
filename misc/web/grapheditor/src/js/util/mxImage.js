@@ -6,16 +6,16 @@
  * Class: mxImage
  *
  * Encapsulates the URL, width and height of an image.
- * 
+ *
  * Constructor: mxImage
- * 
+ *
  * Constructs a new image.
  */
 function mxImage(src, width, height)
 {
-	this.src = src;
-	this.width = width;
-	this.height = height;
+        this.src = src;
+        this.width = width;
+        this.height = height;
 };
 
 /**

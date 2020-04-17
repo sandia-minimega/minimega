@@ -1509,12 +1509,12 @@ EditorUi.prototype.initCanvas = function()
             {
                 cx = (cx != null) ? cx : 0;
                 cy = (cy != null) ? cy : 0;
-                
+
                 var bds = (graph.pageVisible) ? graph.view.getBackgroundPageBounds() : graph.getGraphBounds();
                 var scroll = mxUtils.hasScrollbars(graph.container);
                 var tr = graph.view.translate;
                 var s = graph.view.scale;
-                
+
                 // Normalizes the bounds
                 var b = mxRectangle.fromRectangle(bds);
                 b.x = b.x / s - tr.x;
@@ -2365,7 +2365,7 @@ EditorUi.prototype.initCanvas = function()
             {
                 var t = graph.view.getTranslate();
                 var step = 40 / graph.view.scale;
-                
+
                 if (!mxEvent.isShiftDown(evt))
                 {
                     graph.view.setTranslate(t.x, t.y + ((up) ? step : -step));
@@ -2442,7 +2442,7 @@ EditorUi.prototype.createTemporaryGraph = function(stylesheet)
 };
 
 /**
- * 
+ *
  */
 EditorUi.prototype.addChromelessClickHandler = function()
 {
@@ -2458,7 +2458,7 @@ EditorUi.prototype.addChromelessClickHandler = function()
 };
 
 /**
- * 
+ *
  */
 EditorUi.prototype.toggleFormatPanel = function(forceHide)
 {
@@ -2500,7 +2500,7 @@ EditorUi.prototype.lightboxFit = function(maxHeight)
 
 /**
  * Translates this point by the given vector.
- * 
+ *
  * @param {number} dx X-coordinate of the translation.
  * @param {number} dy Y-coordinate of the translation.
  */
@@ -2724,7 +2724,7 @@ EditorUi.prototype.canUndo = function()
 };
 
 /**
- * 
+ *
  */
 EditorUi.prototype.getEditBlankXml = function()
 {
@@ -3202,7 +3202,7 @@ EditorUi.prototype.updateActionStates = function()
     this.actions.get('selectEdges').setEnabled(unlocked);
     this.actions.get('selectAll').setEnabled(unlocked);
     this.actions.get('selectNone').setEnabled(unlocked);
-    
+
     this.updatePasteActionStates();
 };
 
@@ -3648,7 +3648,7 @@ EditorUi.prototype.addSplitHandler = function(elt, horizontal, dx, onChange)
 
 /**
  * Translates this point by the given vector.
- * 
+ *
  * @param {number} dx X-coordinate of the translation.
  * @param {number} dy Y-coordinate of the translation.
  */
@@ -3678,7 +3678,7 @@ EditorUi.prototype.handleError = function(resp, title, fn, invokeFnOnClose, notF
 
 /**
  * Translates this point by the given vector.
- * 
+ *
  * @param {number} dx X-coordinate of the translation.
  * @param {number} dy Y-coordinate of the translation.
  */

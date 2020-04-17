@@ -271,7 +271,7 @@ var ColorDialog = function(editorUi, color, apply, cancelFn)
 /**
  * Creates function to apply value
  */
-ColorDialog.prototype.presetColors = ['E6D0DE', 'CDA2BE', 'B5739D', 'E1D5E7', 'C3ABD0', 'A680B8', 'D4E1F5', 'A9C4EB', '7EA6E0', 'D5E8D4', '9AC7BF', '67AB9F', 'D5E8D4', 'B9E0A5', '97D077', 'FFF2CC', 'FFE599', 'FFD966', 'FFF4C3', 'FFCE9F', 'FFB570', 'F8CECC', 'F19C99', 'EA6B66']; 
+ColorDialog.prototype.presetColors = ['E6D0DE', 'CDA2BE', 'B5739D', 'E1D5E7', 'C3ABD0', 'A680B8', 'D4E1F5', 'A9C4EB', '7EA6E0', 'D5E8D4', '9AC7BF', '67AB9F', 'D5E8D4', 'B9E0A5', '97D077', 'FFF2CC', 'FFE599', 'FFD966', 'FFF4C3', 'FFCE9F', 'FFB570', 'F8CECC', 'F19C99', 'EA6B66'];
 
 /**
  * Creates function to apply value
@@ -306,7 +306,7 @@ ColorDialog.prototype.createApplyFunction = function()
 };
 
 /**
- * 
+ *
  */
 ColorDialog.recentColors = [];
 
@@ -569,12 +569,12 @@ var FilenameDialog = function(editorUi, filename, buttonText, fn, label, validat
 };
 
 /**
- * 
+ *
  */
 FilenameDialog.filenameHelpLink = null;
 
 /**
- * 
+ *
  */
 FilenameDialog.createTypeHint = function(ui, nameInput, hints)
 {
@@ -943,7 +943,7 @@ var EditDiagramDialog = function(editorUi)
 };
 
 /**
- * 
+ *
  */
 EditDiagramDialog.showNewWindowOption = true;
 
@@ -1526,22 +1526,6 @@ var EditDataDialog = function(ui, cell)
     var id = (EditDataDialog.getDisplayIdForCell != null) ?
         EditDataDialog.getDisplayIdForCell(ui, cell) : null;
 
-    // get node if exists in global ui.topoJSON
-    // var result = nodes.filter(obj => {
-    //   return obj.id === id;
-    // });
-    // console.log(result);
-
-    // set node if exists in global ui.topoJSON
-    // if(result.length > 0){
-    //     node = result[0];
-    // }
-    // else{
-    //     node = {};
-    // }
-    // node.id = id;
-
-    var node = typeof cell.topo !== 'undefined' ? cell.topo : {id:id};
     var value = graph.getModel().getValue(cell);
     if (!mxUtils.isNode(value))
     {
@@ -1550,10 +1534,28 @@ var EditDataDialog = function(ui, cell)
         // obj.setAttribute('label', value || '');
         value = obj;
     }
-    console.log(node);
 
     var startval = value.hasAttribute('schemaVars') ? JSON.parse(value.getAttribute('schemaVars')) : {};
     console.log('this is startval:'), console.log(startval);
+
+    var parameters = {
+        memory: "$DEFAULT_MEMORY",
+        vcpu: "$DEFAULT_VCPU",
+        network: undefined,  // This should really be "null" rather than undefined
+        snapshot:true,
+        cdrom:undefined,
+    };
+
+    if (cell.getStyle().includes("container"))
+    {
+        parameters.filesystem = "$IMAGEDIR/";
+    }
+    else
+    {
+        parameters.kernel = "$IMAGEDIR/";
+        parameters.initrd = "$IMAGEDIR/";
+        parameters.disk = "$IMAGEDIR/";
+    }
 
     // Set JSONEditor and config options based on schema and cell type
     var loadConfig = function () {
@@ -2061,7 +2063,7 @@ var LinkDialog = function(editorUi, initialValue, btnLabel, fn)
 };
 
 /**
- * 
+ *
  */
 var OutlineWindow = function(editorUi, x, y, w, h)
 {
@@ -2228,7 +2230,7 @@ var OutlineWindow = function(editorUi, x, y, w, h)
 };
 
 /**
- * 
+ *
  */
 var LayersWindow = function(editorUi, x, y, w, h)
 {
@@ -2847,262 +2849,275 @@ var LayersWindow = function(editorUi, x, y, w, h)
  */
 var EditMiniConfigDialog = function(editorUi,vertices,edges)
 {
-    var div = document.createElement('div');
-    div.style.textAlign = 'right';
+        var div = document.createElement('div');
+        div.style.textAlign = 'right';
 
-    var header = document.createElement('h2');
-    header.textContent = "Minimega Script";
+        var header = document.createElement('h2');
+        header.textContent = "Minimega Script";
         header.style.marginTop = "0";
         header.style.marginBottom = "10px";
-    header.style.textAlign = 'left';
+        header.style.textAlign = 'left';
 
         div.appendChild(header);
 
-    var textarea = document.createElement('textarea');
-    textarea.setAttribute('wrap', 'off');
-    textarea.setAttribute('spellcheck', 'false');
-    textarea.setAttribute('autocorrect', 'off');
-    textarea.setAttribute('autocomplete', 'off');
-    textarea.setAttribute('autocapitalize', 'off');
-    textarea.style.overflow = 'auto';
-    textarea.style.resize = 'none';
-    textarea.style.width = '100%';
-    textarea.style.height = '360px';
-    textarea.style.lineHeight = 'initial';
-    textarea.style.marginBottom = '16px';
-    var vlans_in_use = {};
-    var vlan_count =10;
-    var vlanid = "a";
-    function searchNextVlan(v){
-        if (!vlans_in_use.hasOwnProperty(v.toString())){
-            vlans_in_use[v.toString()]=true;
-            return v;
-        }
-        while (vlans_in_use.hasOwnProperty(vlanid)){
-            c = vlanid.charCodeAt(vlanid.length-1);
-            if (c == 122){
-                index = v.length-1;
-                carry = 0;
-                while (index > -1){
-                    if (vlanid.charCodeAt(index) == 122){
-                        vlanid = vlanid.substr(0, index) + "a"+ vlanid.substr(index + 1);
-                        carry++;
-                    }
-                    else {
-                        vlanid = vlanid.substr(0, index) + String.fromCharCode(vlanid.charCodeAt(index) + 1)+ vlanid.substr(index + 1);
-                    }
-                    index--;
+        var textarea = document.createElement('textarea');
+        textarea.setAttribute('wrap', 'off');
+        textarea.setAttribute('spellcheck', 'false');
+        textarea.setAttribute('autocorrect', 'off');
+        textarea.setAttribute('autocomplete', 'off');
+        textarea.setAttribute('autocapitalize', 'off');
+        textarea.style.overflow = 'auto';
+        textarea.style.resize = 'none';
+        textarea.style.width = '100%';
+        textarea.style.height = '360px';
+        textarea.style.lineHeight = 'initial';
+        textarea.style.marginBottom = '16px';
+        var vlans_in_use = {};
+        var vlan_count =10;
+        var vlanid = "a";
+        function searchNextVlan(v){
+                if (!vlans_in_use.hasOwnProperty(v.toString())){
+                        vlans_in_use[v.toString()]=true;
+                        return v;
                 }
-                if (carry == vlanid.length){
-                    vlanid += "a";
+                while (vlans_in_use.hasOwnProperty(vlanid)){
+                        c = vlanid.charCodeAt(vlanid.length-1);
+                        if (c == 122){
+                                index = v.length-1;
+                                carry = 0;
+                                while (index > -1){
+                                        if (vlanid.charCodeAt(index) == 122){
+                                                vlanid = vlanid.substr(0, index) + "a"+ vlanid.substr(index + 1);
+                                                carry++;
+                                        }
+                                        else {
+                                                vlanid = vlanid.substr(0, index) + String.fromCharCode(vlanid.charCodeAt(index) + 1)+ vlanid.substr(index + 1);
+                                        }
+                                        index--;
+                                }
+                                if (carry == vlanid.length){
+                                        vlanid += "a";
+                                }
+                        }
+                        else {
+                                vlanid = vlanid.substr(0, vlanid.length -1 ) + String.fromCharCode(c + 1);
+                        }
                 }
-            }
-            else {
-                vlanid = vlanid.substr(0, vlanid.length -1 ) + String.fromCharCode(c + 1);
-            }
+                vlans_in_use[vlanid]=true;
+                return vlanid;
         }
-        vlans_in_use[vlanid]=true;
-        return vlanid;
-    }
 
-    // Standardizes all cells to have standard value object
-    function checkValue(cell){
-        var value = cell.getValue();
-        if (!mxUtils.isNode(value)){
-            var doc = mxUtils.createXmlDocument();
-            var obj = doc.createElement('object');
-            obj.setAttribute('label', value || '');
-            value = obj;
-            cell.setValue(value);
+        // Standardizes all cells to ahve standard value object
+        function checkValue(cell){
+                var value = cell.getValue();
+                if (!mxUtils.isNode(value)){
+                        var doc = mxUtils.createXmlDocument();
+                        var obj = doc.createElement('object');
+                        obj.setAttribute('label', value || '');
+                        value = obj;
+                        cell.setValue(value);
+                }
         }
-    }
 
-    function lookforvlan(cell){
-        checkValue(cell);
-        // Check if vertex is a switch, if it is and it does not have a vlan set all edges to a new vlan
-        if (cell.getStyle().includes("switch")){
-            if (cell.getAttribute("vlan") == undefined ){
-                cell.setAttribute("vlan", searchNextVlan(vlan_count).toString());
-            } 
-            for (var i =0; i< cell.getEdgeCount();i++){
-                var e = cell.getEdgeAt(i);
-                checkValue(e);
-                e.setAttribute("vlan",cell.getAttribute("vlan"));
-            }
-        } else {
-            for (var i =0; i< cell.getEdgeCount();i++){
-                var e = cell.getEdgeAt(i);
-                checkValue(e);
-                // check if edge has a vlan
-                if (e.getAttribute("vlan") != undefined) {
-                    if (!vlans_in_use.hasOwnProperty(e.getAttribute("vlan"))){
+        function lookforvlan(cell){
+                checkValue(cell);
+                // Check if vertex is a switch, if it is and it does not have a vlan set all edges to a new vlan
+                if (cell.getStyle().includes("switch")){
+                        if (cell.getAttribute("vlan") == undefined ){
+                                cell.setAttribute("vlan", searchNextVlan(vlan_count).toString());
+                        }
+                        for (var i =0; i< cell.getEdgeCount();i++){
+                                var e = cell.getEdgeAt(i);
+                                checkValue(e);
+                                e.setAttribute("vlan",cell.getAttribute("vlan"));
+                        }
+                } else {
+                        for (var i =0; i< cell.getEdgeCount();i++){
+                                var e = cell.getEdgeAt(i);
+                                checkValue(e);
+                                // check if edge has a vlan
+                                if (e.getAttribute("vlan") != undefined) {
+                                        if (!vlans_in_use.hasOwnProperty(e.getAttribute("vlan"))){
+                                                vlans_in_use[e.getAttribute("vlan")]=true;
+                                        }
+                                        continue
+                                }
+                                var ec;
+
+                                // Figure out which end is the true target for the edge
+                                if (e.source.getId() != cell.getId()){
+                                        ec = e.source;
+                                } else {ec = e.target;}
+                                if (ec == null){
+                                        return;
+                                }
+                                checkValue(ec);
+
+                                // if connected vertex is a switch get the vlan number or sets one for the switch and the edge
+                                if (ec.getStyle().includes("switch")){
+                                        if (ec.getAttribute("vlan") == undefined){
+                                                e.setAttribute("vlan", searchNextVlan(vlan_count).toString());
+                                                ec.setAttribute("vlan", e.getAttribute("vlan"));
+                                        } else {e.setAttribute("vlan", ec.getAttribute("vlan"));}
+                                } // If its any other device just set a new vlan to the edge
+                                else {
+                                        e.setAttribute("vlan", searchNextVlan(vlanid).toString());
+                                }
+                        }
+                }
+        }
+
+        //Walk through all existing edges
+
+        edges.forEach(e => {
+        checkValue(e);
+        if (e.getAttribute("vlan") != undefined){
+                if (!vlans_in_use.hasOwnProperty(e.getAttribute("vlan"))){
                         vlans_in_use[e.getAttribute("vlan")]=true;
-                    }
-                    continue
                 }
-                var ec;
+        }});
 
-                // Figure out which end is the true target for the edge
-                if (e.source.getId() != cell.getId()){
-                    ec = e.source;
-                } else {ec = e.target;}
-                if (ec == null){
-                    return;
+        var count =0;
+        var parameters = {memory:"2048", vcpu:"1", network:undefined,kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
+        var config = "";
+        var prev_dev_config = "";
+        var prev_dev = {};
+        vertices.forEach(cell => {
+                var dev_config="";
+                var name = "";
+                lookforvlan(cell);
+                // if vertex is a switch skip the device in config
+                cell.setAttribute("type","diagraming");
+                if (cell.getStyle().includes("switch")){return;}
+                if (cell.getStyle().includes("router")){cell.setAttribute("type","router");}
+                if (cell.getStyle().includes("firewall")){cell.setAttribute("type","firewall");}
+                if (cell.getStyle().includes("desktop")){cell.setAttribute("type","desktop");}
+                if (cell.getStyle().includes("server")){cell.setAttribute("type","server");}
+                if (cell.getStyle().includes("mobile")){cell.setAttribute("type","mobile");}
+                if (cell.getAttribute("type") == "diagraming"){
+                        return;
                 }
-                checkValue(ec);
 
-                // if connected vertex is a switch get the vlan number or sets one for the switch and the edge
-                if (ec.getStyle().includes("switch")){
-                    if (ec.getAttribute("vlan") == undefined){
-                        e.setAttribute("vlan", searchNextVlan(vlan_count).toString());
-                        ec.setAttribute("vlan", e.getAttribute("vlan"));
-                    } else {e.setAttribute("vlan", ec.getAttribute("vlan"));}
-                } // If its any other device just set a new vlan to the edge
-                else {
-                    e.setAttribute("vlan", searchNextVlan(vlanid).toString());
-                }
-            }
-        }
-    }
-
-    //Walk through all existing edges
-    
-    edges.forEach(e => {
-    checkValue(e);
-    if (e.getAttribute("vlan") != undefined){
-        if (!vlans_in_use.hasOwnProperty(e.getAttribute("vlan"))){
-            vlans_in_use[e.getAttribute("vlan")]=true;
-        }
-    }});
-    
-    var count =0;
-    var parameters = {memory:"2048", vcpu:"1", network:undefined,kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
-    var config = "";
-    var prev_dev_config = "";
-    var prev_dev = {};
-    vertices.forEach(cell => {
-        var dev_config="";
-        var name = "";
-        lookforvlan(cell);
-        // if vertex is a switch skip the device in config
-        cell.setAttribute("type","diagraming");
-        if (cell.getStyle().includes("switch")){return;}
-        if (cell.getStyle().includes("router")){cell.setAttribute("type","router");}
-        if (cell.getStyle().includes("firewall")){cell.setAttribute("type","firewall");}
-        if (cell.getStyle().includes("desktop")){cell.setAttribute("type","desktop");}
-        if (cell.getStyle().includes("server")){cell.setAttribute("type","server");}
-        if (cell.getStyle().includes("mobile")){cell.setAttribute("type","mobile");}
-        if (cell.getAttribute("type") == "diagraming"){
-            return;
-        }
-        
-        if (cell.getAttribute("name") != undefined) {
-            config += `## Config for ${cell.getAttribute("name")}\n`;
-            name = cell.getAttribute("name");
-        } 
-        else {
-            config+= `##Config for a ${cell.getAttribute("type")} device #${count}\n`;
-            name = `${cell.getAttribute("type")}_device_${count}`
-        }
-        count++;
-
-        var clear ="";
-        var net ="";
-                for (var i =0; i< cell.getEdgeCount();i++){
-                    var e = cell.getEdgeAt(i);
-                    net += `vlan-${e.getAttribute("vlan")}`;
-                    if (i+1 < cell.getEdgeCount()){
-                        net += ' ';
-                    }
-                }
-                if (net == ""){
-                    delete prev_dev["network"];
-                    clear += "clear vm config network"
+                if (cell.getAttribute("name") != undefined) {
+                        config += `## Config for ${cell.getAttribute("name")}\n`;
+                        name = cell.getAttribute("name");
                 }
                 else {
-                    if (cell.getAttribute("network") != net){
-                        cell.setAttribute("network",net);
-                    }
-                    if (prev_dev["network"] != net){
-                    prev_dev["network"] = net
-                    config += `vm config network ${net} \n`;
-                    }
+                        config+= `##Config for a ${cell.getAttribute("type")} device #${count}\n`;
+                        name = `${cell.getAttribute("type")}_device_${count}`
                 }
+                count++;
 
-        // Generate configuration for parameters
-        for (const p in parameters) {
-            // If there is no configuration for a parameter and the previous device had one clear it
-            if ((cell.getAttribute(p) == undefined || cell.getAttribute(p) == "undefined") && prev_dev.hasOwnProperty(p)){
-                if (p != "network"){
-                    delete prev_dev[p];
-                    clear +=`clear vm config ${p}\n`;
-                }
-            }
-            // if it has a configuration for the parameter set it else issue a default value
-            if (cell.getAttribute(p) != undefined && cell.getAttribute(p) != "undefined") { 
-                if(prev_dev[p] != cell.getAttribute(p)){
-                    prev_dev[p] = cell.getAttribute(p);
-                    config += `vm config ${p} ${cell.getAttribute(p)} \n`;
-                }
-            }
-            else {
-                //if (parameters[p] != undefined && !prev_dev_config.includes(`vm config ${p} ${parameters[p]} \n`)){
-                if (parameters[p] != undefined && prev_dev[p] != parameters[p]){
-                    //dev_config += `vm config ${p} ${parameters[p]} \n`;
-                    prev_dev[p] = cell.getAttribute(p);
-                    config += `vm config ${p} ${parameters[p]} \n`;
-                }
-            }
-          }
-        
-        config += clear;
-        if (cell.getStyle().includes("container")){config+=`vm launch container ${name}\n\n`;}
-        else {config+=`vm launch kvm ${name}\n\n`;}
-    });
-    textarea.value = config + "## Starting all VM's\nvm start all\n";
-    div.appendChild(textarea);
-    
-    this.init = function()
-    {
-        textarea.focus();
-    };
-    
-    // Enables dropping files
-    if (Graph.fileSupport)
-    {
-        function handleDrop(evt)
+                var clear ="";
+                var net ="";
+                                for (var i =0; i< cell.getEdgeCount();i++){
+                                        var e = cell.getEdgeAt(i);
+                                        net += `vlan-${e.getAttribute("vlan")}`;
+                                        if (i+1 < cell.getEdgeCount()){
+                                                net += ' ';
+                                        }
+                                }
+                                if (net == ""){
+                                        delete prev_dev["network"];
+                                        clear += "clear vm config network \n"
+                                }
+                                else {
+                                        if (cell.getAttribute("network") != net){
+                                                cell.setAttribute("network",net);
+                                        }
+                                        if (prev_dev["network"] != net){
+                                        prev_dev["network"] = net
+                                        config += `vm config network ${net} \n`;
+                                        }
+                                }
+
+                // Generate configuration for parameters
+                for (const p in parameters) {
+                        // If there is no configuration for a parameter and the previous device had one clear it
+                        if ((cell.getAttribute(p) == undefined || cell.getAttribute(p) == "undefined") && prev_dev.hasOwnProperty(p)){
+                                if (p != "network"){
+                                        delete prev_dev[p];
+                                        clear +=`clear vm config ${p}\n`;
+                                }
+                        }
+                        // if it has a configuration for the parameter set it else issue a default value
+                        if (cell.getAttribute(p) != undefined && cell.getAttribute(p) != "undefined") {
+                                if(prev_dev[p] != cell.getAttribute(p)){
+                                        prev_dev[p] = cell.getAttribute(p);
+                                        config += `vm config ${p} ${cell.getAttribute(p)} \n`;
+                                }
+                        }
+                        else {
+                                //if (parameters[p] != undefined && !prev_dev_config.includes(`vm config ${p} ${parameters[p]} \n`)){
+                                if (parameters[p] != undefined && prev_dev[p] != parameters[p]){
+                                        //dev_config += `vm config ${p} ${parameters[p]} \n`;
+                                        prev_dev[p] = cell.getAttribute(p);
+                                        config += `vm config ${p} ${parameters[p]} \n`;
+                                }
+                        }
+                  }
+
+                config += clear;
+                if (cell.getStyle().includes("container")){config+=`vm launch container ${name}\n\n`;}
+                else {config+=`vm launch kvm ${name}\n\n`;}
+        });
+        textarea.value = config + "## Starting all VM's\nvm start all\n";
+
+        // expand variables
+        if (window.experiment_vars != undefined)
         {
-            evt.stopPropagation();
-            evt.preventDefault();
-            
-            if (evt.dataTransfer.files.length > 0)
-            {
-                var file = evt.dataTransfer.files[0];
-                var reader = new FileReader();
-                
-                reader.onload = function(e)
+                for (var i = 0; i < window.experiment_vars.length; i++)
                 {
-                    textarea.value = e.target.result;
-                };
-                
-                reader.readAsText(file);
-            }
-            else
-            {
-                textarea.value = editorUi.extractGraphModelFromEvent(evt);
-            }
-        };
-        
-        function handleDragOver(evt)
+                        var name = window.experiment_vars[i].name;
+                        var value = window.experiment_vars[i].value;
+
+                        var name = new RegExp('\\$'+name, 'g');
+                        textarea.value = textarea.value.replace(name, value);
+                }
+        }
+        div.appendChild(textarea);
+
+        this.init = function()
         {
-            evt.stopPropagation();
-            evt.preventDefault();
+                textarea.focus();
         };
 
-        // Setup the dnd listeners.
-        textarea.addEventListener('dragover', handleDragOver, false);
-        textarea.addEventListener('drop', handleDrop, false);
-    }
+        // Enables dropping files
+        if (Graph.fileSupport)
+        {
+                function handleDrop(evt)
+                {
+                    evt.stopPropagation();
+                    evt.preventDefault();
+
+                    if (evt.dataTransfer.files.length > 0)
+                    {
+                        var file = evt.dataTransfer.files[0];
+                        var reader = new FileReader();
+
+                                reader.onload = function(e)
+                                {
+                                        textarea.value = e.target.result;
+                                };
+
+                                reader.readAsText(file);
+                }
+                    else
+                    {
+                        textarea.value = editorUi.extractGraphModelFromEvent(evt);
+                    }
+                };
+
+                function handleDragOver(evt)
+                {
+                        evt.stopPropagation();
+                        evt.preventDefault();
+                };
+
+                // Setup the dnd listeners.
+                textarea.addEventListener('dragover', handleDragOver, false);
+                textarea.addEventListener('drop', handleDrop, false);
+        }
 
         var formdiv = document.createElement('div');
         div.appendChild(formdiv);
@@ -3119,32 +3134,32 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 
         cbdiv.appendChild(checkbox);
         cbdiv.appendChild(checkboxLabel);
-    
-    var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
-    {
-        editorUi.hideDialog();
-    });
-    cancelBtn.className = 'geBtn';
-    
-    if (editorUi.editor.cancelFirst)
-    {
-        formdiv.appendChild(cancelBtn);
-    }
 
-    var runBtn = mxUtils.button(mxResources.get('run'), function()
-    {
-        // Removes all illegal control characters before parsing
-        var data = Graph.zapGremlins(mxUtils.trim(textarea.value));
-
-        let cmds = data.split('\n').map(l => {
-          return l.trim();
-        }).filter(l => {
-          return !(l === '' || l.startsWith('#'));
-        }).map(l => {
-          return {
-            command: l
-          };
+        var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
+        {
+                editorUi.hideDialog();
         });
+        cancelBtn.className = 'geBtn';
+
+        if (editorUi.editor.cancelFirst)
+        {
+                formdiv.appendChild(cancelBtn);
+        }
+
+        var runBtn = mxUtils.button(mxResources.get('run'), function()
+        {
+                // Removes all illegal control characters before parsing
+                var data = Graph.zapGremlins(mxUtils.trim(textarea.value));
+
+                let cmds = data.split('\n').map(l => {
+                  return l.trim();
+                }).filter(l => {
+                  return !(l === '' || l.startsWith('#'));
+                }).map(l => {
+                  return {
+                    command: l
+                  };
+                });
 
                 var resetmm = [{command: "clear all"}];
                 if (checkbox.checked) {
@@ -3154,28 +3169,28 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                   cmds = tmp;
                 }
 
-        var responseDlg = new MiniResponseDialog(editorUi);
-        $.post('/commands', JSON.stringify(cmds), function(resp){
-          editorUi.showDialog(responseDlg.container, 820, 600, true, false);
-          responseDlg.init();
-          for (let i = 0; i < resp.length; i++) {
-            let rs  = resp[i];
-            let cmd  = cmds[i];
-            responseDlg.appendRow(cmd.command, rs);
-          }
-        }, "json");
+                var responseDlg = new MiniResponseDialog(editorUi);
+                $.post('/commands', JSON.stringify(cmds), function(resp){
+                  editorUi.showDialog(responseDlg.container, 820, 600, true, false);
+                  responseDlg.init();
+                  for (let i = 0; i < resp.length; i++) {
+                    let rs  = resp[i];
+                    let cmd  = cmds[i];
+                    responseDlg.appendRow(cmd.command, rs);
+                  }
+                }, "json");
 
-        editorUi.hideDialog();
-    });
-    runBtn.className = 'geBtn gePrimaryBtn';
-    formdiv.appendChild(runBtn);
+                editorUi.hideDialog();
+        });
+        runBtn.className = 'geBtn gePrimaryBtn';
+        formdiv.appendChild(runBtn);
 
-    if (!editorUi.editor.cancelFirst)
-    {
-        formdiv.appendChild(cancelBtn);
-    }
+        if (!editorUi.editor.cancelFirst)
+        {
+                formdiv.appendChild(cancelBtn);
+        }
 
-    this.container = div;
+        this.container = div;
 };
 
 /**
@@ -3189,8 +3204,8 @@ var MiniResponseDialog = function(editorUi)
 
     var header = document.createElement('h2');
     header.textContent = "Minimega Response";
-        header.style.marginTop = "0";
-        header.style.marginBottom = "10px";
+    header.style.marginTop = "0";
+    header.style.marginBottom = "10px";
 
     var tdiv = document.createElement('div');
     tdiv.style.overflowY = 'scroll';
@@ -3209,7 +3224,7 @@ var MiniResponseDialog = function(editorUi)
     table.style.lineHeight = 'initial';
     table.style.marginBottom = '16px';
 
-        tdiv.appendChild(table);
+    tdiv.appendChild(table);
 
     div.appendChild(header);
     div.appendChild(tdiv);
@@ -3229,27 +3244,27 @@ var MiniResponseDialog = function(editorUi)
     table.appendChild(theader);
 
     this.appendRow = function(cmd, resps) {
-      let row = document.createElement('tr');
-      row.style.verticalAlign = 'top';
+        let row = document.createElement('tr');
+        row.style.verticalAlign = 'top';
 
-      let cmdTd = document.createElement('td');
-      let respTd = document.createElement('td');
+        let cmdTd = document.createElement('td');
+        let respTd = document.createElement('td');
 
-      cmdTd.textContent = cmd;
+        cmdTd.textContent = cmd;
 
-      for (let r of resps){
-        if (r.Error) {
-          respTd.textContent = "Error: " + r.Error;
-          respTd.style.color = "red";
-          respTd.style.fontWeight = "bold";
+        for (let r of resps){
+            if (r.Error) {
+            respTd.textContent = "Error: " + r.Error;
+            respTd.style.color = "red";
+            respTd.style.fontWeight = "bold";
         } else if (r.Response) {
-          respTd.textContent = r.Response;
+            respTd.textContent = r.Response;
         } else {
-              // blank response
-              respTd.innerHTML = "&#10004;"
-              respTd.style.color = "green";
+                // blank response
+                respTd.innerHTML = "&#10004;"
+                respTd.style.color = "green";
             }
-      }
+        }
 
       table.appendChild(row);
       row.appendChild(cmdTd);
@@ -3261,10 +3276,10 @@ var MiniResponseDialog = function(editorUi)
         table.focus();
     };
 
-        var formdiv = document.createElement('div');
-        formdiv.style.textAlign = 'right';
-        formdiv.style.marginTop = '20px';
-        div.appendChild(formdiv);
+    var formdiv = document.createElement('div');
+    formdiv.style.textAlign = 'right';
+    formdiv.style.marginTop = '20px';
+    div.appendChild(formdiv);
 
     var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
     {
@@ -3293,6 +3308,294 @@ var MiniResponseDialog = function(editorUi)
 };
 
 /**
- * 
+ *
  */
 MiniResponseDialog.showNewWindowOption = true;
+
+
+/**
+ * Constructs a new metadata dialog.
+ */
+var VariablesDialog = function(ui)
+{
+        var div = document.createElement('div');
+
+        var default_vars = [
+                {name: "IMAGEDIR", value:"/images"},
+                {name: "DEFAULT_MEMORY", value:"2048"},
+                {name: "DEFAULT_VCPU", value:"1"},
+        ];
+
+        // Creates the dialog contents
+        var form = new mxForm('properties');
+        form.table.style.width = '100%';
+
+        var attrs = [];
+        var names = [];
+        var texts = [];
+        var count = 0;
+
+        var id = null;
+
+        var addRemoveButton = function(text, name)
+        {
+                var wrapper = document.createElement('div');
+                wrapper.style.position = 'relative';
+                wrapper.style.paddingRight = '20px';
+                wrapper.style.boxSizing = 'border-box';
+                wrapper.style.width = '100%';
+
+                var removeAttr = document.createElement('a');
+                var img = mxUtils.createImage(Dialog.prototype.closeImage);
+                img.style.height = '9px';
+                img.style.fontSize = '9px';
+                img.style.marginBottom = (mxClient.IS_IE11) ? '-1px' : '5px';
+
+                removeAttr.className = 'geButton';
+                removeAttr.setAttribute('title', mxResources.get('delete'));
+                removeAttr.style.position = 'absolute';
+                removeAttr.style.top = '4px';
+                removeAttr.style.right = '0px';
+                removeAttr.style.margin = '0px';
+                removeAttr.style.width = '9px';
+                removeAttr.style.height = '9px';
+                removeAttr.style.cursor = 'pointer';
+                removeAttr.appendChild(img);
+
+                var removeAttrFn = (function(name)
+                {
+                        return function()
+                        {
+                                var count = 0;
+
+                                for (var j = 0; j < names.length; j++)
+                                {
+                                        if (names[j] == name)
+                                        {
+                                                texts[j] = null;
+                                                form.table.deleteRow(count + ((id != null) ? 1 : 0));
+
+                                                break;
+                                        }
+
+                                        if (texts[j] != null)
+                                        {
+                                                count++;
+                                        }
+                                }
+                        };
+                })(name);
+
+                mxEvent.addListener(removeAttr, 'click', removeAttrFn);
+
+                var parent = text.parentNode;
+                wrapper.appendChild(text);
+                wrapper.appendChild(removeAttr);
+                parent.appendChild(wrapper);
+        };
+
+        var addTextArea = function(index, name, value)
+        {
+                names[index] = name;
+                texts[index] = form.addText(names[count] + ':', value, 2);
+                texts[index].style.width = '100%';
+                texts[index].style.overflowX = 'visible';
+
+                addRemoveButton(texts[index], name);
+        };
+
+
+        if (window.experiment_vars === undefined)
+        {
+          window.experiment_vars = default_vars;
+        }
+
+        var temp = window.experiment_vars;
+
+        // Sorts by name
+        temp.sort(function(a, b)
+        {
+            if (a.name < b.name)
+            {
+                return -1;
+            }
+            else if (a.name > b.name)
+            {
+                return 1;
+            }
+            else
+            {
+                return 0;
+            }
+        });
+
+        if (id != null)
+        {
+                var text = document.createElement('div');
+                text.style.width = '100%';
+                text.style.fontSize = '11px';
+                text.style.textAlign = 'center';
+                mxUtils.write(text, id);
+
+                form.addField(mxResources.get('id') + ':', text);
+        }
+
+        for (var i = 0; i < temp.length; i++)
+        {
+                addTextArea(count, temp[i].name, temp[i].value);
+                count++;
+        }
+
+        var top = document.createElement('div');
+        top.style.cssText = 'position:absolute;left:30px;right:30px;overflow-y:auto;top:30px;bottom:80px;';
+        top.appendChild(form.table);
+
+        var newProp = document.createElement('div');
+        newProp.style.boxSizing = 'border-box';
+        newProp.style.paddingRight = '160px';
+        newProp.style.whiteSpace = 'nowrap';
+        newProp.style.marginTop = '6px';
+        newProp.style.width = '100%';
+
+        var nameInput = document.createElement('input');
+        nameInput.setAttribute('placeholder', mxResources.get('enterPropertyName'));
+        nameInput.setAttribute('type', 'text');
+        nameInput.setAttribute('size', (mxClient.IS_IE || mxClient.IS_IE11) ? '36' : '40');
+        nameInput.style.boxSizing = 'border-box';
+        nameInput.style.marginLeft = '2px';
+        nameInput.style.width = '100%';
+
+        newProp.appendChild(nameInput);
+        top.appendChild(newProp);
+        div.appendChild(top);
+
+        function varNameIsOK(name)
+        {
+                return name.match(/^[A-Z_0-9]+$/);
+        }
+
+        var addBtn = mxUtils.button(mxResources.get('addProperty'), function()
+        {
+                var name = nameInput.value;
+
+                // Avoid ':' in attribute names which seems to be valid in Chrome
+                if (name.length > 0 && name != 'label' && name != 'placeholders' && name.indexOf(':') < 0 && varNameIsOK(name))
+                {
+                        try
+                        {
+                                var idx = mxUtils.indexOf(names, name);
+
+                                if (idx >= 0 && texts[idx] != null)
+                                {
+                                        texts[idx].focus();
+                                }
+                                else
+                                {
+                                        if (idx >= 0)
+                                        {
+                                                names.splice(idx, 1);
+                                                texts.splice(idx, 1);
+                                        }
+
+                                        names.push(name);
+                                        var text = form.addText(name + ':', '', 2);
+                                        text.style.width = '100%';
+                                        texts.push(text);
+                                        addRemoveButton(text, name);
+
+                                        text.focus();
+                                }
+
+                                addBtn.setAttribute('disabled', 'disabled');
+                                nameInput.value = '';
+                        }
+                        catch (e)
+                        {
+                                mxUtils.alert(e);
+                        }
+                }
+                else
+                {
+                        mxUtils.alert(mxResources.get('invalidName'));
+                }
+        });
+
+        this.init = function()
+        {
+                if (texts.length > 0)
+                {
+                        texts[0].focus();
+                }
+                else
+                {
+                        nameInput.focus();
+                }
+        };
+
+        addBtn.setAttribute('title', mxResources.get('addProperty'));
+        addBtn.setAttribute('disabled', 'disabled');
+        addBtn.style.textOverflow = 'ellipsis';
+        addBtn.style.position = 'absolute';
+        addBtn.style.overflow = 'hidden';
+        addBtn.style.width = '144px';
+        addBtn.style.right = '0px';
+        addBtn.className = 'geBtn';
+        newProp.appendChild(addBtn);
+
+        var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
+        {
+                ui.hideDialog.apply(ui, arguments);
+        });
+
+        cancelBtn.className = 'geBtn';
+
+        var applyBtn = mxUtils.button(mxResources.get('apply'), function()
+        {
+                ui.hideDialog.apply(ui, arguments);
+
+                var temp = [];
+                for (var i = 0; i < names.length; i++)
+                {
+                        if (texts[i])
+                        {
+                                temp.push({name: names[i], value: texts[i].value});
+                        }
+                }
+                window.experiment_vars = temp;
+        });
+        applyBtn.className = 'geBtn gePrimaryBtn';
+
+        function updateAddBtn()
+        {
+                if (nameInput.value.length > 0)
+                {
+                        addBtn.removeAttribute('disabled');
+                }
+                else
+                {
+                        addBtn.setAttribute('disabled', 'disabled');
+                }
+        };
+
+        mxEvent.addListener(nameInput, 'keyup', updateAddBtn);
+
+        // Catches all changes that don't fire a keyup (such as paste via mouse)
+        mxEvent.addListener(nameInput, 'change', updateAddBtn);
+
+        var buttons = document.createElement('div');
+        buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:30px;height:40px;'
+
+        if (ui.editor.cancelFirst)
+        {
+                buttons.appendChild(cancelBtn);
+                buttons.appendChild(applyBtn);
+        }
+        else
+        {
+                buttons.appendChild(applyBtn);
+                buttons.appendChild(cancelBtn);
+        }
+
+        div.appendChild(buttons);
+        this.container = div;
+};

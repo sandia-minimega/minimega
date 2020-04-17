@@ -154,6 +154,13 @@ Actions.prototype.init = function()
         ui.showDialog(dlg.container, 620, 450, true, false);
         dlg.init();
     });
+
+    this.addAction('editVariables', function()
+    {
+        var dlg = new VariablesDialog(ui);
+        ui.showDialog(dlg.container, 480, 420, true, false, null, false);
+        dlg.init();
+    });
     
     // Edit actions
     this.addAction('undo', function() { ui.undo(); }, null, 'sprite-undo', Editor.ctrlKey + '+Z');
