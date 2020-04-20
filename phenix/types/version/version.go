@@ -9,6 +9,21 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
+var StoredVersion = map[string]string{
+	"Topology":   "v1",
+	"Scenario":   "v1",
+	"Experiment": "v1",
+}
+
+func GetStoredSpecForKind(kind string) (interface{}, error) {
+	version, ok := StoredVersion[kind]
+	if !ok {
+		return nil, fmt.Errorf("unknown kind %s", kind)
+	}
+
+	return GetVersionedSpecForKind(kind, version)
+}
+
 func GetVersionedSpecForKind(kind, version string) (interface{}, error) {
 	switch kind {
 	case "Topology":

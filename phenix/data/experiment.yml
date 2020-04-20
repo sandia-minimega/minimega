@@ -1,0 +1,7 @@
+apiVersion: phenix.sandia.gov/v1
+kind: Experiment
+metadata:
+  name: foobar
+  annotations:
+    topology: foo-bar-topo
+    scenario: foo-bar-scenario

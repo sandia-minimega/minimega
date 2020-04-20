@@ -1,8 +1,7 @@
 package v1
 
 type ScenarioSpec struct {
-	Topology string `json:"topology" yaml:"topology"`
-	Apps     Apps   `json:"apps" yaml:"apps"`
+	Apps Apps `json:"apps" yaml:"apps"`
 }
 
 type Apps struct {

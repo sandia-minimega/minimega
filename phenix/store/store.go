@@ -1,6 +1,8 @@
 package store
 
-import "phenix/types"
+import (
+	"phenix/types"
+)
 
 type Store interface {
 	Init(...Option) error
@@ -10,6 +12,6 @@ type Store interface {
 	Get(*types.Config) error
 	Create(*types.Config) error
 	Update(*types.Config) error
-	Patch(string, string, map[string]interface{}) error
-	Delete(string, string) error
+	Patch(*types.Config, map[string]interface{}) error
+	Delete(*types.Config) error
 }

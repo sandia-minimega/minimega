@@ -6,8 +6,6 @@ ns del-host all
 ns add-host localhost
 {{ end }}
 
-{{ $hostname := "foobar" }}
-
 {{ range .Topology.Nodes }}
 {{ if .General.Snapshot }}
 {{ $firstDrive := index .Hardware.Drives 0 }}
