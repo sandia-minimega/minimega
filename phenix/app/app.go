@@ -64,8 +64,13 @@ func ApplyApps(action Action, spec *v1.ExperimentSpec) error {
 	for _, a := range DefaultApps() {
 		switch action {
 		case ACTIONCONFIG:
+			fmt.Printf("configuring experiment with default '%s' app\n", a.Name())
+
 			err = a.Configure(spec)
 		case ACTIONSTART:
+			fmt.Printf("starting experiment with default '%s' app\n", a.Name())
+
+			err = a.Start(spec)
 		case ACTIONPOSTSTART:
 		case ACTIONCLEANUP:
 		}
@@ -80,8 +85,13 @@ func ApplyApps(action Action, spec *v1.ExperimentSpec) error {
 
 		switch action {
 		case ACTIONCONFIG:
+			fmt.Printf("configuring experiment with '%s' user app\n", a.Name())
+
 			err = a.Configure(spec)
 		case ACTIONSTART:
+			fmt.Printf("starting experiment with '%s' user app\n", a.Name())
+
+			err = a.Start(spec)
 		case ACTIONPOSTSTART:
 		case ACTIONCLEANUP:
 		}
@@ -101,8 +111,13 @@ func ApplyApps(action Action, spec *v1.ExperimentSpec) error {
 
 		switch action {
 		case ACTIONCONFIG:
+			fmt.Printf("configuring experiment with '%s' user app\n", a.Name())
+
 			err = a.Configure(spec)
 		case ACTIONSTART:
+			fmt.Printf("starting experiment with '%s' user app\n", a.Name())
+
+			err = a.Start(spec)
 		case ACTIONPOSTSTART:
 		case ACTIONCLEANUP:
 		}

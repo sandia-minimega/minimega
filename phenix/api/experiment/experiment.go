@@ -2,7 +2,6 @@ package experiment
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"phenix/app"
@@ -91,7 +90,9 @@ func Start(name string) error {
 		return fmt.Errorf("applying apps to experiment: %w", err)
 	}
 
-	if err := tmpl.GenerateFromTemplate("minimega_script.tmpl", exp, os.Stdout); err != nil {
+	filename := fmt.Sprintf("%s/mm_files/%s.mm", exp.BaseDir, exp.ExperimentName)
+
+	if err := tmpl.CreateFileFromTemplate("minimega_script.tmpl", exp, filename); err != nil {
 		return fmt.Errorf("generating minimega script: %w", err)
 	}
 

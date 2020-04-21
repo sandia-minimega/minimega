@@ -43,6 +43,20 @@ func (this UserApp) Configure(spec *v1.ExperimentSpec) error {
 }
 
 func (this UserApp) Start(spec *v1.ExperimentSpec) error {
+	exp, err := json.Marshal(spec)
+	if err != nil {
+		return fmt.Errorf("marshaling experiment spec to JSON: %w", err)
+	}
+
+	exp, err = this.shellOut(ACTIONSTART, exp)
+	if err != nil {
+		return fmt.Errorf("running user app: %w", err)
+	}
+
+	if err := json.Unmarshal(exp, spec); err != nil {
+		return fmt.Errorf("unmarshaling experiment spec from JSON: %w", err)
+	}
+
 	return nil
 }
 

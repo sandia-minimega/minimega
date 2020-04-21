@@ -1,0 +1,13 @@
+[Unit]
+Description=startup processes for serial communications
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/etc/phenix/serial-startup.bash
+RemainAfterExit=true
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target

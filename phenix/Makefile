@@ -1,5 +1,5 @@
 GOSOURCES := $(shell find . \( -name '*.go' \))
-TEMPLATES := $(shell find tmpl/templates \( -name '*.tmpl' \))
+TEMPLATES := $(shell find tmpl/templates \( -name '*' \))
 
 THISFILE := $(lastword $(MAKEFILE_LIST))
 THISDIR  := $(shell dirname $(realpath $(THISFILE)))

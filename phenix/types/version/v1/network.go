@@ -1,6 +1,10 @@
 package v1
 
-import "strings"
+import (
+	"fmt"
+	"net"
+	"strings"
+)
 
 type Network struct {
 	Interfaces []Interface `json:"interfaces" yaml:"interfaces"`
@@ -13,8 +17,8 @@ type Interface struct {
 	Name       string `json:"name" yaml:"name"`
 	Type       string `json:"type" yaml:"type"`
 	Proto      string `json:"proto" yaml:"proto"`
-	UDPPort    int    `json:"udp_port" yaml:"udp_port"`
-	BaudRate   int    `json:"baud_rate" yaml:"baud_rate"`
+	UDPPort    int    `json:"udp_port" yaml:"udp_port" mapstructure:"udp_port"`
+	BaudRate   int    `json:"baud_rate" yaml:"baud_rate" mapstructure:"baud_rate"`
 	Device     string `json:"device" yaml:"device"`
 	VLAN       string `json:"vlan" yaml:"vlan"`
 	Autostart  bool   `json:"autostart" yaml:"autostart"`
@@ -82,4 +86,15 @@ func (this Network) InterfaceConfig() string {
 	}
 
 	return strings.Join(configs, " ")
+}
+
+func (this Interface) LinkAddress() string {
+	addr := fmt.Sprintf("%s/%d", this.Address, this.Mask)
+
+	_, n, err := net.ParseCIDR(addr)
+	if err != nil {
+		return addr
+	}
+
+	return n.String()
 }
