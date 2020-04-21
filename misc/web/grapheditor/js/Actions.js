@@ -69,7 +69,7 @@ Actions.prototype.init = function()
         //     ui.updateActionStates();
         // });
 
-        var dlg = new topoJSONDialog(ui);
+        var dlg = new viewJSONDialog(ui);
         // ui.showDialog(dlg.container, 620, 450, true, false);
         dlg.init();
 

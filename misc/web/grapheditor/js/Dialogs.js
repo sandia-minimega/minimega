@@ -1513,6 +1513,272 @@ ExportDialog.saveLocalFile = function(editorUi, data, filename, format)
     }
 };
 
+// utility function globals
+const vlans_in_use = {};
+const interfaces_in_use = {};
+const vlan_count = 10;
+let vlanid = "a";
+
+// utility function to keyify JSON
+const keyify = (obj, prefix = '', arr) => 
+    Object.keys(obj).reduce((res, el) => {
+        // console.log(el);
+        // console.log(res);
+        if( arr ) {
+            return obj;
+        }
+        else if( Array.isArray(obj[el]) ) {
+            var keyStrings = [];
+            var uniqueKeys = Object.keys((obj[el]).reduce(function(result, obj) {
+              return Object.assign(result, obj);
+            }, {}));
+            // console.log(uniqueKeys);
+            for(var i = 0; i < uniqueKeys.length; i++){
+                keyStrings.push(prefix + el + '.' + uniqueKeys[i]);
+                // if(i < uniqueKeys.length - 1){
+                //     keyString += ', ';
+                // }
+            }
+            console.log(keyStrings);
+            // return [keyString];
+          // return res;
+          return keyStrings;
+        } else if( typeof obj[el] === 'object' && obj[el] !== null ) {
+            return [...res, ...keyify(obj[el], prefix + el + '.')];
+        } else {
+            console.log([...res, prefix + el])
+            return [...res, prefix + el];
+        }
+    }, []);
+
+// utility function to set cell defaults
+function setCellDefaults(graph, cell) {
+
+    var value = graph.getModel().getValue(cell);
+    if (!mxUtils.isNode(value))
+    {
+        var doc = mxUtils.createXmlDocument();
+        var obj = doc.createElement('object');
+        // obj.setAttribute('label', value || '');
+        value = obj;
+    }
+
+    if(value.hasAttribute('schemaVars')) {
+        console.log('cell has schemaVars; exit setCellDefaults');
+        return;
+    }
+    else{
+
+        var startval = {};
+
+        if(cell.isVertex()) {
+
+            if (cell.getStyle().includes("container"))
+            {
+                startval.type = 'container';
+            }
+            else
+            {
+                startval.type = 'kvm';
+            }
+
+            startval.device = 'diagraming';
+            if (cell.getStyle().includes("switch")){startval.device = "switch";}
+            if (cell.getStyle().includes("router")){startval.device = "router";}
+            if (cell.getStyle().includes("firewall")){startval.device = "firewall";}
+            if (cell.getStyle().includes("desktop")){startval.device = "desktop";}
+            if (cell.getStyle().includes("server")){startval.device = "server";}
+            if (cell.getStyle().includes("mobile")){startval.device = "mobile";}
+
+        }
+        else {
+            startval.id = '';
+            startval.name = '';
+        }
+
+        value.setAttribute('schemaVars', JSON.stringify(startval));
+        graph.getModel().setValue(cell, value);
+
+        // lookforvlan(cell);
+
+    }
+
+}
+
+// utility function to get/set next vlan id and name
+function searchNextVlan(v){
+    console.log(v);
+    if (!vlans_in_use.hasOwnProperty(v.toString())){
+        vlans_in_use[v.toString()]=true;
+        return v;
+    }
+    while (vlans_in_use.hasOwnProperty(vlanid)){
+        c = vlanid.charCodeAt(vlanid.length-1);
+        if (c == 122){
+            index = v.length-1;
+            carry = 0;
+            while (index > -1){
+                if (vlanid.charCodeAt(index) == 122){
+                    vlanid = vlanid.substr(0, index) + "a"+ vlanid.substr(index + 1);
+                        carry++;
+                }
+                else {
+                    vlanid = vlanid.substr(0, index) + String.fromCharCode(vlanid.charCodeAt(index) + 1)+ vlanid.substr(index + 1);
+                }
+                index--;
+            }
+            if (carry == vlanid.length){
+                vlanid += "a";
+            }
+        }
+        else {
+                vlanid = vlanid.substr(0, vlanid.length -1 ) + String.fromCharCode(c + 1);
+        }
+    }
+    vlans_in_use[vlanid]=true;
+    return vlanid;
+}
+
+// utility function to set switch edge vlan values
+// https://stackoverflow.com/questions/47062922/how-to-get-all-keys-with-values-from-nested-objects/47063174
+function lookforvlan(graph, cell){
+    // checkValue(cell);
+    setCellDefaults(graph, cell);
+    var schemaVars = JSON.parse(cell.getAttribute('schemaVars'));
+    var edgeSchemaVars;
+    var edgeCellSchemaVars;
+    console.log('this is schemaVars'), console.log(schemaVars);
+    // var props = keyify(schemaVars);
+    // console.log('these are schemaVars keys:');
+    // console.log(props);
+
+    var interfaces;
+    var eth;
+    try {
+        interfaces = schemaVars.network.interfaces; 
+        // eth = 'eth' + (Math.max.apply(Math, interfaces.map(function(o) { return (o.name).substr(-1); })) + 1);
+    }
+    catch {
+        schemaVars.network = {};
+        schemaVars.network.interfaces = [];
+        schemaVars.network.interfaces[0] = {};
+        // eth = 'eth0';
+    }
+    console.log('this is interfaces:'),console.log(interfaces);
+    console.log('this is next eth name: ' + eth);
+
+    var value;
+    var vlan;
+
+    // Check if vertex is a switch, if it is and it does not have a vlan set all edges to a new vlan
+    if (schemaVars.device === 'switch'){
+    // if (cell.getStyle().includes("switch")) {
+        // if (cell.getAttribute("vlan") == undefined){
+        if (typeof schemaVars.network.interfaces[0].vlan === 'undefined' || schemaVars.network.interfaces[0].vlan === '') {
+            schemaVars.network.interfaces[0].vlan = searchNextVlan(vlan_count).toString();
+            schemaVars.network.interfaces[0].name = 'eth0';
+            // value = graph.getModel().getValue(cell);
+            cell.setAttribute('schemaVars', JSON.stringify(schemaVars));
+            // cell.setAttribute("vlan", searchNextVlan(vlan_count).toString());
+        }
+        for (var i =0; i< cell.getEdgeCount();i++){
+            var e = cell.getEdgeAt(i);
+            setCellDefaults(graph, e);
+            edgeSchemaVars = JSON.parse(e.getAttribute('schemaVars'));
+            edgeSchemaVars.name = edgeSchemaVars.id = schemaVars.network.interfaces[0].vlan;
+            // value = graph.getModel().getValue(e);
+            e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
+            // checkValue(e);
+            // e.setAttribute("vlan",cell.getAttribute("vlan"));
+        }
+    } else {
+        for (var i = 0; i < cell.getEdgeCount(); i++){
+            var eth = 'eth' + i;
+            var e = cell.getEdgeAt(i);
+            setCellDefaults(graph, e);
+            // checkValue(e);
+            // check if edge has a vlan14
+            edgeSchemaVars = JSON.parse(e.getAttribute('schemaVars'));
+
+            // if (e.getAttribute("vlan") != undefined) {
+            if (typeof edgeSchemaVars.name !== 'undefined' && edgeSchemaVars.name !== '') {
+                if (!vlans_in_use.hasOwnProperty(edgeSchemaVars.name)){
+                    vlans_in_use[edgeSchemaVars.name]=true;
+                }
+                // continue;
+            }
+            var ec;
+
+            // Figure out which end is the true target for the edge
+            if (e.source.getId() != cell.getId()){
+                ec = e.source;
+            } else {ec = e.target;}
+            if (ec == null){
+                return;
+            }
+            checkValue(ec);
+            console.log('this is ec'), console.log(ec);
+            setCellDefaults(graph, ec);
+            edgeCellSchemaVars = JSON.parse(ec.getAttribute('schemaVars'));
+
+            try {
+                edgeCellinterfaces = edgeCellSchemaVars.network.interfaces; 
+                edgeCellEth = 'eth' + (Math.max.apply(Math, edgeCellinterfaces.map(function(o) { return (o.name).substr(-1); })) + 1);
+            }
+            catch {
+                edgeCellSchemaVars.network = {};
+                edgeCellSchemaVars.network.interfaces = [];
+                edgeCellSchemaVars.network.interfaces[0] = {};
+                edgeCellEth = 'eth0';
+            }
+
+            // if connected vertex is a switch get the vlan number or sets one for the switch and the edge
+            if (edgeCellSchemaVars.device === 'switch'){
+                console.log('edgeCell is a switch'), console.log(ec);
+                if (typeof edgeCellSchemaVars.network.interfaces[0].vlan === 'undefined' || edgeCellSchemaVars.network.interfaces[0].vlan === ''){
+                    // e.setAttribute("vlan", searchNextVlan(vlan_count).toString());
+                    // ec.setAttribute("vlan", e.getAttribute("vlan"));
+                    edgeSchemaVars.name = edgeSchemaVars.id = searchNextVlan(vlan_count).toString();
+                    edgeCellSchemaVars.network.interfaces[0].vlan = edgeSchemaVars.name;
+                    edgeCellSchemaVars.network.interfaces[0].name = edgeCellEth;
+                    ec.setAttribute('schemaVars', JSON.stringify(edgeCellSchemaVars));
+                } else {
+                    console.log(i);
+                    edgeSchemaVars.name = edgeSchemaVars.id = edgeCellSchemaVars.network.interfaces[0].vlan;
+                    e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
+                }
+            } // If its any other device just set a new vlan to the edge
+            else {
+                // e.setAttribute("vlan", searchNextVlan(vlanid).toString());
+                // set edge vlan and vlan id
+                // set device vlan to edge vlan on a new interface
+                if (typeof edgeSchemaVars.name === 'undefined' || edgeSchemaVars.name === '') {
+                    edgeSchemaVars.name = edgeSchemaVars.id = searchNextVlan(vlanid).toString();
+                    e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
+                }
+            }
+
+            schemaVars.network.interfaces[i] = {};
+            schemaVars.network.interfaces[i].vlan = edgeSchemaVars.name;
+            schemaVars.network.interfaces[i].name = eth;
+            cell.setAttribute('schemaVars', JSON.stringify(schemaVars));
+        }
+        
+    }
+}
+
+// Standardizes all cells to ahve standard value object
+function checkValue(cell){
+    var value = cell.getValue();
+    if (!mxUtils.isNode(value)){
+        var doc = mxUtils.createXmlDocument();
+        var obj = doc.createElement('object');
+        obj.setAttribute('label', value || '');
+        value = obj;
+        cell.setValue(value);
+    }
+}
+
 /**
  * Constructs a new JSONEditor for cell JSON
  */
@@ -1526,37 +1792,38 @@ var EditDataDialog = function(ui, cell)
     var id = (EditDataDialog.getDisplayIdForCell != null) ?
         EditDataDialog.getDisplayIdForCell(ui, cell) : null;
 
+    setCellDefaults(graph, cell); // sets cell default user object values
+
+    var filter = function(cell) {return graph.model.isVertex(cell);}
+    var vertices = graph.model.filterDescendants(filter);
+    vertices.forEach(cell => {
+        lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
+    });
+    console.log('this is cell at start:'), console.log(cell);
+
     var value = graph.getModel().getValue(cell);
-    if (!mxUtils.isNode(value))
-    {
-        var doc = mxUtils.createXmlDocument();
-        var obj = doc.createElement('object');
-        // obj.setAttribute('label', value || '');
-        value = obj;
-    }
+    var startval = JSON.parse(value.getAttribute('schemaVars')); // parse schemaVars to JSON for editor
 
-    var startval = value.hasAttribute('schemaVars') ? JSON.parse(value.getAttribute('schemaVars')) : {};
-    console.log('this is startval:'), console.log(startval);
+    // var parameters = {
+    //     memory: "$DEFAULT_MEMORY",
+    //     vcpu: "$DEFAULT_VCPU",
+    //     network: undefined,  // This should really be "null" rather than undefined
+    //     snapshot:true,
+    //     cdrom:undefined,
+    // };
 
-    var parameters = {
-        memory: "$DEFAULT_MEMORY",
-        vcpu: "$DEFAULT_VCPU",
-        network: undefined,  // This should really be "null" rather than undefined
-        snapshot:true,
-        cdrom:undefined,
-    };
+    // if (cell.getStyle().includes("container"))
+    // {
+    //     parameters.filesystem = "$IMAGEDIR/";
+    // }
+    // else
+    // {
+    //     parameters.kernel = "$IMAGEDIR/";
+    //     parameters.initrd = "$IMAGEDIR/";
+    //     parameters.disk = "$IMAGEDIR/";
+    // }
 
-    if (cell.getStyle().includes("container"))
-    {
-        parameters.filesystem = "$IMAGEDIR/";
-    }
-    else
-    {
-        parameters.kernel = "$IMAGEDIR/";
-        parameters.initrd = "$IMAGEDIR/";
-        parameters.disk = "$IMAGEDIR/";
-    }
-
+                    
     // Set JSONEditor and config options based on schema and cell type
     var loadConfig = function () {
         // this.schema = JSON.parse(response); // cell schema
@@ -1644,6 +1911,9 @@ var EditDataDialog = function(ui, cell)
 
     var createEditor = function() {
 
+        var div = document.createElement('div');
+        div.style['overflow-y'] = 'auto';
+
         var editorContainer = document.createElement('div');
         editorContainer.setAttribute('id', 'jsoneditor');
         editorContainer.style.height = '100%';
@@ -1652,8 +1922,6 @@ var EditDataDialog = function(ui, cell)
 
         const editor = new JSONEditor(editorContainer, this.config);
 
-        var div = document.createElement('div');
-        div.style['overflow-y'] = 'auto';
         div.appendChild(editorContainer);
 
         var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
@@ -1720,7 +1988,7 @@ var EditDataDialog = function(ui, cell)
 /**
  * Constructs a new JSONEditor dialog for model JSON
  */
-var topoJSONDialog = function(ui)
+var viewJSONDialog = function(ui)
 {
     const graph = ui.editor.graph;
    
@@ -1729,25 +1997,21 @@ var topoJSONDialog = function(ui)
     filter = function(cell) {return graph.model.isEdge(cell);}
     var edges = graph.model.filterDescendants(filter);
 
-    console.log(vertices);
-    const schema = {}; // set schema
-    // console.log('this is schema'), console.log(schema);
     var nodeArray = [];
     var edgeArray = [];
-    for(var i = 0; i < vertices.length; i++) {
-        var value = graph.getModel().getValue(vertices[i]);
-        if (mxUtils.isNode(value)) {
-            var schemaVars = vertices[i].hasAttribute('schemaVars') ? JSON.parse(vertices[i].getAttribute('schemaVars')) : null;
-            if(schemaVars) nodeArray.push(schemaVars);
-        }
-    };
-    for(var i = 0; i < edges.length; i++) {
-        var value = graph.getModel().getValue(edges[i]);
-        if (mxUtils.isNode(value)) {
-            var schemaVars = edges[i].hasAttribute('schemaVars') ? JSON.parse(edges[i].getAttribute('schemaVars')) : null;
-            if(schemaVars) edgeArray.push(schemaVars);
-        }
-    };
+
+    vertices.forEach(cell => {
+        setCellDefaults(graph, cell);
+        nodeArray.push(JSON.parse(cell.getAttribute('schemaVars')));
+    });
+
+    edges.forEach(cell => {
+        setCellDefaults(graph, cell);
+        edgeArray.push(JSON.parse(cell.getAttribute('schemaVars')));
+    });
+
+    const schema = {}; // set schema
+    // console.log('this is schema'), console.log(schema);
     const json = {nodes: nodeArray, edges: edgeArray}; // global model JSON
     console.log(json);
 
@@ -1838,6 +2102,14 @@ var topoJSONDialog = function(ui)
 
     var createEditor = function() {
 
+        var div = document.createElement('div');
+
+        var header = document.createElement('h2');
+        header.textContent = "Diagram JSON";
+        header.style.marginTop = "0";
+        header.style.marginBottom = "10px";
+        header.style.textAlign = 'left';
+
         var editorContainer = document.createElement('div');
         editorContainer.setAttribute('id', 'jsoneditor');
         editorContainer.style.height = '100%';
@@ -1848,13 +2120,21 @@ var topoJSONDialog = function(ui)
         textarea.setAttribute('readonly', 'readonly');
         textarea.value = JSON.stringify(json, null, 2);
         textarea.setAttribute('id', 'jsonString');
-        textarea.style.width = '100%';
-        textarea.style.height = '100%';
+        textarea.setAttribute('wrap', 'off');
+        textarea.setAttribute('spellcheck', 'false');
+        textarea.setAttribute('autocorrect', 'off');
+        textarea.setAttribute('autocomplete', 'off');
+        textarea.setAttribute('autocapitalize', 'off');
+        textarea.style.overflow = 'auto';
         textarea.style.resize = 'none';
-        textarea.setAttribute('onkeyup', 'autoHeight(this)');
+        textarea.style.width = '100%';
+        textarea.style.height = '360px';
+        textarea.style.lineHeight = 'initial';
+        textarea.style.marginBottom = '16px';
+        // textarea.setAttribute('onkeyup', 'autoHeight(this)');
 
         var textareaScript = document.createElement('script');
-        var code = 'var autoHeight = function(o) {o.style.height = "1px";o.style.height = (25+o.scrollHeight)+"px";}; autoHeight(document.getElementById("jsonString"));document.getElementById("copyJSON").onclick = function(){document.getElementById("jsonString").select();document.execCommand("copy");}';
+        var code = '/*var autoHeight = function(o) {o.style.height = "1px";o.style.height = (25+o.scrollHeight)+"px";}; autoHeight(document.getElementById("jsonString"));*/document.getElementById("copyJSON").onclick = function(){document.getElementById("jsonString").select();document.execCommand("copy");}';
         textareaScript.innerText = code;
 
 
@@ -1863,8 +2143,7 @@ var topoJSONDialog = function(ui)
 
         // const editor = new JSONEditor(editorContainer, this.config);
 
-        var div = document.createElement('div');
-        div.style['overflow-y'] = 'auto';
+        div.appendChild(header);
         div.appendChild(editorContainer);
 
         var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
@@ -2849,6 +3128,9 @@ var LayersWindow = function(editorUi, x, y, w, h)
  */
 var EditMiniConfigDialog = function(editorUi,vertices,edges)
 {
+
+        const graph = editorUi.editor.graph;
+
         var div = document.createElement('div');
         div.style.textAlign = 'right';
 
@@ -2872,110 +3154,17 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         textarea.style.height = '360px';
         textarea.style.lineHeight = 'initial';
         textarea.style.marginBottom = '16px';
-        var vlans_in_use = {};
-        var vlan_count =10;
-        var vlanid = "a";
-        function searchNextVlan(v){
-                if (!vlans_in_use.hasOwnProperty(v.toString())){
-                        vlans_in_use[v.toString()]=true;
-                        return v;
-                }
-                while (vlans_in_use.hasOwnProperty(vlanid)){
-                        c = vlanid.charCodeAt(vlanid.length-1);
-                        if (c == 122){
-                                index = v.length-1;
-                                carry = 0;
-                                while (index > -1){
-                                        if (vlanid.charCodeAt(index) == 122){
-                                                vlanid = vlanid.substr(0, index) + "a"+ vlanid.substr(index + 1);
-                                                carry++;
-                                        }
-                                        else {
-                                                vlanid = vlanid.substr(0, index) + String.fromCharCode(vlanid.charCodeAt(index) + 1)+ vlanid.substr(index + 1);
-                                        }
-                                        index--;
-                                }
-                                if (carry == vlanid.length){
-                                        vlanid += "a";
-                                }
-                        }
-                        else {
-                                vlanid = vlanid.substr(0, vlanid.length -1 ) + String.fromCharCode(c + 1);
-                        }
-                }
-                vlans_in_use[vlanid]=true;
-                return vlanid;
-        }
-
-        // Standardizes all cells to ahve standard value object
-        function checkValue(cell){
-                var value = cell.getValue();
-                if (!mxUtils.isNode(value)){
-                        var doc = mxUtils.createXmlDocument();
-                        var obj = doc.createElement('object');
-                        obj.setAttribute('label', value || '');
-                        value = obj;
-                        cell.setValue(value);
-                }
-        }
-
-        function lookforvlan(cell){
-                checkValue(cell);
-                // Check if vertex is a switch, if it is and it does not have a vlan set all edges to a new vlan
-                if (cell.getStyle().includes("switch")){
-                        if (cell.getAttribute("vlan") == undefined ){
-                                cell.setAttribute("vlan", searchNextVlan(vlan_count).toString());
-                        }
-                        for (var i =0; i< cell.getEdgeCount();i++){
-                                var e = cell.getEdgeAt(i);
-                                checkValue(e);
-                                e.setAttribute("vlan",cell.getAttribute("vlan"));
-                        }
-                } else {
-                        for (var i =0; i< cell.getEdgeCount();i++){
-                                var e = cell.getEdgeAt(i);
-                                checkValue(e);
-                                // check if edge has a vlan
-                                if (e.getAttribute("vlan") != undefined) {
-                                        if (!vlans_in_use.hasOwnProperty(e.getAttribute("vlan"))){
-                                                vlans_in_use[e.getAttribute("vlan")]=true;
-                                        }
-                                        continue
-                                }
-                                var ec;
-
-                                // Figure out which end is the true target for the edge
-                                if (e.source.getId() != cell.getId()){
-                                        ec = e.source;
-                                } else {ec = e.target;}
-                                if (ec == null){
-                                        return;
-                                }
-                                checkValue(ec);
-
-                                // if connected vertex is a switch get the vlan number or sets one for the switch and the edge
-                                if (ec.getStyle().includes("switch")){
-                                        if (ec.getAttribute("vlan") == undefined){
-                                                e.setAttribute("vlan", searchNextVlan(vlan_count).toString());
-                                                ec.setAttribute("vlan", e.getAttribute("vlan"));
-                                        } else {e.setAttribute("vlan", ec.getAttribute("vlan"));}
-                                } // If its any other device just set a new vlan to the edge
-                                else {
-                                        e.setAttribute("vlan", searchNextVlan(vlanid).toString());
-                                }
-                        }
-                }
-        }
 
         //Walk through all existing edges
-
-        edges.forEach(e => {
-        checkValue(e);
-        if (e.getAttribute("vlan") != undefined){
-                if (!vlans_in_use.hasOwnProperty(e.getAttribute("vlan"))){
-                        vlans_in_use[e.getAttribute("vlan")]=true;
+        edges.forEach(cell => {
+        // checkValue(e);
+            setCellDefaults(graph, cell);
+            if (cell.getAttribute("vlan") != undefined){
+                if (!vlans_in_use.hasOwnProperty(cell.getAttribute("vlan"))){
+                        vlans_in_use[cell.getAttribute("vlan")]=true;
                 }
-        }});
+            }
+        });
 
         var count =0;
         var parameters = {memory:"2048", vcpu:"1", network:undefined,kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
@@ -2983,87 +3172,90 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         var prev_dev_config = "";
         var prev_dev = {};
         vertices.forEach(cell => {
-                var dev_config="";
-                var name = "";
-                lookforvlan(cell);
-                // if vertex is a switch skip the device in config
-                cell.setAttribute("type","diagraming");
-                if (cell.getStyle().includes("switch")){return;}
-                if (cell.getStyle().includes("router")){cell.setAttribute("type","router");}
-                if (cell.getStyle().includes("firewall")){cell.setAttribute("type","firewall");}
-                if (cell.getStyle().includes("desktop")){cell.setAttribute("type","desktop");}
-                if (cell.getStyle().includes("server")){cell.setAttribute("type","server");}
-                if (cell.getStyle().includes("mobile")){cell.setAttribute("type","mobile");}
-                if (cell.getAttribute("type") == "diagraming"){
-                        return;
-                }
+            setCellDefaults(graph, cell);
+            var dev_config="";
+            var name = "";
+            lookforvlan(graph, cell);
+            // if vertex is a switch skip the device in config
+            cell.setAttribute("type","diagraming");
+            if (cell.getStyle().includes("switch")){return;}
+            if (cell.getStyle().includes("router")){cell.setAttribute("type","router");}
+            if (cell.getStyle().includes("firewall")){cell.setAttribute("type","firewall");}
+            if (cell.getStyle().includes("desktop")){cell.setAttribute("type","desktop");}
+            if (cell.getStyle().includes("server")){cell.setAttribute("type","server");}
+            if (cell.getStyle().includes("mobile")){cell.setAttribute("type","mobile");}
+            if (cell.getAttribute("type") == "diagraming"){
+                    return;
+            }
 
-                if (cell.getAttribute("name") != undefined) {
-                        config += `## Config for ${cell.getAttribute("name")}\n`;
-                        name = cell.getAttribute("name");
+            if (cell.getAttribute("name") != undefined) {
+                    config += `## Config for ${cell.getAttribute("name")}\n`;
+                    name = cell.getAttribute("name");
+            }
+            else {
+                    config+= `##Config for a ${cell.getAttribute("type")} device #${count}\n`;
+                    name = `${cell.getAttribute("type")}_device_${count}`
+            }
+            count++;
+
+            var clear ="";
+            var net ="";
+
+            for (var i =0; i< cell.getEdgeCount();i++){
+                    var e = cell.getEdgeAt(i);
+                    net += `vlan-${e.getAttribute("vlan")}`;
+                    if (i+1 < cell.getEdgeCount()){
+                            net += ' ';
+                    }
+            }
+            if (net == ""){
+                    delete prev_dev["network"];
+                    clear += "clear vm config network \n"
+            }
+            else {
+                    if (cell.getAttribute("network") != net){
+                            cell.setAttribute("network",net);
+                    }
+                    if (prev_dev["network"] != net){
+                    prev_dev["network"] = net
+                    config += `vm config network ${net} \n`;
+                    }
+            }
+
+            // Generate configuration for parameters
+            for (const p in parameters) {
+                // If there is no configuration for a parameter and the previous device had one clear it
+                if ((cell.getAttribute(p) == undefined || cell.getAttribute(p) == "undefined") && prev_dev.hasOwnProperty(p)){
+                        if (p != "network"){
+                                delete prev_dev[p];
+                                clear +=`clear vm config ${p}\n`;
+                        }
+                }
+                // if it has a configuration for the parameter set it else issue a default value
+                if (cell.getAttribute(p) != undefined && cell.getAttribute(p) != "undefined") {
+                        if(prev_dev[p] != cell.getAttribute(p)){
+                                prev_dev[p] = cell.getAttribute(p);
+                                config += `vm config ${p} ${cell.getAttribute(p)} \n`;
+                        }
                 }
                 else {
-                        config+= `##Config for a ${cell.getAttribute("type")} device #${count}\n`;
-                        name = `${cell.getAttribute("type")}_device_${count}`
+                        //if (parameters[p] != undefined && !prev_dev_config.includes(`vm config ${p} ${parameters[p]} \n`)){
+                        if (parameters[p] != undefined && prev_dev[p] != parameters[p]){
+                                //dev_config += `vm config ${p} ${parameters[p]} \n`;
+                                prev_dev[p] = cell.getAttribute(p);
+                                config += `vm config ${p} ${parameters[p]} \n`;
+                        }
                 }
-                count++;
+            }
 
-                var clear ="";
-                var net ="";
-                                for (var i =0; i< cell.getEdgeCount();i++){
-                                        var e = cell.getEdgeAt(i);
-                                        net += `vlan-${e.getAttribute("vlan")}`;
-                                        if (i+1 < cell.getEdgeCount()){
-                                                net += ' ';
-                                        }
-                                }
-                                if (net == ""){
-                                        delete prev_dev["network"];
-                                        clear += "clear vm config network \n"
-                                }
-                                else {
-                                        if (cell.getAttribute("network") != net){
-                                                cell.setAttribute("network",net);
-                                        }
-                                        if (prev_dev["network"] != net){
-                                        prev_dev["network"] = net
-                                        config += `vm config network ${net} \n`;
-                                        }
-                                }
-
-                // Generate configuration for parameters
-                for (const p in parameters) {
-                        // If there is no configuration for a parameter and the previous device had one clear it
-                        if ((cell.getAttribute(p) == undefined || cell.getAttribute(p) == "undefined") && prev_dev.hasOwnProperty(p)){
-                                if (p != "network"){
-                                        delete prev_dev[p];
-                                        clear +=`clear vm config ${p}\n`;
-                                }
-                        }
-                        // if it has a configuration for the parameter set it else issue a default value
-                        if (cell.getAttribute(p) != undefined && cell.getAttribute(p) != "undefined") {
-                                if(prev_dev[p] != cell.getAttribute(p)){
-                                        prev_dev[p] = cell.getAttribute(p);
-                                        config += `vm config ${p} ${cell.getAttribute(p)} \n`;
-                                }
-                        }
-                        else {
-                                //if (parameters[p] != undefined && !prev_dev_config.includes(`vm config ${p} ${parameters[p]} \n`)){
-                                if (parameters[p] != undefined && prev_dev[p] != parameters[p]){
-                                        //dev_config += `vm config ${p} ${parameters[p]} \n`;
-                                        prev_dev[p] = cell.getAttribute(p);
-                                        config += `vm config ${p} ${parameters[p]} \n`;
-                                }
-                        }
-                  }
-
-                config += clear;
-                if (cell.getStyle().includes("container")){config+=`vm launch container ${name}\n\n`;}
-                else {config+=`vm launch kvm ${name}\n\n`;}
+            config += clear;
+            if (cell.getStyle().includes("container")){config+=`vm launch container ${name}\n\n`;}
+            else {config+=`vm launch kvm ${name}\n\n`;}
         });
         textarea.value = config + "## Starting all VM's\nvm start all\n";
 
         // expand variables
+        console.log(window.experiment_vars);
         if (window.experiment_vars != undefined)
         {
                 for (var i = 0; i < window.experiment_vars.length; i++)

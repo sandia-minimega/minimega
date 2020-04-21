@@ -310,7 +310,7 @@
 }
 .geToolbarContainer .geButton {
         float:left;
-        /*width:20px;*/
+        width:20px;
         height:20px;
         padding:0px 2px 4px 2px;
         margin:2px;
@@ -536,8 +536,10 @@ div.mxWindow .geButton {
 /* custom icon for view json */
 .geSprite-viewjson {
     background:url(../images/json_icon.png) no-repeat !important;
-    width:33px;
+    width:21px;
     height:21px;
+    background-size: 20px 20px !important;
+    margin-top: 1px;
 }
 .geBaseButton {
         padding:10px;

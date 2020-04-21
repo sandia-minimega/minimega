@@ -3,34 +3,24 @@
   "type": "object",
   "title": "Node",
   "required": [
+    "device",
     "type",
     "general",
     "hardware"
   ],
   "properties": {
+    "device": {
+      "$id": "#/properties/nodes/items/properties/device",
+      "type": "string",
+      "title": "Device",
+      "readonly": true,
+      "pattern": "^(.*)$"
+    },
     "type": {
       "$id": "#/properties/nodes/items/properties/type",
       "type": "string",
       "title": "Type",
-      "enum": [
-        "Firewall",
-        "Printer",
-        "Server",
-        "Switch",
-        "Router",
-        "SCEPTRE",
-        "VirtualMachine"
-      ],
-      "default": "VirtualMachine",
-      "examples": [
-        "Firewall",
-        "Printer",
-        "Server",
-        "Switch",
-        "Router",
-        "SCEPTRE",
-        "VirtualMachine"
-      ],
+      "readonly": true,
       "pattern": "^(.*)$"
     },
     "general": {
