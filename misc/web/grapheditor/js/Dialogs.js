@@ -1519,38 +1519,6 @@ const interfaces_in_use = {};
 const vlan_count = 10;
 let vlanid = "a";
 
-// utility function to keyify JSON
-const keyify = (obj, prefix = '', arr) => 
-    Object.keys(obj).reduce((res, el) => {
-        // console.log(el);
-        // console.log(res);
-        if( arr ) {
-            return obj;
-        }
-        else if( Array.isArray(obj[el]) ) {
-            var keyStrings = [];
-            var uniqueKeys = Object.keys((obj[el]).reduce(function(result, obj) {
-              return Object.assign(result, obj);
-            }, {}));
-            // console.log(uniqueKeys);
-            for(var i = 0; i < uniqueKeys.length; i++){
-                keyStrings.push(prefix + el + '.' + uniqueKeys[i]);
-                // if(i < uniqueKeys.length - 1){
-                //     keyString += ', ';
-                // }
-            }
-            console.log(keyStrings);
-            // return [keyString];
-          // return res;
-          return keyStrings;
-        } else if( typeof obj[el] === 'object' && obj[el] !== null ) {
-            return [...res, ...keyify(obj[el], prefix + el + '.')];
-        } else {
-            console.log([...res, prefix + el])
-            return [...res, prefix + el];
-        }
-    }, []);
-
 // utility function to set cell defaults
 function setCellDefaults(graph, cell) {
 
@@ -1647,10 +1615,6 @@ function lookforvlan(graph, cell){
     var schemaVars = JSON.parse(cell.getAttribute('schemaVars')); // current cell (node) schemaVars
     var edgeSchemaVars; // edge schemaVars
     var edgeCellSchemaVars; // target cell schemaVars
-    // var props = keyify(schemaVars);
-    // console.log('these are schemaVars keys:');
-    // console.log(props);
-
     var eth;
     var value;
     var vlan;
@@ -1931,6 +1895,20 @@ var EditDataDialog = function(ui, cell)
 
         const editor = new JSONEditor(editorContainer, this.config);
 
+        // disable vlan attribute if cell is a node and not a switch;
+        // edge values dictate node vlan attribute values unless it's a switch
+        if (cell.isVertex() && editor.getEditor('root.device').getValue() !== 'switch') {
+            for (var i = 0; i < editor.getEditor('root.network.interfaces').getValue().length; i++) {
+                editor.getEditor('root.network.interfaces.'+i+'.vlan').disable();
+            }
+        }
+        else if (cell.isEdge()) {
+            // disable attributes of edge if connected to a switch, since switch dictates values
+            if ( JSON.parse(cell.source.getAttribute('schemaVars')).device === 'switch' || JSON.parse(cell.target.getAttribute('schemaVars')).device === 'switch') {
+                editor.getEditor('root').disable();
+            }
+        }
+
         div.appendChild(editorContainer);
 
         var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
@@ -1949,6 +1927,9 @@ var EditDataDialog = function(ui, cell)
                 var updatedNode = editor.getEditor('root').value; // get current node's JSON (from JSONEditor)
                 value.setAttribute('schemaVars', JSON.stringify(updatedNode));
                 graph.getModel().setValue(cell, value);
+                vertices.forEach(cell => {
+                    lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
+                });
             }
             catch (e)
             {
@@ -2024,7 +2005,7 @@ var viewJSONDialog = function(ui)
 
     const schema = {}; // set schema
     // console.log('this is schema'), console.log(schema);
-    const json = {nodes: nodeArray, edges: edgeArray}; // global model JSON
+    const json = {nodes: nodeArray, vlans: edgeArray}; // global model JSON
     console.log(json);
 
     // Set JSONEditor and config options based on schema and cell type
@@ -3270,14 +3251,14 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         console.log(window.experiment_vars);
         if (window.experiment_vars != undefined)
         {
-                for (var i = 0; i < window.experiment_vars.length; i++)
-                {
-                        var name = window.experiment_vars[i].name;
-                        var value = window.experiment_vars[i].value;
+            for (var i = 0; i < window.experiment_vars.length; i++)
+            {
+                    var name = window.experiment_vars[i].name;
+                    var value = window.experiment_vars[i].value;
 
-                        var name = new RegExp('\\$'+name, 'g');
-                        textarea.value = textarea.value.replace(name, value);
-                }
+                    var name = new RegExp('\\$'+name, 'g');
+                    textarea.value = textarea.value.replace(name, value);
+            }
         }
         div.appendChild(textarea);
 
