@@ -1564,7 +1564,7 @@ function setCellDefaults(graph, cell) {
     }
 
     if(value.hasAttribute('schemaVars')) {
-        console.log('cell has schemaVars; exit setCellDefaults');
+        // console.log('cell has schemaVars; exit setCellDefaults');
         return;
     }
     else{
@@ -1644,10 +1644,9 @@ function searchNextVlan(v){
 function lookforvlan(graph, cell){
     // checkValue(cell);
     setCellDefaults(graph, cell);
-    var schemaVars = JSON.parse(cell.getAttribute('schemaVars'));
-    var edgeSchemaVars;
-    var edgeCellSchemaVars;
-    console.log('this is schemaVars'), console.log(schemaVars);
+    var schemaVars = JSON.parse(cell.getAttribute('schemaVars')); // current cell (node) schemaVars
+    var edgeSchemaVars; // edge schemaVars
+    var edgeCellSchemaVars; // target cell schemaVars
     // var props = keyify(schemaVars);
     // console.log('these are schemaVars keys:');
     // console.log(props);
@@ -1658,24 +1657,22 @@ function lookforvlan(graph, cell){
 
     try {
         schemaVars.network.interfaces;
-        var vlans = [];
-        var edges = cell.edges;
-        console.log('these are edges'), console.log(edges);
+        var vlans = []; // holds true edges
+        var edges = cell.edges; // cell edges
         for(var i = 0; i < edges.length; i++){
-            vlans.push(JSON.parse(edges[i].getAttribute('schemaVars')).name);
+            setCellDefaults(graph, edges[i]);
+            var vlan = JSON.parse(edges[i].getAttribute('schemaVars')).name;
+            if (vlan !== '') vlans.push(vlan);
         }
-        console.log('these are vlans'), console.log(vlans);
         // remove interfaces copied over from another cell
         schemaVars.network.interfaces = (schemaVars.network.interfaces).filter(function( obj ) {
             return vlans.indexOf(obj.vlan) >= 0;
         });
         // if the edge is new and doesn't have a vlan name yet, vlans will be empty, so assign empty obj
-        if ((schemaVars.network.interfaces).length == 0) schemaVars.network.interfaces[0] = {};
+        if (typeof schemaVars.network.interfaces[0] === 'undefined') schemaVars.network.interfaces[0] = {};
         // eth = 'eth' + (Math.max.apply(Math, interfaces.map(function(o) { return (o.name).substr(-1); })) + 1);
     }
     catch(e) {
-        console.log('no interfaces');
-        console.log(e);
         schemaVars.network = {};
         schemaVars.network.interfaces = [];
         schemaVars.network.interfaces[0] = {};
@@ -1713,14 +1710,7 @@ function lookforvlan(graph, cell){
             // check if edge has a vlan14
             edgeSchemaVars = JSON.parse(e.getAttribute('schemaVars'));
 
-            // if (e.getAttribute("vlan") != undefined) {
-            if (typeof edgeSchemaVars.name !== 'undefined' && edgeSchemaVars.name !== '') {
-                if (!vlans_in_use.hasOwnProperty(edgeSchemaVars.name)){
-                    vlans_in_use[edgeSchemaVars.name]=true;
-                }
-                // continue;
-            }
-            var ec;
+            var ec; // edge true target cell
 
             // Figure out which end is the true target for the edge
             if (e.source.getId() != cell.getId()){
@@ -1731,14 +1721,13 @@ function lookforvlan(graph, cell){
             }
             // checkValue(ec);
             setCellDefaults(graph, ec);
-            console.log('this is ec'), console.log(ec);
             edgeCellSchemaVars = JSON.parse(ec.getAttribute('schemaVars'));
 
             try {
-                edgeCellinterfaces = edgeCellSchemaVars.network.interfaces; 
-                edgeCellEth = 'eth' + (Math.max.apply(Math, edgeCellinterfaces.map(function(o) { return (o.name).substr(-1); })) + 1);
+                edgeCellSchemaVars.network.interfaces; 
+                edgeCellEth = 'eth' + (Math.max.apply(Math, (edgeCellSchemaVars.network.interfaces).map(function(o) { return (o.name).substr(-1); })) + 1);
             }
-            catch {
+            catch(e) {
                 edgeCellSchemaVars.network = {};
                 edgeCellSchemaVars.network.interfaces = [];
                 edgeCellSchemaVars.network.interfaces[0] = {};
@@ -1747,7 +1736,7 @@ function lookforvlan(graph, cell){
 
             // if connected vertex is a switch get the vlan number or sets one for the switch and the edge
             if (edgeCellSchemaVars.device === 'switch'){
-                console.log('edgeCell is a switch'), console.log(ec);
+
                 if (typeof edgeCellSchemaVars.network.interfaces[0].vlan === 'undefined' || edgeCellSchemaVars.network.interfaces[0].vlan === ''){
                     // e.setAttribute("vlan", searchNextVlan(vlan_count).toString());
                     // ec.setAttribute("vlan", e.getAttribute("vlan"));
@@ -1756,14 +1745,9 @@ function lookforvlan(graph, cell){
                     edgeCellSchemaVars.network.interfaces[0].name = edgeCellEth;
                     ec.setAttribute('schemaVars', JSON.stringify(edgeCellSchemaVars));
                 } else {
-                    console.log(i);
                     edgeSchemaVars.name = edgeSchemaVars.id = edgeCellSchemaVars.network.interfaces[0].vlan;
                     e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
                 }
-                if (typeof schemaVars.network.interfaces[i]  === 'undefined') schemaVars.network.interfaces[i] = {};
-                schemaVars.network.interfaces[i].vlan = edgeSchemaVars.name;
-                schemaVars.network.interfaces[i].name = eth;
-                cell.setAttribute('schemaVars', JSON.stringify(schemaVars));
             } // If its any other device just set a new vlan to the edge
             else {
                 // e.setAttribute("vlan", searchNextVlan(vlanid).toString());
@@ -1773,11 +1757,21 @@ function lookforvlan(graph, cell){
                     edgeSchemaVars.name = edgeSchemaVars.id = searchNextVlan(vlanid).toString();
                     e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
                 }
-                if (typeof schemaVars.network.interfaces[i] === 'undefined') schemaVars.network.interfaces[i] = {};
-                schemaVars.network.interfaces[i].vlan = edgeSchemaVars.name;
-                schemaVars.network.interfaces[i].name = eth;
-                cell.setAttribute('schemaVars', JSON.stringify(schemaVars));
             }
+
+            if (typeof schemaVars.network.interfaces[i] === 'undefined') schemaVars.network.interfaces[i] = {};
+            schemaVars.network.interfaces[i].vlan = edgeSchemaVars.name;
+            schemaVars.network.interfaces[i].name = eth;
+            cell.setAttribute('schemaVars', JSON.stringify(schemaVars));
+
+            // if (e.getAttribute("vlan") != undefined) {
+            if (typeof edgeSchemaVars.name !== 'undefined' && edgeSchemaVars.name !== '') {
+                if (!vlans_in_use.hasOwnProperty(edgeSchemaVars.name)){
+                    vlans_in_use[edgeSchemaVars.name]=true;
+                }
+                // continue;
+            }
+
         }
     }
 }
@@ -2022,7 +2016,10 @@ var viewJSONDialog = function(ui)
 
     edges.forEach(cell => {
         setCellDefaults(graph, cell);
-        edgeArray.push(JSON.parse(cell.getAttribute('schemaVars')));
+        var vlan = JSON.parse(cell.getAttribute('schemaVars'));
+        if (edgeArray.filter(function(e) { return e.name === vlan.name; }).length <= 0) {
+            edgeArray.push(vlan);
+        }
     });
 
     const schema = {}; // set schema
