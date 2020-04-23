@@ -1575,7 +1575,6 @@ function setCellDefaults(graph, cell) {
 
 // utility function to get/set next vlan id and name
 function searchNextVlan(v){
-    console.log(v);
     if (!vlans_in_use.hasOwnProperty(v.toString())){
         vlans_in_use[v.toString()]=true;
         return v;
@@ -1608,9 +1607,8 @@ function searchNextVlan(v){
 }
 
 // utility function to set switch edge vlan values
-// https://stackoverflow.com/questions/47062922/how-to-get-all-keys-with-values-from-nested-objects/47063174
 function lookforvlan(graph, cell){
-    // checkValue(cell);
+
     setCellDefaults(graph, cell);
     var schemaVars = JSON.parse(cell.getAttribute('schemaVars')); // current cell (node) schemaVars
     var edgeSchemaVars; // edge schemaVars
@@ -1645,14 +1643,10 @@ function lookforvlan(graph, cell){
 
     // Check if vertex is a switch, if it is and it does not have a vlan set all edges to a new vlan
     if (schemaVars.device === 'switch'){
-    // if (cell.getStyle().includes("switch")) {
-        // if (cell.getAttribute("vlan") == undefined){
         if (typeof schemaVars.network.interfaces[0].vlan === 'undefined' || schemaVars.network.interfaces[0].vlan === '') {
             schemaVars.network.interfaces[0].vlan = searchNextVlan(vlan_count).toString();
             schemaVars.network.interfaces[0].name = 'eth0';
-            // value = graph.getModel().getValue(cell);
             cell.setAttribute('schemaVars', JSON.stringify(schemaVars));
-            // cell.setAttribute("vlan", searchNextVlan(vlan_count).toString());
         }
         for (var i =0; i< cell.getEdgeCount();i++){
             var e = cell.getEdgeAt(i);
@@ -1660,10 +1654,7 @@ function lookforvlan(graph, cell){
             edgeSchemaVars = JSON.parse(e.getAttribute('schemaVars'));
             edgeSchemaVars.name = schemaVars.network.interfaces[0].vlan;
             if (edgeSchemaVars.id === '') edgeSchemaVars.id = 'auto';
-            // value = graph.getModel().getValue(e);
             e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
-            // checkValue(e);
-            // e.setAttribute("vlan",cell.getAttribute("vlan"));
         }
     } else {
 
@@ -1682,23 +1673,12 @@ function lookforvlan(graph, cell){
                     name = JSON.parse(e.getAttribute('schemaVars')).name;
                 }
             }
-            // if cell has edges with duplicate vlans, reset all vlans and reassign thereafter
-            // if (dupe) {
-            //     for (var i =0; i< cell.getEdgeCount();i++){
-            //         var e = cell.getEdgeAt(i);
-            //         setCellDefaults(graph, e);
-            //         edgeSchemaVars.name = edgeSchemaVars.id = '';
-            //         e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
-            //     }
-            // }
         }
 
         for (var i = 0; i < cell.getEdgeCount(); i++){
             var eth = 'eth' + i;
             var e = cell.getEdgeAt(i);
             setCellDefaults(graph, e);
-            // checkValue(e);
-            // check if edge has a vlan14
             edgeSchemaVars = JSON.parse(e.getAttribute('schemaVars'));
             // if cell has edges with duplicate vlans, reset all vlans and reassign thereafter
             if (dupe) {
@@ -1734,8 +1714,6 @@ function lookforvlan(graph, cell){
             if (targetSchemaVars.device === 'switch'){
 
                 if (typeof targetSchemaVars.network.interfaces[0].vlan === 'undefined' || targetSchemaVars.network.interfaces[0].vlan === ''){
-                    // e.setAttribute("vlan", searchNextVlan(vlan_count).toString());
-                    // ec.setAttribute("vlan", e.getAttribute("vlan"));
                     edgeSchemaVars.name = searchNextVlan(vlan_count).toString();
                     edgeSchemaVars.id = 'auto';
                     targetSchemaVars.network.interfaces[0].vlan = edgeSchemaVars.name;
@@ -1748,7 +1726,6 @@ function lookforvlan(graph, cell){
                 }
             } // If its any other device just set a new vlan to the edge
             else {
-                // e.setAttribute("vlan", searchNextVlan(vlanid).toString());
                 // set edge vlan and vlan id
                 // set device vlan to edge vlan on a new interface
                 if (typeof edgeSchemaVars.name === 'undefined' || edgeSchemaVars.name === '') {
@@ -1763,12 +1740,10 @@ function lookforvlan(graph, cell){
             schemaVars.network.interfaces[i].name = eth;
             cell.setAttribute('schemaVars', JSON.stringify(schemaVars));
 
-            // if (e.getAttribute("vlan") != undefined) {
             if (typeof edgeSchemaVars.name !== 'undefined' && edgeSchemaVars.name !== '') {
                 if (!vlans_in_use.hasOwnProperty(edgeSchemaVars.name)){
                     vlans_in_use[edgeSchemaVars.name]=true;
                 }
-                // continue;
             }
 
         }
@@ -1807,35 +1782,13 @@ var EditDataDialog = function(ui, cell)
     vertices.forEach(cell => {
         lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
     });
-    console.log('this is cell at start:'), console.log(cell);
 
     var value = graph.getModel().getValue(cell);
     var startval = JSON.parse(value.getAttribute('schemaVars')); // parse schemaVars to JSON for editor
-
-    // var parameters = {
-    //     memory: "$DEFAULT_MEMORY",
-    //     vcpu: "$DEFAULT_VCPU",
-    //     network: undefined,  // This should really be "null" rather than undefined
-    //     snapshot:true,
-    //     cdrom:undefined,
-    // };
-
-    // if (cell.getStyle().includes("container"))
-    // {
-    //     parameters.filesystem = "$IMAGEDIR/";
-    // }
-    // else
-    // {
-    //     parameters.kernel = "$IMAGEDIR/";
-    //     parameters.initrd = "$IMAGEDIR/";
-    //     parameters.disk = "$IMAGEDIR/";
-    // }
-
                     
     // Set JSONEditor and config options based on schema and cell type
     var loadConfig = function () {
-        // this.schema = JSON.parse(response); // cell schema
-        // JSONEditor config options
+
         this.config = {
             schema: schema,
             startval: startval,
@@ -1843,77 +1796,10 @@ var EditDataDialog = function(ui, cell)
             mode: 'tree',
             modes: ['code', 'text', 'tree'],
             show_errors: 'always',
-            // jsoneditor: {
-            //     css: 'utils/topographer/downloads/jsoneditor.min.css',
-            //     js: 'utils/topographer/downloads/jsoneditor.js'
-            // },
             theme: 'bootstrap3',
             iconlib: 'spectre',
-            // template: {
-            // },
-            // ext_lib: {
-            //     lib_dompurify: {
-            //         js: 'utils/topographer/downloads/purify.min.js'
-            //     }
-            // }
         };
-        // editorConfig is statically set in this file, so 'response' should only be the schema
-        // var data = JSON.parse(response),
-        //     schema = JSON.stringify(data, null, 2),
-        //     startval = Object.keys(editorConfig.startval).length !== 0 ? JSON.stringify(editorConfig.startval, null, 2) : '',
-        //     cfg = editorConfig.config,
-        //     code = editorConfig.code,
-        //     style = editorConfig.style,
-        //     desc = editorConfig.desc
 
-        // // Clear include external library checkboxes
-        // Array.from(jeExtlib.querySelectorAll('input')).forEach(function (el) { // from() unsupported in IE
-        //     el.checked = false
-        // });
-
-        // jeExampleDesc.innerHTML = ''
-        // clearOutput()
-
-        // // Add description of example to help page
-        // if (desc !== '' && desc != 'Add optional description here. (HTML format)') {
-        //     jeModalContent.innerHTML = jeExampleDesc.innerHTML = '<h3>Info about "' + editorConfig.title + '" Example</h3>' + desc
-        //     toggleModal()
-        // }
-
-        // // Update ACE Editor instances
-        // aceSchemaEditor.setValue(schema)
-        // aceSchemaEditor.session.getSelection().clearSelection()
-        // aceSchemaEditor.resize()
-
-        // aceStartvalEditor.setValue(startval)
-        // aceStartvalEditor.session.getSelection().clearSelection()
-        // aceStartvalEditor.resize()
-
-        // aceCodeEditor.setValue(code)
-        // aceCodeEditor.session.getSelection().clearSelection()
-        // aceCodeEditor.resize()
-        // lockText()
-
-        // aceStyleEditor.setValue(style)
-        // aceStyleEditor.session.getSelection().clearSelection()
-        // aceStyleEditor.resize()
-
-        // aceOutputEditor.resize()
-        // aceValidateEditor.resize()
-
-        // // Set config options
-        // for (var id in cfg) {
-        //     if (cfg.hasOwnProperty(id)) {
-        //         var el = jeCfg.querySelector('#' + id)
-        //         if (el) {
-        //             if (el.nodeName == 'INPUT' && el.type == 'checkbox') el.checked = cfg[id] || 0
-        //             else if (el.nodeName == 'SELECT') el.value = cfg[id]
-        //         }
-        //     }
-        // }
-
-        // // Trigger generation of form
-        // eventFire(jeExec, 'click');
         createEditor();
     };
 
@@ -1970,9 +1856,6 @@ var EditDataDialog = function(ui, cell)
             {
                 mxUtils.alert(e);
             }
-
-            console.log('this is graphModel after update:');
-            console.log(graph.getModel().cells);
 
             editor.destroy();
 
@@ -2042,92 +1925,21 @@ var viewJSONDialog = function(ui)
     });
 
     const schema = {}; // set schema
-    // console.log('this is schema'), console.log(schema);
     const json = {nodes: nodeArray, vlans: edgeArray}; // global model JSON
-    console.log(json);
 
     // Set JSONEditor and config options based on schema and cell type
     var loadConfig = function () {
-        // this.schema = JSON.parse(response); // cell schema
-        // JSONEditor config options
+
         this.config = {
             schema: schema,
             startval: json,
             ajax: true,
             mode: 'text',
             modes: ['code', 'text', 'tree'],
-            // show_errors: 'always',
-            // jsoneditor: {
-            //     css: 'utils/topographer/downloads/jsoneditor.min.css',
-            //     js: 'utils/topographer/downloads/jsoneditor.js'
-            // },
             theme: 'bootstrap3',
             iconlib: 'spectre',
-            // template: {
-            // },
-            // ext_lib: {
-            //     lib_dompurify: {
-            //         js: 'utils/topographer/downloads/purify.min.js'
-            //     }
-            // }
         };
-        // editorConfig is statically set in this file, so 'response' should only be the schema
-        // var data = JSON.parse(response),
-        //     schema = JSON.stringify(data, null, 2),
-        //     startval = Object.keys(editorConfig.startval).length !== 0 ? JSON.stringify(editorConfig.startval, null, 2) : '',
-        //     cfg = editorConfig.config,
-        //     code = editorConfig.code,
-        //     style = editorConfig.style,
-        //     desc = editorConfig.desc
 
-        // // Clear include external library checkboxes
-        // Array.from(jeExtlib.querySelectorAll('input')).forEach(function (el) { // from() unsupported in IE
-        //     el.checked = false
-        // });
-
-        // jeExampleDesc.innerHTML = ''
-        // clearOutput()
-
-        // // Add description of example to help page
-        // if (desc !== '' && desc != 'Add optional description here. (HTML format)') {
-        //     jeModalContent.innerHTML = jeExampleDesc.innerHTML = '<h3>Info about "' + editorConfig.title + '" Example</h3>' + desc
-        //     toggleModal()
-        // }
-
-        // // Update ACE Editor instances
-        // aceSchemaEditor.setValue(schema)
-        // aceSchemaEditor.session.getSelection().clearSelection()
-        // aceSchemaEditor.resize()
-
-        // aceStartvalEditor.setValue(startval)
-        // aceStartvalEditor.session.getSelection().clearSelection()
-        // aceStartvalEditor.resize()
-
-        // aceCodeEditor.setValue(code)
-        // aceCodeEditor.session.getSelection().clearSelection()
-        // aceCodeEditor.resize()
-        // lockText()
-
-        // aceStyleEditor.setValue(style)
-        // aceStyleEditor.session.getSelection().clearSelection()
-        // aceStyleEditor.resize()
-
-        // aceOutputEditor.resize()
-        // aceValidateEditor.resize()
-
-        // // Set config options
-        // for (var id in cfg) {
-        //     if (cfg.hasOwnProperty(id)) {
-        //         var el = jeCfg.querySelector('#' + id)
-        //         if (el) {
-        //             if (el.nodeName == 'INPUT' && el.type == 'checkbox') el.checked = cfg[id] || 0
-        //             else if (el.nodeName == 'SELECT') el.value = cfg[id]
-        //         }
-        //     }
-        // }
-
-        // // Trigger generation of form
-        // eventFire(jeExec, 'click');
         createEditor();
     };
 
@@ -2197,9 +2009,6 @@ var viewJSONDialog = function(ui)
             {
                 mxUtils.alert(e);
             }
-
-            console.log('this is graphModel after update:');
-            console.log(graph.getModel().cells);
 
             // editor.destroy();
 
@@ -3554,8 +3363,7 @@ var VariablesDialog = function(ui)
 
     // Set JSONEditor and config options based on schema and cell type
     var loadConfig = function () {
-        // this.schema = JSON.parse(response); // cell schema
-        // JSONEditor config options
+
         this.config = {
             schema: schema,
             startval: startval,
@@ -3563,79 +3371,12 @@ var VariablesDialog = function(ui)
             mode: 'tree',
             modes: ['code', 'text', 'tree'],
             show_errors: 'always',
-            // jsoneditor: {
-            //     css: 'utils/topographer/downloads/jsoneditor.min.css',
-            //     js: 'utils/topographer/downloads/jsoneditor.js'
-            // },
             theme: 'bootstrap3',
             iconlib: 'spectre',
             disable_edit_json: true,
             disable_properties: true
-            // template: {
-            // },
-            // ext_lib: {
-            //     lib_dompurify: {
-            //         js: 'utils/topographer/downloads/purify.min.js'
-            //     }
-            // }
         };
-        // editorConfig is statically set in this file, so 'response' should only be the schema
-        // var data = JSON.parse(response),
-        //     schema = JSON.stringify(data, null, 2),
-        //     startval = Object.keys(editorConfig.startval).length !== 0 ? JSON.stringify(editorConfig.startval, null, 2) : '',
-        //     cfg = editorConfig.config,
-        //     code = editorConfig.code,
-        //     style = editorConfig.style,
-        //     desc = editorConfig.desc
 
-        // // Clear include external library checkboxes
-        // Array.from(jeExtlib.querySelectorAll('input')).forEach(function (el) { // from() unsupported in IE
-        //     el.checked = false
-        // });
-
-        // jeExampleDesc.innerHTML = ''
-        // clearOutput()
-
-        // // Add description of example to help page
-        // if (desc !== '' && desc != 'Add optional description here. (HTML format)') {
-        //     jeModalContent.innerHTML = jeExampleDesc.innerHTML = '<h3>Info about "' + editorConfig.title + '" Example</h3>' + desc
-        //     toggleModal()
-        // }
-
-        // // Update ACE Editor instances
-        // aceSchemaEditor.setValue(schema)
-        // aceSchemaEditor.session.getSelection().clearSelection()
-        // aceSchemaEditor.resize()
-
-        // aceStartvalEditor.setValue(startval)
-        // aceStartvalEditor.session.getSelection().clearSelection()
-        // aceStartvalEditor.resize()
-
-        // aceCodeEditor.setValue(code)
-        // aceCodeEditor.session.getSelection().clearSelection()
-        // aceCodeEditor.resize()
-        // lockText()
-
-        // aceStyleEditor.setValue(style)
-        // aceStyleEditor.session.getSelection().clearSelection()
-        // aceStyleEditor.resize()
-
-        // aceOutputEditor.resize()
-        // aceValidateEditor.resize()
-
-        // // Set config options
-        // for (var id in cfg) {
-        //     if (cfg.hasOwnProperty(id)) {
-        //         var el = jeCfg.querySelector('#' + id)
-        //         if (el) {
-        //             if (el.nodeName == 'INPUT' && el.type == 'checkbox') el.checked = cfg[id] || 0
-        //             else if (el.nodeName == 'SELECT') el.value = cfg[id]
-        //         }
-        //     }
-        // }
-
-        // // Trigger generation of form
-        // eventFire(jeExec, 'click');
         createEditor();
     };
 

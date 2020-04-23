@@ -56,11 +56,11 @@ EditorUi = function(editor, container, lightbox)
     }
 
     // set default node schema
-    loadSchema(window.UTILS_PATH + '/topographer/json/node_schema.json', 'application/json', 'nodes', setSchema);
+    loadSchema(window.UTILS_PATH + '/schemas/node_schema.json', 'application/json', 'nodes', setSchema);
     // set default edge schema
-    loadSchema(window.UTILS_PATH + '/topographer/json/edge_schema.json', 'application/json', 'edges', setSchema);
+    loadSchema(window.UTILS_PATH + '/schemas/edge_schema.json', 'application/json', 'edges', setSchema);
     // set experimentVars schema
-    loadSchema(window.UTILS_PATH + '/topographer/json/vars_schema.json', 'application/json', 'vars', setSchema);
+    loadSchema(window.UTILS_PATH + '/schemas/vars_schema.json', 'application/json', 'vars', setSchema);
     
     var graph = this.editor.graph;
     graph.lightbox = lightbox;
