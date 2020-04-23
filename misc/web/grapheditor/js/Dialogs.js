@@ -2027,7 +2027,10 @@ var viewJSONDialog = function(ui)
 
     vertices.forEach(cell => {
         setCellDefaults(graph, cell);
-        nodeArray.push(JSON.parse(cell.getAttribute('schemaVars')));
+        var node = JSON.parse(cell.getAttribute('schemaVars'));
+        if (node.device !== 'switch') {
+            nodeArray.push(node);
+        }
     });
 
     edges.forEach(cell => {
