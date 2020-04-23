@@ -3,6 +3,8 @@ package tmpl
 import (
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"text/template"
 )
 
@@ -14,4 +16,21 @@ func GenerateFromTemplate(name string, data interface{}, w io.Writer) error {
 	}
 
 	return nil
+}
+
+func CreateFileFromTemplate(name string, data interface{}, filename string) error {
+	dir := filepath.Dir(filename)
+
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("creating template path: %w", err)
+	}
+
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return fmt.Errorf("creating template file: %w", err)
+	}
+
+	defer f.Close()
+
+	return GenerateFromTemplate(name, data, f)
 }

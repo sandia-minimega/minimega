@@ -24,7 +24,7 @@ type ExperimentStatus struct {
 
 func (this *ExperimentSpec) SetDefaults() {
 	if this.BaseDir == "" {
-		this.BaseDir = "/phenix/experiments"
+		this.BaseDir = "/phenix/experiments/" + this.ExperimentName
 	}
 
 	this.Topology.SetDefaults()

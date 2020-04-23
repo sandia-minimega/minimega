@@ -1,0 +1,12 @@
+#!/bin/bash
+
+{{ range . }}
+until ping -c1 {{ .Address }} > /dev/null 2>&1; do sleep 1; done;
+socat -lf/tmp/socat.log -d -d -d -d pty,raw,echo=0,link={{ .Device }},b{{ .BaudRate }} UDP4-DATAGRAM:224.1.0.1:{{ .UDPPort }},bind=:{{ .UDPPort }},range={{ .LinkAddress }},ip-add-membership=224.1.0.1:{{ .Address }},ip-multicast-loop=0 &
+route add -net 224.0.0.0/3 gw {{ .Address }}
+device=$(cat /tmp/socat.log | grep symlink | head -n 1 | cut -d' ' -f5 | cut -d'"' -f2)
+link=$(cat /tmp/socat.log | grep symlink | head -n 1 | cut -d' ' -f6 | cut -d'"' -f2)
+if ! [ -L $link ]; then
+  ln -s $device $link
+fi
+{{ end }}

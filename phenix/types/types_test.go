@@ -20,7 +20,7 @@ spec:
 `
 
 var topology = `
-apiVersion: v1
+apiVersion: phenix.sandia.gov/v1
 kind: Topology
 metadata:
   name: foobar
@@ -48,6 +48,15 @@ spec:
         mask: 16.
         proto: static
         type: ethernet
+      - name: S0
+        vlan: foobar
+        address: 172.16.10.1
+        mask: 16.
+        proto: static
+        type: serial
+        baud_rate: 9600.
+        udp_port: 8989.
+        device: "/dev/ttyS0"
 `
 
 func TestConfig(t *testing.T) {

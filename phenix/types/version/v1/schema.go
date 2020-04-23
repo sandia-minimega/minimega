@@ -802,9 +802,9 @@ components:
           type: string
           title: Interface Type
           enum:
-          - ethernet
-          default: ethernet
-          example: ethernet
+          - serial
+          default: serial
+          example: serial
         proto:
           type: string
           title: Interface Protocol
@@ -845,5 +845,5 @@ components:
           minLength: 1
           default: /dev/ttyS0
           example: /dev/ttyS0
-          pattern: '^[\\w\\/]+\\w+$'
+          pattern: '^[\w\/]+\w+$'
 `)

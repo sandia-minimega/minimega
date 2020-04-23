@@ -3,14 +3,17 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 
 	"phenix/api/config"
 	"phenix/api/experiment"
+	"phenix/docs"
 	"phenix/store"
 	"phenix/util"
 	"phenix/util/envflag"
 
+	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"gopkg.in/yaml.v3"
 )
 
@@ -123,6 +126,24 @@ func main() {
 		default:
 			panic("unknown experiment command")
 		}
+	case "docs":
+		port := ":8000"
+
+		if flag.NArg() > 1 {
+			port = ":" + flag.Arg(1)
+		}
+
+		fs := &assetfs.AssetFS{
+			Asset:     docs.Asset,
+			AssetDir:  docs.AssetDir,
+			AssetInfo: docs.AssetInfo,
+		}
+
+		http.Handle("/", http.FileServer(fs))
+
+		fmt.Printf("\nStarting documentation server at %s\n", port)
+
+		http.ListenAndServe(port, nil)
 	default:
 		panic("unknown command")
 	}
@@ -147,6 +168,7 @@ func usage() {
 	fmt.Fprintln(flag.CommandLine.Output(), "  edit <kind/name>                        - edit an existing config")
 	fmt.Fprintln(flag.CommandLine.Output(), "  delete <kind/name>                      - delete a config")
 	fmt.Fprintln(flag.CommandLine.Output(), "  experiment <start,stop> <name>          - start an existing experiment")
+	fmt.Fprintln(flag.CommandLine.Output(), "  docs <port>                             - start documentation server on port (default 8000)")
 	// fmt.Fprintln(flag.CommandLine.Output(), "  help <cmd> - print help message for subcommand")
 
 	fmt.Fprintln(flag.CommandLine.Output(), "")
