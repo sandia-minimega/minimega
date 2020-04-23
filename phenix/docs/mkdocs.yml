@@ -1,0 +1,34 @@
+site_name: 'phenix documentation'
+site_description: 'A place for phenix users to call home.'
+site_author: 'Bryan T. Richardson'
+
+repo_name: 'sandia-minimega/minimega'
+repo_url: 'https://github.com/sandia-minimega/minimega'
+
+# copyright: 'Copyright &copy; 2020 NTESS'
+
+theme:
+  name: 'material'
+  language: 'en'
+  feature:
+    tabs: true
+  favicon: images/favicon.ico
+  logo: images/phenix.png
+  palette:
+    primary: 'deep orange'
+    accent: 'brown'
+  custom_dir: 'theme'
+  include_sidebar: true
+
+extra:
+  social:
+    - icon: 'fontawesome/brands/github'
+      link: 'https://github.com/sandia-minimega/minimega'
+
+markdown_extensions:
+  - admonition
+  - codehilite:
+      guess_lang: false
+  - footnotes
+  - toc:
+      permalink: true

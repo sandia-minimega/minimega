@@ -1,0 +1,4 @@
+docs/bindata.go
+docs/site
+
+tmpl/bindata.go
