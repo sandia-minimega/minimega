@@ -158,7 +158,7 @@ Actions.prototype.init = function()
     this.addAction('editVariables', function()
     {
         var dlg = new VariablesDialog(ui);
-        ui.showDialog(dlg.container, 480, 420, true, false, null, false);
+        // ui.showDialog(dlg.container, 480, 420, true, false, null, false);
         dlg.init();
     });
     

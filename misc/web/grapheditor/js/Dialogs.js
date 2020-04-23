@@ -1614,7 +1614,7 @@ function lookforvlan(graph, cell){
     setCellDefaults(graph, cell);
     var schemaVars = JSON.parse(cell.getAttribute('schemaVars')); // current cell (node) schemaVars
     var edgeSchemaVars; // edge schemaVars
-    var edgeCellSchemaVars; // target cell schemaVars
+    var targetSchemaVars; // target cell schemaVars
     var eth;
     var value;
     var vlan;
@@ -1658,13 +1658,40 @@ function lookforvlan(graph, cell){
             var e = cell.getEdgeAt(i);
             setCellDefaults(graph, e);
             edgeSchemaVars = JSON.parse(e.getAttribute('schemaVars'));
-            edgeSchemaVars.name = edgeSchemaVars.id = schemaVars.network.interfaces[0].vlan;
+            edgeSchemaVars.name = schemaVars.network.interfaces[0].vlan;
+            if (edgeSchemaVars.id === '') edgeSchemaVars.id = 'auto';
             // value = graph.getModel().getValue(e);
             e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
             // checkValue(e);
             // e.setAttribute("vlan",cell.getAttribute("vlan"));
         }
     } else {
+
+        // check if cell (node) is replacing a switch by searching for duplicate vlans
+        if (cell.getEdgeCount() > 1){
+            var dupe = false;
+            var name;
+            for(var i =0; i< cell.getEdgeCount();i++) {
+                var e = cell.getEdgeAt(i);
+                setCellDefaults(graph, e);
+                if (JSON.parse(e.getAttribute('schemaVars')).name === name && name != '') {
+                    dupe = true;
+                    break;
+                }
+                else {
+                    name = JSON.parse(e.getAttribute('schemaVars')).name;
+                }
+            }
+            // if cell has edges with duplicate vlans, reset all vlans and reassign thereafter
+            // if (dupe) {
+            //     for (var i =0; i< cell.getEdgeCount();i++){
+            //         var e = cell.getEdgeAt(i);
+            //         setCellDefaults(graph, e);
+            //         edgeSchemaVars.name = edgeSchemaVars.id = '';
+            //         e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
+            //     }
+            // }
+        }
 
         for (var i = 0; i < cell.getEdgeCount(); i++){
             var eth = 'eth' + i;
@@ -1673,6 +1700,11 @@ function lookforvlan(graph, cell){
             // checkValue(e);
             // check if edge has a vlan14
             edgeSchemaVars = JSON.parse(e.getAttribute('schemaVars'));
+            // if cell has edges with duplicate vlans, reset all vlans and reassign thereafter
+            if (dupe) {
+                edgeSchemaVars.name = '';
+                edgeSchemaVars.id = 'auto';
+            }
 
             var ec; // edge true target cell
 
@@ -1685,31 +1717,33 @@ function lookforvlan(graph, cell){
             }
             // checkValue(ec);
             setCellDefaults(graph, ec);
-            edgeCellSchemaVars = JSON.parse(ec.getAttribute('schemaVars'));
+            targetSchemaVars = JSON.parse(ec.getAttribute('schemaVars'));
 
             try {
-                edgeCellSchemaVars.network.interfaces; 
-                edgeCellEth = 'eth' + (Math.max.apply(Math, (edgeCellSchemaVars.network.interfaces).map(function(o) { return (o.name).substr(-1); })) + 1);
+                targetSchemaVars.network.interfaces; 
+                targetEth = 'eth' + (Math.max.apply(Math, (targetSchemaVars.network.interfaces).map(function(o) { return (o.name).substr(-1); })) + 1);
             }
             catch(e) {
-                edgeCellSchemaVars.network = {};
-                edgeCellSchemaVars.network.interfaces = [];
-                edgeCellSchemaVars.network.interfaces[0] = {};
-                edgeCellEth = 'eth0';
+                targetSchemaVars.network = {};
+                targetSchemaVars.network.interfaces = [];
+                targetSchemaVars.network.interfaces[0] = {};
+                targetEth = 'eth0';
             }
 
             // if connected vertex is a switch get the vlan number or sets one for the switch and the edge
-            if (edgeCellSchemaVars.device === 'switch'){
+            if (targetSchemaVars.device === 'switch'){
 
-                if (typeof edgeCellSchemaVars.network.interfaces[0].vlan === 'undefined' || edgeCellSchemaVars.network.interfaces[0].vlan === ''){
+                if (typeof targetSchemaVars.network.interfaces[0].vlan === 'undefined' || targetSchemaVars.network.interfaces[0].vlan === ''){
                     // e.setAttribute("vlan", searchNextVlan(vlan_count).toString());
                     // ec.setAttribute("vlan", e.getAttribute("vlan"));
-                    edgeSchemaVars.name = edgeSchemaVars.id = searchNextVlan(vlan_count).toString();
-                    edgeCellSchemaVars.network.interfaces[0].vlan = edgeSchemaVars.name;
-                    edgeCellSchemaVars.network.interfaces[0].name = edgeCellEth;
-                    ec.setAttribute('schemaVars', JSON.stringify(edgeCellSchemaVars));
+                    edgeSchemaVars.name = searchNextVlan(vlan_count).toString();
+                    edgeSchemaVars.id = 'auto';
+                    targetSchemaVars.network.interfaces[0].vlan = edgeSchemaVars.name;
+                    targetSchemaVars.network.interfaces[0].name = targetEth;
+                    ec.setAttribute('schemaVars', JSON.stringify(targetSchemaVars));
                 } else {
-                    edgeSchemaVars.name = edgeSchemaVars.id = edgeCellSchemaVars.network.interfaces[0].vlan;
+                    edgeSchemaVars.name = targetSchemaVars.network.interfaces[0].vlan;
+                    if (edgeSchemaVars.id === '') edgeSchemaVars.id = 'auto';
                     e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
                 }
             } // If its any other device just set a new vlan to the edge
@@ -1718,7 +1752,8 @@ function lookforvlan(graph, cell){
                 // set edge vlan and vlan id
                 // set device vlan to edge vlan on a new interface
                 if (typeof edgeSchemaVars.name === 'undefined' || edgeSchemaVars.name === '') {
-                    edgeSchemaVars.name = edgeSchemaVars.id = searchNextVlan(vlanid).toString();
+                    edgeSchemaVars.name = searchNextVlan(vlanid).toString();
+                    edgeSchemaVars.id = 'auto';
                     e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
                 }
             }
@@ -1905,7 +1940,7 @@ var EditDataDialog = function(ui, cell)
         else if (cell.isEdge()) {
             // disable attributes of edge if connected to a switch, since switch dictates values
             if ( JSON.parse(cell.source.getAttribute('schemaVars')).device === 'switch' || JSON.parse(cell.target.getAttribute('schemaVars')).device === 'switch') {
-                editor.getEditor('root').disable();
+                editor.getEditor('root.name').disable();
             }
         }
 
@@ -1998,7 +2033,7 @@ var viewJSONDialog = function(ui)
     edges.forEach(cell => {
         setCellDefaults(graph, cell);
         var vlan = JSON.parse(cell.getAttribute('schemaVars'));
-        if (edgeArray.filter(function(e) { return e.name === vlan.name; }).length <= 0) {
+        if (edgeArray.filter(function(e) { return e.name === vlan.name; }).length <= 0 && vlan.id !== 'auto') {
             edgeArray.push(vlan);
         }
     });
@@ -3503,284 +3538,179 @@ MiniResponseDialog.showNewWindowOption = true;
  */
 var VariablesDialog = function(ui)
 {
+
+    const graph = ui.editor.graph;
+    const schema = ui.schemas['vars']; // set schema
+    // console.log('this is schema'), console.log(schema);
+
+    var startval = [
+        {name: "IMAGEDIR", value:"/images"},
+        {name: "DEFAULT_MEMORY", value:"2048"},
+        {name: "DEFAULT_VCPU", value:"1"},
+    ];
+
+    // Set JSONEditor and config options based on schema and cell type
+    var loadConfig = function () {
+        // this.schema = JSON.parse(response); // cell schema
+        // JSONEditor config options
+        this.config = {
+            schema: schema,
+            startval: startval,
+            ajax: true,
+            mode: 'tree',
+            modes: ['code', 'text', 'tree'],
+            show_errors: 'always',
+            // jsoneditor: {
+            //     css: 'utils/topographer/downloads/jsoneditor.min.css',
+            //     js: 'utils/topographer/downloads/jsoneditor.js'
+            // },
+            theme: 'bootstrap3',
+            iconlib: 'spectre',
+            disable_edit_json: true,
+            disable_properties: true
+            // template: {
+            // },
+            // ext_lib: {
+            //     lib_dompurify: {
+            //         js: 'utils/topographer/downloads/purify.min.js'
+            //     }
+            // }
+        };
+        // editorConfig is statically set in this file, so 'response' should only be the schema
+        // var data = JSON.parse(response),
+        //     schema = JSON.stringify(data, null, 2),
+        //     startval = Object.keys(editorConfig.startval).length !== 0 ? JSON.stringify(editorConfig.startval, null, 2) : '',
+        //     cfg = editorConfig.config,
+        //     code = editorConfig.code,
+        //     style = editorConfig.style,
+        //     desc = editorConfig.desc
+
+        // // Clear include external library checkboxes
+        // Array.from(jeExtlib.querySelectorAll('input')).forEach(function (el) { // from() unsupported in IE
+        //     el.checked = false
+        // });
+
+        // jeExampleDesc.innerHTML = ''
+        // clearOutput()
+
+        // // Add description of example to help page
+        // if (desc !== '' && desc != 'Add optional description here. (HTML format)') {
+        //     jeModalContent.innerHTML = jeExampleDesc.innerHTML = '<h3>Info about "' + editorConfig.title + '" Example</h3>' + desc
+        //     toggleModal()
+        // }
+
+        // // Update ACE Editor instances
+        // aceSchemaEditor.setValue(schema)
+        // aceSchemaEditor.session.getSelection().clearSelection()
+        // aceSchemaEditor.resize()
+
+        // aceStartvalEditor.setValue(startval)
+        // aceStartvalEditor.session.getSelection().clearSelection()
+        // aceStartvalEditor.resize()
+
+        // aceCodeEditor.setValue(code)
+        // aceCodeEditor.session.getSelection().clearSelection()
+        // aceCodeEditor.resize()
+        // lockText()
+
+        // aceStyleEditor.setValue(style)
+        // aceStyleEditor.session.getSelection().clearSelection()
+        // aceStyleEditor.resize()
+
+        // aceOutputEditor.resize()
+        // aceValidateEditor.resize()
+
+        // // Set config options
+        // for (var id in cfg) {
+        //     if (cfg.hasOwnProperty(id)) {
+        //         var el = jeCfg.querySelector('#' + id)
+        //         if (el) {
+        //             if (el.nodeName == 'INPUT' && el.type == 'checkbox') el.checked = cfg[id] || 0
+        //             else if (el.nodeName == 'SELECT') el.value = cfg[id]
+        //         }
+        //     }
+        // }
+
+        // // Trigger generation of form
+        // eventFire(jeExec, 'click');
+        createEditor();
+    };
+
+    var createEditor = function() {
+
         var div = document.createElement('div');
+        div.style['overflow-y'] = 'auto';
 
-        var default_vars = [
-                {name: "IMAGEDIR", value:"/images"},
-                {name: "DEFAULT_MEMORY", value:"2048"},
-                {name: "DEFAULT_VCPU", value:"1"},
-        ];
+        var editorContainer = document.createElement('div');
+        editorContainer.setAttribute('id', 'jsoneditor');
+        editorContainer.style.height = '100%';
+        editorContainer.style.position = 'relative';
+        editorContainer.style['max-width'] ="600px";
 
-        // Creates the dialog contents
-        var form = new mxForm('properties');
-        form.table.style.width = '100%';
+        const editor = new JSONEditor(editorContainer, this.config);
 
-        var attrs = [];
-        var names = [];
-        var texts = [];
-        var count = 0;
-
-        var id = null;
-
-        var addRemoveButton = function(text, name)
-        {
-                var wrapper = document.createElement('div');
-                wrapper.style.position = 'relative';
-                wrapper.style.paddingRight = '20px';
-                wrapper.style.boxSizing = 'border-box';
-                wrapper.style.width = '100%';
-
-                var removeAttr = document.createElement('a');
-                var img = mxUtils.createImage(Dialog.prototype.closeImage);
-                img.style.height = '9px';
-                img.style.fontSize = '9px';
-                img.style.marginBottom = (mxClient.IS_IE11) ? '-1px' : '5px';
-
-                removeAttr.className = 'geButton';
-                removeAttr.setAttribute('title', mxResources.get('delete'));
-                removeAttr.style.position = 'absolute';
-                removeAttr.style.top = '4px';
-                removeAttr.style.right = '0px';
-                removeAttr.style.margin = '0px';
-                removeAttr.style.width = '9px';
-                removeAttr.style.height = '9px';
-                removeAttr.style.cursor = 'pointer';
-                removeAttr.appendChild(img);
-
-                var removeAttrFn = (function(name)
-                {
-                        return function()
-                        {
-                                var count = 0;
-
-                                for (var j = 0; j < names.length; j++)
-                                {
-                                        if (names[j] == name)
-                                        {
-                                                texts[j] = null;
-                                                form.table.deleteRow(count + ((id != null) ? 1 : 0));
-
-                                                break;
-                                        }
-
-                                        if (texts[j] != null)
-                                        {
-                                                count++;
-                                        }
-                                }
-                        };
-                })(name);
-
-                mxEvent.addListener(removeAttr, 'click', removeAttrFn);
-
-                var parent = text.parentNode;
-                wrapper.appendChild(text);
-                wrapper.appendChild(removeAttr);
-                parent.appendChild(wrapper);
-        };
-
-        var addTextArea = function(index, name, value)
-        {
-                names[index] = name;
-                texts[index] = form.addText(names[count] + ':', value, 2);
-                texts[index].style.width = '100%';
-                texts[index].style.overflowX = 'visible';
-
-                addRemoveButton(texts[index], name);
-        };
-
-
-        if (window.experiment_vars === undefined)
-        {
-          window.experiment_vars = default_vars;
-        }
-
-        var temp = window.experiment_vars;
-
-        // Sorts by name
-        temp.sort(function(a, b)
-        {
-            if (a.name < b.name)
-            {
-                return -1;
-            }
-            else if (a.name > b.name)
-            {
-                return 1;
-            }
-            else
-            {
-                return 0;
-            }
-        });
-
-        if (id != null)
-        {
-                var text = document.createElement('div');
-                text.style.width = '100%';
-                text.style.fontSize = '11px';
-                text.style.textAlign = 'center';
-                mxUtils.write(text, id);
-
-                form.addField(mxResources.get('id') + ':', text);
-        }
-
-        for (var i = 0; i < temp.length; i++)
-        {
-                addTextArea(count, temp[i].name, temp[i].value);
-                count++;
-        }
-
-        var top = document.createElement('div');
-        top.style.cssText = 'position:absolute;left:30px;right:30px;overflow-y:auto;top:30px;bottom:80px;';
-        top.appendChild(form.table);
-
-        var newProp = document.createElement('div');
-        newProp.style.boxSizing = 'border-box';
-        newProp.style.paddingRight = '160px';
-        newProp.style.whiteSpace = 'nowrap';
-        newProp.style.marginTop = '6px';
-        newProp.style.width = '100%';
-
-        var nameInput = document.createElement('input');
-        nameInput.setAttribute('placeholder', mxResources.get('enterPropertyName'));
-        nameInput.setAttribute('type', 'text');
-        nameInput.setAttribute('size', (mxClient.IS_IE || mxClient.IS_IE11) ? '36' : '40');
-        nameInput.style.boxSizing = 'border-box';
-        nameInput.style.marginLeft = '2px';
-        nameInput.style.width = '100%';
-
-        newProp.appendChild(nameInput);
-        top.appendChild(newProp);
-        div.appendChild(top);
-
-        function varNameIsOK(name)
-        {
-                return name.match(/^[A-Z_0-9]+$/);
-        }
-
-        var addBtn = mxUtils.button(mxResources.get('addProperty'), function()
-        {
-                var name = nameInput.value;
-
-                // Avoid ':' in attribute names which seems to be valid in Chrome
-                if (name.length > 0 && name != 'label' && name != 'placeholders' && name.indexOf(':') < 0 && varNameIsOK(name))
-                {
-                        try
-                        {
-                                var idx = mxUtils.indexOf(names, name);
-
-                                if (idx >= 0 && texts[idx] != null)
-                                {
-                                        texts[idx].focus();
-                                }
-                                else
-                                {
-                                        if (idx >= 0)
-                                        {
-                                                names.splice(idx, 1);
-                                                texts.splice(idx, 1);
-                                        }
-
-                                        names.push(name);
-                                        var text = form.addText(name + ':', '', 2);
-                                        text.style.width = '100%';
-                                        texts.push(text);
-                                        addRemoveButton(text, name);
-
-                                        text.focus();
-                                }
-
-                                addBtn.setAttribute('disabled', 'disabled');
-                                nameInput.value = '';
-                        }
-                        catch (e)
-                        {
-                                mxUtils.alert(e);
-                        }
-                }
-                else
-                {
-                        mxUtils.alert(mxResources.get('invalidName'));
-                }
-        });
-
-        this.init = function()
-        {
-                if (texts.length > 0)
-                {
-                        texts[0].focus();
-                }
-                else
-                {
-                        nameInput.focus();
-                }
-        };
-
-        addBtn.setAttribute('title', mxResources.get('addProperty'));
-        addBtn.setAttribute('disabled', 'disabled');
-        addBtn.style.textOverflow = 'ellipsis';
-        addBtn.style.position = 'absolute';
-        addBtn.style.overflow = 'hidden';
-        addBtn.style.width = '144px';
-        addBtn.style.right = '0px';
-        addBtn.className = 'geBtn';
-        newProp.appendChild(addBtn);
+        div.appendChild(editorContainer);
 
         var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
         {
-                ui.hideDialog.apply(ui, arguments);
+            ui.hideDialog.apply(ui, arguments);
+            editor.destroy();
         });
-
+        
         cancelBtn.className = 'geBtn';
-
+        
         var applyBtn = mxUtils.button(mxResources.get('apply'), function()
         {
+            try
+            {
                 ui.hideDialog.apply(ui, arguments);
+                var updatedNode = editor.getEditor('root').value; // get current node's JSON (from JSONEditor)
+                value.setAttribute('schemaVars', JSON.stringify(updatedNode));
+                graph.getModel().setValue(cell, value);
+                vertices.forEach(cell => {
+                    lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
+                });
+            }
+            catch (e)
+            {
+                mxUtils.alert(e);
+            }
 
-                var temp = [];
-                for (var i = 0; i < names.length; i++)
-                {
-                        if (texts[i])
-                        {
-                                temp.push({name: names[i], value: texts[i].value});
-                        }
-                }
-                window.experiment_vars = temp;
+            console.log('this is graphModel after update:');
+            console.log(graph.getModel().cells);
+
+            editor.destroy();
+
         });
+
         applyBtn.className = 'geBtn gePrimaryBtn';
-
-        function updateAddBtn()
-        {
-                if (nameInput.value.length > 0)
-                {
-                        addBtn.removeAttribute('disabled');
-                }
-                else
-                {
-                        addBtn.setAttribute('disabled', 'disabled');
-                }
-        };
-
-        mxEvent.addListener(nameInput, 'keyup', updateAddBtn);
-
-        // Catches all changes that don't fire a keyup (such as paste via mouse)
-        mxEvent.addListener(nameInput, 'change', updateAddBtn);
-
+        
         var buttons = document.createElement('div');
-        buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:30px;height:40px;'
-
+        buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:15px;height:40px;border-top:1px solid #ccc;padding-top:20px;'
+        
         if (ui.editor.cancelFirst)
         {
-                buttons.appendChild(cancelBtn);
-                buttons.appendChild(applyBtn);
+            buttons.appendChild(cancelBtn);
+            buttons.appendChild(applyBtn);
         }
         else
         {
-                buttons.appendChild(applyBtn);
-                buttons.appendChild(cancelBtn);
+            buttons.appendChild(applyBtn);
+            buttons.appendChild(cancelBtn);
         }
 
         div.appendChild(buttons);
         this.container = div;
+
+        // show dialog only after editor is created
+        ui.showDialog(this.container, 480, 420, true, false, null, false); 
+
+    };
+
+    this.init = function()
+    {
+        console.log('init');
+        loadConfig();
+    };
+
 };
