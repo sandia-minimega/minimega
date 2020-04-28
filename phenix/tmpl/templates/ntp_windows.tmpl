@@ -1,0 +1,32 @@
+echo "Starting NTP..."
+net start w32time
+Start-Sleep -s 5
+echo "Configuring timezone to 'UTC'..."
+tzutil /s "UTC"
+echo "Configuring NTP..."
+w32tm /config /manualpeerlist:"{{ . }}" /syncfromflags:manual /reliable:YES /update
+echo "Restart NTP for the changes to take affect..."
+net stop w32time
+Start-Sleep -s 2
+net start w32time
+
+# In order for the windows VM to properly sync to the NTP server it needs to wait
+# for the server to settle down and be ready.  The below loop waits for the NTP
+# server to settle and produce a valid stratum number.  Once a valid stratum is
+# received the NTP client can be restarted and forced to resync.
+echo "Wait for NTP server at {{ . }} then resync"
+Do {
+    Start-Sleep -s 60
+    echo "Get NTP server status"
+    $output = w32tm /monitor /computers:{{ . }} # get the output of the w32tm monitor action
+    $str = $output[2].Split(' ')[1] # get the third line of the output and split it, to get the stratum number
+    $num = [convert]::ToInt32($str, 10) # convert the stratum number to an integer
+    echo "Stratum: $num"
+} Until ($num -gt 0) # when the NTP server is not ready the stratum number will be 0, anything higher than that should mean its ready
+Start-Sleep -s 60
+net stop w32time
+Start-Sleep -s 2
+net start w32time
+echo "NTP Server ready, time to resync local NTP"
+w32tm /resync /force
+echo "Done..."
