@@ -38,8 +38,11 @@ type Route struct {
 }
 
 type OSPF struct {
-	RouterID string `json:"router_id" yaml:"router_id"`
-	Areas    []Area `json:"areas" yaml:"areas"`
+	RouterID        string `json:"router_id" yaml:"router_id"`
+	Areas           []Area `json:"areas" yaml:"areas"`
+	DeadInterval    int    `json:"dead_interval" yaml:"dead_interval"`
+	HelloInterval   int    `json:"hello_interval" yaml:"hello_interval"`
+	RetransInterval int    `json:"retransmission_interval" yaml:"retransmission_interval"`
 }
 
 type Area struct {

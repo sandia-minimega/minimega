@@ -102,6 +102,18 @@ func (this Node) FileInjects() string {
 	return strings.Join(injects, " ")
 }
 
+func (this Node) RouterName() string {
+	if !strings.EqualFold(this.Type, "router") {
+		return this.General.Hostname
+	}
+
+	name := strings.ToLower(this.General.Hostname)
+	name = strings.ReplaceAll(name, ".", "-")
+	name = strings.ReplaceAll(name, "_", "-")
+
+	return name
+}
+
 func (this Hardware) DiskConfig(snapshot string) string {
 	configs := make([]string, len(this.Drives))
 
