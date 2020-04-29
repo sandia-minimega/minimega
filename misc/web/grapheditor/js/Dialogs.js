@@ -1644,7 +1644,7 @@ function lookforvlan(graph, cell){
     // Check if vertex is a switch, if it is and it does not have a vlan set all edges to a new vlan
     if (schemaVars.device === 'switch'){
         if (typeof schemaVars.network.interfaces[0].vlan === 'undefined' || schemaVars.network.interfaces[0].vlan === '') {
-            schemaVars.network.interfaces[0].vlan = searchNextVlan(vlan_count).toString();
+            schemaVars.network.interfaces[0].vlan = searchNextVlan(vlanid).toString();
             schemaVars.network.interfaces[0].name = 'eth0';
             cell.setAttribute('schemaVars', JSON.stringify(schemaVars));
         }
@@ -1714,7 +1714,7 @@ function lookforvlan(graph, cell){
             if (targetSchemaVars.device === 'switch'){
 
                 if (typeof targetSchemaVars.network.interfaces[0].vlan === 'undefined' || targetSchemaVars.network.interfaces[0].vlan === ''){
-                    edgeSchemaVars.name = searchNextVlan(vlan_count).toString();
+                    edgeSchemaVars.name = searchNextVlan(vlanid).toString();
                     edgeSchemaVars.id = 'auto';
                     targetSchemaVars.network.interfaces[0].vlan = edgeSchemaVars.name;
                     targetSchemaVars.network.interfaces[0].name = targetEth;
@@ -1798,6 +1798,7 @@ var EditDataDialog = function(ui, cell)
             show_errors: 'always',
             theme: 'bootstrap3',
             iconlib: 'spectre',
+            no_additional_properties: true
         };
 
         createEditor();
@@ -1818,16 +1819,21 @@ var EditDataDialog = function(ui, cell)
 
         // disable vlan attribute if cell is a node and not a switch;
         // edge values dictate node vlan attribute values unless it's a switch
-        if (cell.isVertex() && editor.getEditor('root.device').getValue() !== 'switch') {
-            for (var i = 0; i < editor.getEditor('root.network.interfaces').getValue().length; i++) {
-                editor.getEditor('root.network.interfaces.'+i+'.vlan').disable();
+        try {
+            if (cell.isVertex() && editor.getEditor('root.device').getValue() !== 'switch') {
+                for (var i = 0; i < editor.getEditor('root.network.interfaces').getValue().length; i++) {
+                    editor.getEditor('root.network.interfaces.'+i+'.vlan').disable();
+                }
+            }
+            else if (cell.isEdge()) {
+                // disable attributes of edge if connected to a switch, since switch dictates values
+                if ( JSON.parse(cell.source.getAttribute('schemaVars')).device === 'switch' || JSON.parse(cell.target.getAttribute('schemaVars')).device === 'switch') {
+                    editor.getEditor('root.name').disable();
+                }
             }
         }
-        else if (cell.isEdge()) {
-            // disable attributes of edge if connected to a switch, since switch dictates values
-            if ( JSON.parse(cell.source.getAttribute('schemaVars')).device === 'switch' || JSON.parse(cell.target.getAttribute('schemaVars')).device === 'switch') {
-                editor.getEditor('root.name').disable();
-            }
+        catch {
+            console.log('vertex with no edges');
         }
 
         div.appendChild(editorContainer);
@@ -2995,104 +3001,202 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         textarea.style.lineHeight = 'initial';
         textarea.style.marginBottom = '16px';
 
+        var edgeSchemaVars;
         //Walk through all existing edges
         edges.forEach(cell => {
         // checkValue(e);
             setCellDefaults(graph, cell);
-            if (cell.getAttribute("vlan") != undefined){
-                if (!vlans_in_use.hasOwnProperty(cell.getAttribute("vlan"))){
-                        vlans_in_use[cell.getAttribute("vlan")]=true;
+            edgeSchemaVars = JSON.parse(cell.getAttribute('schemaVars'));
+            if (typeof edgeSchemaVars.name !== 'undefined' && edgeSchemaVars.name !== '') {
+                if (!vlans_in_use.hasOwnProperty(edgeSchemaVars.name)){
+                    vlans_in_use[edgeSchemaVars.name]=true;
                 }
             }
         });
 
         var count =0;
-        var parameters = {memory:"2048", vcpu:"1", network:undefined,kernel:undefined,initrd:undefined,disk:undefined,snapshot:true,cdrom:undefined};
+
+        var parameters = [
+            {
+                name: 'memory',
+                path: 'hardware.memory'
+            },
+            {
+                name: 'vcpu',
+                path: 'hardware.vcpus'
+            },
+            {
+                name: 'network',
+                path: 'network'
+            },
+            {
+                name: 'kernel',
+                path: 'hardware.os_type'
+            },
+            {
+                name: 'initrd',
+                path: 'hardware.memory'
+            },
+            {
+                name: 'disk',
+                path: 'hardware.drives'
+            },
+            {
+                name: 'snapshot',
+                path: 'general.snapshot'
+            },
+            {
+                name: 'cdrom',
+                path: 'hardware.drives'
+            }
+        ];
+            // memory:"2048", 
+            // vcpu:"1", 
+            // network:undefined,
+            // kernel:undefined,
+            // initrd:undefined,
+            // disk:undefined,
+            // snapshot:true,
+            // cdrom:undefined
+
+        // utility function to return path array
+        const getPath = (path) => {
+            var paths = path.split('.');
+            var pathString;
+            for (p in paths) {
+                pathString += []
+            }
+            return paths;
+        };
+
         var config = "";
         var prev_dev_config = "";
         var prev_dev = {};
+        var schemaVars;
+        var miniccc_commands = [];
         vertices.forEach(cell => {
             setCellDefaults(graph, cell);
-            var dev_config="";
-            var name = "";
+            schemaVars = JSON.parse(cell.getAttribute('schemaVars'));
             lookforvlan(graph, cell);
+
             // if vertex is a switch skip the device in config
-            cell.setAttribute("type","diagraming");
-            if (cell.getStyle().includes("switch")){return;}
-            if (cell.getStyle().includes("router")){cell.setAttribute("type","router");}
-            if (cell.getStyle().includes("firewall")){cell.setAttribute("type","firewall");}
-            if (cell.getStyle().includes("desktop")){cell.setAttribute("type","desktop");}
-            if (cell.getStyle().includes("server")){cell.setAttribute("type","server");}
-            if (cell.getStyle().includes("mobile")){cell.setAttribute("type","mobile");}
-            if (cell.getAttribute("type") == "diagraming"){
-                    return;
+            if (schemaVars.device === 'switch'){
+                return;
             }
 
-            if (cell.getAttribute("name") != undefined) {
-                    config += `## Config for ${cell.getAttribute("name")}\n`;
-                    name = cell.getAttribute("name");
+            var dev_config="";
+            var name = "";
+            
+            try {
+                if (schemaVars.general.hostname != "") {
+                    config += `## Config for ${schemaVars.general.hostname}\n`;
+                    name = schemaVars.general.hostname;
+                } 
+                else{
+                    config += `##Config for a ${schemaVars.device} device #${count}\n`;
+                    name = `${schemaVars.device}_device_${count}`
+                }
             }
-            else {
-                    config+= `##Config for a ${cell.getAttribute("type")} device #${count}\n`;
-                    name = `${cell.getAttribute("type")}_device_${count}`
+            catch {
+                config += `##Config for a ${schemaVars.device} device #${count}\n`;
+                name = `${schemaVars.device}_device_${count}`
             }
             count++;
 
-            var clear ="";
-            var net ="";
+            var clear = "";
+            var net = "";
 
             for (var i =0; i< cell.getEdgeCount();i++){
-                    var e = cell.getEdgeAt(i);
-                    net += `vlan-${e.getAttribute("vlan")}`;
-                    if (i+1 < cell.getEdgeCount()){
-                            net += ' ';
-                    }
+                var e = cell.getEdgeAt(i);
+                edgeSchemaVars = JSON.parse(e.getAttribute('schemaVars'));
+                net += `vlan-${edgeSchemaVars.name}`;
+                if (i+1 < cell.getEdgeCount()){
+                    net += ' ';
+                }
             }
-            if (net == ""){
-                    delete prev_dev["network"];
-                    clear += "clear vm config network \n"
+            console.log('this is prev_dev[network]'), console.log(prev_dev["network"]);
+            if (net == "" && typeof prev_dev["network"] != 'undefined'){
+                delete prev_dev["network"];
+                clear += "clear vm config network \n";
             }
             else {
-                    if (cell.getAttribute("network") != net){
-                            cell.setAttribute("network",net);
-                    }
-                    if (prev_dev["network"] != net){
-                    prev_dev["network"] = net
+                // if (cell.getAttribute("network") != net){
+                //     cell.setAttribute("network",net);
+                // }
+                if (prev_dev["network"] != net && net != ""){
+                    prev_dev["network"] = net;
                     config += `vm config network ${net} \n`;
-                    }
+                }
             }
 
             // Generate configuration for parameters
-            for (const p in parameters) {
-                // If there is no configuration for a parameter and the previous device had one clear it
-                if ((cell.getAttribute(p) == undefined || cell.getAttribute(p) == "undefined") && prev_dev.hasOwnProperty(p)){
-                        if (p != "network"){
-                                delete prev_dev[p];
-                                clear +=`clear vm config ${p}\n`;
-                        }
+            parameters.forEach(function(p) {
+                var name = p.name;
+                var path = getPath(p.path);
+                console.log(name), console.log(path);
+                // if it has a configuration for the parameter set it
+                try {
+                    var value = schemaVars;
+                    for (i in path) {
+                        value = value[path[i]];
+                    }
+                    console.log('this is value in paramsearch <'+name+'>'), console.log(value);
+                    value = value.toString(); // will catch if undefined
+                    if (prev_dev[name] != value && value != '' && name != "network"){
+                        prev_dev[name] = value;
+                        config += `vm config ${name} ${value} \n`;
+                    }
                 }
-                // if it has a configuration for the parameter set it else issue a default value
-                if (cell.getAttribute(p) != undefined && cell.getAttribute(p) != "undefined") {
-                        if(prev_dev[p] != cell.getAttribute(p)){
-                                prev_dev[p] = cell.getAttribute(p);
-                                config += `vm config ${p} ${cell.getAttribute(p)} \n`;
-                        }
+                catch { // parameter value is undefined
+                    // If there is no configuration for a parameter and the previous device had one clear it
+                    if (name != "network" && prev_dev.hasOwnProperty(name)) {
+                        delete prev_dev[name];
+                        clear += `clear vm config ${name}\n`;
+                    }
                 }
-                else {
-                        //if (parameters[p] != undefined && !prev_dev_config.includes(`vm config ${p} ${parameters[p]} \n`)){
-                        if (parameters[p] != undefined && prev_dev[p] != parameters[p]){
-                                //dev_config += `vm config ${p} ${parameters[p]} \n`;
-                                prev_dev[p] = cell.getAttribute(p);
-                                config += `vm config ${p} ${parameters[p]} \n`;
-                        }
-                }
-            }
+
+                // // If there is no configuration for a parameter and the previous device had one clear it
+                // if ((cell.getAttribute(p) == undefined || cell.getAttribute(p) == "undefined") && prev_dev.hasOwnProperty(p)){
+                //     if (p != "network"){
+                //         delete prev_dev[p];
+                //         clear +=`clear vm config ${p}\n`;
+                //     }
+                // }
+                // // if it has a configuration for the parameter set it else issue a default value
+                // if (cell.getAttribute(p) != undefined && cell.getAttribute(p) != "undefined") {
+                //     if(prev_dev[p] != cell.getAttribute(p)){
+                //         prev_dev[p] = cell.getAttribute(p);
+                //         config += `vm config ${p} ${cell.getAttribute(p)} \n`;
+                //     }
+                // }
+                // else {
+                //     //if (parameters[p] != undefined && !prev_dev_config.includes(`vm config ${p} ${parameters[p]} \n`)){
+                //     if (parameters[p] != undefined && prev_dev[p] != parameters[p]){
+                //         //dev_config += `vm config ${p} ${parameters[p]} \n`;
+                //         prev_dev[p] = cell.getAttribute(p);
+                //         config += `vm config ${p} ${parameters[p]} \n`;
+                //     }
+                // }
+            });
 
             config += clear;
-            if (cell.getStyle().includes("container")){config+=`vm launch container ${name}\n\n`;}
-            else {config+=`vm launch kvm ${name}\n\n`;}
+            if (schemaVars.type === "container") {config+=`vm launch container ${name}\n\n`;}
+            else {config+=`vm launch ${schemaVars.type} ${name}\n\n`;}
+            if (typeof schemaVars.miniccc_commands !== 'undefined') {
+                for (var i = 0; i < schemaVars.miniccc_commands.length; i++) {
+                    if (schemaVars.miniccc_commands[i] != '') {
+                        miniccc_commands.push(schemaVars.miniccc_commands[i]);
+                    }
+                }
+            }
         });
-        textarea.value = config + "## Starting all VM's\nvm start all\n";
+        textarea.value = config;
+        if (miniccc_commands.length > 0) textarea.value += "## miniccc commands\n"
+        for(var i = 0; i < miniccc_commands.length; i++) {
+            textarea.value += miniccc_commands[i]+"\n";
+        }
+        textarea.value += "\n";
+        textarea.value += "## Starting all VM's\nvm start all\n";
 
         // expand variables
         console.log(window.experiment_vars);
