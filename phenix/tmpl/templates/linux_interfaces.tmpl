@@ -1,0 +1,58 @@
+{{ if eq .Hardware.OSType v1.OSType_Linux }}
+auto lo
+iface lo inet loopback
+    {{ range $idx, $iface := .Network.Interfaces }}
+{{/* TODO: need to create netmask from cidr */}}
+{{ $mask == NetmaskFromCidr( $iface.Mask )}}
+allow-hotplug eth{{ $idx }}
+        {{ if eq $iface.Address "" }}
+iface eth{{ $idx }} manual
+        {{ else if eq $iface.Address "dhcp" }}
+iface eth{{ $idx }} dhcp
+        {{ else }}
+iface eth{{ $idx }} static
+address {{ $iface.Address }}
+netmask {{ $mask }}
+            {{ if ne $iface.Gateway "autoassigned" && if ne $iface.Gateway "" }}
+gateway {{ $iface.Gateway }}
+            {{ end }}
+        {{ end }}
+    {{ end }}
+    {{ range $idx, $iface .Network.Interfaces }}
+{{/* TODO: need to create netmask from cidr */}}
+{{ $mask == NetmaskFromCidr( $iface.Mask )}}
+allow-hotplug ens{{ $idx + 1 }}
+        {{ if eq $iface.Address "" }}
+iface ens{{ $idx + 1 }} manual
+        {{ else if eq $iface.Address "dhcp" }}
+iface ens{{ $idx + 1 }} dhcp
+        {{ else }}
+iface ens{{ $idx + 1 }} static
+address {{ $iface.Address }}
+netmask {{ $mask }}
+            {{ if ne $iface.Gateway "autoassigned" && if ne $iface.Gateway "" }}
+gateway {{ $iface.Gateway }}
+            {{ end }}
+        {{ end }}
+    {{ end }}
+{{ else if eq .Hardware.OSType v1.OSType_CentOS }}
+    {{ range $idx, $iface := .Network.Interfaces }}   
+DEVICE=eth{{ $idx }}
+        {{ if eq $iface.Address "dhcp" }}
+BOOTPROTO=dhcp
+ONBOOT=yes
+        {{ else if eq $iface.Address ""}}
+BOOTPROTO=none
+ONBOOT=yes
+        {{ else }}
+BOOTPROTO=none
+ONBOOT=yes
+IPADDR={{ $iface.Address }}
+NETMASK={{ $mask }}
+            {{ if ne $iface.Gateway "autoassigned" && if ne $iface.Gateway "" }}
+GATEWAY={{ $iface.Gateway }}
+            {{ end }}
+USERCTL=none
+        {{ end }}
+    {{ end }}
+{{ end }}

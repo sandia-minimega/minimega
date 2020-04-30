@@ -1,0 +1,4 @@
+#!/bin/bash
+
+sed -i -e 's/sceptre/{{ . }}/g' /etc/hosts
+hostnamectl set-hostname {{ . }}
