@@ -1286,7 +1286,7 @@
         "address": {
           "type": "string",
           "title": "address",
-          "default": "",
+          "default": "192.168.0.1",
           "examples": [
             "192.168.1.100"
           ],

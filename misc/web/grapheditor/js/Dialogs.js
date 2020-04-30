@@ -1558,6 +1558,13 @@ function setCellDefaults(graph, cell) {
             if (cell.getStyle().includes("server")){startval.device = "server";}
             if (cell.getStyle().includes("mobile")){startval.device = "mobile";}
 
+            startval.general = {};
+            startval.general.hostname = startval.device + (cell.getId());
+            value.setAttribute('label', startval.general.hostname);
+
+            startval.hardware = {};
+            startval.hardware.os_type = 'linux';
+
         }
         else {
             startval.id = '';
@@ -1566,8 +1573,6 @@ function setCellDefaults(graph, cell) {
 
         value.setAttribute('schemaVars', JSON.stringify(startval));
         graph.getModel().setValue(cell, value);
-
-        // lookforvlan(cell);
 
     }
 
@@ -1744,6 +1749,7 @@ function lookforvlan(graph, cell){
                 if (!vlans_in_use.hasOwnProperty(edgeSchemaVars.name)){
                     vlans_in_use[edgeSchemaVars.name]=true;
                 }
+                e.setAttribute('label', edgeSchemaVars.name);
             }
 
         }
@@ -1848,22 +1854,31 @@ var EditDataDialog = function(ui, cell)
         
         var applyBtn = mxUtils.button(mxResources.get('apply'), function()
         {
-            try
-            {
-                ui.hideDialog.apply(ui, arguments);
-                var updatedNode = editor.getEditor('root').value; // get current node's JSON (from JSONEditor)
-                value.setAttribute('schemaVars', JSON.stringify(updatedNode));
-                graph.getModel().setValue(cell, value);
-                vertices.forEach(cell => {
-                    lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
-                });
-            }
-            catch (e)
-            {
-                mxUtils.alert(e);
-            }
+            const errors = editor.validate();
+            var validForm = (errors.length) ? false : true;
 
-            editor.destroy();
+            if (validForm) {
+                try
+                {
+                    ui.hideDialog.apply(ui, arguments);
+                    var updatedNode = editor.getEditor('root').value; // get current node's JSON (from JSONEditor)
+                    value.setAttribute('schemaVars', JSON.stringify(updatedNode));
+                    if (cell.isVertex()) {value.setAttribute('label', updatedNode.general.hostname);}
+                    graph.getModel().setValue(cell, value);
+                    vertices.forEach(cell => {
+                        lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
+                    });
+                }
+                catch (e)
+                {
+                    mxUtils.alert(e);
+                }
+
+                editor.destroy();
+            }
+            else {
+                mxUtils.alert(JSON.stringify(errors));
+            }
 
         });
 
@@ -3016,6 +3031,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 
         var count =0;
 
+        // TODO: move mappings to a config file
         var parameters = [
             {
                 name: 'memory',
@@ -3050,14 +3066,6 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                 path: 'hardware.drives'
             }
         ];
-            // memory:"2048", 
-            // vcpu:"1", 
-            // network:undefined,
-            // kernel:undefined,
-            // initrd:undefined,
-            // disk:undefined,
-            // snapshot:true,
-            // cdrom:undefined
 
         // utility function to return path array
         const getPath = (path) => {
@@ -3101,6 +3109,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                 config += `##Config for a ${schemaVars.device} device #${count}\n`;
                 name = `${schemaVars.device}_device_${count}`
             }
+            cell.setAttribute('label', name);
             count++;
 
             var clear = "";
@@ -3141,7 +3150,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                         value = value[path[i]];
                     }
                     console.log('this is value in paramsearch <'+name+'>'), console.log(value);
-                    value = value.toString(); // will catch if undefined
+                    value = value.toString(); // cast to string to catch undefined and/or boolean values
                     if (prev_dev[name] != value && value != '' && name != "network"){
                         prev_dev[name] = value;
                         config += `vm config ${name} ${value} \n`;
@@ -3154,29 +3163,6 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                         clear += `clear vm config ${name}\n`;
                     }
                 }
-
-                // // If there is no configuration for a parameter and the previous device had one clear it
-                // if ((cell.getAttribute(p) == undefined || cell.getAttribute(p) == "undefined") && prev_dev.hasOwnProperty(p)){
-                //     if (p != "network"){
-                //         delete prev_dev[p];
-                //         clear +=`clear vm config ${p}\n`;
-                //     }
-                // }
-                // // if it has a configuration for the parameter set it else issue a default value
-                // if (cell.getAttribute(p) != undefined && cell.getAttribute(p) != "undefined") {
-                //     if(prev_dev[p] != cell.getAttribute(p)){
-                //         prev_dev[p] = cell.getAttribute(p);
-                //         config += `vm config ${p} ${cell.getAttribute(p)} \n`;
-                //     }
-                // }
-                // else {
-                //     //if (parameters[p] != undefined && !prev_dev_config.includes(`vm config ${p} ${parameters[p]} \n`)){
-                //     if (parameters[p] != undefined && prev_dev[p] != parameters[p]){
-                //         //dev_config += `vm config ${p} ${parameters[p]} \n`;
-                //         prev_dev[p] = cell.getAttribute(p);
-                //         config += `vm config ${p} ${parameters[p]} \n`;
-                //     }
-                // }
             });
 
             config += clear;
@@ -3194,8 +3180,8 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         if (miniccc_commands.length > 0) textarea.value += "## miniccc commands\n"
         for(var i = 0; i < miniccc_commands.length; i++) {
             textarea.value += miniccc_commands[i]+"\n";
+            if (i == miniccc_commands.length - 1) {textarea.value += "\n";}
         }
-        textarea.value += "\n";
         textarea.value += "## Starting all VM's\nvm start all\n";
 
         // expand variables
@@ -3509,25 +3495,30 @@ var VariablesDialog = function(ui)
         
         var applyBtn = mxUtils.button(mxResources.get('apply'), function()
         {
-            try
-            {
-                ui.hideDialog.apply(ui, arguments);
-                var updatedNode = editor.getEditor('root').value; // get current node's JSON (from JSONEditor)
-                value.setAttribute('schemaVars', JSON.stringify(updatedNode));
-                graph.getModel().setValue(cell, value);
-                vertices.forEach(cell => {
-                    lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
-                });
-            }
-            catch (e)
-            {
-                mxUtils.alert(e);
-            }
+            const errors = editor.validate();
+            var validForm = (errors.length) ? false : true;
 
-            console.log('this is graphModel after update:');
-            console.log(graph.getModel().cells);
+            if (validForm) {
+                try
+                {
+                    ui.hideDialog.apply(ui, arguments);
+                    var updatedNode = editor.getEditor('root').value; // get current node's JSON (from JSONEditor)
+                    value.setAttribute('schemaVars', JSON.stringify(updatedNode));
+                    graph.getModel().setValue(cell, value);
+                    vertices.forEach(cell => {
+                        lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
+                    });
+                }
+                catch (e)
+                {
+                    mxUtils.alert(e);
+                }
 
-            editor.destroy();
+                editor.destroy();
+            }
+            else {
+                mxUtils.alert(JSON.stringify(errors));
+            }
 
         });
 
