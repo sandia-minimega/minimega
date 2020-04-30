@@ -28,7 +28,7 @@ func (Vyatta) Configure(spec *v1.ExperimentSpec) error {
 
 		vyattaFile := spec.BaseDir + "/vyatta/" + node.General.Hostname + ".boot"
 
-		a := v1.Injection{
+		a := &v1.Injection{
 			Src:         vyattaFile,
 			Dst:         "/opt/vyatta/etc/config/config.boot",
 			Description: "",
@@ -41,10 +41,30 @@ func (Vyatta) Configure(spec *v1.ExperimentSpec) error {
 }
 
 func (Vyatta) Start(spec *v1.ExperimentSpec) error {
+	var (
+		ntpServers = spec.Topology.FindNodesWithLabels("ntp-server")
+		ntpAddr    string
+	)
+
+	if len(ntpServers) != 0 {
+		// Just take first server if more than one are labeled.
+		for _, iface := range ntpServers[0].Network.Interfaces {
+			if strings.EqualFold(iface.VLAN, "mgmt") {
+				ntpAddr = iface.Address
+				break
+			}
+		}
+	}
+
 	// loop through nodes
 	for _, node := range spec.Topology.Nodes {
 		if !strings.EqualFold(node.Type, "router") {
 			continue
+		}
+
+		data := map[string]interface{}{
+			"node":     node,
+			"ntp-addr": ntpAddr,
 		}
 
 		vyattaDir := spec.BaseDir + "/vyatta"
@@ -55,7 +75,7 @@ func (Vyatta) Start(spec *v1.ExperimentSpec) error {
 
 		vyattaFile := vyattaDir + "/" + node.General.Hostname + ".boot"
 
-		if err := tmpl.CreateFileFromTemplate("vyatta.tmpl", node, vyattaFile); err != nil {
+		if err := tmpl.CreateFileFromTemplate("vyatta.tmpl", data, vyattaFile); err != nil {
 			return fmt.Errorf("generating vyatta config: %w", err)
 		}
 	}
