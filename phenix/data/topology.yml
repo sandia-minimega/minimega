@@ -59,3 +59,22 @@ spec:
         udp_port: 8989.
         baud_rate: 9600.
         device: /dev/ttyS0
+  - type: Router
+    labels:
+      ntp-server: "true"
+    general:
+      hostname: router-01
+      snapshot: true
+    hardware:
+      os_type: linux
+      drives:
+      - image: vyatta.qc2
+    network:
+      interfaces:
+      - name: IF0
+        vlan: mgmt
+        address: 172.16.10.254
+        mask: 16.
+        proto: static
+        type: ethernet
+        
