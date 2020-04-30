@@ -101,3 +101,14 @@ func (this Interface) LinkAddress() string {
 
 	return n.String()
 }
+
+// need to convert the cidr to netmask
+func (this Interface) MaskAddress() string {
+	addr := fmt.Sprintf("%s/%d", this.Address, this.Mask)
+
+	_, n, err := net.ParseCIDR(addr)
+	if err != nil {
+		return addr
+	}
+
+}
