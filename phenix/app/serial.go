@@ -41,19 +41,19 @@ func (Serial) Configure(spec *v1.ExperimentSpec) error {
 			// update injections to include serial type (src and dst)
 			serialFile := spec.BaseDir + "/startup/" + node.General.Hostname + "-serial.bash"
 
-			a := v1.Injection{
+			a := &v1.Injection{
 				Src:         serialFile,
 				Dst:         "/etc/phenix/serial-startup.bash",
 				Description: "",
 			}
 
-			b := v1.Injection{
+			b := &v1.Injection{
 				Src:         spec.BaseDir + "/startup/serial-startup.service",
 				Dst:         "/etc/systemd/system/serial-startup.service",
 				Description: "",
 			}
 
-			c := v1.Injection{
+			c := &v1.Injection{
 				Src:         spec.BaseDir + "/startup/symlinks/serial-startup.service",
 				Dst:         "/etc/systemd/system/multi-user.target.wants/serial-startup.service",
 				Description: "",
