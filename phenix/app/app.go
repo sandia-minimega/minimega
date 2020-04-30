@@ -12,8 +12,9 @@ func init() {
 	apps["serial"] = new(Serial)
 	apps["user-shell"] = new(UserApp)
 	apps["vyatta"] = new(Vyatta)
+	apps["startup"] = new(Startup)
 
-	defaultApps = []string{"ntp", "serial"}
+	defaultApps = []string{"startup", "ntp", "serial"}
 }
 
 type Action string
