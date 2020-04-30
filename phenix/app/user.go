@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os/exec"
 
 	v1 "phenix/types/version/v1"
 )
@@ -25,6 +26,8 @@ func (this UserApp) Name() string {
 }
 
 func (this UserApp) Configure(spec *v1.ExperimentSpec) error {
+	// do we assume linux or should we check for current OS?
+
 	exp, err := json.Marshal(spec)
 	if err != nil {
 		return fmt.Errorf("marshaling experiment spec to JSON: %w", err)
@@ -72,5 +75,15 @@ func (this UserApp) shellOut(action Action, data []byte) ([]byte, error) {
 	// TODO: this is a stub for shelling out to user apps on the command line. The
 	// command-line program called should be assumed to have the name
 	// `phenix-<appname>`.
+
+	cmdName := "phenix-" + this.options.Name
+
+	out, err := exec.Command(cmdName, action, data).Output()
+	if err != nil {
+		fmt.Errorf("user app %s command %s failed: %w", this.options.Name, cmdName, err)
+	}
+
+	return out
+
 	return nil, fmt.Errorf("user app %s: %w", this.options.Name, ErrUserAppNotFound)
 }
