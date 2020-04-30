@@ -32,13 +32,16 @@ const (
 	OSType_CentOS  OSType = "centos"
 )
 
+type Labels map[string]string
+
 type Node struct {
-	Type       string      `json:"type" yaml:"type"`
-	General    General     `json:"general" yaml:"general"`
-	Hardware   Hardware    `json:"hardware" yaml:"hardware"`
-	Network    Network     `json:"network" yaml:"network"`
-	Injections []Injection `json:"injections" yaml:"injections"`
-	Metadata   Metadata    `json:"metadata" yaml:"metadata"`
+	Labels     Labels       `json:"labels" yaml:"labels"`
+	Type       string       `json:"type" yaml:"type"`
+	General    General      `json:"general" yaml:"general"`
+	Hardware   Hardware     `json:"hardware" yaml:"hardware"`
+	Network    Network      `json:"network" yaml:"network"`
+	Injections []*Injection `json:"injections" yaml:"injections"`
+	Metadata   Metadata     `json:"metadata" yaml:"metadata"`
 }
 
 type General struct {
