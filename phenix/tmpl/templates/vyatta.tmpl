@@ -1,55 +1,57 @@
+{{ $ntpAddr := index . "ntp-addr" }}
+{{ $node := index . "node" }}
+
 interfaces {
-    {{ range .Interface }}
-    {{/* TODO: need to determine loop.index */}}
-    ethernet eth{{ .FIXME }} {
-        address {{ .Address }}/{{ .Mask }}
+{{ range $idx, $iface := $node.Network.Interfaces }}
+    ethernet eth{{ $idx }} {
+        address {{ $iface.Address }}/{{ $iface.Mask }}
         duplex auto
-        mtu {{ .MTU }}
-        {{ if eq .Proto "OSPF" }}
+        mtu {{ $iface.MTU }}
+        {{ if eq $iface.Proto "OSPF" }}
         ip {
             ospf {
-                dead-interval {{ .DeadInterval }}
-                hello-interval {{ .HelloInterval }}
-                retransmit-interval {{ .RetransInterval }}
+                dead-interval {{ $node.Network.OSPF.DeadInterval }}
+                hello-interval {{ $node.Network.OSPF.HelloInterval }}
+                retransmit-interval {{ $node.Network.OSPF.RetransInterval }}
                 transmit-delay 1
             }
         }
         {{ end }}
-        {{ if .Rulesets }}
+        {{ if ne $node.Network.Rulesets "" }}
         firewall {
-            {{ range .Ruleset }}
-                {{/* TODO: need to understand acl.filter_type */}}
-                {{/* maybe we do this as function handler */}}
+            {{ range $rule := $node.Network.Rulesets }}
+                {{/* TODO: BTR to understand acl.filter_type */}}
                 {{/* if eq .FIXME "send" */}}
-                {{ $filter = "out" }}
+                {{/* $filter = "out" */}}
                 {{/* else if eq .FIXME "receive" */}}
-                {{ $filter = "in" }}
-                {{ end }}
-                {{ $filter }} {
-                    name {{ .Ruleset.Name }}
+                {{/* $filter = "in" */}}
+                {{/* end */}}
+                {{/* remove `none ` from the below and uncomment $filter */}}
+                {{/* $filter */}} none {
+                    name {{ $rule.Name }}
                 }
             {{ end }}
         }
         {{ end }}
-        {{/* TODO: need to determine router.loopback_ip */}}
+        {{/* TODO: BTR to determine router.loopback_ip and mask */}}
         {{ if ne .FIXME "None" }}
         loopback lo {
             address {{ .FIXME }}/{{ .FIXME }}
         }
         {{ end }}
     }
-    {{ end }}
+{{ end }}
 }
 
 {{ $nat := 10 }}
 nat {
-{{ range .Interface }}
-   {{/* TODO: need to determine length of nat_config */}}
+{{ range $iface }}
+   {{/* TODO: need to determine length of nat_config (see line 50 in mako) */}}
    {{ if gt .FIXME 0 }}
    source {
        rule {{ $n }} {
            {{/* TODO: need to determine nat_config */}}
-           {{ ifaceNum := .FIXME }}
+           {{ $ifaceNum := .FIXME }}
            outbound-interface eth{{ .FIXME }}
            {{ if ne .FIXME "" }}
            source {
@@ -71,37 +73,35 @@ nat {
 }
 
 {{ $hasFirewall := false }}
-{{ range .Rulesets }}
-    {{ if .Ruleset.Default }}
+{{ range $rules := $node.Network.Rulesets }}
+    {{ if ne $rules.Default "" }}
     {{ $hasFirewall = true }}
 firewall {
     {{ end }}
-    {{ if .Ruleset.Default }}
-    name {{ .Ruleset.Name }} {
-        default-action {{ .Ruleset.Default }}
-        {{/* Not sure why there is another if statement in the mako */}}
-        description "{{ .Ruleset.Description }}"
-        {{ range .Rules }}
-        rule {{ .Rule.ID }} {
-            action {{ .Rule.Action }}
-            {{/* Also not sure why this if statement is in the mako */}}
-            {{ if .Ruleset.Default }}
-            description "{{ .Rule.Description }}
+    {{ if ne $rules.Default "" }}
+    name {{ $rules.Name }} {
+        default-action {{ $rules.Default }}
+        description "{{ $rules.Description }}"
+        {{ range $idx, $rule := $rules.Rules }}
+        rule {{ $rule.ID }} {
+            action {{ $rule.Action }}
+            {{ if ne $rules.Default "" }}
+            description "{{ $rule.Description }}"
             {{ end }}
-            {{ if .Rule.Source.Address }}
-            protocol {{ .Rule.Protocol }}
+            {{ if ne $rule.Source.Address "" }}
+            protocol {{ $rule.Protocol }}
             source {
-                address {{ .Rule.Source.Address }}
-                {{ if .Rule.Source.Port }}
-                port {{ .Rule.Source.Port }}
+                address {{ $rule.Source.Address }}
+                {{ if ne $rule.Source.Port "" }}
+                port {{ $rule.Source.Port }}
                 {{ end }}
             }
             {{ end }}
-            {{ if .Rule.Destination.Address }}
+            {{ if ne $rule.Destination.Address "" }}
             destination {
-                address {{ .Rule.Destination.Address }}
-                {{ if .Rule.Destination.Port }}
-                port {{ .Rule.Destination.Port }}
+                address {{ $rule.Destination.Address }}
+                {{ if ne $rule.Destination.Port "" }}
+                port {{ $rule.Destination.Port }}
                 {{ end }}
             }
             {{ end }}
@@ -109,7 +109,7 @@ firewall {
         {{ end }}
     }
     {{ end }}
-    {{ if $hasFirewall && if .FIXME }}
+    {{ if $hasFirewall && if ne $rules.Default "" }}
 }
     {{ end }}
 {{ end }}
@@ -117,45 +117,44 @@ firewall {
 {{/* Do we need the following? */}}
 protocols {
     static {
-        {{ range .Routes }}
-        route {{ .Route.Destination }} {
-            next-hop {{ .Route.Next }} {
-                distance {{ .Route.Cost }}
+    {{ range $route := $node.Network.Routes }}
+        route {{ $route.Destination }} {
+            next-hop {{ $route.Next }} {
+                distance {{ $route.Cost }}
             }
         }
-        {{ end }}
+    {{ end }}
     }
 
     ospf {
-        {{ range .Areas }}
-        area {{ .Area.AreaID }} {
-            {{ range .Area.AreaNetworks }}
-            {{/* This may be a cidr/int instead of string */}}
-            network {{ .AreaNetwork.Network }}
-            {{ end }}
+    {{ range $areas := $node.Network.OSPF.Areas }}
+        area {{ $areas.AreaID }} {
+        {{ range $areas.AreaNetworks }}
+            network {{ $areas.AreaNetwork.Network }}
+        {{ end }}
         }
         parameters {
-            router-id {{ .OSPF.RouterID }}
+            router-id {{ $node.Network.OSPF.RouterID }}
         }
         redistribute {
-            {{/* TODO: need to determine ospf_bgp_redis */}}
-            {{ if .FIXME }}
+        {{/* TODO: need to determine ospf_bgp_redis */}}
+        {{ if .FIXME }}
             bgp {
                 {{/* See lines 146-148 on vyatta.mako */}}
             }
-            {{ end }}
-            {{/* TODO: need to determine ospf_connected_redis */}}
-            {{ if .FIXME }}
+        {{ end }}
+        {{/* TODO: need to determine ospf_connected_redis */}}
+        {{ if .FIXME }}
             connected {
 
             }
-            {{ end }}
-            {{/* TODO: need to determine ospf_static_redis */}}
-            {{ if .FIXME }}
+        {{ end }}
+        {{/* TODO: need to determine ospf_static_redis */}}
+        {{ if .FIXME }}
             static {
 
             }
-            {{ end }}
+        {{ end }}
         }
     }
 
@@ -163,39 +162,39 @@ protocols {
     {{ if gt .FIXME 0 }}
     {{/* TODO: need to determine as_number */}}
     bgp {{ .FIXME }} {
-        {{/* TODO: need to determine neighbors */}}
-        {{ range .FIXME }}
+    {{/* TODO: need to determine neighbors */}}
+    {{ range .FIXME }}
         neighbor {{ .FIXME }} {
             nexthop-self
             remote-as {{ .FIXME }}
         }
-        {{ end }}
+    {{ end }}
 
         redistribute {
-            {{/* TODO: need to determine ospf_redis */}}
-            {{ if .FIXME }}
+        {{/* TODO: need to determine ospf_redis */}}
+        {{ if .FIXME }}
             ospf {
 
             }
-            {{ end }}
-            {{/* TODO: need to determine static_redis */}}
-            {{ if .FIXME }}
+        {{ end }}
+        {{/* TODO: need to determine static_redis */}}
+        {{ if .FIXME }}
             static {
 
             }
-            {{ end }}
-            {{/* TODO: need to determine connected_redis */}}
-            {{ if .FIXME }}
+        {{ end }}
+        {{/* TODO: need to determine connected_redis */}}
+        {{ if .FIXME }}
             connected {
 
             }
-            {{ end }}
-            {{/* TODO: need to determine rip_redis */}}
-            {{ if .FIXME }}
+        {{ end }}
+        {{/* TODO: need to determine rip_redis */}}
+        {{ if .FIXME }}
             rip {
 
             }
-            {{ end }}
+        {{ end }}
         }
     }
     {{ end }}
@@ -205,13 +204,14 @@ protocols {
 {{/* TODO: need to add Ipsec VPN content */}}
 
 system {
-    host-name {{ .RouterName }}
+    host-name {{ $node.RouterName }}
+{{ if ne $ntpAddr "" }}
     ntp {
-        {{/* TODO: need to determine ntp server address */}}
-        server {{ .FIXME }} {
+        server {{ $ntpAddr }} {
             perfer
         }
     }
+{{ end }}
 }
 /* Warning: Do not remove the following line. */
 /* === vyatta-config-version: "dhcp-relay@1:vrrp@1:zone-policy@1:content-inspection@3:webproxy@1:quagga@2:webgui@1:wanloadbalance@3:ipsec@3:firewall@4:conntrack-sync@1:cluster@1:system@4:qos@1:nat@3:dhcp-server@4:config-management@1" === */
