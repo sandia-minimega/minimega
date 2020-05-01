@@ -87,11 +87,11 @@ EditorUi = function(editor, container, lightbox)
         new Image().src = mxConnectionHandler.prototype.connectImage.src;
     }
 
-    // sets cell defaults when cell is added
+    // sets cell defaults when cell is added (not cloned)
     // ensures all methods to add cell are captured
     graph.addListener(mxEvent.CELLS_ADDED, function(sender, evt)
     {
-        var cells= evt.getProperty('cells');
+        var cells = evt.getProperty('cells');
         for(var i = 0; i < cells.length; i++) {
             checkValue(graph, cells[i]);
             // lookforvlan(graph, cells[i]);
