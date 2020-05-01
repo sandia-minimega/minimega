@@ -54,7 +54,7 @@ func (this UserApp) shellOut(action Action, spec *v1.ExperimentSpec) error {
 	cmdName := "phenix-" + this.options.Name
 
 	if err := exec.Command("which", cmdName).Run(); err != nil {
-		return fmt.Errorf("external user app %s does not exist in your path", cmdName)
+		return fmt.Errorf("external user app %s does not exist in your path: %w", cmdName, ErrUserAppNotFound)
 	}
 
 	data, err := json.Marshal(spec)
@@ -67,7 +67,7 @@ func (this UserApp) shellOut(action Action, spec *v1.ExperimentSpec) error {
 		stdErr bytes.Buffer
 	)
 
-	cmd := exec.Command(cmdName, action)
+	cmd := exec.Command(cmdName, string(action))
 	cmd.Stdin = bytes.NewBuffer(data)
 	cmd.Stdout = &stdOut
 	cmd.Stderr = &stdErr

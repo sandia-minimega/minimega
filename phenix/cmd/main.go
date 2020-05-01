@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
@@ -65,19 +66,43 @@ func main() {
 
 		fmt.Println()
 	case "get":
-		c, err := config.GetConfig(flag.Arg(1))
+		var (
+			flags  = flag.NewFlagSet("get", flag.ExitOnError)
+			format = flags.String("o", "yaml", "output format (yaml or json)")
+		)
+
+		if err := flags.Parse(flag.Args()[1:]); err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+
+		c, err := config.GetConfig(flags.Arg(0))
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
 
-		m, err := yaml.Marshal(c)
-		if err != nil {
-			fmt.Println(fmt.Errorf("marshaling config to YAML: %w", err))
+		switch *format {
+		case "yaml":
+			m, err := yaml.Marshal(c)
+			if err != nil {
+				fmt.Println(fmt.Errorf("marshaling config to YAML: %w", err))
+				os.Exit(1)
+			}
+
+			fmt.Println(string(m))
+		case "json":
+			m, err := json.Marshal(c)
+			if err != nil {
+				fmt.Println(fmt.Errorf("marshaling config to JSON: %w", err))
+				os.Exit(1)
+			}
+
+			fmt.Println(string(m))
+		default:
+			fmt.Printf("unrecognized output format '%s'\n", *format)
 			os.Exit(1)
 		}
-
-		fmt.Println(string(m))
 	case "create":
 		if flag.NArg() == 1 {
 			fmt.Println("no config files provided")
