@@ -1541,13 +1541,13 @@ function checkValue(graph, cell) {
         if (cell.isVertex()) {
             schemaVars = JSON.parse(value.getAttribute('schemaVars'));
             var hostname = schemaVars.general.hostname;
-            var cellId = cell.getId();
+            var cellId = parseInt(cell.getId());
             var filter = function(cell) {return graph.model.isVertex(cell);}
             var vertices = graph.model.filterDescendants(filter);
             var hostExists = false;
             for (var i = 0; i < vertices.length; i++) {
                 var checkHost = vertices[i].getAttribute('label');
-                var checkHostId = vertices[i].getId();
+                var checkHostId = parseInt(vertices[i].getId());
                 if (hostname == checkHost && checkHostId != cellId && cellId > checkHostId) {
                     schemaVars.general.hostname = `${schemaVars.device}_device_${host_count}`;
                     cell.setAttribute('label', schemaVars.general.hostname);
@@ -1983,7 +1983,21 @@ var viewJSONDialog = function(ui)
     });
 
     const schema = {}; // set schema
-    const json = {nodes: nodeArray, vlans: edgeArray}; // global model JSON
+    let json = {nodes: nodeArray, vlans: edgeArray}; // global model JSON
+
+    if (window.experiment_vars != undefined)
+    {
+        var jsonString = JSON.stringify(json);
+        for (var i = 0; i < window.experiment_vars.length; i++)
+        {
+            var name = window.experiment_vars[i].name;
+            var value = window.experiment_vars[i].value;
+
+            var name = new RegExp('\\$'+name, 'g');
+            jsonString = jsonString.replace(name, value);
+        }
+        json = JSON.parse(jsonString);
+    }
 
     // Set JSONEditor and config options based on schema and cell type
     var loadConfig = function () {
@@ -3224,11 +3238,11 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         {
             for (var i = 0; i < window.experiment_vars.length; i++)
             {
-                    var name = window.experiment_vars[i].name;
-                    var value = window.experiment_vars[i].value;
+                var name = window.experiment_vars[i].name;
+                var value = window.experiment_vars[i].value;
 
-                    var name = new RegExp('\\$'+name, 'g');
-                    textarea.value = textarea.value.replace(name, value);
+                var name = new RegExp('\\$'+name, 'g');
+                textarea.value = textarea.value.replace(name, value);
             }
         }
         div.appendChild(textarea);
@@ -3537,11 +3551,7 @@ var VariablesDialog = function(ui)
                 {
                     ui.hideDialog.apply(ui, arguments);
                     var updatedNode = editor.getEditor('root').value; // get current node's JSON (from JSONEditor)
-                    value.setAttribute('schemaVars', JSON.stringify(updatedNode));
-                    graph.getModel().setValue(cell, value);
-                    vertices.forEach(cell => {
-                        lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
-                    });
+                    window.experiment_vars = updatedNode;
                 }
                 catch (e)
                 {

@@ -484,11 +484,11 @@ Editor.prototype.readGraphState = function(node)
         this.graph.background = null;
     }
 
-    var experiment_vars = node.getAttribute('experimentVars');
-    if (experiment_vars != undefined)
-    {
-            window.experiment_vars = JSON.parse(experiment_vars);
-    }
+    // var experiment_vars = node.getAttribute('experimentVars');
+    // if (experiment_vars != undefined)
+    // {
+    //         window.experiment_vars = JSON.parse(experiment_vars);
+    // }
 };
 
 /**
