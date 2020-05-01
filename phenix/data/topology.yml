@@ -80,9 +80,12 @@ spec:
         ruleset_in: test
       rulesets:
       - name: test
-        default: accept
-        rules: 
+        default: drop
+        rules:
         - id: 10.
-          action: drop
+          action: accept
           protocol: all
+          source:
+            address: 1.1.1.1
+            port: 53.
         

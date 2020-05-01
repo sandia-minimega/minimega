@@ -27,8 +27,8 @@ type Interface struct {
 	Address    string `json:"address" yaml:"address"`
 	Mask       int    `json:"mask" yaml:"mask"`
 	Gateway    string `json:"gateway" yaml:"gateway"`
-	RulesetIn  string `json:"ruleset_in" yaml:"ruleset_in"`
-	RulesetOut string `json:"ruleset_out" yaml:"ruleset_out"`
+	RulesetIn  string `json:"ruleset_in" yaml:"ruleset_in" mapstructure:"ruleset_in"`
+	RulesetOut string `json:"ruleset_out" yaml:"ruleset_out" mapstructure:"ruleset_out"`
 }
 
 type Route struct {
