@@ -80,6 +80,16 @@ func Start(name string) error {
 		return fmt.Errorf("getting experiment %s from store: %w", name, err)
 	}
 
+	status := new(v1.ExperimentStatus)
+
+	if err := mapstructure.Decode(c.Status, status); err != nil {
+		return fmt.Errorf("decoding experiment status: %w", err)
+	}
+
+	if status.StartTime != "" {
+		return fmt.Errorf("experiment already running (started at: %s)", status.StartTime)
+	}
+
 	exp := new(v1.ExperimentSpec)
 
 	if err := mapstructure.Decode(c.Spec, exp); err != nil {
