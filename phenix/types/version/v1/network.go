@@ -9,7 +9,7 @@ import (
 type Network struct {
 	Interfaces []Interface `json:"interfaces" yaml:"interfaces"`
 	Routes     []Route     `json:"routes" yaml:"routes"`
-	OSPF       OSPF        `json:"ospf" yaml:"ospf"`
+	OSPF       *OSPF       `json:"ospf" yaml:"ospf"`
 	Rulesets   []Ruleset   `json:"rulesets" yaml:"rulesets"`
 }
 
@@ -62,12 +62,12 @@ type Ruleset struct {
 }
 
 type Rule struct {
-	ID          int      `json:"id" yaml:"id"`
-	Description string   `json:"description" yaml:"description"`
-	Action      string   `json:"action" yaml:"action"`
-	Protocol    string   `json:"protocol" yaml:"protocol"`
-	Source      AddrPort `json:"source" yaml:"source"`
-	Destination AddrPort `json:"destination" yaml:"destination"`
+	ID          int       `json:"id" yaml:"id"`
+	Description string    `json:"description" yaml:"description"`
+	Action      string    `json:"action" yaml:"action"`
+	Protocol    string    `json:"protocol" yaml:"protocol"`
+	Source      *AddrPort `json:"source" yaml:"source"`
+	Destination *AddrPort `json:"destination" yaml:"destination"`
 }
 
 type AddrPort struct {
@@ -100,15 +100,4 @@ func (this Interface) LinkAddress() string {
 	}
 
 	return n.String()
-}
-
-// need to convert the cidr to netmask
-func (this Interface) MaskAddress() string {
-	addr := fmt.Sprintf("%s/%d", this.Address, this.Mask)
-
-	_, n, err := net.ParseCIDR(addr)
-	if err != nil {
-		return addr
-	}
-
 }
