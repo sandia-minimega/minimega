@@ -17,6 +17,7 @@ all:
 
 clean:
 	-rm bin/phenix
+	-rm docs/bindata.go
 	-rm tmpl/bindata.go
 
 .PHONY: install-build-deps

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"phenix/app"
+	"phenix/minimega"
 	"phenix/store"
 	"phenix/tmpl"
 	"phenix/types"
@@ -104,6 +105,12 @@ func Start(name string) error {
 
 	if err := tmpl.CreateFileFromTemplate("minimega_script.tmpl", exp, filename); err != nil {
 		return fmt.Errorf("generating minimega script: %w", err)
+	}
+
+	cmd := &minimega.Command{Command: "read " + filename}
+
+	if err := minimega.ErrorResponse(minimega.Run(cmd)); err != nil {
+		return fmt.Errorf("reading minimega script: %w", err)
 	}
 
 	c.Status = map[string]interface{}{"startTime": time.Now().Format(time.RFC3339)}

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 
 	v1 "phenix/types/version/v1"
+	"phenix/util"
 )
 
 var ErrUserAppNotFound = errors.New("user app not found")
@@ -53,7 +54,7 @@ func (this UserApp) Cleanup(spec *v1.ExperimentSpec) error {
 func (this UserApp) shellOut(action Action, spec *v1.ExperimentSpec) error {
 	cmdName := "phenix-" + this.options.Name
 
-	if err := exec.Command("which", cmdName).Run(); err != nil {
+	if !util.ShellCommandExists(cmdName) {
 		return fmt.Errorf("external user app %s does not exist in your path: %w", cmdName, ErrUserAppNotFound)
 	}
 

@@ -2,6 +2,7 @@ package util
 
 import (
 	"io"
+	"os/exec"
 	"phenix/types"
 
 	"github.com/olekukonko/tablewriter"
@@ -18,4 +19,9 @@ func PrintTableOfConfigs(writer io.Writer, configs types.Configs) error {
 
 	table.Render()
 	return nil
+}
+
+func ShellCommandExists(cmd string) bool {
+	err := exec.Command("which", cmd).Run()
+	return err == nil
 }
