@@ -9,7 +9,7 @@ import (
 type Network struct {
 	Interfaces []Interface `json:"interfaces" yaml:"interfaces"`
 	Routes     []Route     `json:"routes" yaml:"routes"`
-	OSPF       OSPF        `json:"ospf" yaml:"ospf"`
+	OSPF       *OSPF       `json:"ospf" yaml:"ospf"`
 	Rulesets   []Ruleset   `json:"rulesets" yaml:"rulesets"`
 }
 
@@ -27,8 +27,8 @@ type Interface struct {
 	Address    string `json:"address" yaml:"address"`
 	Mask       int    `json:"mask" yaml:"mask"`
 	Gateway    string `json:"gateway" yaml:"gateway"`
-	RulesetIn  string `json:"ruleset_in" yaml:"ruleset_in"`
-	RulesetOut string `json:"ruleset_out" yaml:"ruleset_out"`
+	RulesetIn  string `json:"ruleset_in" yaml:"ruleset_in" mapstructure:"ruleset_in"`
+	RulesetOut string `json:"ruleset_out" yaml:"ruleset_out" mapstructure:"ruleset_out"`
 }
 
 type Route struct {
@@ -62,12 +62,12 @@ type Ruleset struct {
 }
 
 type Rule struct {
-	ID          int      `json:"id" yaml:"id"`
-	Description string   `json:"description" yaml:"description"`
-	Action      string   `json:"action" yaml:"action"`
-	Protocol    string   `json:"protocol" yaml:"protocol"`
-	Source      AddrPort `json:"source" yaml:"source"`
-	Destination AddrPort `json:"destination" yaml:"destination"`
+	ID          int       `json:"id" yaml:"id"`
+	Description string    `json:"description" yaml:"description"`
+	Action      string    `json:"action" yaml:"action"`
+	Protocol    string    `json:"protocol" yaml:"protocol"`
+	Source      *AddrPort `json:"source" yaml:"source"`
+	Destination *AddrPort `json:"destination" yaml:"destination"`
 }
 
 type AddrPort struct {
@@ -102,13 +102,16 @@ func (this Interface) LinkAddress() string {
 	return n.String()
 }
 
-// need to convert the cidr to netmask
-func (this Interface) MaskAddress() string {
+func (this Interface) NetworkMask() string {
 	addr := fmt.Sprintf("%s/%d", this.Address, this.Mask)
 
 	_, n, err := net.ParseCIDR(addr)
 	if err != nil {
-		return addr
+		// This should really mess someone up...
+		return "0.0.0.0"
 	}
 
+	m := n.Mask
+
+	return fmt.Sprintf("%d.%d.%d.%d", m[0], m[1], m[2], m[3])
 }

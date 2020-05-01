@@ -734,12 +734,12 @@ components:
           type: string
           title: Outbound Ruleset
           example: OutToICS
-          pattern: '^[\\w-]+$'
+          pattern: '^[\w-]+$'
         ruleset_in:
           type: string
           title: Inbound Ruleset
           example: InFromSCADA
-          pattern: '^[\\w-]+$'
+          pattern: '^[\w-]+$'
     static_iface:
       allOf:
       - $ref: '#/components/schemas/iface'

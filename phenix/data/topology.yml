@@ -77,4 +77,15 @@ spec:
         mask: 16.
         proto: static
         type: ethernet
+        ruleset_in: test
+      rulesets:
+      - name: test
+        default: drop
+        rules:
+        - id: 10.
+          action: accept
+          protocol: all
+          source:
+            address: 1.1.1.1
+            port: 53.
         

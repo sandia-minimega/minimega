@@ -21,70 +21,72 @@ func (this *Startup) Configure(spec *v1.ExperimentSpec) error {
 	startupDir := spec.BaseDir + "/startup"
 
 	for _, node := range spec.Topology.Nodes {
+		// if type is router, skip it and continue
+		if node.Type == "Router" {
+			continue
+		}
+
 		// loop through nodes
 		if node.Hardware.OSType == v1.OSType_Linux || node.Hardware.OSType == v1.OSType_RHEL || node.Hardware.OSType == v1.OSType_CentOS {
-			// if type is router, continue
-			if node.Type == "Router" {
-				continue
-			}
+			var keep []*v1.Injection
 
 			// delete any exisitng interface injections
-			for i, inject := range node.Injections {
-				if inject.Destination == "interfaces" || inject.Destination == "startup.ps1" {
-					copy(inject[i:], inject[i+1:])
-					inject[len(inject)-1] = ""
-					inject = inject[:len(inject)-1]
+			for _, inject := range node.Injections {
+				if inject.Dst == "interfaces" || inject.Dst == "startup.ps1" {
+					continue
 				}
+
+				keep = append(keep, inject)
 			}
+
+			node.Injections = keep
 
 			// if vm is centos or rhel, need a separate file per interface
 			if node.Hardware.OSType == v1.OSType_RHEL || node.Hardware.OSType == v1.OSType_CentOS {
-				for idx, iface := range node.Network.Interfaces {
-					ifaceFile := startupDir + "/interfaces-" + node.General.Hostname + "-eth" + idx
+				for idx := range node.Network.Interfaces {
+					ifaceFile := fmt.Sprintf("%s/interfaces-%s-eth%d", startupDir, node.General.Hostname, idx)
 
 					a := &v1.Injection{
-						Src:         ifaceFile,
-						Dst:         "/etc/sysconfig/nettwork-scripts/ifcfg-eth" + idx,
-						Description: "",
+						Src: ifaceFile,
+						Dst: fmt.Sprintf("/etc/sysconfig/network-scripts/ifcfg-eth%d", idx),
 					}
 
 					node.Injections = append(node.Injections, a)
 				}
 			} else if node.Hardware.OSType == v1.OSType_Linux {
-				hostnameFile := startupDir + "/" + node.General.Hostname + "-hostname.sh"
-				timezoneFile := startupDir + "/" + node.General.Hostname + "-timezone.sh"
-				ifaceFile := startupDir + "/" + node.General.Hostname + "-interfaces.sh"
+				var (
+					hostnameFile = startupDir + "/" + node.General.Hostname + "-hostname.sh"
+					timezoneFile = startupDir + "/" + node.General.Hostname + "-timezone.sh"
+					ifaceFile    = startupDir + "/" + node.General.Hostname + "-interfaces"
+				)
 
 				a := &v1.Injection{
-					Src:         hostnameFile,
-					Dst:         "/etc/phenix/startup/1_hostname-start.sh",
-					Description: "",
+					Src: hostnameFile,
+					Dst: "/etc/phenix/startup/1_hostname-start.sh",
 				}
 				b := &v1.Injection{
-					Src:         timezoneFile,
-					Dst:         "/etc/phenix/startup/2_timezone-start.sh",
-					Description: "",
+					Src: timezoneFile,
+					Dst: "/etc/phenix/startup/2_timezone-start.sh",
 				}
 				c := &v1.Injection{
-					Src:         ifaceFile,
-					Dst:         "/etc/network/interfaces",
-					Description: "",
+					Src: ifaceFile,
+					Dst: "/etc/network/interfaces",
 				}
 
 				node.Injections = append(node.Injections, a, b, c)
 			} else if node.Hardware.OSType == v1.OSType_Windows {
-				startupFile := startupDir + "/" + node.General.Hostname + "-startup.ps1"
-				schedFile := startupDir + "/" + node.General.Hostname + "-startup-scheduler.cmd"
+				var (
+					startupFile = startupDir + "/" + node.General.Hostname + "-startup.ps1"
+					schedFile   = startupDir + "/startup-scheduler.cmd"
+				)
 
 				a := &v1.Injection{
-					Src:         startupFile,
-					Dst:         "startup.ps1",
-					Destination: "",
+					Src: startupFile,
+					Dst: "startup.ps1",
 				}
 				b := &v1.Injection{
-					Src:         schedFile,
-					Dst:         "ProgramData/Microsoft/Windows/Start Menu/Programs/StartUp/startup_scheduler.cmd",
-					Description: "",
+					Src: schedFile,
+					Dst: "ProgramData/Microsoft/Windows/Start Menu/Programs/StartUp/startup_scheduler.cmd",
 				}
 
 				node.Injections = append(node.Injections, a, b)
@@ -104,36 +106,48 @@ func (this Startup) Start(spec *v1.ExperimentSpec) error {
 	}
 
 	for _, node := range spec.Topology.Nodes {
-		// it appears linux, rhel, and centos share the same interfaces template
-		if node.Hardware.OSType == v1.OSType_Linux || node.Hardware.OSType == v1.OSType_RHEL || node.Hardware.OSType == v1.OSType_CentOS {
-			ifaceFile := startupDir + "/interfaces-" + node.General.Hostname + "-eth" + idx
+		// if type is router, skip it and continue
+		if node.Type == "Router" {
+			continue
+		}
 
-			if err := tmpl.CreateFileFromTemplate("linux_interfaces.tmpl", node, ifaceFile); err != nil {
-				return fmt.Errorf("generating linux interfaces config: %w", err)
+		// it appears linux, rhel, and centos share the same interfaces template
+		if node.Hardware.OSType == v1.OSType_RHEL || node.Hardware.OSType == v1.OSType_CentOS {
+			for idx := range node.Network.Interfaces {
+				ifaceFile := fmt.Sprintf("%s/interfaces-%s-eth%d", startupDir, node.General.Hostname, idx)
+
+				if err := tmpl.CreateFileFromTemplate("linux_interfaces.tmpl", node, ifaceFile); err != nil {
+					return fmt.Errorf("generating linux interfaces config: %w", err)
+				}
 			}
 		} else if node.Hardware.OSType == v1.OSType_Linux {
-			hostnameFile := startupDir + "/" + node.General.Hostname + "-hostname.sh"
-			timezoneFile := startupDir + "/" + node.General.Hostname + "-timezone.sh"
+			var (
+				hostnameFile = startupDir + "/" + node.General.Hostname + "-hostname.sh"
+				timezoneFile = startupDir + "/" + node.General.Hostname + "-timezone.sh"
+				ifaceFile    = startupDir + "/" + node.General.Hostname + "-interfaces"
+				timeZone     = "Etc/UTC"
+			)
 
 			if err := tmpl.CreateFileFromTemplate("linux_hostname.tmpl", node.General.Hostname, hostnameFile); err != nil {
 				return fmt.Errorf("generating linux hostname config: %w", err)
 			}
 
-			timeZone := "Etc/UTC"
-
 			if err := tmpl.CreateFileFromTemplate("linux_timezone.tmpl", timeZone, timezoneFile); err != nil {
+				return fmt.Errorf("generating linux timezone config: %w", err)
+			}
+
+			if err := tmpl.CreateFileFromTemplate("linux_interfaces.tmpl", node, ifaceFile); err != nil {
 				return fmt.Errorf("generating linux interfaces config: %w", err)
 			}
 		} else if node.Hardware.OSType == v1.OSType_Windows {
 			startupFile := startupDir + "/" + node.General.Hostname + "-startup.ps1"
-			schedFile := startupDir + "/" + node.General.Hostname + "-startup-scheduler.cmd"
 
 			if err := tmpl.CreateFileFromTemplate("windows_startup.tmpl", node, startupFile); err != nil {
-				return fmt.Errorf("generating linux hostname config: %w", err)
+				return fmt.Errorf("generating windows startup config: %w", err)
 			}
 
-			if err := tmpl.CreateFileFromTemplate("windows_startup_scheduler.tmpl", node, schedFile); err != nil {
-				return fmt.Errorf("generating linux hostname config: %w", err)
+			if err := tmpl.RestoreAsset(startupDir, "startup-scheduler.cmd"); err != nil {
+				return fmt.Errorf("restoring windows startup scheduler: %w", err)
 			}
 		}
 	}

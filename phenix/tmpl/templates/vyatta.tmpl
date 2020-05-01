@@ -17,91 +17,57 @@ interfaces {
             }
         }
         {{ end }}
-        {{ if ne $node.Network.Rulesets "" }}
+        {{ if or $iface.RulesetIn $iface.RulesetOut }}
         firewall {
-            {{ range $rule := $node.Network.Rulesets }}
-                {{/* TODO: BTR to understand acl.filter_type */}}
-                {{/* if eq .FIXME "send" */}}
-                {{/* $filter = "out" */}}
-                {{/* else if eq .FIXME "receive" */}}
-                {{/* $filter = "in" */}}
-                {{/* end */}}
-                {{/* remove `none ` from the below and uncomment $filter */}}
-                {{/* $filter */}} none {
-                    name {{ $rule.Name }}
-                }
+            {{ if $iface.RulesetIn }}
+            in {
+                name {{ $iface.RulesetIn }}
+            }
             {{ end }}
-        }
-        {{ end }}
-        {{/* TODO: BTR to determine router.loopback_ip and mask */}}
-        {{ if ne .FIXME "None" }}
-        loopback lo {
-            address {{ .FIXME }}/{{ .FIXME }}
+
+            {{ if $iface.RulesetOut }}
+            out {
+                name {{ $iface.RulesetOut }}
+            }
+            {{ end }}
         }
         {{ end }}
     }
 {{ end }}
 }
 
-{{ $nat := 10 }}
-nat {
-{{ range $iface }}
-   {{/* TODO: need to determine length of nat_config (see line 50 in mako) */}}
-   {{ if gt .FIXME 0 }}
-   source {
-       rule {{ $n }} {
-           {{/* TODO: need to determine nat_config */}}
-           {{ $ifaceNum := .FIXME }}
-           outbound-interface eth{{ .FIXME }}
-           {{ if ne .FIXME "" }}
-           source {
-               address {{ .FIXME }}/{{ .FIXME }}
-           }
-           {{ end }}
-           translation {
-               {{ if eq .FIXME "overload" }}
-               address masquerade
-               {{ else if eq .FIXME "static" }}
-               address {{ .FIXME }}
-               {{ end }}
-           }
-       }
-       {{ $n += 1 }}
-   }
-    {{ end }}
-{{ end }}
-}
-
-{{ $hasFirewall := false }}
-{{ range $rules := $node.Network.Rulesets }}
-    {{ if ne $rules.Default "" }}
-    {{ $hasFirewall = true }}
 firewall {
-    {{ end }}
-    {{ if ne $rules.Default "" }}
-    name {{ $rules.Name }} {
-        default-action {{ $rules.Default }}
-        description "{{ $rules.Description }}"
-        {{ range $idx, $rule := $rules.Rules }}
-        rule {{ $rule.ID }} {
-            action {{ $rule.Action }}
-            {{ if ne $rules.Default "" }}
-            description "{{ $rule.Description }}"
+{{ range $node.Network.Rulesets }}
+    {{ if .Default }}
+    name {{ .Name }} {
+        default-action {{ .Default }}
+        {{ if .Description }}
+        description "{{ .Description }}"
+        {{ end }}
+        {{ range .Rules }}
+        rule {{ .ID }} {
+            action {{ .Action }}
+            {{ if .Description }}
+            description "{{ .Description }}"
             {{ end }}
-            {{ if ne $rule.Source.Address "" }}
-            protocol {{ $rule.Protocol }}
+            protocol {{ .Protocol }}
+            {{ if .Source }}
             source {
-                address {{ $rule.Source.Address }}
-                {{ if ne $rule.Source.Port "" }}
-                port {{ $rule.Source.Port }}
+                {{ if .Source.Address }}
+                address {{ .Source.Address }}
+                {{ end }}
+                {{ if .Source.Port }}
+                port {{ .Source.Port }}
                 {{ end }}
             }
             {{ end }}
-            {{ if ne $rule.Destination.Address "" }}
+            {{ if .Destination }}
             destination {
-                address {{ $rule.Destination.Address }}
-                {{ if ne $rule.Destination.Port "" }}
-                port {{ $rule.Destination.Port }}
+                {{ if .Destination.Address }}
+                address {{ .Destination.Address }}
+                {{ end }}
+                {{ if .Destination.Port }}
+                port {{ .Destination.Port }}
                 {{ end }}
             }
             {{ end }}
@@ -109,103 +75,50 @@ firewall {
         {{ end }}
     }
     {{ end }}
-    {{ if $hasFirewall && if ne $rules.Default "" }}
-}
-    {{ end }}
 {{ end }}
+}
 
-{{/* Do we need the following? */}}
 protocols {
     static {
-    {{ range $route := $node.Network.Routes }}
+{{ range $route := $node.Network.Routes }}
         route {{ $route.Destination }} {
             next-hop {{ $route.Next }} {
                 distance {{ $route.Cost }}
             }
         }
-    {{ end }}
+{{ end }}
     }
 
     ospf {
+{{ if $node.Network.OSPF }}
     {{ range $areas := $node.Network.OSPF.Areas }}
         area {{ $areas.AreaID }} {
         {{ range $areas.AreaNetworks }}
             network {{ $areas.AreaNetwork.Network }}
         {{ end }}
         }
+    {{ end }}
         parameters {
+    {{ if $node.Network.OSPF.RouterID }}
             router-id {{ $node.Network.OSPF.RouterID }}
+    {{ end }}
         }
         redistribute {
-        {{/* TODO: need to determine ospf_bgp_redis */}}
-        {{ if .FIXME }}
-            bgp {
-                {{/* See lines 146-148 on vyatta.mako */}}
-            }
-        {{ end }}
-        {{/* TODO: need to determine ospf_connected_redis */}}
-        {{ if .FIXME }}
-            connected {
-
-            }
-        {{ end }}
-        {{/* TODO: need to determine ospf_static_redis */}}
-        {{ if .FIXME }}
-            static {
-
-            }
-        {{ end }}
+            {{/* TODO: add redistribution stuff to OSPF schema definition */}}
         }
+{{ end }}
     }
 
-    {{/* TODO: need to determine length of router.bgp */}}
-    {{ if gt .FIXME 0 }}
-    {{/* TODO: need to determine as_number */}}
-    bgp {{ .FIXME }} {
-    {{/* TODO: need to determine neighbors */}}
-    {{ range .FIXME }}
-        neighbor {{ .FIXME }} {
-            nexthop-self
-            remote-as {{ .FIXME }}
-        }
-    {{ end }}
-
-        redistribute {
-        {{/* TODO: need to determine ospf_redis */}}
-        {{ if .FIXME }}
-            ospf {
-
-            }
-        {{ end }}
-        {{/* TODO: need to determine static_redis */}}
-        {{ if .FIXME }}
-            static {
-
-            }
-        {{ end }}
-        {{/* TODO: need to determine connected_redis */}}
-        {{ if .FIXME }}
-            connected {
-
-            }
-        {{ end }}
-        {{/* TODO: need to determine rip_redis */}}
-        {{ if .FIXME }}
-            rip {
-
-            }
-        {{ end }}
-        }
+    bgp {
+        {{/* TODO: add BGP stuff to Network schema definition */}}
     }
-    {{ end }}
 }
-{{/* end protocol block */}}
 
 {{/* TODO: need to add Ipsec VPN content */}}
 
 system {
     host-name {{ $node.RouterName }}
-{{ if ne $ntpAddr "" }}
+{{ if $ntpAddr }}
     ntp {
         server {{ $ntpAddr }} {
             perfer

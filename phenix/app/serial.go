@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"phenix/tmpl"
 	v1 "phenix/types/version/v1"
@@ -108,7 +109,10 @@ func (Serial) Start(spec *v1.ExperimentSpec) error {
 			}
 
 			if err := os.Symlink("../serial-startup.service", symlinksDir+"/serial-startup.service"); err != nil {
-				return fmt.Errorf("creating symlink for serial-startup.service: %w", err)
+				// Ignore the error if it was for the symlinked file already existing.
+				if !strings.Contains(err.Error(), "file exists") {
+					return fmt.Errorf("creating symlink for serial-startup.service: %w", err)
+				}
 			}
 		}
 	}
