@@ -93,8 +93,8 @@ EditorUi = function(editor, container, lightbox)
     {
         var cells= evt.getProperty('cells');
         for(var i = 0; i < cells.length; i++) {
-            setCellDefaults(graph, cells[i]);
-            lookforvlan(graph, cells[i]);
+            checkValue(graph, cells[i]);
+            // lookforvlan(graph, cells[i]);
         }
     });
 
@@ -102,21 +102,27 @@ EditorUi = function(editor, container, lightbox)
     // ensures all methods to add edges are captured
     graph.addListener(mxEvent.CELL_CONNECTED, function(sender, evt)
     {
-        var source = evt.getProperty('edge').source;
-        var target = evt.getProperty('edge').target;
+        var edge = evt.getProperty('edge');
+        var source = edge.source;
+        var target = edge.target;
+        var terminal = evt.getProperty('terminal');
         if (source){
-            setCellDefaults(graph, source);
+            checkValue(graph, source);
             lookforvlan(graph, source);
         }
         if (target) {
-            setCellDefaults(graph, target);
+            checkValue(graph, target);
             lookforvlan(graph, target);
         }
-        // var filter = function(cell) {return graph.model.isVertex(cell);}
-        // var vertices = graph.model.filterDescendants(filter);
-        // vertices.forEach(cell => {
-        //     lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
-        // });
+        // if (terminal) {
+        //     checkValue(graph, terminal);
+        //     lookforvlan(graph, terminal);
+        // }
+        var filter = function(cell) {return graph.model.isVertex(cell);}
+        var vertices = graph.model.filterDescendants(filter);
+        vertices.forEach(cell => {
+            lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
+        });
     });
 
     graph.convertValueToString = function(cell)

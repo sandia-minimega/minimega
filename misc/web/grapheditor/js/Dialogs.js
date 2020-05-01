@@ -1520,7 +1520,9 @@ const vlan_count = 10;
 let vlanid = "a";
 
 // utility function to set cell defaults
-function setCellDefaults(graph, cell) {
+// Standardizes all cells to have standard value object
+// and instatiates schemaVars object
+function checkValue(graph, cell) {
 
     var value = graph.getModel().getValue(cell);
     if (!mxUtils.isNode(value))
@@ -1632,7 +1634,7 @@ function searchNextVlan(v){
 // utility function to set switch edge vlan values
 function lookforvlan(graph, cell){
 
-    setCellDefaults(graph, cell);
+    checkValue(graph, cell);
     var schemaVars = JSON.parse(cell.getAttribute('schemaVars')); // current cell (node) schemaVars
     var edgeSchemaVars; // edge schemaVars
     var targetSchemaVars; // target cell schemaVars
@@ -1645,7 +1647,7 @@ function lookforvlan(graph, cell){
         var vlans = []; // holds true edges
         var edges = cell.edges; // cell edges
         for(var i = 0; i < edges.length; i++){
-            setCellDefaults(graph, edges[i]);
+            checkValue(graph, edges[i]);
             var vlan = JSON.parse(edges[i].getAttribute('schemaVars')).name;
             if (vlan !== '') vlans.push(vlan);
         }
@@ -1673,7 +1675,7 @@ function lookforvlan(graph, cell){
         }
         for (var i =0; i< cell.getEdgeCount();i++){
             var e = cell.getEdgeAt(i);
-            setCellDefaults(graph, e);
+            checkValue(graph, e);
             edgeSchemaVars = JSON.parse(e.getAttribute('schemaVars'));
             edgeSchemaVars.name = schemaVars.network.interfaces[0].vlan;
             if (edgeSchemaVars.id === '') edgeSchemaVars.id = 'auto';
@@ -1690,7 +1692,7 @@ function lookforvlan(graph, cell){
             var name;
             for(var i =0; i< cell.getEdgeCount();i++) {
                 var e = cell.getEdgeAt(i);
-                setCellDefaults(graph, e);
+                checkValue(graph, e);
                 if (JSON.parse(e.getAttribute('schemaVars')).name === name && name != '') {
                     dupe = true;
                     break;
@@ -1704,7 +1706,7 @@ function lookforvlan(graph, cell){
         for (var i = 0; i < cell.getEdgeCount(); i++){
             var eth = 'eth' + i;
             var e = cell.getEdgeAt(i);
-            setCellDefaults(graph, e);
+            checkValue(graph, e);
             edgeSchemaVars = JSON.parse(e.getAttribute('schemaVars'));
             // if cell has edges with duplicate vlans, reset all vlans and reassign thereafter
             if (dupe) {
@@ -1715,48 +1717,53 @@ function lookforvlan(graph, cell){
             var ec; // edge true target cell
 
             // Figure out which end is the true target for the edge
-            if (e.source.getId() != cell.getId()){
-                ec = e.source;
-            } else {ec = e.target;}
-            if (ec == null){
-                return;
-            }
-            // checkValue(ec);
-            setCellDefaults(graph, ec);
-            targetSchemaVars = JSON.parse(ec.getAttribute('schemaVars'));
-
             try {
-                targetSchemaVars.network.interfaces; 
-                targetEth = 'eth' + (Math.max.apply(Math, (targetSchemaVars.network.interfaces).map(function(o) { return (o.name).substr(-1); })) + 1);
+                if (e.source.getId() != cell.getId()){
+                    ec = e.source;
+                } else {ec = e.target;}
             }
-            catch(e) {
-                targetSchemaVars.network = {};
-                targetSchemaVars.network.interfaces = [];
-                targetSchemaVars.network.interfaces[0] = {};
-                targetEth = 'eth0';
+            catch (e) {
+
             }
 
-            // if connected vertex is a switch get the vlan number or sets one for the switch and the edge
-            if (targetSchemaVars.device === 'switch'){
-                if (typeof targetSchemaVars.network.interfaces[0].vlan === 'undefined' || targetSchemaVars.network.interfaces[0].vlan === ''){
-                    edgeSchemaVars.name = searchNextVlan(vlanid).toString();
-                    edgeSchemaVars.id = 'auto';
-                    targetSchemaVars.network.interfaces[0].vlan = edgeSchemaVars.name;
-                    targetSchemaVars.network.interfaces[0].name = targetEth;
-                    ec.setAttribute('schemaVars', JSON.stringify(targetSchemaVars));
-                } else {
-                    edgeSchemaVars.name = targetSchemaVars.network.interfaces[0].vlan;
-                    if (edgeSchemaVars.id === '') edgeSchemaVars.id = 'auto';
-                    e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
+            if (ec) {
+                // checkValue(ec);
+                checkValue(graph, ec);
+                targetSchemaVars = JSON.parse(ec.getAttribute('schemaVars'));
+
+                try {
+                    targetSchemaVars.network.interfaces; 
+                    targetEth = 'eth' + (Math.max.apply(Math, (targetSchemaVars.network.interfaces).map(function(o) { return (o.name).substr(-1); })) + 1);
                 }
-            } // If its any other device just set a new vlan to the edge
-            else {
-                // set edge vlan and vlan id
-                // set device vlan to edge vlan on a new interface
-                if (typeof edgeSchemaVars.name === 'undefined' || edgeSchemaVars.name === '') {
-                    edgeSchemaVars.name = searchNextVlan(vlanid).toString();
-                    edgeSchemaVars.id = 'auto';
-                    e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
+                catch(e) {
+                    targetSchemaVars.network = {};
+                    targetSchemaVars.network.interfaces = [];
+                    targetSchemaVars.network.interfaces[0] = {};
+                    targetEth = 'eth0';
+                }
+
+                // if connected vertex is a switch get the vlan number or sets one for the switch and the edge
+                if (targetSchemaVars.device === 'switch'){
+                    if (typeof targetSchemaVars.network.interfaces[0].vlan === 'undefined' || targetSchemaVars.network.interfaces[0].vlan === ''){
+                        edgeSchemaVars.name = searchNextVlan(vlanid).toString();
+                        edgeSchemaVars.id = 'auto';
+                        targetSchemaVars.network.interfaces[0].vlan = edgeSchemaVars.name;
+                        targetSchemaVars.network.interfaces[0].name = targetEth;
+                        ec.setAttribute('schemaVars', JSON.stringify(targetSchemaVars));
+                    } else {
+                        edgeSchemaVars.name = targetSchemaVars.network.interfaces[0].vlan;
+                        if (edgeSchemaVars.id === '') edgeSchemaVars.id = 'auto';
+                        e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
+                    }
+                } // If its any other device just set a new vlan to the edge
+                else {
+                    // set edge vlan and vlan id
+                    // set device vlan to edge vlan on a new interface
+                    if (typeof edgeSchemaVars.name === 'undefined' || edgeSchemaVars.name === '') {
+                        edgeSchemaVars.name = searchNextVlan(vlanid).toString();
+                        edgeSchemaVars.id = 'auto';
+                        e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
+                    }
                 }
             }
 
@@ -1778,17 +1785,6 @@ function lookforvlan(graph, cell){
     }
 }
 
-// Standardizes all cells to ahve standard value object
-function checkValue(cell){
-    var value = cell.getValue();
-    if (!mxUtils.isNode(value)){
-        var doc = mxUtils.createXmlDocument();
-        var obj = doc.createElement('object');
-        obj.setAttribute('label', value || '');
-        value = obj;
-        cell.setValue(value);
-    }
-}
 
 /**
  * Constructs a new JSONEditor for cell JSON
@@ -1803,13 +1799,15 @@ var EditDataDialog = function(ui, cell)
     var id = (EditDataDialog.getDisplayIdForCell != null) ?
         EditDataDialog.getDisplayIdForCell(ui, cell) : null;
 
-    setCellDefaults(graph, cell); // sets cell default user object values
+    checkValue(graph, cell); // sets cell default user object values
 
     var filter = function(cell) {return graph.model.isVertex(cell);}
     var vertices = graph.model.filterDescendants(filter);
-    vertices.forEach(cell => {
-        lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
-    });
+    // vertices.forEach(cell => {
+    //     lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
+    // });
+
+    // lookforvlan(graph, cell);
 
     var value = graph.getModel().getValue(cell);
     var startval = JSON.parse(value.getAttribute('schemaVars')); // parse schemaVars to JSON for editor
@@ -1961,7 +1959,8 @@ var viewJSONDialog = function(ui)
     var edgeArray = [];
 
     vertices.forEach(cell => {
-        setCellDefaults(graph, cell);
+        checkValue(graph, cell);
+        lookforvlan(graph, cell);
         var node = JSON.parse(cell.getAttribute('schemaVars'));
         if (node.device !== 'switch') {
             nodeArray.push(node);
@@ -1969,7 +1968,7 @@ var viewJSONDialog = function(ui)
     });
 
     edges.forEach(cell => {
-        setCellDefaults(graph, cell);
+        checkValue(graph, cell);
         var vlan = JSON.parse(cell.getAttribute('schemaVars'));
         if (edgeArray.filter(function(e) { return e.name === vlan.name; }).length <= 0 && vlan.id !== 'auto') {
             edgeArray.push(vlan);
@@ -3051,7 +3050,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         //Walk through all existing edges
         edges.forEach(cell => {
         // checkValue(e);
-            setCellDefaults(graph, cell);
+            checkValue(graph, cell);
             edgeSchemaVars = JSON.parse(cell.getAttribute('schemaVars'));
             if (typeof edgeSchemaVars.name !== 'undefined' && edgeSchemaVars.name !== '') {
                 if (!vlans_in_use.hasOwnProperty(edgeSchemaVars.name)){
@@ -3114,7 +3113,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         var schemaVars;
         var miniccc_commands = [];
         vertices.forEach(cell => {
-            setCellDefaults(graph, cell);
+            checkValue(graph, cell);
             schemaVars = JSON.parse(cell.getAttribute('schemaVars'));
             lookforvlan(graph, cell);
 
