@@ -11,3 +11,4 @@ doc/content/articles/api.article
 doc/content/articles/minirouter_api.article
 tests/*.got
 tests/*/*.got
+phenix/phenix.bdb
