@@ -104,17 +104,17 @@ protocols {
     {{ end }}
         }
         redistribute {
-            {{ /* TODO: add redistribution stuff to OSPF schema definition */ }}
+            {{/* TODO: add redistribution stuff to OSPF schema definition */}}
         }
 {{ end }}
     }
 
     bgp {
-        {{ /* TODO: add BGP stuff to Network schema definition */ }}
+        {{/* TODO: add BGP stuff to Network schema definition */}}
     }
 }
 
-{{ /* TODO: need to add Ipsec VPN content */ }}
+{{/* TODO: need to add Ipsec VPN content */}}
 
 system {
     host-name {{ $node.RouterName }}
