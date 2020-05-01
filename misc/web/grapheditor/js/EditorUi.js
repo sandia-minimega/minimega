@@ -86,6 +86,60 @@ EditorUi = function(editor, container, lightbox)
     {
         new Image().src = mxConnectionHandler.prototype.connectImage.src;
     }
+
+    // sets cell defaults when cell is added
+    // ensures all methods to add cell are captured
+    graph.addListener(mxEvent.CELLS_ADDED, function(sender, evt)
+    {
+        var cells= evt.getProperty('cells');
+        for(var i = 0; i < cells.length; i++) {
+            setCellDefaults(graph, cells[i]);
+            lookforvlan(graph, cells[i]);
+        }
+    });
+
+    // sets cell defaults when cell is connected
+    // ensures all methods to add edges are captured
+    graph.addListener(mxEvent.CELL_CONNECTED, function(sender, evt)
+    {
+        var source = evt.getProperty('edge').source;
+        var target = evt.getProperty('edge').target;
+        if (source){
+            setCellDefaults(graph, source);
+            lookforvlan(graph, source);
+        }
+        if (target) {
+            setCellDefaults(graph, target);
+            lookforvlan(graph, target);
+        }
+        // var filter = function(cell) {return graph.model.isVertex(cell);}
+        // var vertices = graph.model.filterDescendants(filter);
+        // vertices.forEach(cell => {
+        //     lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
+        // });
+    });
+
+    graph.convertValueToString = function(cell)
+    {
+        if (mxUtils.isNode(cell.value))
+        {
+            return cell.getAttribute('label', '')
+        }
+    };
+
+    var cellLabelChanged = graph.cellLabelChanged;
+    graph.cellLabelChanged = function(cell, newValue, autoSize)
+    {
+        if (mxUtils.isNode(cell.value))
+        {
+            // Clones the value for correct undo/redo
+                var elt = cell.value.cloneNode(true);
+            elt.setAttribute('label', newValue);
+            newValue = elt;
+        }
+
+        cellLabelChanged.apply(this, arguments);
+    };
     
     // Disables graph and forced panning in chromeless mode
     if (this.editor.chromeless && !this.editor.editable)

@@ -1531,50 +1531,68 @@ function setCellDefaults(graph, cell) {
         value = obj;
     }
 
-    if(value.hasAttribute('schemaVars')) {
-        // console.log('cell has schemaVars; exit setCellDefaults');
-        return;
+    var schemaVars;
+
+    if (value.hasAttribute('schemaVars')) {
+        // update hostname if it's a duplicate and a vertex
+        if (cell.isVertex()) {
+            schemaVars = JSON.parse(value.getAttribute('schemaVars'));
+            var hostname = schemaVars.general.hostname;
+            var filter = function(cell) {return graph.model.isVertex(cell);}
+            var vertices = graph.model.filterDescendants(filter);
+            var hostExists = false;
+            for (var i = 0; i < vertices.length; i++) {
+                var checkHost = vertices[i].getAttribute('label');
+                if (hostname == checkHost && vertices[i].getId() !== cell.getId()) {
+                    schemaVars.general.hostname = schemaVars.device + cell.getId();
+                    cell.setAttribute('label', schemaVars.general.hostname);
+                }
+            }
+        }
+        else {
+            return;
+        }
     }
-    else{
+    else {
 
-        var startval = {};
+        schemaVars = {};
 
-        if(cell.isVertex()) {
+        if (cell.isVertex()) {
 
             if (cell.getStyle().includes("container"))
             {
-                startval.type = 'container';
+                schemaVars.type = 'container';
             }
             else
             {
-                startval.type = 'kvm';
+                schemaVars.type = 'kvm';
             }
 
-            startval.device = 'diagraming';
-            if (cell.getStyle().includes("switch")){startval.device = "switch";}
-            if (cell.getStyle().includes("router")){startval.device = "router";}
-            if (cell.getStyle().includes("firewall")){startval.device = "firewall";}
-            if (cell.getStyle().includes("desktop")){startval.device = "desktop";}
-            if (cell.getStyle().includes("server")){startval.device = "server";}
-            if (cell.getStyle().includes("mobile")){startval.device = "mobile";}
+            schemaVars.device = 'diagraming';
+            if (cell.getStyle().includes("switch")){schemaVars.device = "switch";}
+            if (cell.getStyle().includes("router")){schemaVars.device = "router";}
+            if (cell.getStyle().includes("firewall")){schemaVars.device = "firewall";}
+            if (cell.getStyle().includes("desktop")){schemaVars.device = "desktop";}
+            if (cell.getStyle().includes("server")){schemaVars.device = "server";}
+            if (cell.getStyle().includes("mobile")){schemaVars.device = "mobile";}
 
-            startval.general = {};
-            startval.general.hostname = startval.device + (cell.getId());
-            value.setAttribute('label', startval.general.hostname);
+            schemaVars.general = {};
+            schemaVars.general.hostname = schemaVars.device + (cell.getId());
+            value.setAttribute('label', schemaVars.general.hostname);
 
-            startval.hardware = {};
-            startval.hardware.os_type = 'linux';
+            schemaVars.hardware = {};
+            schemaVars.hardware.os_type = 'linux';
 
         }
         else {
-            startval.id = '';
-            startval.name = '';
+            schemaVars.id = '';
+            schemaVars.name = '';
         }
 
-        value.setAttribute('schemaVars', JSON.stringify(startval));
-        graph.getModel().setValue(cell, value);
-
     }
+
+    value.setAttribute('schemaVars', JSON.stringify(schemaVars));
+    graph.getModel().setValue(cell, value);
 
 }
 
@@ -1660,6 +1678,9 @@ function lookforvlan(graph, cell){
             edgeSchemaVars.name = schemaVars.network.interfaces[0].vlan;
             if (edgeSchemaVars.id === '') edgeSchemaVars.id = 'auto';
             e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
+            e.setAttribute('label', schemaVars.network.interfaces[0].vlan);
+            var value = graph.getModel().getValue(e);
+            graph.getModel().setValue(e, value);
         }
     } else {
 
@@ -1717,7 +1738,6 @@ function lookforvlan(graph, cell){
 
             // if connected vertex is a switch get the vlan number or sets one for the switch and the edge
             if (targetSchemaVars.device === 'switch'){
-
                 if (typeof targetSchemaVars.network.interfaces[0].vlan === 'undefined' || targetSchemaVars.network.interfaces[0].vlan === ''){
                     edgeSchemaVars.name = searchNextVlan(vlanid).toString();
                     edgeSchemaVars.id = 'auto';
@@ -1750,6 +1770,8 @@ function lookforvlan(graph, cell){
                     vlans_in_use[edgeSchemaVars.name]=true;
                 }
                 e.setAttribute('label', edgeSchemaVars.name);
+                var value = graph.getModel().getValue(e);
+                graph.getModel().setValue(e, value);
             }
 
         }
@@ -1864,7 +1886,10 @@ var EditDataDialog = function(ui, cell)
                     var updatedNode = editor.getEditor('root').value; // get current node's JSON (from JSONEditor)
                     value.setAttribute('schemaVars', JSON.stringify(updatedNode));
                     if (cell.isVertex()) {value.setAttribute('label', updatedNode.general.hostname);}
+                    else {value.setAttribute('label', updatedNode.name);}
                     graph.getModel().setValue(cell, value);
+                    // var filter = function(cell) {return graph.model.isVertex(cell);}
+                    // var vertices = graph.model.filterDescendants(filter);
                     vertices.forEach(cell => {
                         lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
                     });
@@ -1883,6 +1908,12 @@ var EditDataDialog = function(ui, cell)
         });
 
         applyBtn.className = 'geBtn gePrimaryBtn';
+
+        editor.on('change',() => {
+            const errors = editor.validate();
+            if (errors.length) {applyBtn.setAttribute('disabled', 'disabled');}
+            else {applyBtn.removeAttribute('disabled');}
+        });
         
         var buttons = document.createElement('div');
         buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:15px;height:40px;border-top:1px solid #ccc;padding-top:20px;'
@@ -3142,14 +3173,12 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
             parameters.forEach(function(p) {
                 var name = p.name;
                 var path = getPath(p.path);
-                console.log(name), console.log(path);
                 // if it has a configuration for the parameter set it
                 try {
                     var value = schemaVars;
                     for (i in path) {
                         value = value[path[i]];
                     }
-                    console.log('this is value in paramsearch <'+name+'>'), console.log(value);
                     value = value.toString(); // cast to string to catch undefined and/or boolean values
                     if (prev_dev[name] != value && value != '' && name != "network"){
                         prev_dev[name] = value;
@@ -3523,6 +3552,12 @@ var VariablesDialog = function(ui)
         });
 
         applyBtn.className = 'geBtn gePrimaryBtn';
+
+        editor.on('change',() => {
+            const errors = editor.validate();
+            if (errors.length) {applyBtn.setAttribute('disabled', 'disabled');}
+            else {applyBtn.removeAttribute('disabled');}
+        });
         
         var buttons = document.createElement('div');
         buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:15px;height:40px;border-top:1px solid #ccc;padding-top:20px;'
