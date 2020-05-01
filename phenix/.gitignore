@@ -1,4 +1,6 @@
 docs/bindata.go
 docs/site
 
+phenix.bdb
+
 tmpl/bindata.go

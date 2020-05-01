@@ -17,15 +17,15 @@ interfaces {
             }
         }
         {{ end }}
-        {{ if or (ne $iface.RulesetIn "") (ne $iface.RulesetOut "") }}
+        {{ if or $iface.RulesetIn $iface.RulesetOut }}
         firewall {
-            {{ if ne $iface.RulesetIn "" }}
+            {{ if $iface.RulesetIn }}
             in {
                 name {{ $iface.RulesetIn }}
             }
             {{ end }}
 
-            {{ if ne $iface.RulesetOut "" }}
+            {{ if $iface.RulesetOut }}
             out {
                 name {{ $iface.RulesetOut }}
             }
@@ -38,35 +38,35 @@ interfaces {
 
 firewall {
 {{ range $node.Network.Rulesets }}
-    {{ if ne .Default "" }}
+    {{ if .Default }}
     name {{ .Name }} {
         default-action {{ .Default }}
-        {{ if ne .Description "" }}
+        {{ if .Description }}
         description "{{ .Description }}"
         {{ end }}
         {{ range .Rules }}
         rule {{ .ID }} {
             action {{ .Action }}
-            {{ if ne .Description "" }}
+            {{ if .Description }}
             description "{{ .Description }}"
             {{ end }}
             protocol {{ .Protocol }}
-            {{ if ne .Source nil }}
+            {{ if .Source }}
             source {
-                {{ if ne .Source.Address "" }}
+                {{ if .Source.Address }}
                 address {{ .Source.Address }}
                 {{ end }}
-                {{ if ne .Source.Port 0 }}
+                {{ if .Source.Port }}
                 port {{ .Source.Port }}
                 {{ end }}
             }
             {{ end }}
-            {{ if ne .Destination nil }}
+            {{ if .Destination }}
             destination {
-                {{ if ne .Destination.Address "" }}
+                {{ if .Destination.Address }}
                 address {{ .Destination.Address }}
                 {{ end }}
-                {{ if ne .Destination.Port 0 }}
+                {{ if .Destination.Port }}
                 port {{ .Destination.Port }}
                 {{ end }}
             }
@@ -90,7 +90,7 @@ protocols {
     }
 
     ospf {
-{{ if ne $node.Network.OSPF nil }}
+{{ if $node.Network.OSPF }}
     {{ range $areas := $node.Network.OSPF.Areas }}
         area {{ $areas.AreaID }} {
         {{ range $areas.AreaNetworks }}
@@ -99,7 +99,7 @@ protocols {
         }
     {{ end }}
         parameters {
-    {{ if ne $node.Network.OSPF.RouterID "" }}
+    {{ if $node.Network.OSPF.RouterID }}
             router-id {{ $node.Network.OSPF.RouterID }}
     {{ end }}
         }
@@ -118,7 +118,7 @@ protocols {
 
 system {
     host-name {{ $node.RouterName }}
-{{ if ne $ntpAddr "" }}
+{{ if $ntpAddr }}
     ntp {
         server {{ $ntpAddr }} {
             perfer
