@@ -101,3 +101,17 @@ func (this Interface) LinkAddress() string {
 
 	return n.String()
 }
+
+func (this Interface) NetworkMask() string {
+	addr := fmt.Sprintf("%s/%d", this.Address, this.Mask)
+
+	_, n, err := net.ParseCIDR(addr)
+	if err != nil {
+		// This should really mess someone up...
+		return "0.0.0.0"
+	}
+
+	m := n.Mask
+
+	return fmt.Sprintf("%d.%d.%d.%d", m[0], m[1], m[2], m[3])
+}

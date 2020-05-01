@@ -10,11 +10,11 @@ import (
 func init() {
 	apps["ntp"] = new(NTP)
 	apps["serial"] = new(Serial)
+	apps["startup"] = new(Startup)
 	apps["user-shell"] = new(UserApp)
 	apps["vyatta"] = new(Vyatta)
-	apps["startup"] = new(Startup)
 
-	defaultApps = []string{"startup", "ntp", "serial"}
+	defaultApps = []string{"ntp", "serial", "startup", "vyatta"}
 }
 
 type Action string
