@@ -15,6 +15,9 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
+// List collects experiments, each in a struct that references the latest
+// versioned experiment spec and status. It returns a slice of experiments and
+// any errors encountered while gathering and decoding them.
 func List() ([]types.Experiment, error) {
 	configs, err := store.List("Experiment")
 	if err != nil {
@@ -44,6 +47,10 @@ func List() ([]types.Experiment, error) {
 	return experiments, nil
 }
 
+// Get retrieves the experiment with the given name. It returns a pointer to a
+// struct that references the latest versioned experiment spec and status for
+// the given experiment, and any errors encountered while retrieving the
+// experiment.
 func Get(name string) (*types.Experiment, error) {
 	c, _ := types.NewConfig("experiment/" + name)
 
@@ -68,6 +75,12 @@ func Get(name string) (*types.Experiment, error) {
 	return exp, nil
 }
 
+// Create uses the provided arguments to create a new experiment. The
+// `scenarioName` argument can be an empty string, in which case no scenario is
+// used for the experiment. The `baseDir` argument can be an empty string, in
+// which case the default value of `/phenix/experiments/{name}` is used for the
+// experiment base directory. It returns any errors encountered while creating
+// the experiment.
 func Create(name, topoName, scenarioName, baseDir string) error {
 	if name == "" {
 		return fmt.Errorf("no experiment name provided")
@@ -131,6 +144,11 @@ func Create(name, topoName, scenarioName, baseDir string) error {
 	return nil
 }
 
+// CreateFromConfig uses the provided config argument to create a new
+// experiment. The provided config must be of kind `Experiment`, and must
+// contain an annotation in its metadata identifying the topology to use for the
+// experiment. A scenario annotation may also be provided, but is not required.
+// It returns any errors encountered while creating the experiment.
 func CreateFromConfig(c *types.Config) error {
 	topoName, ok := c.Metadata.Annotations["topology"]
 	if !ok {
@@ -194,6 +212,8 @@ func create(c *types.Config) error {
 	return nil
 }
 
+// Start starts the experiment with the given name. It returns any errors
+// encountered while starting the experiment.
 func Start(name string) error {
 	c, _ := types.NewConfig("experiment/" + name)
 
@@ -250,6 +270,8 @@ func Start(name string) error {
 	return nil
 }
 
+// Stop stops the experiment with the given name. It returns any errors
+// encountered while stopping the experiment.
 func Stop(name string) error {
 	c, _ := types.NewConfig("experiment/" + name)
 

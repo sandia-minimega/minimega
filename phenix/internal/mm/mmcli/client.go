@@ -42,6 +42,8 @@ func wrapErr(err error) chan *miniclient.Response {
 	return out
 }
 
+// ErrorResponse is used when only concerned with errors returned from a call to
+// minimega. The first error encountered will be returned.
 func ErrorResponse(responses chan *miniclient.Response) error {
 	for response := range responses {
 		for _, resp := range response.Resp {
@@ -54,6 +56,8 @@ func ErrorResponse(responses chan *miniclient.Response) error {
 	return nil
 }
 
+// SingleReponse is used when only a single response (or error) is expected to
+// be returned from a call to minimega.
 func SingleResponse(responses chan *miniclient.Response) (string, error) {
 	for response := range responses {
 		r := response.Resp[0]
@@ -68,7 +72,9 @@ func SingleResponse(responses chan *miniclient.Response) (string, error) {
 	return "", errors.New("no responses")
 }
 
-// run minimega commands, automatically redialing if we were disconnected
+// Run dials the minimega Unix socket and runs the given command, automatically
+// redialing if disconnected. Any errors encountered will be returned as part of
+// the response channel.
 func Run(c *Command) chan *miniclient.Response {
 	mu.Lock()
 	defer mu.Unlock()

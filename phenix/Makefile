@@ -7,9 +7,8 @@ COMMIT  := $(shell git log -1 --format="%h - %ae")
 DATE    := $(shell date -u)
 VERSION := $(VER) (commit $(COMMIT)) $(DATE)
 
-GOSOURCES     := $(shell find . \( -name '*.go' \))
-DOCUMENTATION := $(shell find docs/docs \( -name '*' \))
-TEMPLATES     := $(shell find tmpl/templates \( -name '*' \))
+GOSOURCES := $(shell find . \( -name '*.go' \))
+TEMPLATES := $(shell find tmpl/templates \( -name '*' \))
 
 THISFILE := $(lastword $(MAKEFILE_LIST))
 THISDIR  := $(shell dirname $(realpath $(THISFILE)))
@@ -26,7 +25,6 @@ all:
 
 clean:
 	-rm bin/phenix
-	-rm docs/bindata.go
 	-rm tmpl/bindata.go
 
 .PHONY: install-build-deps
@@ -39,17 +37,9 @@ remove-build-deps:
 bin/go-bindata:
 	go install github.com/go-bindata/go-bindata/v3/go-bindata
 
-docs/bindata.go: $(DOCUMENTATION) bin/go-bindata
-	mkdocs build -f docs/mkdocs.yml
-	$(GOBIN)/go-bindata -pkg docs -prefix docs/site -o docs/bindata.go docs/site/...
-
 tmpl/bindata.go: $(TEMPLATES) bin/go-bindata
 	$(GOBIN)/go-bindata -pkg tmpl -prefix tmpl/templates -o tmpl/bindata.go tmpl/templates/...
 
 bin/phenix: $(GOSOURCES) tmpl/bindata.go
 	mkdir -p bin
 	CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-X 'phenix/version.Version=$(VERSION)' -s -w" -trimpath -o bin/phenix cmd/main.go
-
-.PHONY: serve-docs
-serve-docs:
-	mkdocs serve -f docs/mkdocs.yml

@@ -1,5 +1,7 @@
 package vm
 
+// RedeployOption is a function that configures options for a VM redeployment.
+// It is used in `vm.Redeploy`.
 type RedeployOption func(*redeployOptions)
 
 type redeployOptions struct {
@@ -20,30 +22,44 @@ func newRedeployOptions(opts ...RedeployOption) redeployOptions {
 	return o
 }
 
+// CPU sets the number of CPUs to be used for the redeployed VM. It defaults to
+// 0, which means the redeployed VM will have the same number of CPUs as the
+// current VM.
 func CPU(c int) RedeployOption {
 	return func(o *redeployOptions) {
 		o.cpu = c
 	}
 }
 
+// Memory sets the amound of memory (in MB) to be used for the redeployed VM. It
+// defaults to 0, which means the redeployed VM will have the same amount of
+// memory as the current VM.
 func Memory(m int) RedeployOption {
 	return func(o *redeployOptions) {
 		o.mem = m
 	}
 }
 
+// Disk sets the path to the disk to be used for the redeployed VM. It defaults
+// to an empyt string, which means the redeployed VM will use the same disk as
+// the current VM.
 func Disk(d string) RedeployOption {
 	return func(o *redeployOptions) {
 		o.disk = d
 	}
 }
 
+// Inject sets whether or not files will be injected into the redeployed VM. If
+// true, and `Disk` is set, and the current VM has file injections configured,
+// the redeployed VM will have the same files injected.
 func Inject(i bool) RedeployOption {
 	return func(o *redeployOptions) {
 		o.inject = i
 	}
 }
 
+// InjectPartition sets the disk partition files will be injected into in the
+// redeployed VM. Only used if `Inject` is set to true and `Disk` is set.
 func InjectPartition(p int) RedeployOption {
 	return func(o *redeployOptions) {
 		o.part = p

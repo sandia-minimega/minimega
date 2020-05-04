@@ -9,12 +9,15 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
+// StoredVersion tracks the latest stored version of each config kind.
 var StoredVersion = map[string]string{
 	"Topology":   "v1",
 	"Scenario":   "v1",
 	"Experiment": "v1",
 }
 
+// GetStoredSpecForKind looks up the current stored version for the given kind
+// and returns the versioned spec. Internally it calls `GetVersionedSpecForKind`.
 func GetStoredSpecForKind(kind string) (interface{}, error) {
 	version, ok := StoredVersion[kind]
 	if !ok {
@@ -24,6 +27,8 @@ func GetStoredSpecForKind(kind string) (interface{}, error) {
 	return GetVersionedSpecForKind(kind, version)
 }
 
+// GetVersionedSpecForKind returns an initialized spec for the given kind and
+// version.
 func GetVersionedSpecForKind(kind, version string) (interface{}, error) {
 	switch kind {
 	case "Topology":
@@ -52,6 +57,8 @@ func GetVersionedSpecForKind(kind, version string) (interface{}, error) {
 	}
 }
 
+// GetVersionedValidatorForKind returns a pointer to the `openapi3.Schema`
+// validator corresponding to the given kind and version.
 func GetVersionedValidatorForKind(kind, version string) (*openapi3.Schema, error) {
 	switch version {
 	case "v1":

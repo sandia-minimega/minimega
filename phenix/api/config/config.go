@@ -14,6 +14,10 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// List collects configs of the given type (topology, scenario, experiment). If
+// no config type is specified, or `all` is specified, then all the known
+// configs will be collected. It returns a slice of configs and any errors
+// encountered while getting the configs from the store.
 func List(which string) (types.Configs, error) {
 	var (
 		configs types.Configs
@@ -40,6 +44,13 @@ func List(which string) (types.Configs, error) {
 	return configs, nil
 }
 
+// Get retrieves the config with the given name. The given name should be of the
+// form `type/name`, where `type` is one of `topology, scenario, or experiment`.
+// It returns a pointer to the config and any errors encountered while getting
+// the config from the store. Note that the returned config will **not** have
+// its `spec` and `status` fields casted to the given type, but instead will be
+// generic `map[string]interface{}` fields. It's up to the caller to convert
+// these fields into the appropriate types.
 func Get(name string) (*types.Config, error) {
 	c, err := types.NewConfig(name)
 	if err != nil {
@@ -53,6 +64,12 @@ func Get(name string) (*types.Config, error) {
 	return c, nil
 }
 
+// Create reads a config file from the given path, validates it, and persists it
+// to the store. Validation of configs is done against OpenAPIv3 schema
+// definitions. In the event the config file being read defines an experiment,
+// additional validations are done to ensure the annotated topology (required)
+// and scenario (optional) exist. It returns a pointer to the resulting config
+// struct and eny errors encountered while creating the config.
 func Create(path string) (*types.Config, error) {
 	if path == "" {
 		return nil, fmt.Errorf("no config file provided")
@@ -80,6 +97,15 @@ func Create(path string) (*types.Config, error) {
 	return c, nil
 }
 
+// Edit retrieves the config with the given name for editing. The given name
+// should be of the form `type/name`, where `type` is one of `topology,
+// scenario, or experiment`. A YAML representation of the config is written to a
+// temporary file, and that file is opened for editing using the default editor
+// (as defined by the user's `EDITOR` env variable). If no default editor is
+// found, `vim` is used. If no changes were made to the file, an error of type
+// `editor.ErrNoChange` is returned. This can be checked using the
+// `IsConfigNotModified` function. It returns the updated config and any errors
+// encountered while editing the config.
 func Edit(name string) (*types.Config, error) {
 	c, err := types.NewConfig(name)
 	if err != nil {
@@ -127,6 +153,11 @@ func Edit(name string) (*types.Config, error) {
 	return c, nil
 }
 
+// Delete removes the config with the given name from the store. The given name
+// should be of the form `type/name`, where `type` is one of `topology,
+// scenario, or experiment`. If `all` is specified, then all the known configs
+// are removed. It returns any errors encountered while removing the config from
+// the store.
 func Delete(name string) error {
 	if name == "all" {
 		configs, _ := List("all")
@@ -156,6 +187,9 @@ func delete(c *types.Config) error {
 	return nil
 }
 
+// IsConfigNotModified returns a boolean indicating whether the error is known
+// to report that a config was not modified during editing. It is satisfied by
+// editor.ErrNoChange.
 func IsConfigNotModified(err error) bool {
 	return errors.Is(err, editor.ErrNoChange)
 }

@@ -12,6 +12,9 @@ import (
 
 var vlanAliasRegex = regexp.MustCompile(`(.*) \(\d*\)`)
 
+// List collects VMs, combining topology settings with running VM details if the
+// experiment is running. It returns a slice of VM structs and any errors
+// encountered while gathering them.
 func List(expName string) ([]types.VM, error) {
 	exp, err := experiment.Get(expName)
 	if err != nil {
@@ -78,6 +81,10 @@ func List(expName string) ([]types.VM, error) {
 	return vms, nil
 }
 
+// Get retrieves the VM with the given name from the experiment with the given
+// name. If the experiment is running, topology VM settings are combined with
+// running VM details. It returns a pointer to a VM struct, and any errors
+// encountered while retrieving the VM.
 func Get(expName, vmName string) (*types.VM, error) {
 	exp, err := experiment.Get(expName)
 	if err != nil {
@@ -149,6 +156,8 @@ func Get(expName, vmName string) (*types.VM, error) {
 	return vm, nil
 }
 
+// Pause stops a running VM with the given name in the experiment with the given
+// name. It returns any errors encountered while pausing the VM.
 func Pause(expName, vmName string) error {
 	err := StopCaptures(expName, vmName)
 	if err != nil && !errors.Is(err, ErrNoCaptures) {
@@ -162,6 +171,8 @@ func Pause(expName, vmName string) error {
 	return nil
 }
 
+// Resume starts a paused VM with the given name in the experiment with the
+// given name. It returns any errors encountered while resuming the VM.
 func Resume(expName, vmName string) error {
 	if err := mm.StartVM(mm.NS(expName), mm.VM(vmName)); err != nil {
 		return fmt.Errorf("resuming VM: %w", err)
@@ -170,6 +181,10 @@ func Resume(expName, vmName string) error {
 	return nil
 }
 
+// Redeploy redeploys a VM with the given name in the experiment with the given
+// name. Multiple redeploy options can be passed to alter the resulting
+// redeployed VM, such as CPU, memory, and disk options. It returns any errors
+// encountered while redeploying the VM.
 func Redeploy(expName, vmName string, opts ...RedeployOption) error {
 	o := newRedeployOptions(opts...)
 
@@ -216,6 +231,8 @@ func Redeploy(expName, vmName string, opts ...RedeployOption) error {
 	return nil
 }
 
+// Kill deletes a VM with the given name in the experiment with the given name.
+// It returns any errors encountered while killing the VM.
 func Kill(expName, vmName string) error {
 	if err := mm.KillVM(mm.NS(expName), mm.VM(vmName)); err != nil {
 		return fmt.Errorf("killing VM: %w", err)

@@ -8,6 +8,12 @@ import (
 	"text/template"
 )
 
+// GenerateFromTemplate executes the template with the given name using the
+// given data. The result is written to the given writer. The templates used are
+// located in the `phenix/tmpl/templates' directory. Each template will have a
+// function with the signature `add(int, int)` available to it via a
+// `template.FuncMap`. It returns any errors encountered while executing the
+// template.
 func GenerateFromTemplate(name string, data interface{}, w io.Writer) error {
 	funcs := template.FuncMap{
 		"add": func(a, b int) int {
@@ -24,6 +30,10 @@ func GenerateFromTemplate(name string, data interface{}, w io.Writer) error {
 	return nil
 }
 
+// CreateFileFromTemplate executes the template with the given name using the
+// given data. The result is written to the given file. Internally it calls
+// `GenerateFromTemplate`. It returns any errors encountered while executing the
+// template.
 func CreateFileFromTemplate(name string, data interface{}, filename string) error {
 	dir := filepath.Dir(filename)
 

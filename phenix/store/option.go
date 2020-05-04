@@ -1,5 +1,7 @@
 package store
 
+// Option is a function that configures options for a config store. It is used
+// in `store.Init`.
 type Option func(*Options)
 
 type Options struct {
@@ -16,6 +18,7 @@ func NewOptions(opts ...Option) Options {
 	return o
 }
 
+// Endpoint sets the endpoint URI to use for the store.
 func Endpoint(e string) Option {
 	return func(o *Options) {
 		o.Endpoint = e

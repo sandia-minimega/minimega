@@ -1,4 +1,5 @@
 // Taken from https://samrapdev.com/capturing-sensitive-input-with-editor-in-golang-from-the-cli/
+
 package editor
 
 import (
@@ -16,6 +17,9 @@ var ErrNoChange = errors.New("no changes made to file")
 
 const DefaultEditor = "vim"
 
+// OpenFileInEditor opens the file at the given path for editing with the user's
+// default editor. The default editor is determined via the `EDITOR` env
+// variable. If not set, the default editor (vim) is used.
 func OpenFileInEditor(path string) error {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
@@ -35,6 +39,10 @@ func OpenFileInEditor(path string) error {
 	return cmd.Run()
 }
 
+// EditData writes the given data to a temporary file, then calls
+// `OpenFileInEditor` to edit the data. It returns the edited data and any
+// errors encountered while editing the data. If the given data was not
+// modified, `ErrNoChange` is returned.
 func EditData(data []byte) ([]byte, error) {
 	file, err := ioutil.TempFile(os.TempDir(), "*")
 	if err != nil {

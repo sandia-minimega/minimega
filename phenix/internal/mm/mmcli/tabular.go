@@ -48,6 +48,9 @@ func tabularToMapCols(columns []string) tabularToMapper {
 	}
 }
 
+// RunTabular is used to run the given command when the response is expected to
+// be in tabular form. A slice of maps is returned, with each map representing a
+// row in the tabular response and each map key representing the column.
 func RunTabular(cmd *Command) []map[string]string {
 	// copy all fields in header order
 	mapper := tabularToMap

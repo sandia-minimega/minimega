@@ -6,6 +6,9 @@ import (
 	"phenix/types/version"
 )
 
+// ValidateConfigSpec validates the spec in the given config using the
+// appropriate `openapi3.Schema` validator. Any validation errors encountered
+// are returned.
 func ValidateConfigSpec(c Config) error {
 	if g := c.APIGroup(); g != API_GROUP {
 		return fmt.Errorf("invalid API group %s: expected %s", g, API_GROUP)

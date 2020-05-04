@@ -5,6 +5,9 @@ import (
 	"phenix/internal/mm"
 )
 
+// Connect moves or reconnects the given interface for the given VM in the given
+// experiment to the given VLAN. The given interface must already exist in the
+// VM. It returns any errors encountered while connecting the interface.
 func Connect(expName, vmName string, iface int, vlan string) error {
 	err := mm.ConnectVMInterface(mm.NS(expName), mm.VM(vmName), mm.ConnectInterface(iface), mm.ConnectVLAN(vlan))
 	if err != nil {
@@ -14,6 +17,9 @@ func Connect(expName, vmName string, iface int, vlan string) error {
 	return nil
 }
 
+// Disconnect disconnects the given interface for the given VM in the given
+// experiment from the VLAN it's currently connected to (if any). It returns any
+// errors encountered while disconnecting the interface.
 func Disonnect(expName, vmName string, iface int) error {
 	err := mm.DisonnectVMInterface(mm.NS(expName), mm.VM(vmName), mm.ConnectInterface(iface))
 	if err != nil {

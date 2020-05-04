@@ -12,6 +12,8 @@ import (
 	"github.com/olekukonko/tablewriter"
 )
 
+// PrintTableOfConfigs writes the given configs to the given writer as an ASCII
+// table. The table headers are set to Kind, Version, Name, and Created.
 func PrintTableOfConfigs(writer io.Writer, configs types.Configs) {
 	table := tablewriter.NewWriter(writer)
 
@@ -24,6 +26,9 @@ func PrintTableOfConfigs(writer io.Writer, configs types.Configs) {
 	table.Render()
 }
 
+// PrintTableOfExperiments writes the given experiments to the given writer as
+// an ASCII table. The table headers are set to Name, Topology, Scenario,
+// Started, VM Count, VLAN Count, and Apps.
 func PrintTableOfExperiments(writer io.Writer, exps ...types.Experiment) {
 	table := tablewriter.NewWriter(writer)
 
@@ -57,6 +62,9 @@ func PrintTableOfExperiments(writer io.Writer, exps ...types.Experiment) {
 	table.Render()
 }
 
+// PrintTableOfVMs writes the given VMs to the given writer as an ASCII table.
+// The table headers are set to Host, Name, Running, Disk, Interfaces, and
+// Uptime.
 func PrintTableOfVMs(writer io.Writer, vms ...types.VM) {
 	table := tablewriter.NewWriter(writer)
 

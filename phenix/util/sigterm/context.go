@@ -7,6 +7,8 @@ import (
 	"syscall"
 )
 
+// CancelContext returns a context that wraps the given context with a cancel
+// function that's called when a SIGTERM or SIGINT is trapped.
 func CancelContext(ctx context.Context) context.Context {
 	ctxWithCancel, cancel := context.WithCancel(ctx)
 

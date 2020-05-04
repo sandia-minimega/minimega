@@ -15,6 +15,10 @@ var (
 	ErrNoCaptures    = errors.New("no captures exist")
 )
 
+// StartCapture starts a packet capture on the given interface for the given VM
+// in the given experiment. The captured packets are written to the given output
+// file in PCAP format. It returns any errors encountered while starting the
+// packet capture.
 func StartCapture(expName, vmName string, iface int, out string) error {
 	vm, err := Get(expName, vmName)
 	if err != nil {
@@ -52,6 +56,13 @@ func StartCapture(expName, vmName string, iface int, out string) error {
 	return nil
 }
 
+// StopCaptures stops all currently running packet captures for the given VM in
+// the given experiment. Due to a limitation in minimega, it is not possible to
+// stop a single capture if more than one capture is running for a VM. Once
+// stopped, the PCAP file for each capture is written to the `captures`
+// directory in the experiment's configured base directory using the filename
+// provided when the capture was started. It returns any errors encountered
+// while stopping the packet captures.
 func StopCaptures(expName, vmName string) error {
 	captures := mm.GetVMCaptures(mm.NS(expName), mm.VM(vmName))
 
@@ -64,7 +75,7 @@ func StopCaptures(expName, vmName string) error {
 		return fmt.Errorf("getting experiment %s: %w", expName, err)
 	}
 
-	dir := fmt.Sprintf("%s/images/%s/files", exp.Spec.BaseDir, expName)
+	dir := fmt.Sprintf("%s/captures", exp.Spec.BaseDir)
 
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("creating files directory for experiment %s: %w", expName, err)
