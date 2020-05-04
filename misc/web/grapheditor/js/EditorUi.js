@@ -13,11 +13,12 @@ EditorUi = function(editor, container, lightbox)
     this.container = container || document.body;
 
     this.schemas = {}; // store default schemas
+    this.params = [];
 
     var self = this; // to access member variables in scope of local functions/callbacks
 
     // Load schema
-    var loadSchema = function (file, mimeType, schemaType, callback) {
+    var loadFile = function (file, mimeType, schemaType, callback) {
         if (window.fetch && window.File && window.FileReader && window.FileList && window.Blob) {
             fetch(file, {mode: 'no-cors'})
             .then(function (response) {
@@ -29,7 +30,8 @@ EditorUi = function(editor, container, lightbox)
             }).then(function (blob) {
                 var reader = new FileReader()
                 reader.onload = function (e) {
-                    setSchema(e.target.result, schemaType)
+                    if (schemaType) {setSchema(e.target.result, schemaType);}
+                    else {loadParams(e.target.result);}
                 }
                 reader.readAsText(blob)
             })
@@ -43,7 +45,10 @@ EditorUi = function(editor, container, lightbox)
         xobj.open('GET', file, true)
         xobj.onreadystatechange = function () {
             if (xobj.readyState == 4) {
-                if (xobj.status == '200') setSchema(xobj.responseText, schemaType)
+                if (xobj.status == '200') {
+                    if (schemaType) {setSchema(xobj.responseText, schemaType)}
+                    else {loadParams(xobj.responseText);}
+                }
                 else console.log(xobj.status)
             }
         }
@@ -55,12 +60,19 @@ EditorUi = function(editor, container, lightbox)
         self.schemas[schemaType] = JSON.parse(response);
     }
 
+    var loadParams = function(response) {
+        self.params = JSON.parse(response).parameters;
+    }
+
     // set default node schema
-    loadSchema(window.UTILS_PATH + '/schemas/node_schema.json', 'application/json', 'nodes', setSchema);
+    loadFile(window.UTILS_PATH + '/schemas/node_schema.json', 'application/json', 'nodes', setSchema);
     // set default edge schema
-    loadSchema(window.UTILS_PATH + '/schemas/edge_schema.json', 'application/json', 'edges', setSchema);
+    loadFile(window.UTILS_PATH + '/schemas/edge_schema.json', 'application/json', 'edges', setSchema);
     // set experimentVars schema
-    loadSchema(window.UTILS_PATH + '/schemas/vars_schema.json', 'application/json', 'vars', setSchema);
+    loadFile(window.UTILS_PATH + '/schemas/vars_schema.json', 'application/json', 'vars', setSchema);
+
+    // get minimega param->schema mapping
+    loadFile(window.UTILS_PATH + '/schemas/param_map.json', 'application/json', null, loadParams);
     
     var graph = this.editor.graph;
     graph.lightbox = lightbox;

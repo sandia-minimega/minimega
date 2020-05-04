@@ -3080,42 +3080,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         });
 
         var count = 0;
-
-        // TODO: move mappings to a config file
-        var parameters = [
-            {
-                name: 'memory',
-                path: 'hardware.memory'
-            },
-            {
-                name: 'vcpu',
-                path: 'hardware.vcpus'
-            },
-            {
-                name: 'network',
-                path: 'network'
-            },
-            {
-                name: 'kernel',
-                path: 'hardware.os_type'
-            },
-            {
-                name: 'initrd',
-                path: 'hardware.memory'
-            },
-            {
-                name: 'disk',
-                path: 'hardware.drives'
-            },
-            {
-                name: 'snapshot',
-                path: 'general.snapshot'
-            },
-            {
-                name: 'cdrom',
-                path: 'hardware.drives'
-            }
-        ];
+        var parameters = editorUi.params; // minimega parameter->schema maps for script generation
 
         // utility function to return path array
         const getPath = (path) => {
@@ -3126,6 +3091,19 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
             }
             return paths;
         };
+
+        // utility function to get minimega params from JSON for config
+        // currently not used, but might be worth revisiting down the road
+        // function getParams(object, key, result){
+        //     if(object.hasOwnProperty(key))
+        //         result.push(object[key]);
+
+        //     for(var i=0; i<Object.keys(object).length; i++){
+        //         if(typeof object[Object.keys(object)[i]] == "object"){
+        //             getParams(object[Object.keys(object)[i]], key, result);
+        //         }
+        //     }
+        // }
 
         var config = "";
         var prev_dev_config = "";
@@ -3173,10 +3151,10 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                     net += ' ';
                 }
             }
-            console.log('this is prev_dev[network]'), console.log(prev_dev["network"]);
-            if (net == "" && typeof prev_dev["network"] != 'undefined'){
+            // console.log('this is prev_dev[network]'), console.log(prev_dev["network"]);
+            if (net == "" && typeof prev_dev["network"] !== 'undefined'){
                 delete prev_dev["network"];
-                clear += "clear vm config network \n";
+                clear += "clear vm config net \n";
             }
             else {
                 // if (cell.getAttribute("network") != net){
@@ -3184,7 +3162,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                 // }
                 if (prev_dev["network"] != net && net != ""){
                     prev_dev["network"] = net;
-                    config += `vm config network ${net} \n`;
+                    config += `vm config net ${net} \n`;
                 }
             }
 
@@ -3192,24 +3170,57 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
             parameters.forEach(function(p) {
                 var name = p.name;
                 var path = getPath(p.path);
+                var options = p.options;
+                var configString = ``; // append config command options
                 // if it has a configuration for the parameter set it
                 try {
-                    var value = schemaVars;
-                    for (i in path) {
-                        value = value[path[i]];
+                    var obj = schemaVars;
+                    for (p in path) {
+                        obj = obj[path[p]];
                     }
-                    value = value.toString(); // cast to string to catch undefined and/or boolean values
-                    if (prev_dev[name] != value && value != '' && name != "network"){
-                        prev_dev[name] = value;
-                        config += `vm config ${name} ${value} \n`;
+                    if (Array.isArray(obj) && obj.length > 0) {
+                        for (var i = 0; i < obj.length; i++) {
+                            for (var j = 0; j < options.length; j++) {
+                                var optionVal = obj[i][options[j]];
+                                if (typeof optionVal !== 'undefined' && optionVal != '') {
+                                    configString += `${optionVal}`;
+                                    if (j < options.length - 1) {
+                                        configString += `,`;
+                                    }
+                                }
+                                else{
+                                    continue;
+                                }
+                            }
+                            if (i < obj.length - 1 && obj.length != 1) {
+                                configString += ` `;
+                            }
+                        }
+                    }
+                    else if (typeof obj !== 'undefined') {
+                        for (var i = 0; i < options.length; i++) {
+                            var optionVal = obj[options[i]];
+                            if (typeof optionVal !== 'undefined' && optionVal != '') {
+                                configString += `${optionVal}`;
+                                if (i < options.length - 1) {
+                                    configString += `,`;
+                                }
+                            }
+                        }
                     }
                 }
-                catch { // parameter value is undefined
-                    // If there is no configuration for a parameter and the previous device had one clear it
-                    if (name != "network" && prev_dev.hasOwnProperty(name)) {
-                        delete prev_dev[name];
-                        clear += `clear vm config ${name}\n`;
-                    }
+                catch (e) { // parameter search ran into an undefined property
+                    console.log(e);
+                }
+                var value = configString;
+                if (prev_dev[name] != value && value != '' && name != "net"){
+                    prev_dev[name] = value;
+                    config += `vm config ${name} ${value} \n`;
+                }
+                // If there is no configuration for a parameter and the previous device had one clear it
+                if (name != "net" && prev_dev.hasOwnProperty(name) && value == '') {
+                    delete prev_dev[name];
+                    clear += `clear vm config ${name}\n`;
                 }
             });
 
