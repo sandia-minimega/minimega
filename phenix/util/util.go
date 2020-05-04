@@ -3,6 +3,7 @@ package util
 import (
 	"io"
 	"os/exec"
+
 	"phenix/types"
 
 	"github.com/olekukonko/tablewriter"
@@ -18,6 +19,10 @@ func PrintTableOfConfigs(writer io.Writer, configs types.Configs) error {
 	}
 
 	table.Render()
+	return nil
+}
+
+func PrintTableOfVMs(writer io.Writer, vms types.VMs) error {
 	return nil
 }
 

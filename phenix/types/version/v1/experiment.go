@@ -3,6 +3,7 @@ package v1
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 type Schedule map[string]string
@@ -25,6 +26,12 @@ type ExperimentStatus struct {
 func (this *ExperimentSpec) SetDefaults() {
 	if this.BaseDir == "" {
 		this.BaseDir = "/phenix/experiments/" + this.ExperimentName
+	}
+
+	if !filepath.IsAbs(this.BaseDir) {
+		if absPath, err := filepath.Abs(this.BaseDir); err == nil {
+			this.BaseDir = absPath
+		}
 	}
 
 	this.Topology.SetDefaults()

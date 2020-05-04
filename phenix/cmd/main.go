@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"phenix/api/config"
 	"phenix/api/experiment"
+	"phenix/api/vm"
 	"phenix/docs"
 	"phenix/store"
 	"phenix/util"
@@ -150,6 +152,19 @@ func main() {
 			}
 		default:
 			panic("unknown experiment command")
+		}
+	case "vm":
+		switch flag.Arg(1) {
+		case "info":
+			// Should look like `expName/vmName`
+			parts := strings.Split(flag.Arg(2), "/")
+
+			vm, err := vm.Get(parts[0], parts[1])
+			if err != nil {
+				panic(err)
+			}
+
+			fmt.Println(vm)
 		}
 	case "docs":
 		port := ":8000"

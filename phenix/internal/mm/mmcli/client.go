@@ -1,6 +1,6 @@
 // Taken (almost) as-is from minimega/miniweb.
 
-package minimega
+package mmcli
 
 import (
 	"errors"

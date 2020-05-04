@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"phenix/app"
-	"phenix/minimega"
+	"phenix/internal/mm"
 	"phenix/store"
 	"phenix/tmpl"
 	"phenix/types"
@@ -14,6 +14,30 @@ import (
 	"github.com/activeshadow/structs"
 	"github.com/mitchellh/mapstructure"
 )
+
+func Get(name string) (*types.Experiment, error) {
+	c, _ := types.NewConfig("experiment/" + name)
+
+	if err := store.Get(c); err != nil {
+		return nil, fmt.Errorf("getting experiment %s from store: %w", name, err)
+	}
+
+	spec := new(v1.ExperimentSpec)
+
+	if err := mapstructure.Decode(c.Spec, spec); err != nil {
+		return nil, fmt.Errorf("decoding experiment spec: %w", err)
+	}
+
+	status := new(v1.ExperimentStatus)
+
+	if err := mapstructure.Decode(c.Status, status); err != nil {
+		return nil, fmt.Errorf("decoding experiment status: %w", err)
+	}
+
+	exp := &types.Experiment{Spec: spec, Status: status}
+
+	return exp, nil
+}
 
 func Create(c *types.Config) error {
 	topoName, ok := c.Metadata.Annotations["topology"]
@@ -107,9 +131,7 @@ func Start(name string) error {
 		return fmt.Errorf("generating minimega script: %w", err)
 	}
 
-	cmd := &minimega.Command{Command: "read " + filename}
-
-	if err := minimega.ErrorResponse(minimega.Run(cmd)); err != nil {
+	if err := mm.ReadScriptFromFile(filename); err != nil {
 		return fmt.Errorf("reading minimega script: %w", err)
 	}
 

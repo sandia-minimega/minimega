@@ -1,4 +1,4 @@
-package minimega
+package mmcli
 
 import "flag"
 
