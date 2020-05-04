@@ -1891,9 +1891,25 @@ var EditDataDialog = function(ui, cell)
                     var updatedNode = editor.getEditor('root').value; // get current node's JSON (from JSONEditor)
                     value.setAttribute('schemaVars', JSON.stringify(updatedNode));
                     if (cell.isVertex()) {value.setAttribute('label', updatedNode.general.hostname);}
-                    else {value.setAttribute('label', updatedNode.name);}
+                    else {
+                        value.setAttribute('label', updatedNode.name);
+                        var name = updatedNode.name;
+                        var id = updatedNode.id;
+                        var filter = function(cell) {return graph.model.isEdge(cell);}
+                        var edges = graph.model.filterDescendants(filter);
+                        edges.forEach(cell => {
+                            // if an edge's id changes, apply change to all vlans with same name (e.g., connected to switch)
+                            var v = graph.getModel().getValue(cell);
+                            var schemaVars = JSON.parse(v.getAttribute('schemaVars'));
+                            if (name == schemaVars.name) {
+                                schemaVars.id = id;
+                                v.setAttribute('schemaVars', JSON.stringify(schemaVars));
+                                graph.getModel().setValue(cell, v);
+                            }
+                        });
+                    }
                     graph.getModel().setValue(cell, value);
-                    var filter = function(cell) {return graph.model.isVertex(cell);}
+                    filter = function(cell) {return graph.model.isVertex(cell);}
                     var vertices = graph.model.filterDescendants(filter);
                     vertices.forEach(cell => {
                         lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
@@ -3170,8 +3186,8 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
             parameters.forEach(function(p) {
                 var name = p.name;
                 var path = getPath(p.path);
-                var options = p.options;
-                var configString = ``; // append config command options
+                var args = p.args;
+                var argString = ``; // append config command arguments
                 // if it has a configuration for the parameter set it
                 try {
                     var obj = schemaVars;
@@ -3180,12 +3196,12 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                     }
                     if (Array.isArray(obj) && obj.length > 0) {
                         for (var i = 0; i < obj.length; i++) {
-                            for (var j = 0; j < options.length; j++) {
-                                var optionVal = obj[i][options[j]];
-                                if (typeof optionVal !== 'undefined' && optionVal != '') {
-                                    configString += `${optionVal}`;
-                                    if (j < options.length - 1) {
-                                        configString += `,`;
+                            for (var j = 0; j < args.length; j++) {
+                                var argval = obj[i][args[j]].toString(); // to catch false/boolean values
+                                if (typeof argval !== 'undefined' && argval != '') {
+                                    argString += `${argval}`;
+                                    if (j < args.length - 1) {
+                                        argString += `,`;
                                     }
                                 }
                                 else{
@@ -3193,26 +3209,26 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                                 }
                             }
                             if (i < obj.length - 1 && obj.length != 1) {
-                                configString += ` `;
+                                argString += ` `;
                             }
                         }
                     }
                     else if (typeof obj !== 'undefined') {
-                        for (var i = 0; i < options.length; i++) {
-                            var optionVal = obj[options[i]];
-                            if (typeof optionVal !== 'undefined' && optionVal != '') {
-                                configString += `${optionVal}`;
-                                if (i < options.length - 1) {
-                                    configString += `,`;
+                        for (var i = 0; i < args.length; i++) {
+                            var argval = obj[args[i]].toString(); // to catch false/boolean values
+                            if (typeof argval !== 'undefined' && argval != '') {
+                                argString += `${argval}`;
+                                if (i < args.length - 1) {
+                                    argString += `,`;
                                 }
                             }
                         }
                     }
                 }
                 catch (e) { // parameter search ran into an undefined property
-                    console.log(e);
+                    // console.log(e);
                 }
-                var value = configString;
+                var value = argString;
                 if (prev_dev[name] != value && value != '' && name != "net"){
                     prev_dev[name] = value;
                     config += `vm config ${name} ${value} \n`;

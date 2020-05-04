@@ -78,6 +78,9 @@
       "title": "Hardware",
       "required": [
         "os_type",
+        "cpu",
+        "vcpus",
+        "memory",
         "drives"
       ],
       "properties": {
@@ -126,6 +129,38 @@
             "rhel",
             "centos"
           ],
+          "pattern": "^(.*)$"
+        },
+        "cdrom": {
+          "$id": "#/nodes/properties/hardware/properties/cdrom",
+          "type": "string",
+          "title": "cdrom",
+          "default": "$IMAGEDIR/",
+          "examples": [],
+          "pattern": "^(.*)$"
+        },
+        "kernel": {
+          "$id": "#/nodes/properties/hardware/properties/kernel",
+          "type": "string",
+          "title": "kernel",
+          "default": "$IMAGEDIR/",
+          "examples": [],
+          "pattern": "^(.*)$"
+        },
+        "initrd": {
+          "$id": "#/nodes/properties/hardware/properties/initrd",
+          "type": "string",
+          "title": "initrd",
+          "default": "$IMAGEDIR/",
+          "examples": [],
+          "pattern": "^(.*)$"
+        },
+        "filesystem": {
+          "$id": "#/nodes/properties/hardware/properties/filesystem",
+          "type": "string",
+          "title": "filesystem",
+          "default": "$IMAGEDIR/",
+          "examples": [],
           "pattern": "^(.*)$"
         },
         "drives": {
