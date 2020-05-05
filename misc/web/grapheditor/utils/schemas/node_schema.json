@@ -27,9 +27,7 @@
       "$id": "#/nodes/properties/general",
       "type": "object",
       "title": "General",
-      "required": [
-        "hostname"
-      ],
+      "required": ["snapshot"],
       "properties": {
         "hostname": {
           "$id": "#/nodes/properties/general/properties/hostname",

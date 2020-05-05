@@ -26,49 +26,6 @@ Actions.prototype.init = function()
 
     this.addAction('viewJSON', function(evt){
 
-        // // var tmp = document.createElement('div');
-        // // tmp.id = 'topographer';
-
-        // window.ui = ui;
-        // window.graph = graph;
-        // window.editor = editor;
-
-        // var frame = document.createElement('iframe');
-        // frame.setAttribute('width', '100%');
-        // frame.setAttribute('height', '100%');
-        // frame.setAttribute('src', window.UTILS_PATH + "/topographer/index.html");
-        // frame.style.backgroundColor = 'white';
-
-        // // var ajax = new XMLHttpRequest();
-        // // ajax.open("GET", window.UTILS_PATH + "/topographer/index.html", false);
-        // // ajax.send();
-        // // console.log(ajax);
-        // // tmp.innerHTML += ajax.responseText;
-
-        // var wnd = new mxWindow('Topographer JSON Editor', frame, 300, 80, 1200, 900, true, true);
-        // wnd.setMaximizable(true);
-        // wnd.setResizable(true);
-        // wnd.setVisible(true);
-        // wnd.setClosable(true);
-        
-        // ui.topographerOpen = true;
-        // ui.updateActionStates();
-
-        // wnd.addListener(mxEvent.ACTIVATE, function(e){
-        //     console.log(e);
-        //     // var tmp = document.getElementById('topographer');
-        //     // console.log(tmp);
-        //     // var ajax = new XMLHttpRequest();
-        //     // ajax.open("GET", "../resources/help.html", false);
-        //     // ajax.send();
-        //     // tmp.innerHTML += 'hello';
-        // });
-
-        // wnd.addListener(mxEvent.CLOSE, function(e){
-        //     ui.topographerOpen = false;
-        //     ui.updateActionStates();
-        // });
-
         var dlg = new viewJSONDialog(ui);
         // ui.showDialog(dlg.container, 620, 450, true, false);
         dlg.init();
@@ -128,24 +85,6 @@ Actions.prototype.init = function()
     this.addAction('preview', function() { mxUtils.show(graph, null, 10, 10); });
     this.addAction('generateConfig', function() 
     {
-        // var obj =  {
-        //   "nodes": [
-        //     {
-        //       "type": "VirtualMachine",
-        //       "general": {
-        //         "hostname": "test1"
-        //       },
-        //       "hardware": {
-        //         "os_type": "linux",
-        //         "drives": []
-        //       }
-        //     }
-        //   ]
-        // };
-        // var encoder = new mxCodec();
-        // var node = encoder.encode(obj);
-        // mxUtils.popup(mxUtils.getXml(node));
-        // console.log(node);
         var filter = function(cell) {return graph.model.isVertex(cell);}
         var vertices = graph.model.filterDescendants(filter);
         filter = function(cell) {return graph.model.isEdge(cell);}

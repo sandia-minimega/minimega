@@ -1540,17 +1540,16 @@ function checkValue(graph, cell) {
         // update hostname if it's a duplicate and a vertex (for copied cells)
         if (cell.isVertex()) {
             schemaVars = JSON.parse(value.getAttribute('schemaVars'));
-            var hostname = schemaVars.general.hostname;
+            var hostname = cell.getAttribute('label');
             var cellId = parseInt(cell.getId());
             var filter = function(cell) {return graph.model.isVertex(cell);}
             var vertices = graph.model.filterDescendants(filter);
-            var hostExists = false;
             for (var i = 0; i < vertices.length; i++) {
-                var checkHost = vertices[i].getAttribute('label');
+                var checkLabel = vertices[i].getAttribute('label');
                 var checkHostId = parseInt(vertices[i].getId());
-                if (hostname == checkHost && checkHostId != cellId && cellId > checkHostId) {
-                    schemaVars.general.hostname = `${schemaVars.device}_device_${host_count}`;
-                    cell.setAttribute('label', schemaVars.general.hostname);
+                if (checkLabel == hostname && checkHostId != cellId && cellId > checkHostId) {
+                    delete schemaVars.general.hostname;
+                    cell.setAttribute('label', `${schemaVars.device}_device_${host_count}`);
                     host_count++;
                 }
             }
@@ -1563,10 +1562,8 @@ function checkValue(graph, cell) {
             catch {
 
             }
-
         }
         else {
-
             return;
         }
     }
@@ -1594,8 +1591,8 @@ function checkValue(graph, cell) {
             if (cell.getStyle().includes("mobile")){schemaVars.device = "mobile";}
 
             schemaVars.general = {};
-            schemaVars.general.hostname = `${schemaVars.device}_device_${host_count}`; // (cell.getId());
-            value.setAttribute('label', schemaVars.general.hostname);
+            // schemaVars.general.hostname = `${schemaVars.device}_device_${host_count}`; // (cell.getId());
+            value.setAttribute('label', `${schemaVars.device}_device_${host_count}`);
             host_count++;
 
             schemaVars.hardware = {};
@@ -1814,6 +1811,7 @@ var EditDataDialog = function(ui, cell)
     var id = (EditDataDialog.getDisplayIdForCell != null) ?
         EditDataDialog.getDisplayIdForCell(ui, cell) : null;
 
+    console.log(cell);
     checkValue(graph, cell); // sets cell default user object values
 
     var value = graph.getModel().getValue(cell);
@@ -1851,11 +1849,17 @@ var EditDataDialog = function(ui, cell)
         const editor = new JSONEditor(editorContainer, this.config);
 
         // disable vlan attribute if cell is a node and not a switch;
+        // disable/enable various properties depending on type
         // edge values dictate node vlan attribute values unless it's a switch
         try {
-            if (cell.isVertex() && editor.getEditor('root.device').getValue() !== 'switch') {
-                for (var i = 0; i < editor.getEditor('root.network.interfaces').getValue().length; i++) {
-                    editor.getEditor('root.network.interfaces.'+i+'.vlan').disable();
+            if (cell.isVertex()) {
+                if (editor.getEditor('root.device').getValue() !== 'switch') {
+                    for (var i = 0; i < editor.getEditor('root.network.interfaces').getValue().length; i++) {
+                        editor.getEditor('root.network.interfaces.'+i+'.vlan').disable();
+                    }
+                }
+                if (editor.getEditor('root.type').getValue() === 'container') {
+
                 }
             }
             else if (cell.isEdge()) {
@@ -1890,7 +1894,7 @@ var EditDataDialog = function(ui, cell)
                     ui.hideDialog.apply(ui, arguments);
                     var updatedNode = editor.getEditor('root').value; // get current node's JSON (from JSONEditor)
                     value.setAttribute('schemaVars', JSON.stringify(updatedNode));
-                    if (cell.isVertex()) {value.setAttribute('label', updatedNode.general.hostname);}
+                    if (cell.isVertex() && updatedNode.general.hostname != '' && typeof updatedNode.general.hostname !== 'undefined') {value.setAttribute('label', updatedNode.general.hostname);}
                     else {
                         value.setAttribute('label', updatedNode.name);
                         var name = updatedNode.name;
@@ -2001,20 +2005,6 @@ var viewJSONDialog = function(ui)
     const schema = {}; // set schema
     let json = {nodes: nodeArray, vlans: edgeArray}; // global model JSON
 
-    if (window.experiment_vars != undefined)
-    {
-        var jsonString = JSON.stringify(json);
-        for (var i = 0; i < window.experiment_vars.length; i++)
-        {
-            var name = window.experiment_vars[i].name;
-            var value = window.experiment_vars[i].value;
-
-            var name = new RegExp('\\$'+name, 'g');
-            jsonString = jsonString.replace(name, value);
-        }
-        json = JSON.parse(jsonString);
-    }
-
     // Set JSONEditor and config options based on schema and cell type
     var loadConfig = function () {
 
@@ -2105,18 +2095,52 @@ var viewJSONDialog = function(ui)
         applyBtn.className = 'geBtn gePrimaryBtn';
         applyBtn.innerHTML = 'Copy';
         applyBtn.setAttribute('id', 'copyJSON');
+
+        var dlBtn = mxUtils.button(mxResources.get('apply'), function()
+        {
+            try
+            {
+                console.log('download');
+                downloadObjectAsJson(json, 'topo');
+
+            }
+            catch (e)
+            {
+                mxUtils.alert(e);
+            }
+
+            // editor.destroy();
+
+        });
+
+        // https://stackoverflow.com/questions/19721439/download-json-object-as-a-file-from-browser
+        function downloadObjectAsJson(exportObj, exportName){
+            var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(exportObj));
+            var downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href",     dataStr);
+            downloadAnchorNode.setAttribute("download", exportName + ".json");
+            document.body.appendChild(downloadAnchorNode); // required for firefox
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        dlBtn.className = 'geBtn gePrimaryBtn';
+        dlBtn.innerHTML = 'Download';
+        dlBtn.setAttribute('id', 'dowloadJSON');
         
         var buttons = document.createElement('div');
-        buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:15px;height:40px;border-top:1px solid #ccc;padding-top:20px;'
+        buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:15px;height:40px;border-top:1px solid #ccc;padding-top:20px;margin-bottom:15px;'
         
         if (ui.editor.cancelFirst)
         {
             buttons.appendChild(cancelBtn);
             buttons.appendChild(applyBtn);
+            buttons.appendChild(dlBtn);
         }
         else
         {
             buttons.appendChild(applyBtn);
+            buttons.appendChild(dlBtn);
             buttons.appendChild(cancelBtn);
         }
 
@@ -3110,6 +3134,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 
         // utility function to get minimega params from JSON for config
         // currently not used, but might be worth revisiting down the road
+        // https://stackoverflow.com/questions/15523514/find-by-key-deep-in-a-nested-array
         // function getParams(object, key, result){
         //     if(object.hasOwnProperty(key))
         //         result.push(object[key]);
@@ -3140,7 +3165,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
             var name = "";
             
             try {
-                if (schemaVars.general.hostname != "") {
+                if (schemaVars.general.hostname != "" && typeof schemaVars.general.hostname != 'undefined') {
                     config += `## Config for ${schemaVars.general.hostname}\n`;
                     name = schemaVars.general.hostname;
                 } 
@@ -3260,7 +3285,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         textarea.value += "## Starting all VM's\nvm start all\n";
 
         // expand variables
-        console.log(window.experiment_vars);
+        // console.log(window.experiment_vars);
         if (window.experiment_vars != undefined)
         {
             for (var i = 0; i < window.experiment_vars.length; i++)
@@ -3511,8 +3536,16 @@ MiniResponseDialog.showNewWindowOption = true;
 
 
 /**
- * Constructs a new metadata dialog.
+ * Constructs a new experiment variables dialog.
  */
+
+// set default experiment variable values
+window.experiment_vars = [
+    {name: "IMAGEDIR", value:"/images"},
+    {name: "DEFAULT_MEMORY", value:"2048"},
+    {name: "DEFAULT_VCPU", value:"1"},
+];
+
 var VariablesDialog = function(ui)
 {
 
@@ -3520,11 +3553,7 @@ var VariablesDialog = function(ui)
     const schema = ui.schemas['vars']; // set schema
     // console.log('this is schema'), console.log(schema);
 
-    var startval = [
-        {name: "IMAGEDIR", value:"/images"},
-        {name: "DEFAULT_MEMORY", value:"2048"},
-        {name: "DEFAULT_VCPU", value:"1"},
-    ];
+    var startval = window.experiment_vars;
 
     // Set JSONEditor and config options based on schema and cell type
     var loadConfig = function () {

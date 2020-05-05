@@ -533,7 +533,7 @@ div.mxWindow .geButton {
         width:21px;
         height:21px;
 }
-/* custom icon for view json */
+/* custom icons */
 .geSprite-viewjson {
     background:url(../images/json_icon.png) no-repeat !important;
     width:21px;
@@ -541,6 +541,21 @@ div.mxWindow .geButton {
     background-size: 20px 20px !important;
     margin-top: 1px;
 }
+.geSprite-editvariables {
+    background:url(../images/variables.png) no-repeat !important;
+    width:21px;
+    height:21px;
+    background-size: 20px 20px !important;
+    margin-top: 1px;
+}
+.geSprite-generateconfig {
+    background:url(../images/genConfig.png) no-repeat !important;
+    width:21px;
+    height:21px;
+    background-size: 20px 20px !important;
+    margin-top: 1px;
+}
+/***************/
 .geBaseButton {
         padding:10px;
         border-radius:6px;

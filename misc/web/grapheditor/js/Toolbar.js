@@ -172,9 +172,17 @@ Toolbar.prototype.init = function()
     var insertMenu = this.addMenu('', mxResources.get('insert') + ' (' + mxResources.get('doubleClickTooltip') + ')', true, 'insert', null, true);
     this.addDropDownArrow(insertMenu, 'geSprite-plus', 38, 48, -4, -3, 36, -8);
 
-    // add action to open Topographer view of model json
+    // add action to generate config
+    var elts = this.addItems(['-', 'generateConfig']);
+    elts[0].setAttribute('title', mxResources.get('generateConfig'));
+
+    // add action to view json for copy/download
     var elts = this.addItems(['-', 'viewJSON']);
     elts[0].setAttribute('title', mxResources.get('viewJSON'));
+
+    // add action to edit experiment variables
+    var elts = this.addItems(['-', 'editVariables']);
+    elts[0].setAttribute('title', mxResources.get('editVariables'));
 };
 
 /**
