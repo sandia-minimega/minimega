@@ -105,7 +105,7 @@ EditorUi = function(editor, container, lightbox)
     {
         var cells = evt.getProperty('cells');
         for(var i = 0; i < cells.length; i++) {
-            checkValue(graph, cells[i]);
+            checkValue(graph, cells[i], self);
             // lookforvlan(graph, cells[i]);
         }
     });

@@ -1523,7 +1523,7 @@ let host_count = 0;
 // utility function to set cell defaults
 // Standardizes all cells to have standard value object
 // and instatiates schemaVars object
-function checkValue(graph, cell) {
+function checkValue(graph, cell, ui) {
 
     var value = graph.getModel().getValue(cell);
     if (!mxUtils.isNode(value))
@@ -1572,6 +1572,25 @@ function checkValue(graph, cell) {
         schemaVars = {};
 
         if (cell.isVertex()) {
+
+            //TODO: set default values from schema???
+            // const schema = ui.schemas['nodes'];
+
+            // let config = {
+            //     schema: schema,
+            //     startval: {},
+            //     ajax: true,
+            //     mode: 'text',
+            //     modes: ['code', 'text', 'tree'],
+            //     theme: 'bootstrap3',
+            //     iconlib: 'spectre',
+            // };
+
+            // var element = document.createElement("div");
+            // element.setAttribute('id', 'jsoneditor');
+
+            // const editor = new JSONEditor(element, config);
+            // schemaVars = editor.getEditor('root').value; 
 
             if (cell.getStyle().includes("container"))
             {
@@ -1811,7 +1830,6 @@ var EditDataDialog = function(ui, cell)
     var id = (EditDataDialog.getDisplayIdForCell != null) ?
         EditDataDialog.getDisplayIdForCell(ui, cell) : null;
 
-    console.log(cell);
     checkValue(graph, cell); // sets cell default user object values
 
     var value = graph.getModel().getValue(cell);
@@ -1870,7 +1888,7 @@ var EditDataDialog = function(ui, cell)
             }
         }
         catch {
-            console.log('vertex with no edges');
+            
         }
 
         div.appendChild(editorContainer);
@@ -1894,7 +1912,9 @@ var EditDataDialog = function(ui, cell)
                     ui.hideDialog.apply(ui, arguments);
                     var updatedNode = editor.getEditor('root').value; // get current node's JSON (from JSONEditor)
                     value.setAttribute('schemaVars', JSON.stringify(updatedNode));
-                    if (cell.isVertex() && updatedNode.general.hostname != '' && typeof updatedNode.general.hostname !== 'undefined') {value.setAttribute('label', updatedNode.general.hostname);}
+                    if (cell.isVertex() && updatedNode.general.hostname != '' && typeof updatedNode.general.hostname !== 'undefined') {
+                        value.setAttribute('label', updatedNode.general.hostname);
+                    }
                     else {
                         value.setAttribute('label', updatedNode.name);
                         var name = updatedNode.name;
@@ -1964,7 +1984,6 @@ var EditDataDialog = function(ui, cell)
 
     this.init = function()
     {
-        console.log('init');
         loadConfig();
     };
 
@@ -2154,7 +2173,6 @@ var viewJSONDialog = function(ui)
 
     this.init = function()
     {
-        console.log('init');
         loadConfig();
     };
 
@@ -3631,7 +3649,7 @@ var VariablesDialog = function(ui)
         });
         
         var buttons = document.createElement('div');
-        buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:15px;height:40px;border-top:1px solid #ccc;padding-top:20px;'
+        buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:15px;height:40px;border-top:1px solid #ccc;padding-top:20px;margin-bottom:15px;'
         
         if (ui.editor.cancelFirst)
         {
@@ -3654,7 +3672,6 @@ var VariablesDialog = function(ui)
 
     this.init = function()
     {
-        console.log('init');
         loadConfig();
     };
 
