@@ -2021,10 +2021,11 @@ var viewJSONDialog = function(ui)
         }
     });
 
-    var combinedSchema = {"nodes": ui.schemas['nodes'], "vlans": ui.schemas['edges']}; 
-    console.log(combinedSchema);
+    // hack combining node and edge schema programmatically
+    const combinedSchema = JSON.parse('{"type": "object", "title": "Topo", "properties": { "nodes" : ' + JSON.stringify(ui.schemas['nodes']) + ', "vlans": ' + JSON.stringify(ui.schemas['edges']) + '}}'); 
+    // console.log(combinedSchema);
 
-    const schema = {}; // set schema
+    // const schema = {}; // set schema
     let json = {nodes: nodeArray, vlans: edgeArray}; // global model JSON
 
     // Set JSONEditor and config options based on schema and cell type
