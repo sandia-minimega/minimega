@@ -13,7 +13,7 @@ ns add-host localhost
     {{ $firstDrive := index .Hardware.Drives 0 }}
 disk snapshot {{ $firstDrive.Image }} {{ $.SnapshotName .General.Hostname }} 
         {{- if gt (len .Injections) 0 }}
-disk inject {{ $.SnapshotName .General.Hostname  }}:{{ $firstDrive.InjectPartition }} files {{ .FileInjects }}
+disk inject {{ $.SnapshotName .General.Hostname  }}:{{ $firstDrive.GetInjectPartition }} files {{ .FileInjects }}
         {{- end }}
     {{- end }}
 clear vm config

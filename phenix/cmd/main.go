@@ -14,9 +14,10 @@ import (
 	"phenix/docs"
 	"phenix/store"
 	"phenix/util"
-	"phenix/util/envflag"
+	"phenix/version"
 
 	assetfs "github.com/elazarl/go-bindata-assetfs"
+	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v3"
 )
 
@@ -31,185 +32,259 @@ func init() {
 }
 
 func main() {
-	envflag.Parse("PHENIX")
-	flag.Parse()
+	app := &cli.App{
+		Name:    "phenix",
+		Version: version.Version,
+		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:    "store.endpoint",
+				Usage:   "endpoint for store service",
+				Value:   "bolt://phenix.bdb",
+				EnvVars: []string{"PHENIX_STORE_ENDPOINT"},
+			},
+			&cli.IntFlag{
+				Name:    "log.verbosity",
+				Usage:   "log verbosity (0 - 10)",
+				EnvVars: []string{"PHENIX_LOG_VERBOSITY"},
+			},
+		},
+		Before: func(ctx *cli.Context) error {
+			if err := store.Init(store.Endpoint(ctx.String("store.endpoint"))); err != nil {
+				return cli.Exit(err, 1)
+			}
 
-	if f_help {
-		usage()
-		return
+			return nil
+		},
+		Commands: []*cli.Command{
+			{
+				Name:     "list",
+				Aliases:  []string{"l"},
+				Category: "config",
+				Usage:    "list known phenix configs",
+				Action: func(ctx *cli.Context) error {
+					configs, err := config.ListConfigs(ctx.Args().First())
+
+					if err != nil {
+						return cli.Exit(err, 1)
+					}
+
+					fmt.Println()
+
+					if len(configs) == 0 {
+						fmt.Println("no configs currently exist")
+					} else {
+						util.PrintTableOfConfigs(os.Stdout, configs)
+					}
+
+					fmt.Println()
+
+					return nil
+				},
+			},
+			{
+				Name:     "get",
+				Aliases:  []string{"g"},
+				Category: "config",
+				Usage:    "get phenix config",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "output",
+						Aliases: []string{"o"},
+						Usage:   "output format (yaml, json)",
+						Value:   "yaml",
+					},
+				},
+				Action: func(ctx *cli.Context) error {
+					c, err := config.GetConfig(ctx.Args().First())
+					if err != nil {
+						return cli.Exit(err, 1)
+					}
+
+					switch ctx.String("output") {
+					case "yaml":
+						m, err := yaml.Marshal(c)
+						if err != nil {
+							return cli.Exit(fmt.Errorf("marshaling config to YAML: %w", err), 1)
+						}
+
+						fmt.Println(string(m))
+					case "json":
+						m, err := json.Marshal(c)
+						if err != nil {
+							return cli.Exit(fmt.Errorf("marshaling config to JSON: %w", err), 1)
+						}
+
+						fmt.Println(string(m))
+					default:
+						return cli.Exit(fmt.Sprintf("unrecognized output format '%s'\n", ctx.String("output")), 1)
+					}
+
+					return nil
+				},
+			},
+			{
+				Name:     "create",
+				Aliases:  []string{"c"},
+				Category: "config",
+				Usage:    "create phenix config(s)",
+				Action: func(ctx *cli.Context) error {
+					if ctx.Args().Len() == 0 {
+						return cli.Exit("no config files provided", 1)
+					}
+
+					for _, f := range ctx.Args().Slice() {
+						c, err := config.CreateConfig(f)
+						if err != nil {
+							return cli.Exit(err, 1)
+						}
+
+						fmt.Printf("%s/%s config created\n", c.Kind, c.Metadata.Name)
+					}
+
+					return nil
+				},
+			},
+			{
+				Name:     "edit",
+				Aliases:  []string{"e"},
+				Category: "config",
+				Usage:    "edit phenix config",
+				Action: func(ctx *cli.Context) error {
+					c, err := config.EditConfig(ctx.Args().First())
+					if err != nil {
+						if config.IsConfigNotModified(err) {
+							return cli.Exit("no changes made to config", 0)
+						}
+
+						return cli.Exit(err, 1)
+					}
+
+					fmt.Printf("%s/%s config updated\n", c.Kind, c.Metadata.Name)
+
+					return nil
+				},
+			},
+			{
+				Name:     "delete",
+				Aliases:  []string{"d"},
+				Category: "config",
+				Usage:    "delete phenix config(s)",
+				Action: func(ctx *cli.Context) error {
+					if ctx.Args().Len() == 0 {
+						return cli.Exit("no config(s) provided", 1)
+					}
+
+					for _, c := range ctx.Args().Slice() {
+						if err := config.DeleteConfig(c); err != nil {
+							return cli.Exit(err, 1)
+						}
+
+						fmt.Printf("%s deleted\n", c)
+					}
+
+					return nil
+				},
+			},
+			{
+				Name:     "experiment",
+				Aliases:  []string{"exp"},
+				Category: "experiments",
+				Usage:    "phenix experiment management",
+				Subcommands: []*cli.Command{
+					{
+						Name:  "start",
+						Usage: "start an experiment",
+						Action: func(ctx *cli.Context) error {
+							if err := experiment.Start(ctx.Args().First()); err != nil {
+								return cli.Exit(err, 1)
+							}
+
+							return nil
+						},
+					},
+					{
+						Name:  "stop",
+						Usage: "stop an experiment",
+						Action: func(ctx *cli.Context) error {
+							if err := experiment.Stop(ctx.Args().First()); err != nil {
+								return cli.Exit(err, 1)
+							}
+
+							return nil
+						},
+					},
+				},
+			},
+			{
+				Name:     "vm",
+				Category: "virtual machines",
+				Usage:    "phenix VM management",
+				Subcommands: []*cli.Command{
+					{
+						Name:  "info",
+						Usage: "show VM info",
+						Action: func(ctx *cli.Context) error {
+							// Should look like `exp` or `exp/vm`
+							parts := strings.Split(ctx.Args().First(), "/")
+
+							switch len(parts) {
+							case 1:
+								vms, err := vm.List(parts[0])
+								if err != nil {
+									return cli.Exit(err, 1)
+								}
+
+								util.PrintTableOfVMs(os.Stdout, vms...)
+							case 2:
+								vm, err := vm.Get(parts[0], parts[1])
+								if err != nil {
+									return cli.Exit(err, 1)
+								}
+
+								util.PrintTableOfVMs(os.Stdout, *vm)
+							default:
+								return cli.Exit("invalid argument", 1)
+							}
+
+							return nil
+						},
+					},
+				},
+			},
+			{
+				Name:     "docs",
+				Category: "documentation",
+				Usage:    "serve documenation over HTTP",
+				Flags: []cli.Flag{
+					&cli.StringFlag{
+						Name:    "endpoint",
+						Aliases: []string{"e"},
+						Usage:   "endpoint to bind HTTP server to",
+						Value:   ":8080",
+					},
+				},
+				Action: func(ctx *cli.Context) error {
+					endpoint := ctx.String("endpoint")
+
+					fs := &assetfs.AssetFS{
+						Asset:     docs.Asset,
+						AssetDir:  docs.AssetDir,
+						AssetInfo: docs.AssetInfo,
+					}
+
+					http.Handle("/", http.FileServer(fs))
+
+					fmt.Printf("\nStarting documentation server at %s\n", endpoint)
+
+					http.ListenAndServe(endpoint, nil)
+
+					return nil
+				},
+			},
+		},
 	}
 
-	if flag.NArg() < 1 {
-		usage()
-		os.Exit(1)
+	if err := app.Run(os.Args); err != nil {
+		fmt.Println(err)
 	}
-
-	if err := store.Init(store.Path(f_storePath)); err != nil {
-		fmt.Println("error initializing config store:", err)
-		os.Exit(1)
-	}
-
-	switch flag.Arg(0) {
-	case "list":
-		configs, err := config.ListConfigs(flag.Arg(1))
-
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		fmt.Println()
-
-		if len(configs) == 0 {
-			fmt.Println("no configs currently exist")
-		} else {
-			util.PrintTableOfConfigs(os.Stdout, configs)
-		}
-
-		fmt.Println()
-	case "get":
-		var (
-			flags  = flag.NewFlagSet("get", flag.ExitOnError)
-			format = flags.String("o", "yaml", "output format (yaml or json)")
-		)
-
-		if err := flags.Parse(flag.Args()[1:]); err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		c, err := config.GetConfig(flags.Arg(0))
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		switch *format {
-		case "yaml":
-			m, err := yaml.Marshal(c)
-			if err != nil {
-				fmt.Println(fmt.Errorf("marshaling config to YAML: %w", err))
-				os.Exit(1)
-			}
-
-			fmt.Println(string(m))
-		case "json":
-			m, err := json.Marshal(c)
-			if err != nil {
-				fmt.Println(fmt.Errorf("marshaling config to JSON: %w", err))
-				os.Exit(1)
-			}
-
-			fmt.Println(string(m))
-		default:
-			fmt.Printf("unrecognized output format '%s'\n", *format)
-			os.Exit(1)
-		}
-	case "create":
-		if flag.NArg() == 1 {
-			fmt.Println("no config files provided")
-			os.Exit(1)
-		}
-
-		for _, f := range flag.Args()[1:] {
-			c, err := config.CreateConfig(f)
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
-			}
-
-			fmt.Printf("%s/%s config created\n", c.Kind, c.Metadata.Name)
-		}
-	case "edit":
-		c, err := config.EditConfig(flag.Arg(1))
-		if err != nil {
-			if config.IsConfigNotModified(err) {
-				fmt.Println("no changes made to config")
-				os.Exit(0)
-			}
-
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		fmt.Printf("%s/%s config updated\n", c.Kind, c.Metadata.Name)
-	case "delete":
-		if err := config.DeleteConfig(flag.Arg(1)); err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
-		fmt.Printf("%s deleted\n", flag.Arg(1))
-	case "experiment":
-		switch flag.Arg(1) {
-		case "start":
-			if err := experiment.Start(flag.Arg(2)); err != nil {
-				panic(err)
-			}
-		case "stop":
-			if err := experiment.Stop(flag.Arg(2)); err != nil {
-				panic(err)
-			}
-		default:
-			panic("unknown experiment command")
-		}
-	case "vm":
-		switch flag.Arg(1) {
-		case "info":
-			// Should look like `expName/vmName`
-			parts := strings.Split(flag.Arg(2), "/")
-
-			vm, err := vm.Get(parts[0], parts[1])
-			if err != nil {
-				panic(err)
-			}
-
-			fmt.Println(vm)
-		}
-	case "docs":
-		port := ":8000"
-
-		if flag.NArg() > 1 {
-			port = ":" + flag.Arg(1)
-		}
-
-		fs := &assetfs.AssetFS{
-			Asset:     docs.Asset,
-			AssetDir:  docs.AssetDir,
-			AssetInfo: docs.AssetInfo,
-		}
-
-		http.Handle("/", http.FileServer(fs))
-
-		fmt.Printf("\nStarting documentation server at %s\n", port)
-
-		http.ListenAndServe(port, nil)
-	default:
-		panic("unknown command")
-	}
-
-	os.Exit(0)
-}
-
-func usage() {
-	fmt.Fprintln(flag.CommandLine.Output(), "minimega phenix")
-
-	fmt.Fprintln(flag.CommandLine.Output(), "")
-
-	fmt.Fprintln(flag.CommandLine.Output(), "Global Options:")
-	flag.PrintDefaults()
-
-	fmt.Fprintln(flag.CommandLine.Output(), "")
-
-	fmt.Fprintln(flag.CommandLine.Output(), "Subcommands:")
-	fmt.Fprintln(flag.CommandLine.Output(), "  list [all,topology,scenario,experiment] - get a list of configs")
-	fmt.Fprintln(flag.CommandLine.Output(), "  get <kind/name>                         - get an existing config")
-	fmt.Fprintln(flag.CommandLine.Output(), "  create <path/to/config>                 - create a new config")
-	fmt.Fprintln(flag.CommandLine.Output(), "  edit <kind/name>                        - edit an existing config")
-	fmt.Fprintln(flag.CommandLine.Output(), "  delete <kind/name>                      - delete a config")
-	fmt.Fprintln(flag.CommandLine.Output(), "  experiment <start,stop> <name>          - start an existing experiment")
-	fmt.Fprintln(flag.CommandLine.Output(), "  docs <port>                             - start documentation server on port (default 8000)")
-	// fmt.Fprintln(flag.CommandLine.Output(), "  help <cmd> - print help message for subcommand")
-
-	fmt.Fprintln(flag.CommandLine.Output(), "")
 }

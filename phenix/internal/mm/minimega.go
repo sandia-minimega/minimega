@@ -29,7 +29,24 @@ func (Minimega) ClearNamespace(ns string) error {
 	cmd.Command = "clear namespace " + ns
 
 	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
-		return fmt.Errorf("clearing mmcli namespace: %w", err)
+		return fmt.Errorf("clearing minimega namespace: %w", err)
+	}
+
+	return nil
+}
+
+func (Minimega) LaunchVMs(ns string) error {
+	cmd := mmcli.NewCommand()
+	cmd.Command = "vm launch"
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("launching VMs: %w", err)
+	}
+
+	cmd.Command = "vm start all"
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("starting VMs: %w", err)
 	}
 
 	return nil

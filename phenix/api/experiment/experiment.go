@@ -135,6 +135,10 @@ func Start(name string) error {
 		return fmt.Errorf("reading minimega script: %w", err)
 	}
 
+	if err := mm.LaunchVMs(exp.ExperimentName); err != nil {
+		return fmt.Errorf("launching experiment VMs: %w", err)
+	}
+
 	c.Status = map[string]interface{}{"startTime": time.Now().Format(time.RFC3339)}
 
 	if err := app.ApplyApps(app.ACTIONPOSTSTART, exp); err != nil {
@@ -165,6 +169,10 @@ func Stop(name string) error {
 
 	if err := app.ApplyApps(app.ACTIONCLEANUP, exp); err != nil {
 		return fmt.Errorf("applying apps to experiment: %w", err)
+	}
+
+	if err := mm.ClearNamespace(exp.ExperimentName); err != nil {
+		return fmt.Errorf("killing experiment VMs: %w", err)
 	}
 
 	c.Spec = structs.MapDefaultCase(exp, structs.CASESNAKE)

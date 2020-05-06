@@ -21,9 +21,3 @@ func Endpoint(e string) Option {
 		o.Endpoint = e
 	}
 }
-
-func Path(p string) Option {
-	return func(o *Options) {
-		o.Endpoint = p
-	}
-}

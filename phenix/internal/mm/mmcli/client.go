@@ -95,6 +95,5 @@ func Run(c *Command) chan *miniclient.Response {
 		}
 	}
 
-	fmt.Printf("running: %v\n", c)
 	return mm.Run(c.String())
 }

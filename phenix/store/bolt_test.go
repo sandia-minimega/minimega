@@ -52,7 +52,7 @@ func TestConfigCreate(t *testing.T) {
 
 	b := NewBoltDB()
 
-	if err := b.Init(Path(f.Name())); err != nil {
+	if err := b.Init(Endpoint("bolt://" + f.Name())); err != nil {
 		t.Log(err)
 		t.FailNow()
 	}
@@ -81,7 +81,7 @@ func TestConfigCreateAndGet(t *testing.T) {
 
 	b := NewBoltDB()
 
-	if err := b.Init(Path(f.Name())); err != nil {
+	if err := b.Init(Endpoint("bolt://" + f.Name())); err != nil {
 		t.Log(err)
 		t.FailNow()
 	}

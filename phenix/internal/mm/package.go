@@ -10,6 +10,10 @@ func ClearNamespace(ns string) error {
 	return DefaultMM.ClearNamespace(ns)
 }
 
+func LaunchVMs(ns string) error {
+	return DefaultMM.LaunchVMs(ns)
+}
+
 func GetVMInfo(opts ...Option) types.VMs {
 	return DefaultMM.GetVMInfo(opts...)
 }

@@ -83,55 +83,57 @@ func ApplyApps(action Action, spec *v1.ExperimentSpec) error {
 		}
 	}
 
-	for _, e := range spec.Scenario.Apps.Experiment {
-		a := GetApp(e.Name)
+	if spec.Scenario != nil && spec.Scenario.Apps != nil {
+		for _, e := range spec.Scenario.Apps.Experiment {
+			a := GetApp(e.Name)
 
-		switch action {
-		case ACTIONCONFIG:
-			fmt.Printf("configuring experiment with '%s' user app\n", a.Name())
+			switch action {
+			case ACTIONCONFIG:
+				fmt.Printf("configuring experiment with '%s' user app\n", a.Name())
 
-			err = a.Configure(spec)
-		case ACTIONSTART:
-			fmt.Printf("starting experiment with '%s' user app\n", a.Name())
+				err = a.Configure(spec)
+			case ACTIONSTART:
+				fmt.Printf("starting experiment with '%s' user app\n", a.Name())
 
-			err = a.Start(spec)
-		case ACTIONPOSTSTART:
-		case ACTIONCLEANUP:
-		}
-
-		if err != nil {
-			if errors.Is(err, ErrUserAppNotFound) {
-				fmt.Printf("experiment app %s not found\n", a.Name())
-				continue
+				err = a.Start(spec)
+			case ACTIONPOSTSTART:
+			case ACTIONCLEANUP:
 			}
 
-			return fmt.Errorf("applying experiment app %s for action %s: %w", a.Name(), action, err)
-		}
-	}
+			if err != nil {
+				if errors.Is(err, ErrUserAppNotFound) {
+					fmt.Printf("experiment app %s not found\n", a.Name())
+					continue
+				}
 
-	for _, h := range spec.Scenario.Apps.Host {
-		a := GetApp(h.Name)
-
-		switch action {
-		case ACTIONCONFIG:
-			fmt.Printf("configuring experiment with '%s' user app\n", a.Name())
-
-			err = a.Configure(spec)
-		case ACTIONSTART:
-			fmt.Printf("starting experiment with '%s' user app\n", a.Name())
-
-			err = a.Start(spec)
-		case ACTIONPOSTSTART:
-		case ACTIONCLEANUP:
+				return fmt.Errorf("applying experiment app %s for action %s: %w", a.Name(), action, err)
+			}
 		}
 
-		if err != nil {
-			if errors.Is(err, ErrUserAppNotFound) {
-				fmt.Printf("host app %s not found\n", a.Name())
-				continue
+		for _, h := range spec.Scenario.Apps.Host {
+			a := GetApp(h.Name)
+
+			switch action {
+			case ACTIONCONFIG:
+				fmt.Printf("configuring experiment with '%s' user app\n", a.Name())
+
+				err = a.Configure(spec)
+			case ACTIONSTART:
+				fmt.Printf("starting experiment with '%s' user app\n", a.Name())
+
+				err = a.Start(spec)
+			case ACTIONPOSTSTART:
+			case ACTIONCLEANUP:
 			}
 
-			return fmt.Errorf("applying host app %s for action %s: %w", a.Name(), action, err)
+			if err != nil {
+				if errors.Is(err, ErrUserAppNotFound) {
+					fmt.Printf("host app %s not found\n", a.Name())
+					continue
+				}
+
+				return fmt.Errorf("applying host app %s for action %s: %w", a.Name(), action, err)
+			}
 		}
 	}
 

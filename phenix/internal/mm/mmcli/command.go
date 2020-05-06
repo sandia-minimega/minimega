@@ -50,6 +50,5 @@ func (c *Command) String() string {
 	// don't record command in history
 	cmd = fmt.Sprintf(".record false %v", cmd)
 
-	fmt.Printf("built command: `%v`\n", cmd)
 	return cmd
 }

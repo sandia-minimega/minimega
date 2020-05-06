@@ -64,7 +64,7 @@ type Drive struct {
 	Image           string `json:"image" yaml:"image"`
 	Interface       string `json:"interface" yaml:"interface"`
 	CacheMode       string `json:"cache_mode" yaml:"cache_mode"`
-	InjectPartition int    `json:"inject_partition" yaml:"inject_partition"`
+	InjectPartition *int   `json:"inject_partition" yaml:"inject_partition"`
 }
 
 type Injection struct {
@@ -139,4 +139,12 @@ func (this Hardware) DiskConfig(snapshot string) string {
 	}
 
 	return strings.Join(configs, " ")
+}
+
+func (this Drive) GetInjectPartition() int {
+	if this.InjectPartition == nil {
+		return 1
+	}
+
+	return *this.InjectPartition
 }

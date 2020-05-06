@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"time"
 
 	"phenix/types"
@@ -21,11 +22,18 @@ func NewBoltDB() Store {
 func (this *BoltDB) Init(opts ...Option) error {
 	options := NewOptions(opts...)
 
-	var err error
-
-	this.db, err = bbolt.Open(options.Endpoint, 0600, &bbolt.Options{NoFreelistSync: true})
+	u, err := url.Parse(options.Endpoint)
 	if err != nil {
-		return fmt.Errorf("opening Bolt file: %w", err)
+		return fmt.Errorf("parsing BoltDB endpoint: %w", err)
+	}
+
+	if u.Scheme != "bolt" {
+		return fmt.Errorf("invalid scheme '%s' for BoltDB endpoint", u.Scheme)
+	}
+
+	this.db, err = bbolt.Open(u.Host+u.Path, 0600, &bbolt.Options{NoFreelistSync: true})
+	if err != nil {
+		return fmt.Errorf("opening BoltDB file: %w", err)
 	}
 
 	return nil

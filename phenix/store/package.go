@@ -1,12 +1,28 @@
 package store
 
 import (
+	"fmt"
+	"net/url"
 	"phenix/types"
 )
 
 var DefaultStore Store = NewBoltDB()
 
 func Init(opts ...Option) error {
+	options := NewOptions(opts...)
+
+	u, err := url.Parse(options.Endpoint)
+	if err != nil {
+		return fmt.Errorf("parsing store endpoint: %w", err)
+	}
+
+	switch u.Scheme {
+	case "bolt":
+		DefaultStore = NewBoltDB()
+	default:
+		return fmt.Errorf("unknown store scheme '%s'", u.Scheme)
+	}
+
 	return DefaultStore.Init(opts...)
 }
 

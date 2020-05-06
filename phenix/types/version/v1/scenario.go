@@ -1,7 +1,7 @@
 package v1
 
 type ScenarioSpec struct {
-	Apps Apps `json:"apps" yaml:"apps"`
+	Apps *Apps `json:"apps" yaml:"apps"`
 }
 
 type Apps struct {

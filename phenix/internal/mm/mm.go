@@ -8,6 +8,8 @@ type MM interface {
 	ReadScriptFromFile(string) error
 	ClearNamespace(string) error
 
+	LaunchVMs(string) error
+
 	GetVMInfo(...Option) types.VMs
 	StartVM(...Option) error
 	StopVM(...Option) error
