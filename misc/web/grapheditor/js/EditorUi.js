@@ -130,6 +130,8 @@ EditorUi = function(editor, container, lightbox)
         //     checkValue(graph, terminal);
         //     lookforvlan(graph, terminal);
         // }
+        // a little hacky, but need to recompute all vlan values to handle cases when
+        // edges are reset after disconnected from a switch 
         var filter = function(cell) {return graph.model.isVertex(cell);}
         var vertices = graph.model.filterDescendants(filter);
         vertices.forEach(cell => {

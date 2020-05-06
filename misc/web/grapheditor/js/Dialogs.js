@@ -1864,26 +1864,26 @@ var EditDataDialog = function(ui, cell)
         editorContainer.style.position = 'relative';
         editorContainer.style['max-width'] ="600px";
 
-        const editor = new JSONEditor(editorContainer, this.config);
+        const jsoneditor = new JSONEditor(editorContainer, this.config);
 
         // disable vlan attribute if cell is a node and not a switch;
         // disable/enable various properties depending on type
         // edge values dictate node vlan attribute values unless it's a switch
         try {
             if (cell.isVertex()) {
-                if (editor.getEditor('root.device').getValue() !== 'switch') {
+                if (jsoneditor.getEditor('root.device').getValue() !== 'switch') {
                     for (var i = 0; i < editor.getEditor('root.network.interfaces').getValue().length; i++) {
                         editor.getEditor('root.network.interfaces.'+i+'.vlan').disable();
                     }
                 }
-                if (editor.getEditor('root.type').getValue() === 'container') {
+                if (jsoneditor.getEditor('root.type').getValue() === 'container') {
 
                 }
             }
             else if (cell.isEdge()) {
                 // disable attributes of edge if connected to a switch, since switch dictates values
                 if ( JSON.parse(cell.source.getAttribute('schemaVars')).device === 'switch' || JSON.parse(cell.target.getAttribute('schemaVars')).device === 'switch') {
-                    editor.getEditor('root.name').disable();
+                    jsoneditor.getEditor('root.name').disable();
                 }
             }
         }
@@ -1896,26 +1896,26 @@ var EditDataDialog = function(ui, cell)
         var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
         {
             ui.hideDialog.apply(ui, arguments);
-            editor.destroy();
+            jsoneditor.destroy();
         });
         
         cancelBtn.className = 'geBtn';
         
         var applyBtn = mxUtils.button(mxResources.get('apply'), function()
         {
-            const errors = editor.validate();
+            const errors = jsoneditor.validate();
             var validForm = (errors.length) ? false : true;
 
             if (validForm) {
                 try
                 {
                     ui.hideDialog.apply(ui, arguments);
-                    var updatedNode = editor.getEditor('root').value; // get current node's JSON (from JSONEditor)
+                    var updatedNode = jsoneditor.getEditor('root').value; // get current node's JSON (from JSONEditor)
                     value.setAttribute('schemaVars', JSON.stringify(updatedNode));
                     if (cell.isVertex() && updatedNode.general.hostname != '' && typeof updatedNode.general.hostname !== 'undefined') {
                         value.setAttribute('label', updatedNode.general.hostname);
                     }
-                    else {
+                    else if (cell.isEdge()) {
                         value.setAttribute('label', updatedNode.name);
                         var name = updatedNode.name;
                         var id = updatedNode.id;
@@ -1944,7 +1944,7 @@ var EditDataDialog = function(ui, cell)
                     mxUtils.alert(e);
                 }
 
-                editor.destroy();
+                jsoneditor.destroy();
             }
             else {
                 mxUtils.alert(JSON.stringify(errors));
@@ -1954,8 +1954,8 @@ var EditDataDialog = function(ui, cell)
 
         applyBtn.className = 'geBtn gePrimaryBtn';
 
-        editor.on('change',() => {
-            const errors = editor.validate();
+        jsoneditor.on('change',() => {
+            const errors = jsoneditor.validate();
             if (errors.length) {applyBtn.setAttribute('disabled', 'disabled');}
             else {applyBtn.removeAttribute('disabled');}
         });
@@ -2021,6 +2021,9 @@ var viewJSONDialog = function(ui)
         }
     });
 
+    var combinedSchema = {"nodes": ui.schemas['nodes'], "vlans": ui.schemas['edges']}; 
+    console.log(combinedSchema);
+
     const schema = {}; // set schema
     let json = {nodes: nodeArray, vlans: edgeArray}; // global model JSON
 
@@ -2028,7 +2031,7 @@ var viewJSONDialog = function(ui)
     var loadConfig = function () {
 
         this.config = {
-            schema: schema,
+            schema: combinedSchema,
             startval: json,
             ajax: true,
             mode: 'text',
@@ -2055,6 +2058,7 @@ var viewJSONDialog = function(ui)
         editorContainer.style.height = '100%';
         editorContainer.style.position = 'relative';
         // editorContainer.style['max-width'] ="600px";
+        // editorContainer.style.display = 'none';
 
         var textarea = document.createElement('textarea');
         textarea.setAttribute('readonly', 'readonly');
@@ -2077,14 +2081,51 @@ var viewJSONDialog = function(ui)
         var code = '/*var autoHeight = function(o) {o.style.height = "1px";o.style.height = (25+o.scrollHeight)+"px";}; autoHeight(document.getElementById("jsonString"));*/document.getElementById("copyJSON").onclick = function(){document.getElementById("jsonString").select();document.execCommand("copy");}';
         textareaScript.innerText = code;
 
-
         editorContainer.append(textareaScript);
         editorContainer.append(textarea);
 
-        // const editor = new JSONEditor(editorContainer, this.config);
+        // TODO: enable json editing using editor and/or textarea
+        // var validateTextarea = document.createElement('textarea');
+        // validateTextarea.setAttribute('id', 'validate-textarea');
+        // validateTextarea.setAttribute('disabled', 'disabled');
+        // validateTextarea.setAttribute('readonly', 'readonly');
+        // validateTextarea.style.width = '100%';
+        // validateTextarea.style.resize = 'none';
+        // validateTextarea.style.height = '80px';
+        // validateTextarea.style.overflow = 'auto';
+
+        // const jsoneditor = new JSONEditor(editorContainer, this.config);
+
+        // listen for changes
+        // jsoneditor.on('change', function () {
+        //     // output
+        //     let jsonval = jsoneditor.getValue();
+        //     // textarea.value = JSON.stringify(jsonval, null, 2);
+
+        //     // validate
+        //     let validationErrors = jsoneditor.validate();
+        //     console.log(validationErrors);
+        //     if (validationErrors.length) {
+        //         validateTextarea.value = JSON.stringify(validationErrors, null, 2);
+        //     } else {
+        //         validateTextarea.value = 'valid';
+        //     }
+        // });
+
+        // textarea.addEventListener('keyup', function () {
+        //     try {
+        //         jsoneditor.setValue(JSON.parse(textarea.value));
+        //     }
+        //     catch (e) {
+        //         console.log('catch'), console.log(e);
+        //         validateTextarea.value = e;
+        //     }
+            
+        // });
 
         div.appendChild(header);
         div.appendChild(editorContainer);
+        // div.appendChild(validateTextarea);
 
         var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
         {
@@ -3603,28 +3644,28 @@ var VariablesDialog = function(ui)
         editorContainer.style.position = 'relative';
         editorContainer.style['max-width'] ="600px";
 
-        const editor = new JSONEditor(editorContainer, this.config);
+        const jsoneditor = new JSONEditor(editorContainer, this.config);
 
         div.appendChild(editorContainer);
 
         var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
         {
             ui.hideDialog.apply(ui, arguments);
-            editor.destroy();
+            jsoneditor.destroy();
         });
         
         cancelBtn.className = 'geBtn';
         
         var applyBtn = mxUtils.button(mxResources.get('apply'), function()
         {
-            const errors = editor.validate();
+            const errors = jsoneditor.validate();
             var validForm = (errors.length) ? false : true;
 
             if (validForm) {
                 try
                 {
                     ui.hideDialog.apply(ui, arguments);
-                    var updatedNode = editor.getEditor('root').value; // get current node's JSON (from JSONEditor)
+                    var updatedNode = jsoneditor.getEditor('root').value; // get current node's JSON (from JSONEditor)
                     window.experiment_vars = updatedNode;
                 }
                 catch (e)
@@ -3632,7 +3673,7 @@ var VariablesDialog = function(ui)
                     mxUtils.alert(e);
                 }
 
-                editor.destroy();
+                jsoneditor.destroy();
             }
             else {
                 mxUtils.alert(JSON.stringify(errors));
@@ -3642,8 +3683,8 @@ var VariablesDialog = function(ui)
 
         applyBtn.className = 'geBtn gePrimaryBtn';
 
-        editor.on('change',() => {
-            const errors = editor.validate();
+        jsoneditor.on('change',() => {
+            const errors = jsoneditor.validate();
             if (errors.length) {applyBtn.setAttribute('disabled', 'disabled');}
             else {applyBtn.removeAttribute('disabled');}
         });
