@@ -5,6 +5,7 @@ import (
 )
 
 type Experiment struct {
-	Spec   *v1.ExperimentSpec
-	Status *v1.ExperimentStatus
+	Metadata ConfigMetadata
+	Spec     *v1.ExperimentSpec
+	Status   *v1.ExperimentStatus
 }

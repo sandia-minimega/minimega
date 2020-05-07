@@ -15,6 +15,35 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
+func List() ([]types.Experiment, error) {
+	configs, err := store.List("Experiment")
+	if err != nil {
+		return nil, fmt.Errorf("getting list of experiment configs from store: %w", err)
+	}
+
+	var experiments []types.Experiment
+
+	for _, c := range configs {
+		spec := new(v1.ExperimentSpec)
+
+		if err := mapstructure.Decode(c.Spec, spec); err != nil {
+			return nil, fmt.Errorf("decoding experiment spec: %w", err)
+		}
+
+		status := new(v1.ExperimentStatus)
+
+		if err := mapstructure.Decode(c.Status, status); err != nil {
+			return nil, fmt.Errorf("decoding experiment status: %w", err)
+		}
+
+		exp := types.Experiment{Metadata: c.Metadata, Spec: spec, Status: status}
+
+		experiments = append(experiments, exp)
+	}
+
+	return experiments, nil
+}
+
 func Get(name string) (*types.Experiment, error) {
 	c, _ := types.NewConfig("experiment/" + name)
 
@@ -34,15 +63,78 @@ func Get(name string) (*types.Experiment, error) {
 		return nil, fmt.Errorf("decoding experiment status: %w", err)
 	}
 
-	exp := &types.Experiment{Spec: spec, Status: status}
+	exp := &types.Experiment{Metadata: c.Metadata, Spec: spec, Status: status}
 
 	return exp, nil
 }
 
-func Create(c *types.Config) error {
+func Create(name, topoName, scenarioName, baseDir string) error {
+	if name == "" {
+		return fmt.Errorf("no experiment name provided")
+	}
+
+	if topoName == "" {
+		return fmt.Errorf("no topology name provided")
+	}
+
+	topo, _ := types.NewConfig("topology/" + topoName)
+
+	if err := store.Get(topo); err != nil {
+		return fmt.Errorf("topology doesn't exist")
+	}
+
+	meta := types.ConfigMetadata{
+		Name: name,
+		Annotations: map[string]string{
+			"topology": topoName,
+		},
+	}
+
+	spec := map[string]interface{}{
+		"experimentName": name,
+		"baseDir":        baseDir,
+		"topology":       topo.Spec,
+	}
+
+	var scenario *types.Config
+
+	if scenarioName != "" {
+		scenario, _ = types.NewConfig("scenario/" + scenarioName)
+
+		if err := store.Get(scenario); err != nil {
+			return fmt.Errorf("scenario doesn't exist")
+		}
+
+		meta.Annotations["scenario"] = scenarioName
+		spec["scenario"] = scenario.Spec
+	}
+
+	c := &types.Config{
+		Version:  "phenix.sandia.gov/v1",
+		Kind:     "Experiment",
+		Metadata: meta,
+		Spec:     spec,
+	}
+
+	if err := create(c); err != nil {
+		return fmt.Errorf("creating experiment config: %w", err)
+	}
+
+	if err := types.ValidateConfigSpec(*c); err != nil {
+		return fmt.Errorf("validating experiment config: %w", err)
+	}
+
+	if err := store.Create(c); err != nil {
+		return fmt.Errorf("storing experiment config: %w", err)
+	}
+
+	return nil
+}
+
+func CreateFromConfig(c *types.Config) error {
 	topoName, ok := c.Metadata.Annotations["topology"]
 	if !ok {
-		panic("topology annotation missing")
+		return fmt.Errorf("topology annotation missing from experiment")
 	}
 
 	scenarioName := c.Metadata.Annotations["scenario"]
@@ -50,7 +142,7 @@ func Create(c *types.Config) error {
 	topo, _ := types.NewConfig("topology/" + topoName)
 
 	if err := store.Get(topo); err != nil {
-		panic("topology doesn't exist")
+		return fmt.Errorf("topology doesn't exist")
 	}
 
 	c.Spec = map[string]interface{}{
@@ -62,21 +154,25 @@ func Create(c *types.Config) error {
 		scenario, _ := types.NewConfig("scenario/" + scenarioName)
 
 		if err := store.Get(scenario); err != nil {
-			panic("scenario doesn't exist")
+			return fmt.Errorf("scenario doesn't exist")
 		}
 
 		topo, ok := scenario.Metadata.Annotations["topology"]
 		if !ok {
-			panic("topology annotation missing")
+			return fmt.Errorf("topology annotation missing from scenario")
 		}
 
 		if topo != topoName {
-			panic("experiment/scenario topology mismatch")
+			return fmt.Errorf("experiment/scenario topology mismatch")
 		}
 
 		c.Spec["scenario"] = scenario.Spec
 	}
 
+	return create(c)
+}
+
+func create(c *types.Config) error {
 	exp := new(v1.ExperimentSpec)
 
 	if err := mapstructure.Decode(c.Spec, exp); err != nil {

@@ -64,7 +64,7 @@ func CreateConfig(path string) (*types.Config, error) {
 	}
 
 	if c.Kind == "Experiment" && c.Spec == nil {
-		if err := experiment.Create(c); err != nil {
+		if err := experiment.CreateFromConfig(c); err != nil {
 			return nil, fmt.Errorf("creating experiment config spec: %w", err)
 		}
 	}
@@ -132,9 +132,7 @@ func DeleteConfig(name string) error {
 		configs, _ := ListConfigs("all")
 
 		for _, c := range configs {
-			name := c.Kind + "/" + c.Metadata.Name
-
-			if err := deleteConfig(name); err != nil {
+			if err := deleteConfig(&c); err != nil {
 				return err
 			}
 		}
@@ -142,15 +140,15 @@ func DeleteConfig(name string) error {
 		return nil
 	}
 
-	return deleteConfig(name)
-}
-
-func deleteConfig(name string) error {
-	c, err := types.NewConfig(name)
+	c, err := GetConfig(name)
 	if err != nil {
-		return err
+		return fmt.Errorf("getting config '%s': %w", name, err)
 	}
 
+	return deleteConfig(c)
+}
+
+func deleteConfig(c *types.Config) error {
 	if err := store.Delete(c); err != nil {
 		return fmt.Errorf("deleting config in store: %w", err)
 	}

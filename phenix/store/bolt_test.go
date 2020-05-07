@@ -122,7 +122,7 @@ func TestConfigDelete(t *testing.T) {
 
 	b := NewBoltDB()
 
-	if err := b.Init(Path(f.Name())); err != nil {
+	if err := b.Init(Endpoint("bolt://" + f.Name())); err != nil {
 		t.Log(err)
 		t.FailNow()
 	}

@@ -192,6 +192,64 @@ func main() {
 				Usage:    "phenix experiment management",
 				Subcommands: []*cli.Command{
 					{
+						Name:  "list",
+						Usage: "list all experiments",
+						Action: func(ctx *cli.Context) error {
+							exps, err := experiment.List()
+							if err != nil {
+								return cli.Exit(err, 1)
+							}
+
+							util.PrintTableOfExperiments(os.Stdout, exps...)
+
+							return nil
+						},
+					},
+					{
+						Name:  "create",
+						Usage: "create a new experiment",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:    "topology",
+								Aliases: []string{"t"},
+								Usage:   "name of existing topology to use",
+							},
+							&cli.StringFlag{
+								Name:    "scenario",
+								Aliases: []string{"s"},
+								Usage:   "name of existing scenario to use",
+							},
+							&cli.StringFlag{
+								Name:    "base-dir",
+								Aliases: []string{"d"},
+								Usage:   "base directory to use for experiment",
+							},
+						},
+						Action: func(ctx *cli.Context) error {
+							name := ctx.Args().First()
+
+							if name == "" {
+								return cli.Exit("must provide experiment name", 1)
+							}
+
+							var (
+								topology = ctx.String("topology")
+								scenario = ctx.String("scenario")
+								baseDir  = ctx.String("base-dir")
+							)
+
+							if topology == "" {
+								return cli.Exit("must provide topology name", 1)
+							}
+
+							if err := experiment.Create(name, topology, scenario, baseDir); err != nil {
+								return cli.Exit(err, 1)
+							}
+
+							return nil
+						},
+					},
+					{
 						Name:  "start",
 						Usage: "start an experiment",
 						Action: func(ctx *cli.Context) error {
@@ -209,6 +267,49 @@ func main() {
 							if err := experiment.Stop(ctx.Args().First()); err != nil {
 								return cli.Exit(err, 1)
 							}
+
+							return nil
+						},
+					},
+					{
+						Name:  "restart",
+						Usage: "restart an experiment",
+						Action: func(ctx *cli.Context) error {
+							if err := experiment.Stop(ctx.Args().First()); err != nil {
+								return cli.Exit(err, 1)
+							}
+
+							if err := experiment.Start(ctx.Args().First()); err != nil {
+								return cli.Exit(err, 1)
+							}
+
+							return nil
+						},
+					},
+					{
+						Name:  "delete",
+						Usage: "delete an experiment",
+						Action: func(ctx *cli.Context) error {
+							name := ctx.Args().First()
+
+							if name == "" {
+								return cli.Exit("must provide experiment name", 1)
+							}
+
+							exp, err := experiment.Get(ctx.Args().First())
+							if err != nil {
+								return cli.Exit(err, 1)
+							}
+
+							if exp.Status.Running() {
+								return cli.Exit("cannot delete a running experiment", 1)
+							}
+
+							if err := config.DeleteConfig("experiment/" + name); err != nil {
+								return cli.Exit(err, 1)
+							}
+
+							fmt.Printf("experiment %s deleted\n", name)
 
 							return nil
 						},
