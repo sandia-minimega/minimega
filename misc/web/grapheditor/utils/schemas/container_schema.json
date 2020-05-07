@@ -20,6 +20,7 @@
       "$id": "#/nodes/properties/type",
       "type": "string",
       "title": "Type",
+      "default": "container",
       "readonly": true,
       "pattern": "^(.*)$"
     },
@@ -27,7 +28,7 @@
       "$id": "#/nodes/properties/general",
       "type": "object",
       "title": "General",
-      "required": ["snapshot"],
+      "required": ["hostname", "snapshot"],
       "properties": {
         "hostname": {
           "$id": "#/nodes/properties/general/properties/hostname",
@@ -59,6 +60,31 @@
             false
           ]
         },
+        "fifos": {
+          "$id": "#/nodes/properties/general/properties/fifos",
+          "type": "string",
+          "title": "fifos",
+          "default": "1",
+          "examples": [
+            "2"
+          ],
+          "pattern": "^(.*)$"
+        },
+        "init": {
+          "$id": "#/nodes/properties/general/properties/init",
+          "type": "string",
+          "title": "init",
+          "default": "/init",
+          "examples": [],
+          "pattern": "^(.*)$"
+        },
+        "preinit": {
+          "$id": "#/nodes/properties/general/properties/preinit",
+          "type": "string",
+          "title": "preinit",
+          "examples": ["enable_ip_forwarding.sh"],
+          "pattern": "^(.*)$"
+        },
         "do_not_boot": {
           "$id": "#/nodes/properties/general/properties/do_not_boot",
           "type": "boolean",
@@ -75,11 +101,10 @@
       "type": "object",
       "title": "Hardware",
       "required": [
-        "os_type",
         "cpu",
         "vcpus",
         "memory",
-        "drives"
+        "filesystem"
       ],
       "properties": {
         "cpu": {
@@ -109,7 +134,7 @@
           "$id": "#/nodes/properties/hardware/properties/memory",
           "type": "string",
           "title": "memory",
-          "default": "1024",
+          "default": "2048",
           "examples": [
             "8192"
           ],
@@ -129,30 +154,6 @@
           ],
           "pattern": "^(.*)$"
         },
-        "cdrom": {
-          "$id": "#/nodes/properties/hardware/properties/cdrom",
-          "type": "string",
-          "title": "cdrom",
-          "default": "$IMAGEDIR/",
-          "examples": [],
-          "pattern": "^(.*)$"
-        },
-        "kernel": {
-          "$id": "#/nodes/properties/hardware/properties/kernel",
-          "type": "string",
-          "title": "kernel",
-          "default": "$IMAGEDIR/",
-          "examples": [],
-          "pattern": "^(.*)$"
-        },
-        "initrd": {
-          "$id": "#/nodes/properties/hardware/properties/initrd",
-          "type": "string",
-          "title": "initrd",
-          "default": "$IMAGEDIR/",
-          "examples": [],
-          "pattern": "^(.*)$"
-        },
         "filesystem": {
           "$id": "#/nodes/properties/hardware/properties/filesystem",
           "type": "string",
@@ -160,64 +161,6 @@
           "default": "$IMAGEDIR/",
           "examples": [],
           "pattern": "^(.*)$"
-        },
-        "drives": {
-          "$id": "#/nodes/properties/hardware/properties/drives",
-          "type": "array",
-          "title": "Drives",
-          "items": {
-            "$id": "#/nodes/properties/hardware/properties/drives/items",
-            "type": "object",
-            "title": "Drive",
-            "required": [
-              "image"
-            ],
-            "properties": {
-              "image": {
-                "$id": "#/nodes/properties/hardware/properties/drives/items/properties/image",
-                "type": "string",
-                "title": "Image",
-                "minLength": 1,
-                "default": "",
-                "examples": [
-                  "win10provider.qc2"
-                ],
-                "pattern": "^(.*)$"
-              },
-              "interface": {
-                "$id": "#/nodes/properties/hardware/properties/drives/items/properties/interface",
-                "type": "string",
-                "title": "interface",
-                "enum": ["ahci", "ide", "scsi", "sd", "mtd", "floppy", "pflash", "virtio"],
-                "default": "ide",
-                "examples": [
-                  "ide"
-                ],
-                "pattern": "^(.*)$"
-              },
-              "cache_mode": {
-                "$id": "#/nodes/properties/hardware/properties/drives/items/properties/cache_mode",
-                "type": "string",
-                "title": "cache_mode",
-                "enum": ["none", "writeback", "unsafe", "directsync", "writethrough"],
-                "default": "writeback",
-                "examples": [
-                  "writeback"
-                ],
-                "pattern": "^(.*)$"
-              },
-              "inject_partition": {
-                "$id": "#/nodes/properties/hardware/properties/drives/items/properties/inject_partition",
-                "type": "string",
-                "title": "inject_partition",
-                "default": "1",
-                "examples": [
-                  "2"
-                ],
-                "pattern": "^(.*)$"
-              }
-            }
-          }
         }
       }
     },

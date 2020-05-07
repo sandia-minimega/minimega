@@ -20,6 +20,7 @@
       "$id": "#/nodes/properties/type",
       "type": "string",
       "title": "Type",
+      "default": "kvm",
       "readonly": true,
       "pattern": "^(.*)$"
     },
@@ -27,7 +28,7 @@
       "$id": "#/nodes/properties/general",
       "type": "object",
       "title": "General",
-      "required": ["snapshot"],
+      "required": ["hostname", "snapshot"],
       "properties": {
         "hostname": {
           "$id": "#/nodes/properties/general/properties/hostname",
@@ -109,7 +110,7 @@
           "$id": "#/nodes/properties/hardware/properties/memory",
           "type": "string",
           "title": "memory",
-          "default": "1024",
+          "default": "2048",
           "examples": [
             "8192"
           ],
@@ -153,12 +154,32 @@
           "examples": [],
           "pattern": "^(.*)$"
         },
-        "filesystem": {
-          "$id": "#/nodes/properties/hardware/properties/filesystem",
+        "migrate": {
+          "$id": "#/nodes/properties/hardware/properties/migrate",
           "type": "string",
-          "title": "filesystem",
+          "title": "migrate",
           "default": "$IMAGEDIR/",
           "examples": [],
+          "pattern": "^(.*)$"
+        },
+        "serial-ports": {
+          "$id": "#/nodes/properties/hardware/properties/serial-ports",
+          "type": "string",
+          "title": "serial-ports",
+          "default": "1",
+          "examples": [
+            "4"
+          ],
+          "pattern": "^(.*)$"
+        },
+        "virtio-ports": {
+          "$id": "#/nodes/properties/hardware/properties/virtio-ports",
+          "type": "string",
+          "title": "virtio-ports",
+          "default": "1",
+          "examples": [
+            "4"
+          ],
           "pattern": "^(.*)$"
         },
         "drives": {

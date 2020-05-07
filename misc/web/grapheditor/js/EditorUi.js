@@ -13,7 +13,7 @@ EditorUi = function(editor, container, lightbox)
     this.container = container || document.body;
 
     this.schemas = {}; // store default schemas
-    this.params = [];
+    this.params = []; // store minimega to schema param mappings
 
     var self = this; // to access member variables in scope of local functions/callbacks
 
@@ -65,9 +65,15 @@ EditorUi = function(editor, container, lightbox)
     }
 
     // set default node schema
-    loadFile(window.UTILS_PATH + '/schemas/node_schema.json', 'application/json', 'nodes', setSchema);
+    loadFile(window.UTILS_PATH + '/schemas/node_schema.json', 'application/json', 'node', setSchema);
+    // set default kvm schema
+    loadFile(window.UTILS_PATH + '/schemas/kvm_schema.json', 'application/json', 'kvm', setSchema);
+    // set default container schema
+    loadFile(window.UTILS_PATH + '/schemas/container_schema.json', 'application/json', 'container', setSchema);
+    // set default switch schema
+    loadFile(window.UTILS_PATH + '/schemas/switch_schema.json', 'application/json', 'switch', setSchema);
     // set default edge schema
-    loadFile(window.UTILS_PATH + '/schemas/edge_schema.json', 'application/json', 'edges', setSchema);
+    loadFile(window.UTILS_PATH + '/schemas/edge_schema.json', 'application/json', 'vlan', setSchema);
     // set experimentVars schema
     loadFile(window.UTILS_PATH + '/schemas/vars_schema.json', 'application/json', 'vars', setSchema);
 
@@ -106,7 +112,6 @@ EditorUi = function(editor, container, lightbox)
         var cells = evt.getProperty('cells');
         for(var i = 0; i < cells.length; i++) {
             checkValue(graph, cells[i], self);
-            // lookforvlan(graph, cells[i]);
         }
     });
 
@@ -126,17 +131,6 @@ EditorUi = function(editor, container, lightbox)
             checkValue(graph, target);
             lookforvlan(graph, target);
         }
-        // if (terminal) {
-        //     checkValue(graph, terminal);
-        //     lookforvlan(graph, terminal);
-        // }
-        // a little hacky, but need to recompute all vlan values to handle cases when
-        // edges are reset after disconnected from a switch 
-        var filter = function(cell) {return graph.model.isVertex(cell);}
-        var vertices = graph.model.filterDescendants(filter);
-        vertices.forEach(cell => {
-            lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
-        });
     });
 
     graph.convertValueToString = function(cell)
@@ -153,7 +147,7 @@ EditorUi = function(editor, container, lightbox)
         if (mxUtils.isNode(cell.value))
         {
             // Clones the value for correct undo/redo
-                var elt = cell.value.cloneNode(true);
+            var elt = cell.value.cloneNode(true);
             elt.setAttribute('label', newValue);
             newValue = elt;
         }

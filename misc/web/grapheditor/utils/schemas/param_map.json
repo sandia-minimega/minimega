@@ -131,14 +131,14 @@
         },
         {
             "name": "serial-ports",
-            "path": "general",
+            "path": "hardware",
             "args": [
                 "serial-ports"
             ]
         },
         {
             "name": "virtio-ports",
-            "path": "general",
+            "path": "hardware",
             "args": [
                 "virtio-ports"
             ]

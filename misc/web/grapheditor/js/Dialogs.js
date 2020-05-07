@@ -1513,6 +1513,13 @@ ExportDialog.saveLocalFile = function(editorUi, data, filename, format)
     }
 };
 
+
+/**
+ * UTILITY FUNCTIONS below perform various data-manipulation operations
+ * across topo-specific dialogs/actions (e.g., EditDataDialog, VariablesDialog, and
+ * EditMiniConfigDialog, ViewJSONDialog)
+ */
+
 // utility function globals
 const vlans_in_use = {};
 const interfaces_in_use = {};
@@ -1534,11 +1541,20 @@ function checkValue(graph, cell, ui) {
         value = obj;
     }
 
+    value = value.cloneNode(true);
+
     var schemaVars;
+    var device = 'diagraming';
+    if (cell.getStyle().includes("switch")){device = "switch";}
+    if (cell.getStyle().includes("router")){device = "router";}
+    if (cell.getStyle().includes("firewall")){device = "firewall";}
+    if (cell.getStyle().includes("desktop")){device = "desktop";}
+    if (cell.getStyle().includes("server")){device = "server";}
+    if (cell.getStyle().includes("mobile")){device = "mobile";}
 
     if (value.hasAttribute('schemaVars')) {
         // update hostname if it's a duplicate and a vertex (for copied cells)
-        if (cell.isVertex()) {
+        if (cell.isVertex() && device != 'switch') {
             schemaVars = JSON.parse(value.getAttribute('schemaVars'));
             var hostname = cell.getAttribute('label');
             var cellId = parseInt(cell.getId());
@@ -1548,8 +1564,10 @@ function checkValue(graph, cell, ui) {
                 var checkLabel = vertices[i].getAttribute('label');
                 var checkHostId = parseInt(vertices[i].getId());
                 if (checkLabel == hostname && checkHostId != cellId && cellId > checkHostId) {
-                    delete schemaVars.general.hostname;
-                    cell.setAttribute('label', `${schemaVars.device}_device_${host_count}`);
+                    schemaVars.general.hostname = `${schemaVars.device}_device_${host_count}`;
+                    value.setAttribute('label', `${schemaVars.device}_device_${host_count}`);
+                    value.setAttribute('schemaVars', JSON.stringify(schemaVars));
+                    graph.getModel().setValue(cell, value);
                     host_count++;
                 }
             }
@@ -1571,7 +1589,7 @@ function checkValue(graph, cell, ui) {
 
         schemaVars = {};
 
-        if (cell.isVertex()) {
+        if (cell.isVertex() && device != 'switch') {
 
             //TODO: set default values from schema???
             // const schema = ui.schemas['nodes'];
@@ -1601,16 +1619,10 @@ function checkValue(graph, cell, ui) {
                 schemaVars.type = 'kvm';
             }
 
-            schemaVars.device = 'diagraming';
-            if (cell.getStyle().includes("switch")){schemaVars.device = "switch";}
-            if (cell.getStyle().includes("router")){schemaVars.device = "router";}
-            if (cell.getStyle().includes("firewall")){schemaVars.device = "firewall";}
-            if (cell.getStyle().includes("desktop")){schemaVars.device = "desktop";}
-            if (cell.getStyle().includes("server")){schemaVars.device = "server";}
-            if (cell.getStyle().includes("mobile")){schemaVars.device = "mobile";}
+            schemaVars.device = device;
 
             schemaVars.general = {};
-            // schemaVars.general.hostname = `${schemaVars.device}_device_${host_count}`; // (cell.getId());
+            schemaVars.general.hostname = `${schemaVars.device}_device_${host_count}`; // (cell.getId());
             value.setAttribute('label', `${schemaVars.device}_device_${host_count}`);
             host_count++;
 
@@ -1619,18 +1631,28 @@ function checkValue(graph, cell, ui) {
 
         }
         else {
-            schemaVars.id = '';
-            schemaVars.name = '';
+            // only set default vlan value if device is switch
+            schemaVars.id = 'auto';
+            if (device == 'switch') {
+                schemaVars.device = 'switch';
+                schemaVars.hostname = `${schemaVars.device}_device_${host_count}`;
+                value.setAttribute('label', `${schemaVars.device}_device_${host_count}`);
+                schemaVars.name = searchNextVlan(vlanid).toString();
+                host_count++;
+            }
+            else {
+                schemaVars.name = ''; // initial (edge) vlan name set when connected to cell
+            }
         }
+
+        value.setAttribute('schemaVars', JSON.stringify(schemaVars));
+        graph.getModel().setValue(cell, value);
 
     }
 
-    value.setAttribute('schemaVars', JSON.stringify(schemaVars));
-    graph.getModel().setValue(cell, value);
-
 }
 
-// utility function to get/set next vlan id and name
+// utility function to get/set next vlan name
 function searchNextVlan(v){
     if (!vlans_in_use.hasOwnProperty(v.toString())){
         vlans_in_use[v.toString()]=true;
@@ -1663,16 +1685,15 @@ function searchNextVlan(v){
     return vlanid;
 }
 
-// utility function to set switch edge vlan values
+// utility function to set node and edge vlan values
 function lookforvlan(graph, cell){
 
     checkValue(graph, cell);
+    var value = graph.getModel().getValue(cell); // value user object
+    value = value.cloneNode(true); // clone for value update
     var schemaVars = JSON.parse(cell.getAttribute('schemaVars')); // current cell (node) schemaVars
     var edgeSchemaVars; // edge schemaVars
     var targetSchemaVars; // target cell schemaVars
-    var eth;
-    var value;
-    var vlan;
 
     try {
         schemaVars.network.interfaces;
@@ -1681,7 +1702,7 @@ function lookforvlan(graph, cell){
         for(var i = 0; i < edges.length; i++){
             checkValue(graph, edges[i]);
             var vlan = JSON.parse(edges[i].getAttribute('schemaVars')).name;
-            if (vlan !== '') vlans.push(vlan);
+            if (vlan != '') vlans.push(vlan);
         }
         // remove interfaces copied over from another cell
         schemaVars.network.interfaces = (schemaVars.network.interfaces).filter(function( obj ) {
@@ -1692,31 +1713,48 @@ function lookforvlan(graph, cell){
         // eth = 'eth' + (Math.max.apply(Math, interfaces.map(function(o) { return (o.name).substr(-1); })) + 1);
     }
     catch(e) {
-        schemaVars.network = {};
-        schemaVars.network.interfaces = [];
-        schemaVars.network.interfaces[0] = {};
-        // eth = 'eth0';
+        if (schemaVars.device != 'switch') {
+            schemaVars.network = {};
+            schemaVars.network.interfaces = [];
+            schemaVars.network.interfaces[0] = {};
+            // eth = 'eth0';
+        }
     }
 
     // Check if vertex is a switch, if it is and it does not have a vlan set all edges to a new vlan
-    if (schemaVars.device === 'switch'){
-        if (typeof schemaVars.network.interfaces[0].vlan === 'undefined' || schemaVars.network.interfaces[0].vlan === '') {
-            schemaVars.network.interfaces[0].vlan = searchNextVlan(vlanid).toString();
-            schemaVars.network.interfaces[0].name = 'eth0';
-            cell.setAttribute('schemaVars', JSON.stringify(schemaVars));
+    if (schemaVars.device == 'switch'){
+        if (typeof schemaVars.name === 'undefined' || schemaVars.name == '') {
+            schemaVars.name = searchNextVlan(vlanid).toString();
+            schemaVars.id = 'auto';
+            value.setAttribute('schemaVars', JSON.stringify(schemaVars));
         }
-        for (var i =0; i< cell.getEdgeCount();i++){
+        for (var i =0; i < cell.getEdgeCount();i++){
             var e = cell.getEdgeAt(i);
             checkValue(graph, e);
+            var edgevalue = graph.getModel().getValue(e);
+            edgevalue = edgevalue.cloneNode(true);
             edgeSchemaVars = JSON.parse(e.getAttribute('schemaVars'));
-            edgeSchemaVars.name = schemaVars.network.interfaces[0].vlan;
-            if (edgeSchemaVars.id === '') edgeSchemaVars.id = 'auto';
-            e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
-            e.setAttribute('label', schemaVars.network.interfaces[0].vlan);
-            var value = graph.getModel().getValue(e);
-            graph.getModel().setValue(e, value);
+            edgeSchemaVars.name = schemaVars.name;
+            edgeSchemaVars.id = schemaVars.id;
+            edgevalue.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
+            edgevalue.setAttribute('label', schemaVars.name);
+            graph.getModel().setValue(e, edgevalue);
+
+            try {
+                if (e.source.getId() != cell.getId()){
+                    ec = e.source;
+                } else {ec = e.target;}
+            }
+            catch (e) {
+
+            }
+            if (ec) {
+                lookforvlan(graph, ec);
+            }
         }
-    } else {
+        return;
+    } 
+    else {
 
         // check if cell (node) is replacing a switch by searching for duplicate vlans
         if (cell.getEdgeCount() > 1){
@@ -1725,7 +1763,7 @@ function lookforvlan(graph, cell){
             for(var i =0; i< cell.getEdgeCount();i++) {
                 var e = cell.getEdgeAt(i);
                 checkValue(graph, e);
-                if (JSON.parse(e.getAttribute('schemaVars')).name === name && name != '') {
+                if (JSON.parse(e.getAttribute('schemaVars')).name == name && name != '') {
                     dupe = true;
                     break;
                 }
@@ -1739,6 +1777,8 @@ function lookforvlan(graph, cell){
             var eth = 'eth' + i;
             var e = cell.getEdgeAt(i);
             checkValue(graph, e);
+            var edgevalue = graph.getModel().getValue(e);
+            edgevalue = edgevalue.cloneNode(true);
             edgeSchemaVars = JSON.parse(e.getAttribute('schemaVars'));
             // if cell has edges with duplicate vlans, reset all vlans and reassign thereafter
             if (dupe) {
@@ -1760,6 +1800,8 @@ function lookforvlan(graph, cell){
 
             if (ec) {
                 checkValue(graph, ec);
+                var targetvalue = graph.getModel().getValue(ec);
+                targetvalue = targetvalue.cloneNode(true);
                 targetSchemaVars = JSON.parse(ec.getAttribute('schemaVars'));
 
                 try {
@@ -1767,54 +1809,87 @@ function lookforvlan(graph, cell){
                     targetEth = 'eth' + (Math.max.apply(Math, (targetSchemaVars.network.interfaces).map(function(o) { return (o.name).substr(-1); })) + 1);
                 }
                 catch(e) {
-                    targetSchemaVars.network = {};
-                    targetSchemaVars.network.interfaces = [];
-                    targetSchemaVars.network.interfaces[0] = {};
-                    targetEth = 'eth0';
+                    if (targetSchemaVars.device != 'switch') {
+                        targetSchemaVars.network = {};
+                        targetSchemaVars.network.interfaces = [];
+                        targetSchemaVars.network.interfaces[0] = {};
+                        targetEth = 'eth0';
+                    }
                 }
 
                 // if connected vertex is a switch get the vlan number or sets one for the switch and the edge
-                if (targetSchemaVars.device === 'switch'){
-                    if (typeof targetSchemaVars.network.interfaces[0].vlan === 'undefined' || targetSchemaVars.network.interfaces[0].vlan === ''){
+                if (targetSchemaVars.device == 'switch'){
+                    if (typeof targetSchemaVars.name === 'undefined' || targetSchemaVars.name == ''){
                         edgeSchemaVars.name = searchNextVlan(vlanid).toString();
                         edgeSchemaVars.id = 'auto';
-                        targetSchemaVars.network.interfaces[0].vlan = edgeSchemaVars.name;
-                        targetSchemaVars.network.interfaces[0].name = targetEth;
-                        ec.setAttribute('schemaVars', JSON.stringify(targetSchemaVars));
+                        targetSchemaVars.name = edgeSchemaVars.name;
+                        targetSchemaVars.id = edgeSchemaVars.id;
                     } else {
-                        edgeSchemaVars.name = targetSchemaVars.network.interfaces[0].vlan;
-                        if (edgeSchemaVars.id === '') edgeSchemaVars.id = 'auto';
-                        e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
+                        edgeSchemaVars.name = targetSchemaVars.name;
+                        edgeSchemaVars.id = targetSchemaVars.id;
+                        edgevalue.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
                     }
-                } // If its any other device just set a new vlan to the edge
+                    targetvalue.setAttribute('schemaVars', JSON.stringify(targetSchemaVars));
+                    graph.getModel().setValue(ec, targetvalue);
+                } // if its any other device just set a new vlan to the edge
                 else {
                     // set edge vlan and vlan id
-                    // set device vlan to edge vlan on a new interface
-                    if (typeof edgeSchemaVars.name === 'undefined' || edgeSchemaVars.name === '') {
+                    if (typeof edgeSchemaVars.name === 'undefined' || edgeSchemaVars.name == '') {
                         edgeSchemaVars.name = searchNextVlan(vlanid).toString();
                         edgeSchemaVars.id = 'auto';
-                        e.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
+                        edgevalue.setAttribute('schemaVars', JSON.stringify(edgeSchemaVars));
                     }
+                    var newVlan = true;
+                    var matchIdx = -1;
+                    for (var j = 0; j < ec.getEdgeCount(); j++){
+                        try {
+                            matchIdx++;
+                            if (edgeSchemaVars.name == targetSchemaVars.network.interfaces[j].vlan) {
+                                newVlan = false;
+                                break;
+                            }   
+                        }
+                        catch {
+                            
+                        }
+                    }
+                    // set device vlan to edge vlan on a new interface if doesn't exist
+                    if (newVlan) {
+                        var newEth = 'eth' + matchIdx;
+                        targetSchemaVars.network.interfaces[matchIdx] = {};
+                        targetSchemaVars.network.interfaces[matchIdx].vlan = edgeSchemaVars.name;
+                        targetSchemaVars.network.interfaces[matchIdx].name = newEth;
+                    }
+                    // set device vlan to edge vlan if interface exists
+                    else {
+                        targetSchemaVars.network.interfaces[matchIdx].vlan = edgeSchemaVars.name;
+                    }   
+                    targetvalue.setAttribute('schemaVars', JSON.stringify(targetSchemaVars));
+                    graph.getModel().setValue(ec, targetvalue);
                 }
             }
 
             if (typeof schemaVars.network.interfaces[i] === 'undefined') schemaVars.network.interfaces[i] = {};
             schemaVars.network.interfaces[i].vlan = edgeSchemaVars.name;
             schemaVars.network.interfaces[i].name = eth;
-            cell.setAttribute('schemaVars', JSON.stringify(schemaVars));
+            value.setAttribute('schemaVars', JSON.stringify(schemaVars));
+            graph.getModel().setValue(cell, value);
 
-            if (typeof edgeSchemaVars.name !== 'undefined' && edgeSchemaVars.name !== '') {
+            if (typeof edgeSchemaVars.name !== 'undefined' && edgeSchemaVars.name != '') {
                 if (!vlans_in_use.hasOwnProperty(edgeSchemaVars.name)){
                     vlans_in_use[edgeSchemaVars.name]=true;
                 }
-                e.setAttribute('label', edgeSchemaVars.name);
-                var value = graph.getModel().getValue(e);
-                graph.getModel().setValue(e, value);
+                edgevalue.setAttribute('label', edgeSchemaVars.name);
+                graph.getModel().setValue(e, edgevalue);
             }
 
         }
     }
 }
+
+/**
+ * END UTILITY FUNCTIONS
+ */
 
 
 /**
@@ -1823,17 +1898,29 @@ function lookforvlan(graph, cell){
 var EditDataDialog = function(ui, cell)
 {
     const graph = ui.editor.graph;
-    const type = cell.isVertex() ? 'nodes' : 'edges'; // get type to load specific schema
+    
+    checkValue(graph, cell); // sets cell default user object values (for cloned cells)
+    var value = graph.getModel().getValue(cell);
+    var startval = JSON.parse(value.getAttribute('schemaVars')); // parse schemaVars to JSON for editor
+
+    let type; // get type to load cell-specific schema
+    if (cell.isVertex()) {
+        if (startval.device == 'switch') {
+            type = 'switch';
+        }
+        else {
+            type = startval.type = 'kvm' ? 'kvm' : 'container';
+        }
+    }
+    else {
+        type = 'vlan';
+    }
+
     const schema = ui.schemas[type]; // set schema
     // console.log('this is schema'), console.log(schema);
 
     var id = (EditDataDialog.getDisplayIdForCell != null) ?
         EditDataDialog.getDisplayIdForCell(ui, cell) : null;
-
-    checkValue(graph, cell); // sets cell default user object values
-
-    var value = graph.getModel().getValue(cell);
-    var startval = JSON.parse(value.getAttribute('schemaVars')); // parse schemaVars to JSON for editor
                     
     // Set JSONEditor and config options based on schema and cell type
     var loadConfig = function () {
@@ -1871,18 +1958,15 @@ var EditDataDialog = function(ui, cell)
         // edge values dictate node vlan attribute values unless it's a switch
         try {
             if (cell.isVertex()) {
-                if (jsoneditor.getEditor('root.device').getValue() !== 'switch') {
-                    for (var i = 0; i < editor.getEditor('root.network.interfaces').getValue().length; i++) {
-                        editor.getEditor('root.network.interfaces.'+i+'.vlan').disable();
+                if (jsoneditor.getEditor('root.device').getValue() != 'switch') {
+                    for (var i = 0; i < jsoneditor.getEditor('root.network.interfaces').getValue().length; i++) {
+                        jsoneditor.getEditor('root.network.interfaces.'+i+'.vlan').disable();
                     }
-                }
-                if (jsoneditor.getEditor('root.type').getValue() === 'container') {
-
                 }
             }
             else if (cell.isEdge()) {
                 // disable attributes of edge if connected to a switch, since switch dictates values
-                if ( JSON.parse(cell.source.getAttribute('schemaVars')).device === 'switch' || JSON.parse(cell.target.getAttribute('schemaVars')).device === 'switch') {
+                if ( JSON.parse(cell.source.getAttribute('schemaVars')).device == 'switch' || JSON.parse(cell.target.getAttribute('schemaVars')).device == 'switch') {
                     jsoneditor.getEditor('root.name').disable();
                 }
             }
@@ -1910,10 +1994,18 @@ var EditDataDialog = function(ui, cell)
                 try
                 {
                     ui.hideDialog.apply(ui, arguments);
+                    value = value.cloneNode(true);
                     var updatedNode = jsoneditor.getEditor('root').value; // get current node's JSON (from JSONEditor)
                     value.setAttribute('schemaVars', JSON.stringify(updatedNode));
-                    if (cell.isVertex() && updatedNode.general.hostname != '' && typeof updatedNode.general.hostname !== 'undefined') {
-                        value.setAttribute('label', updatedNode.general.hostname);
+                    if (cell.isVertex()) {
+                        if (updatedNode.device == 'switch') {
+                            value.setAttribute('label', updatedNode.hostname);
+                        }
+                        else {
+                            value.setAttribute('label', updatedNode.general.hostname);
+                        }
+                        graph.getModel().setValue(cell, value);
+                        lookforvlan(graph, cell);
                     }
                     else if (cell.isEdge()) {
                         value.setAttribute('label', updatedNode.name);
@@ -1921,23 +2013,28 @@ var EditDataDialog = function(ui, cell)
                         var id = updatedNode.id;
                         var filter = function(cell) {return graph.model.isEdge(cell);}
                         var edges = graph.model.filterDescendants(filter);
+                        // if an edge's id changes, apply change to all vlans with same name (e.g., connected to switch)
                         edges.forEach(cell => {
-                            // if an edge's id changes, apply change to all vlans with same name (e.g., connected to switch)
-                            var v = graph.getModel().getValue(cell);
-                            var schemaVars = JSON.parse(v.getAttribute('schemaVars'));
+                            var edgevalue = graph.getModel().getValue(cell);
+                            edgevalue = edgevalue.cloneNode(true);
+                            var schemaVars = JSON.parse(edgevalue.getAttribute('schemaVars'));
                             if (name == schemaVars.name) {
                                 schemaVars.id = id;
-                                v.setAttribute('schemaVars', JSON.stringify(schemaVars));
-                                graph.getModel().setValue(cell, v);
+                                edgevalue.setAttribute('schemaVars', JSON.stringify(schemaVars));
+                                graph.getModel().setValue(cell, edgevalue);
                             }
                         });
+                        graph.getModel().setValue(cell, value);
+                        // TODO: call lookforvlan on source and target
+                        var source = cell.source;
+                        if (source) {
+                            lookforvlan(graph, source);
+                        }
+                        var target = cell.target;
+                        if (target) {
+                            lookforvlan(graph, target);
+                        }
                     }
-                    graph.getModel().setValue(cell, value);
-                    filter = function(cell) {return graph.model.isVertex(cell);}
-                    var vertices = graph.model.filterDescendants(filter);
-                    vertices.forEach(cell => {
-                        lookforvlan(graph, cell); // sets vlan values for cell based on edges/switches
-                    });
                 }
                 catch (e)
                 {
@@ -2008,7 +2105,7 @@ var viewJSONDialog = function(ui)
         checkValue(graph, cell);
         lookforvlan(graph, cell);
         var node = JSON.parse(cell.getAttribute('schemaVars'));
-        if (node.device !== 'switch') {
+        if (node.device != 'switch') {
             nodeArray.push(node);
         }
     });
@@ -2016,17 +2113,32 @@ var viewJSONDialog = function(ui)
     edges.forEach(cell => {
         checkValue(graph, cell);
         var vlan = JSON.parse(cell.getAttribute('schemaVars'));
-        if (edgeArray.filter(function(e) { return e.name === vlan.name; }).length <= 0 && vlan.id !== 'auto') {
+        if (edgeArray.filter(function(e) { return e.name == vlan.name; }).length <= 0 && vlan.id != 'auto') {
             edgeArray.push(vlan);
         }
     });
 
     // hack combining node and edge schema programmatically
-    const combinedSchema = JSON.parse('{"type": "object", "title": "Topo", "properties": { "nodes" : ' + JSON.stringify(ui.schemas['nodes']) + ', "vlans": ' + JSON.stringify(ui.schemas['edges']) + '}}'); 
+    // TODO: enforce comprehensive JSON schema for in-view editing
+    const combinedSchema = JSON.parse('{"type": "object", "title": "Topo", "properties": { "nodes" : ' + JSON.stringify(ui.schemas['node']) + ', "vlans": ' + JSON.stringify(ui.schemas['vlan']) + '}}'); 
     // console.log(combinedSchema);
 
     // const schema = {}; // set schema
     let json = {nodes: nodeArray, vlans: edgeArray}; // global model JSON
+
+    if (window.experiment_vars != undefined)
+    {
+        var jsonString = JSON.stringify(json);
+        for (var i = 0; i < window.experiment_vars.length; i++)
+        {
+            var name = window.experiment_vars[i].name;
+            var value = window.experiment_vars[i].value;
+
+            var name = new RegExp('\\$'+name, 'g');
+            jsonString = jsonString.replace(name, value);
+        }
+        json = JSON.parse(jsonString);
+    }
 
     // Set JSONEditor and config options based on schema and cell type
     var loadConfig = function () {
@@ -2131,7 +2243,7 @@ var viewJSONDialog = function(ui)
         var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
         {
             ui.hideDialog.apply(ui, arguments);
-            // editor.destroy();
+            // jsoneditor.destroy();
         });
         
         cancelBtn.className = 'geBtn';
@@ -2141,7 +2253,7 @@ var viewJSONDialog = function(ui)
         {
             try
             {
-                console.log('do something here');
+                // console.log('do something here');
 
             }
             catch (e)
@@ -2149,7 +2261,7 @@ var viewJSONDialog = function(ui)
                 mxUtils.alert(e);
             }
 
-            // editor.destroy();
+            // jsoneditor.destroy();
 
         });
 
@@ -2161,7 +2273,7 @@ var viewJSONDialog = function(ui)
         {
             try
             {
-                console.log('download');
+                // console.log('download');
                 downloadObjectAsJson(json, 'topo');
 
             }
@@ -2170,7 +2282,7 @@ var viewJSONDialog = function(ui)
                 mxUtils.alert(e);
             }
 
-            // editor.destroy();
+            // jsoneditor.destroy();
 
         });
 
@@ -3136,7 +3248,7 @@ var LayersWindow = function(editorUi, x, y, w, h)
 };
 
 /**
- * Constructs a new edit file dialog.
+ * Constructs a new JSONEditor for minimega config script
  */
 var EditMiniConfigDialog = function(editorUi,vertices,edges)
 {
@@ -3172,7 +3284,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         edges.forEach(cell => {
             checkValue(graph, cell);
             edgeSchemaVars = JSON.parse(cell.getAttribute('schemaVars'));
-            if (typeof edgeSchemaVars.name !== 'undefined' && edgeSchemaVars.name !== '') {
+            if (typeof edgeSchemaVars.name !== 'undefined' && edgeSchemaVars.name != '') {
                 if (!vlans_in_use.hasOwnProperty(edgeSchemaVars.name)){
                     vlans_in_use[edgeSchemaVars.name]=true;
                 }
@@ -3213,11 +3325,13 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         var miniccc_commands = [];
         vertices.forEach(cell => {
             checkValue(graph, cell);
+            var value = graph.getModel().getValue(cell); // value user object
+            value = value.cloneNode(true); // clone for value update
             schemaVars = JSON.parse(cell.getAttribute('schemaVars'));
             lookforvlan(graph, cell);
 
             // if vertex is a switch skip the device in config
-            if (schemaVars.device === 'switch'){
+            if (schemaVars.device == 'switch'){
                 return;
             }
 
@@ -3238,7 +3352,8 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                 config += `##Config for a ${schemaVars.device} device #${count}\n`;
                 name = `${schemaVars.device}_device_${count}`
             }
-            cell.setAttribute('label', name);
+            value.setAttribute('label', name);
+            graph.getModel().setValue(cell, value);
             count++;
 
             var clear = "";
@@ -3314,6 +3429,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                     // console.log(e);
                 }
                 var value = argString;
+                if (name == 'hostname' && schemaVars.type == 'kvm') value = '';
                 if (prev_dev[name] != value && value != '' && name != "net"){
                     prev_dev[name] = value;
                     config += `vm config ${name} ${value} \n`;
@@ -3326,7 +3442,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
             });
 
             config += clear;
-            if (schemaVars.type === "container") {config+=`vm launch container ${name}\n\n`;}
+            if (schemaVars.type == "container") {config+=`vm launch container ${name}\n\n`;}
             else {config+=`vm launch ${schemaVars.type} ${name}\n\n`;}
             if (typeof schemaVars.miniccc_commands !== 'undefined') {
                 for (var i = 0; i < schemaVars.miniccc_commands.length; i++) {
@@ -3450,6 +3566,8 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                   tmp.push(...cmds);
                   cmds = tmp;
                 }
+
+                console.log(cmds);
 
                 var responseDlg = new MiniResponseDialog(editorUi);
                 $.post('/commands', JSON.stringify(cmds), function(resp){
@@ -3596,7 +3714,7 @@ MiniResponseDialog.showNewWindowOption = true;
 
 
 /**
- * Constructs a new experiment variables dialog.
+ * Constructs a new JSONEditor for experiment variables
  */
 
 // set default experiment variable values
