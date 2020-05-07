@@ -122,19 +122,6 @@ func (Minimega) StopVM(opts ...Option) error {
 	return nil
 }
 
-func (Minimega) KillVM(opts ...Option) error {
-	o := NewOptions(opts...)
-
-	cmd := mmcli.NewNamespacedCommand(o.ns)
-	cmd.Command = fmt.Sprintf("vm kill %s", o.vm)
-
-	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
-		return fmt.Errorf("killing VM %s in namespace %s: %w", o.vm, o.ns, err)
-	}
-
-	return flush(o.ns)
-}
-
 func (Minimega) RedeployVM(opts ...Option) error {
 	o := NewOptions(opts...)
 
@@ -235,6 +222,45 @@ func (Minimega) RedeployVM(opts ...Option) error {
 
 	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
 		return fmt.Errorf("starting VM %s in namespace %s: %w", o.vm, o.ns, err)
+	}
+
+	return nil
+}
+
+func (Minimega) KillVM(opts ...Option) error {
+	o := NewOptions(opts...)
+
+	cmd := mmcli.NewNamespacedCommand(o.ns)
+	cmd.Command = fmt.Sprintf("vm kill %s", o.vm)
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("killing VM %s in namespace %s: %w", o.vm, o.ns, err)
+	}
+
+	return flush(o.ns)
+}
+
+func (Minimega) ConnectVMInterface(opts ...Option) error {
+	o := NewOptions(opts...)
+
+	cmd := mmcli.NewNamespacedCommand(o.ns)
+	cmd.Command = fmt.Sprintf("vm net connect %s %d %s", o.vm, o.connectIface, o.connectVLAN)
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("connecting interface %d on VM %s to VLAN %s in namespace %s: %w", o.connectIface, o.vm, o.connectVLAN, o.ns, err)
+	}
+
+	return nil
+}
+
+func (Minimega) DisonnectVMInterface(opts ...Option) error {
+	o := NewOptions(opts...)
+
+	cmd := mmcli.NewNamespacedCommand(o.ns)
+	cmd.Command = fmt.Sprintf("vm net disconnect %s %d", o.vm, o.connectIface)
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("disconnecting interface %d on VM %s in namespace %s: %w", o.connectIface, o.vm, o.ns, err)
 	}
 
 	return nil

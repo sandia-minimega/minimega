@@ -150,7 +150,7 @@ func Get(expName, vmName string) (*types.VM, error) {
 }
 
 func Pause(expName, vmName string) error {
-	err := StopVMCaptures(expName, vmName)
+	err := StopCaptures(expName, vmName)
 	if err != nil && !errors.Is(err, ErrNoCaptures) {
 		return fmt.Errorf("stopping captures for VM %s in experiment %s: %w", vmName, expName, err)
 	}
@@ -170,10 +170,56 @@ func Resume(expName, vmName string) error {
 	return nil
 }
 
-func Kill(expName, vmName string) error {
+func Redeploy(expName, vmName string, opts ...RedeployOption) error {
+	o := newRedeployOptions(opts...)
+
+	var injects []string
+
+	if o.inject {
+		exp, err := experiment.Get(expName)
+		if err != nil {
+			return fmt.Errorf("getting experiment %s: %w", expName, err)
+		}
+
+		for _, n := range exp.Spec.Topology.Nodes {
+			if n.General.Hostname != vmName {
+				continue
+			}
+
+			if o.disk == "" {
+				o.disk = n.Hardware.Drives[0].Image
+				o.part = n.Hardware.Drives[0].GetInjectPartition()
+			}
+
+			for _, i := range n.Injections {
+				injects = append(injects, fmt.Sprintf("%s:%s", i.Src, i.Dst))
+			}
+
+			break
+		}
+	}
+
+	mmOpts := []mm.Option{
+		mm.NS(expName),
+		mm.VM(vmName),
+		mm.CPU(o.cpu),
+		mm.Mem(o.mem),
+		mm.Disk(o.disk),
+		mm.Injects(injects...),
+		mm.InjectPartition(o.part),
+	}
+
+	if err := mm.RedeployVM(mmOpts...); err != nil {
+		return fmt.Errorf("redeploying VM: %w", err)
+	}
+
 	return nil
 }
 
-func Redeploy(expName, vmName string, inject bool) error {
+func Kill(expName, vmName string) error {
+	if err := mm.KillVM(mm.NS(expName), mm.VM(vmName)); err != nil {
+		return fmt.Errorf("killing VM: %w", err)
+	}
+
 	return nil
 }

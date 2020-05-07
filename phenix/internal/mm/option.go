@@ -12,6 +12,9 @@ type options struct {
 	injectPart int
 	injects    []string
 
+	connectIface int
+	connectVLAN  string
+
 	captureIface int
 	captureFile  string
 }
@@ -65,6 +68,24 @@ func InjectPartition(p int) Option {
 func Injects(i ...string) Option {
 	return func(o *options) {
 		o.injects = i
+	}
+}
+
+func ConnectInterface(i int) Option {
+	return func(o *options) {
+		o.connectIface = i
+	}
+}
+
+func ConnectVLAN(v string) Option {
+	return func(o *options) {
+		o.connectVLAN = v
+	}
+}
+
+func DisonnectInterface(i int) Option {
+	return func(o *options) {
+		o.connectIface = i
 	}
 }
 

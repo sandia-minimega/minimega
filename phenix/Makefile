@@ -1,3 +1,12 @@
+SHELL := /bin/bash
+
+# Default hyperdark version number to the shorthand git commit hash if
+# not set at the command line.
+VER     := $(or $(VER),$(shell git log -1 --format="%h"))
+COMMIT  := $(shell git log -1 --format="%h - %ae")
+DATE    := $(shell date -u)
+VERSION := $(VER) (commit $(COMMIT)) $(DATE)
+
 GOSOURCES     := $(shell find . \( -name '*.go' \))
 DOCUMENTATION := $(shell find docs/docs \( -name '*' \))
 TEMPLATES     := $(shell find tmpl/templates \( -name '*' \))
@@ -39,7 +48,7 @@ tmpl/bindata.go: $(TEMPLATES) bin/go-bindata
 
 bin/phenix: $(GOSOURCES) docs/bindata.go tmpl/bindata.go
 	mkdir -p bin
-	CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-s -w" -trimpath -o bin/phenix cmd/main.go
+	CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-X 'phenix/version.Version=$(VERSION)' -s -w" -trimpath -o bin/phenix cmd/main.go
 
 .PHONY: serve-docs
 serve-docs:

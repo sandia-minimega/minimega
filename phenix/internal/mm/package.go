@@ -26,12 +26,20 @@ func StopVM(opts ...Option) error {
 	return DefaultMM.StopVM(opts...)
 }
 
+func RedeployVM(opts ...Option) error {
+	return DefaultMM.RedeployVM(opts...)
+}
+
 func KillVM(opts ...Option) error {
 	return DefaultMM.KillVM(opts...)
 }
 
-func RedeployVM(opts ...Option) error {
-	return DefaultMM.RedeployVM(opts...)
+func ConnectVMInterface(opts ...Option) error {
+	return DefaultMM.ConnectVMInterface(opts...)
+}
+
+func DisonnectVMInterface(opts ...Option) error {
+	return DefaultMM.DisonnectVMInterface(opts...)
 }
 
 func StartVMCapture(opts ...Option) error {

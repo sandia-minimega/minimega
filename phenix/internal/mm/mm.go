@@ -13,8 +13,11 @@ type MM interface {
 	GetVMInfo(...Option) types.VMs
 	StartVM(...Option) error
 	StopVM(...Option) error
-	KillVM(...Option) error
 	RedeployVM(...Option) error
+	KillVM(...Option) error
+
+	ConnectVMInterface(...Option) error
+	DisconnectVMInterface(...Option) error
 
 	StartVMCapture(...Option) error
 	StopVMCapture(...Option) error

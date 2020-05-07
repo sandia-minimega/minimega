@@ -15,7 +15,7 @@ var (
 	ErrNoCaptures    = errors.New("no captures exist")
 )
 
-func StartVMCapture(expName, vmName string, iface int, out string) error {
+func StartCapture(expName, vmName string, iface int, out string) error {
 	vm, err := Get(expName, vmName)
 	if err != nil {
 		return fmt.Errorf("getting VM details: %w", err)
@@ -37,7 +37,7 @@ func StartVMCapture(expName, vmName string, iface int, out string) error {
 
 	for _, capture := range captures {
 		if capture.Interface == iface {
-			return fmt.Errorf("starting VM capture for interface %d on VM %s in experiment %s: %w", iface, vmName, expName, err)
+			return fmt.Errorf("packet capture already running for interface %d on VM %s in experiment %s", iface, vmName, expName)
 		}
 	}
 
@@ -52,7 +52,7 @@ func StartVMCapture(expName, vmName string, iface int, out string) error {
 	return nil
 }
 
-func StopVMCaptures(expName, vmName string) error {
+func StopCaptures(expName, vmName string) error {
 	captures := mm.GetVMCaptures(mm.NS(expName), mm.VM(vmName))
 
 	if captures == nil {

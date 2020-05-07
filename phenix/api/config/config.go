@@ -14,7 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func ListConfigs(which string) (types.Configs, error) {
+func List(which string) (types.Configs, error) {
 	var (
 		configs types.Configs
 		err     error
@@ -40,7 +40,7 @@ func ListConfigs(which string) (types.Configs, error) {
 	return configs, nil
 }
 
-func GetConfig(name string) (*types.Config, error) {
+func Get(name string) (*types.Config, error) {
 	c, err := types.NewConfig(name)
 	if err != nil {
 		return nil, err
@@ -53,7 +53,7 @@ func GetConfig(name string) (*types.Config, error) {
 	return c, nil
 }
 
-func CreateConfig(path string) (*types.Config, error) {
+func Create(path string) (*types.Config, error) {
 	if path == "" {
 		return nil, fmt.Errorf("no config file provided")
 	}
@@ -80,7 +80,7 @@ func CreateConfig(path string) (*types.Config, error) {
 	return c, nil
 }
 
-func EditConfig(name string) (*types.Config, error) {
+func Edit(name string) (*types.Config, error) {
 	c, err := types.NewConfig(name)
 	if err != nil {
 		return nil, err
@@ -127,12 +127,12 @@ func EditConfig(name string) (*types.Config, error) {
 	return c, nil
 }
 
-func DeleteConfig(name string) error {
+func Delete(name string) error {
 	if name == "all" {
-		configs, _ := ListConfigs("all")
+		configs, _ := List("all")
 
 		for _, c := range configs {
-			if err := deleteConfig(&c); err != nil {
+			if err := delete(&c); err != nil {
 				return err
 			}
 		}
@@ -140,15 +140,15 @@ func DeleteConfig(name string) error {
 		return nil
 	}
 
-	c, err := GetConfig(name)
+	c, err := Get(name)
 	if err != nil {
 		return fmt.Errorf("getting config '%s': %w", name, err)
 	}
 
-	return deleteConfig(c)
+	return delete(c)
 }
 
-func deleteConfig(c *types.Config) error {
+func delete(c *types.Config) error {
 	if err := store.Delete(c); err != nil {
 		return fmt.Errorf("deleting config in store: %w", err)
 	}
