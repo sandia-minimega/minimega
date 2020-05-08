@@ -92,9 +92,15 @@ func main() {
 						Usage: "get phenix config",
 						Flags: []cli.Flag{
 							&cli.StringFlag{
-								Name:  "output",
-								Usage: "output format (yaml, json)",
-								Value: "yaml",
+								Name:    "output",
+								Aliases: []string{"o"},
+								Usage:   "output format (yaml, json)",
+								Value:   "yaml",
+							},
+							&cli.BoolFlag{
+								Name:    "pretty",
+								Aliases: []string{"p"},
+								Usage:   "pretty print JSON output",
 							},
 						},
 						Action: func(ctx *cli.Context) error {
@@ -112,7 +118,17 @@ func main() {
 
 								fmt.Println(string(m))
 							case "json":
-								m, err := json.Marshal(c)
+								var (
+									m   []byte
+									err error
+								)
+
+								if ctx.Bool("pretty") {
+									m, err = json.MarshalIndent(c, "", "  ")
+								} else {
+									m, err = json.Marshal(c)
+								}
+
 								if err != nil {
 									return cli.Exit(fmt.Errorf("marshaling config to JSON: %w", err), 1)
 								}
