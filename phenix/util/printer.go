@@ -90,3 +90,23 @@ func PrintTableOfVMs(writer io.Writer, vms ...types.VM) {
 
 	table.Render()
 }
+
+func PrintTableOfImageConfigs(writer io.Writer, imgs ...types.Image) {
+	table := tablewriter.NewWriter(writer)
+
+	// TODO: add additional data to table
+	table.SetHeader([]string{"Name", "Size", "Variant", "Release", "Overlays", "Packages"})
+
+	for _, img := range imgs {
+		table.Append([]string{
+			img.Metadata.Name,
+			img.Spec.Size,
+			img.Spec.Variant,
+			img.Spec.Release,
+			strings.Join(img.Spec.Overlays, ", "),
+			strings.Join(img.Spec.Packages, ", "),
+		})
+	}
+
+	table.Render()
+}

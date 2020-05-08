@@ -1,0 +1,48 @@
+steps:
+  - mkimg: {{ `"{{ output }}"` }}
+    size: {{ .Size }}
+    format: {{ .Format }}
+    compress: "{{ .Compress }}"
+  - mklabel: msdos
+    device: {{ `"{{ output }}"` }}
+  - mkpart: primary
+    device: {{ `"{{ output }}"` }}
+    start: 1M
+    end: 100%
+    tag: root
+  - kpartx: {{ `"{{ output }}"` }}
+  - mkfs: ext4
+    partition: root
+  - mount: root
+  - unpack-rootfs: root
+  - debootstrap: {{ .Release }}
+    mirror: {{ .Mirror }}
+    options: "{{ .PackageList }} {{- .DebAppend }} {{ .Verbose }}"
+    target: root
+    unless: rootfs_unpacked
+  {{- if .Cache  }}
+  - cache-rootfs: root
+    unless: rootfs_unpacked
+  {{- end }}
+  {{- if .Overlays }}
+  - overlay: root
+    paths:
+      {{- range $overlay := .Overlays }}
+      - {{ $overlay }}
+      {{- end }}
+  {{- end }}
+  {{- if .Scripts }}
+  - chroot: root
+    shell: |
+{{ .PostBuild }}
+  {{- end }}
+  - fstab: root
+  - grub: bios
+    tag: root
+  {{- if .Ramdisk }}
+  - ramdisk: root
+  {{- end }}
+  - shell: |
+      echo Disk usage of this installation:
+      du -sh "$ROOT"
+    root-fs: root

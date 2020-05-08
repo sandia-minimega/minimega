@@ -10,8 +10,10 @@ import (
 
 	"phenix/api/config"
 	"phenix/api/experiment"
+	"phenix/api/image"
 	"phenix/api/vm"
 	"phenix/store"
+	v1 "phenix/types/version/v1"
 	"phenix/util"
 	"phenix/version"
 
@@ -141,13 +143,19 @@ func main() {
 					{
 						Name:  "create",
 						Usage: "create phenix config(s)",
+						Flags: []cli.Flag{
+							&cli.BoolFlag{
+								Name:  "skip-validation",
+								Usage: "skip config spec validation against schema",
+							},
+						},
 						Action: func(ctx *cli.Context) error {
 							if ctx.Args().Len() == 0 {
 								return cli.Exit("no config files provided", 1)
 							}
 
 							for _, f := range ctx.Args().Slice() {
-								c, err := config.Create(f)
+								c, err := config.Create(f, !ctx.Bool("skip-validation"))
 								if err != nil {
 									return cli.Exit(err, 1)
 								}
@@ -608,6 +616,293 @@ func main() {
 									return nil
 								},
 							},
+						},
+					},
+				},
+			},
+			{
+				Name:  "image",
+				Usage: "phenix Image management",
+				Subcommands: []*cli.Command{
+					{
+						Name:      "create",
+						Usage:     "create configuration from which to build an image",
+						ArgsUsage: "[flags] <name>",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:    "size",
+								Aliases: []string{"z"},
+								Usage:   "image size to use",
+							},
+							&cli.StringFlag{
+								Name:    "variant",
+								Aliases: []string{"v"},
+								Usage:   "image variant to use",
+							},
+							&cli.StringFlag{
+								Name:    "release",
+								Aliases: []string{"r"},
+								Usage:   "os release codename (defaults to bionic)",
+							},
+							&cli.StringFlag{
+								Name:    "mirror",
+								Aliases: []string{"m"},
+								Usage:   "debootstrap mirror (must match release, defaults to http://us.archive.ubuntu.com/ubuntu/)",
+							},
+							&cli.StringFlag{
+								Name:    "format",
+								Aliases: []string{"f"},
+								Usage:   "format of disk image (defaults to raw)",
+							},
+							&cli.BoolFlag{
+								Name:    "compress",
+								Aliases: []string{"c"},
+								Usage:   "compress image after creation",
+							},
+							&cli.StringFlag{
+								Name:    "overlays",
+								Aliases: []string{"o"},
+								Usage:   "list of overlay names (separated by comma)",
+							},
+							&cli.StringFlag{
+								Name:    "packages",
+								Aliases: []string{"p"},
+								Usage:   "list of packages to include in addition to those provided by variant (separated by comma)",
+							},
+							&cli.StringFlag{
+								Name:    "scripts",
+								Aliases: []string{"s"},
+								Usage:   "list of scripts to include in addition to the default one (separated by comma)",
+							},
+							&cli.StringFlag{
+								Name:    "debootstrap_append",
+								Aliases: []string{"d"},
+								Usage:   "additional arguments to debootstrap",
+							},
+						},
+						Action: func(ctx *cli.Context) error {
+							var img v1.Image
+
+							name := ctx.Args().First()
+							img.Size = ctx.String("size")
+							img.Variant = ctx.String("variant")
+							img.Release = ctx.String("release")
+							img.Mirror = ctx.String("mirror")
+							img.Format = v1.Format(ctx.String("format"))
+							img.Compress = ctx.Bool("compress")
+							img.DebAppend = ctx.String("debootstrap_append")
+
+							if overlays := ctx.String("overlays"); overlays != "" {
+								img.Overlays = strings.Split(overlays, ",")
+							}
+
+							if packages := ctx.String("packages"); packages != "" {
+								img.Packages = strings.Split(packages, ",")
+							}
+
+							if scripts := ctx.String("scripts"); scripts != "" {
+								img.ScriptPaths = strings.Split(scripts, ",")
+							}
+
+							if err := image.Create(name, &img); err != nil {
+								return cli.Exit(err, 1)
+							}
+
+							return nil
+						},
+					},
+					{
+						Name:      "create-from",
+						Usage:     "create a new configuration from an existing one",
+						ArgsUsage: "[flags] <name> <saveas>",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:    "overlays",
+								Aliases: []string{"o"},
+								Usage:   "list of overlay names (separated by comma)",
+							},
+							&cli.StringFlag{
+								Name:    "packages",
+								Aliases: []string{"p"},
+								Usage:   "list of packages to include in addition to those provided by variant (separated by comma)",
+							},
+							&cli.StringFlag{
+								Name:    "scripts",
+								Aliases: []string{"s"},
+								Usage:   "list of scripts to include in addition to the default one (separated by comma)",
+							},
+						},
+						Action: func(ctx *cli.Context) error {
+							if ctx.Args().First() == "" {
+								return cli.Exit("name of existing config is required", 1)
+							}
+
+							if ctx.Args().Get(1) == "" {
+								return cli.Exit("name for new config is required", 1)
+							}
+
+							var (
+								name     = ctx.Args().First()
+								saveas   = ctx.Args().Get(1)
+								overlays = strings.Split(ctx.String("overlays"), ",")
+								packages = strings.Split(ctx.String("packages"), ",")
+								scripts  = strings.Split(ctx.String("scripts"), ",")
+							)
+
+							if err := image.CreateFromConfig(name, saveas, overlays, packages, scripts); err != nil {
+								return cli.Exit(err, 1)
+							}
+
+							return nil
+						},
+					},
+					{
+						Name:      "build",
+						Usage:     "build an image from a configuration",
+						ArgsUsage: "[flags] <name>",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:    "verbosity",
+								Aliases: []string{"v"},
+								Usage:   "enable verbose output from debootstrap (options are v, vv, vvv)",
+							},
+							&cli.BoolFlag{
+								Name:    "cache",
+								Aliases: []string{"c"},
+								Usage:   "cache rootfs as tar archive",
+							},
+						},
+						Action: func(ctx *cli.Context) error {
+							if ctx.Args().First() == "" {
+								return cli.Exit("name of config to build is required", 1)
+							}
+
+							var (
+								name      = ctx.Args().First()
+								verbosity = ctx.String("verbosity")
+								cache     = ctx.Bool("cache")
+							)
+
+							if err := image.Build(name, verbosity, cache); err != nil {
+								return cli.Exit(err, 1)
+							}
+
+							return nil
+						},
+					},
+					{
+						Name:      "list",
+						Usage:     "prints a list of image build configuration",
+						ArgsUsage: "",
+						Action: func(ctx *cli.Context) error {
+							imgs, err := image.List()
+							if err != nil {
+								return cli.Exit(err, 1)
+							}
+
+							util.PrintTableOfImageConfigs(os.Stdout, imgs...)
+
+							return nil
+						},
+					},
+					{
+						Name:      "delete",
+						Usage:     "delete image build configuration by name",
+						ArgsUsage: "<name>",
+						Action: func(ctx *cli.Context) error {
+							name := ctx.Args().First()
+
+							if name == "" {
+								return cli.Exit("name of config to delete is required", 1)
+							}
+
+							if err := config.Delete("image/" + name); err != nil {
+								return cli.Exit(err, 1)
+							}
+
+							fmt.Printf("image config %s deleted\n", name)
+
+							return nil
+						},
+					},
+					{
+						Name:      "append",
+						Usage:     "append scripts, packages, and/or overlays to image build config",
+						ArgsUsage: "[flags] <name>",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:    "overlays",
+								Aliases: []string{"o"},
+								Usage:   "list of overlay names (separated by comma)",
+							},
+							&cli.StringFlag{
+								Name:    "packages",
+								Aliases: []string{"p"},
+								Usage:   "list of packages to include in addition to those provided by variant (separated by comma)",
+							},
+							&cli.StringFlag{
+								Name:    "scripts",
+								Aliases: []string{"s"},
+								Usage:   "list of scripts to include in addition to the default one (separated by comma)",
+							},
+						},
+						Action: func(ctx *cli.Context) error {
+							if ctx.Args().First() == "" {
+								return cli.Exit("name of config file to append to is required", 1)
+							}
+
+							var (
+								name     = ctx.Args().First()
+								overlays = strings.Split(ctx.String("overlays"), ",")
+								packages = strings.Split(ctx.String("packages"), ",")
+								scripts  = strings.Split(ctx.String("scripts"), ",")
+							)
+
+							if err := image.Append(name, overlays, packages, scripts); err != nil {
+								return cli.Exit(err, 1)
+							}
+
+							return nil
+						},
+					},
+					{
+						Name:      "remove",
+						Usage:     "remove scripts, packages, and/or overlays from an image build config",
+						ArgsUsage: "[flags] <name>>",
+						Flags: []cli.Flag{
+							&cli.StringFlag{
+								Name:    "overlays",
+								Aliases: []string{"o"},
+								Usage:   "list of overlay names (separated by comma)",
+							},
+							&cli.StringFlag{
+								Name:    "packages",
+								Aliases: []string{"p"},
+								Usage:   "list of packages to include in addition to those provided by variant (separated by comma)",
+							},
+							&cli.StringFlag{
+								Name:    "scripts",
+								Aliases: []string{"s"},
+								Usage:   "list of scripts to include in addition to the default one (separated by comma)",
+							},
+						},
+						Action: func(ctx *cli.Context) error {
+							if ctx.Args().First() == "" {
+								return cli.Exit("name of config file to remove from is required", 1)
+							}
+
+							var (
+								name     = ctx.Args().First()
+								overlays = strings.Split(ctx.String("overlays"), ",")
+								packages = strings.Split(ctx.String("packages"), ",")
+								scripts  = strings.Split(ctx.String("scripts"), ",")
+							)
+
+							if err := image.Remove(name, overlays, packages, scripts); err != nil {
+								return cli.Exit(err, 1)
+							}
+
+							return nil
 						},
 					},
 				},

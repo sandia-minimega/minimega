@@ -26,13 +26,15 @@ func List(which string) (types.Configs, error) {
 
 	switch which {
 	case "", "all":
-		configs, err = store.List("Topology", "Scenario", "Experiment")
+		configs, err = store.List("Topology", "Scenario", "Experiment", "Image")
 	case "topology":
 		configs, err = store.List("Topology")
 	case "scenario":
 		configs, err = store.List("Scenario")
 	case "experiment":
 		configs, err = store.List("Experiment")
+	case "image":
+		configs, err = store.List("Image")
 	default:
 		return nil, fmt.Errorf("unknown config kind provided")
 	}
@@ -70,7 +72,7 @@ func Get(name string) (*types.Config, error) {
 // additional validations are done to ensure the annotated topology (required)
 // and scenario (optional) exist. It returns a pointer to the resulting config
 // struct and eny errors encountered while creating the config.
-func Create(path string) (*types.Config, error) {
+func Create(path string, validate bool) (*types.Config, error) {
 	if path == "" {
 		return nil, fmt.Errorf("no config file provided")
 	}
@@ -86,8 +88,10 @@ func Create(path string) (*types.Config, error) {
 		}
 	}
 
-	if err := types.ValidateConfigSpec(*c); err != nil {
-		return nil, fmt.Errorf("validating config: %w", err)
+	if validate {
+		if err := types.ValidateConfigSpec(*c); err != nil {
+			return nil, fmt.Errorf("validating config: %w", err)
+		}
 	}
 
 	if err := store.Create(c); err != nil {
