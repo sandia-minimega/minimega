@@ -482,7 +482,7 @@ Menus.prototype.init = function()
         })));
         this.put('file', new Menu(mxUtils.bind(this, function(menu, parent)
         {
-          this.addMenuItems(menu, ['new', 'open', '-', 'save', 'saveAs', '-', 'import', 'export', '-', 'pageSetup', 'print', '-', 'generateConfig', 'viewJSON', 'editVariables'], parent);
+          this.addMenuItems(menu, ['new', 'open', '-', 'save', 'saveAs', '-', 'import', 'export', '-', 'pageSetup', 'print', '-', 'generateConfig', 'viewJSON', 'editVariables', 'importJSON'], parent);
         })));
         this.put('edit', new Menu(mxUtils.bind(this, function(menu, parent)
         {

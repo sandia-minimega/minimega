@@ -26,9 +26,14 @@ Actions.prototype.init = function()
 
     this.addAction('viewJSON', function(evt){
 
-        var dlg = new viewJSONDialog(ui);
-        // ui.showDialog(dlg.container, 620, 450, true, false);
-        dlg.init();
+        progressInit(document.getElementsByClassName('geDiagramContainer')[0]);
+        /// a little hacky, but need to delay to allow spinner to render, since
+        // JSON generation wrecks DOM with large topos (TODO: use webworkers/async/etc.?)
+        setTimeout(function() {
+            var dlg = new viewJSONDialog(ui);
+            // ui.showDialog(dlg.container, 620, 450, true, false);
+            dlg.init();
+        }, 300);
 
     }, null, null, null);
 
@@ -85,19 +90,32 @@ Actions.prototype.init = function()
     this.addAction('preview', function() { mxUtils.show(graph, null, 10, 10); });
     this.addAction('generateConfig', function() 
     {
-        var filter = function(cell) {return graph.model.isVertex(cell);}
-        var vertices = graph.model.filterDescendants(filter);
-        filter = function(cell) {return graph.model.isEdge(cell);}
-        var edges = graph.model.filterDescendants(filter);
-        var dlg = new EditMiniConfigDialog(ui,vertices,edges);
-        ui.showDialog(dlg.container, 620, 450, true, false);
-        dlg.init();
+        progressInit(document.getElementsByClassName('geDiagramContainer')[0]);
+        // a little hacky, but need to delay to allow spinner to render, since
+        // config generation wrecks DOM with large topos (TODO: use webworkers/async/etc.?)
+        setTimeout(function() {
+            var filter = function(cell) {return graph.model.isVertex(cell);}
+            var vertices = graph.model.filterDescendants(filter);
+            filter = function(cell) {return graph.model.isEdge(cell);}
+            var edges = graph.model.filterDescendants(filter);
+            var dlg = new EditMiniConfigDialog(ui,vertices,edges);
+            ui.showDialog(dlg.container, 620, 450, true, false);
+            dlg.init();
+            progressDestroy();
+        }, 300);
     });
 
     this.addAction('editVariables', function()
     {
         var dlg = new VariablesDialog(ui);
         // ui.showDialog(dlg.container, 480, 420, true, false, null, false);
+        dlg.init();
+    });
+
+    this.addAction('importJSON', function()
+    {
+        var dlg = new ImportJSONDialog(graph, ui);
+        ui.showDialog(dlg.container, 480, 457, true, false, null, false);
         dlg.init();
     });
     

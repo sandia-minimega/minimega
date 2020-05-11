@@ -101,25 +101,11 @@
       "type": "object",
       "title": "Hardware",
       "required": [
-        "cpu",
         "vcpus",
         "memory",
         "filesystem"
       ],
       "properties": {
-        "cpu": {
-          "$id": "#/nodes/properties/hardware/properties/cpu",
-          "type": "string",
-          "title": "cpu",
-          "default": "Broadwell",
-          "examples": [
-            "Broadwell",
-            "Haswell",
-            "core2duo",
-            "pentium3"
-          ],
-          "pattern": "^(.*)$"
-        },
         "vcpus": {
           "$id": "#/nodes/properties/hardware/properties/vcpus",
           "type": "string",
@@ -158,7 +144,7 @@
           "$id": "#/nodes/properties/hardware/properties/filesystem",
           "type": "string",
           "title": "filesystem",
-          "default": "$IMAGEDIR/",
+          "minLength": 1,
           "examples": [],
           "pattern": "^(.*)$"
         }

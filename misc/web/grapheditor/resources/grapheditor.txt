@@ -166,6 +166,7 @@ id=ID
 image=Image
 images=Images
 import=Import
+importJSON=Import JSON
 increaseIndent=Increase Indent
 insert=Insert
 insertColumnBefore=Insert Column Left

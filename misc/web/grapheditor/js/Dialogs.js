@@ -1543,14 +1543,19 @@ function checkValue(graph, cell, ui) {
 
     value = value.cloneNode(true);
 
-    var schemaVars;
+    var schemaVars; // stores schema-specific JSON data
     var device = 'diagraming';
-    if (cell.getStyle().includes("switch")){device = "switch";}
-    if (cell.getStyle().includes("router")){device = "router";}
-    if (cell.getStyle().includes("firewall")){device = "firewall";}
-    if (cell.getStyle().includes("desktop")){device = "desktop";}
-    if (cell.getStyle().includes("server")){device = "server";}
-    if (cell.getStyle().includes("mobile")){device = "mobile";}
+    try {
+        if (cell.getStyle().includes("switch")){device = "switch";}
+        if (cell.getStyle().includes("router")){device = "router";}
+        if (cell.getStyle().includes("firewall")){device = "firewall";}
+        if (cell.getStyle().includes("desktop")){device = "desktop";}
+        if (cell.getStyle().includes("server")){device = "server";}
+        if (cell.getStyle().includes("mobile")){device = "mobile";}
+    }
+    catch {
+        // console.log('no style');
+    }
 
     if (value.hasAttribute('schemaVars')) {
         // update hostname if it's a duplicate and a vertex (for copied cells)
@@ -1591,42 +1596,43 @@ function checkValue(graph, cell, ui) {
 
         if (cell.isVertex() && device != 'switch') {
 
-            //TODO: set default values from schema???
-            // const schema = ui.schemas['nodes'];
-
-            // let config = {
-            //     schema: schema,
-            //     startval: {},
-            //     ajax: true,
-            //     mode: 'text',
-            //     modes: ['code', 'text', 'tree'],
-            //     theme: 'bootstrap3',
-            //     iconlib: 'spectre',
-            // };
-
-            // var element = document.createElement("div");
-            // element.setAttribute('id', 'jsoneditor');
-
-            // const editor = new JSONEditor(element, config);
-            // schemaVars = editor.getEditor('root').value; 
-
+            let type;
             if (cell.getStyle().includes("container"))
             {
-                schemaVars.type = 'container';
+                type = 'container';
             }
             else
             {
-                schemaVars.type = 'kvm';
+                type = 'kvm';
             }
 
+            const schema = ui.schemas[type]; // get schema to load default values
+
+            let config = {
+                schema: schema,
+                startval: {},
+                ajax: true,
+                mode: 'text',
+                modes: ['code', 'text', 'tree'],
+                theme: 'bootstrap3',
+                iconlib: 'spectre',
+            };
+
+            // hack to parse default schema values
+            var element = document.createElement("div");
+            element.setAttribute('id', 'jsoneditor');
+            const editor = new JSONEditor(element, config);
+            schemaVars = editor.getEditor('root').value; 
+
+            schemaVars.type = type;
             schemaVars.device = device;
 
-            schemaVars.general = {};
+            if (typeof schemaVars.general === 'undefined') schemaVars.general = {};
             schemaVars.general.hostname = `${schemaVars.device}_device_${host_count}`; // (cell.getId());
             value.setAttribute('label', `${schemaVars.device}_device_${host_count}`);
             host_count++;
 
-            schemaVars.hardware = {};
+            if (typeof schemaVars.hardware === 'undefined') schemaVars.hardware = {};
             schemaVars.hardware.os_type = 'linux';
 
         }
@@ -1909,7 +1915,7 @@ var EditDataDialog = function(ui, cell)
             type = 'switch';
         }
         else {
-            type = startval.type = 'kvm' ? 'kvm' : 'container';
+            type = startval.type;
         }
     }
     else {
@@ -2185,7 +2191,7 @@ var viewJSONDialog = function(ui)
         textarea.style.overflow = 'auto';
         textarea.style.resize = 'none';
         textarea.style.width = '100%';
-        textarea.style.height = '360px';
+        textarea.style.height = '420px';
         textarea.style.lineHeight = 'initial';
         textarea.style.marginBottom = '16px';
         // textarea.setAttribute('onkeyup', 'autoHeight(this)');
@@ -2302,7 +2308,7 @@ var viewJSONDialog = function(ui)
         dlBtn.setAttribute('id', 'dowloadJSON');
         
         var buttons = document.createElement('div');
-        buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:15px;height:40px;border-top:1px solid #ccc;padding-top:20px;margin-bottom:15px;'
+        buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:15px;height:40px;padding-top:20px;margin-bottom:15px;'
         
         if (ui.editor.cancelFirst)
         {
@@ -2322,6 +2328,7 @@ var viewJSONDialog = function(ui)
 
         // show dialog only after editor is created
         ui.showDialog(this.container, 480, 420, true, false, null, false); 
+        progressDestroy();
 
     };
 
@@ -3275,7 +3282,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         textarea.style.overflow = 'auto';
         textarea.style.resize = 'none';
         textarea.style.width = '100%';
-        textarea.style.height = '360px';
+        textarea.style.height = '420px';
         textarea.style.lineHeight = 'initial';
         textarea.style.marginBottom = '16px';
 
@@ -3362,7 +3369,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
             for (var i =0; i< cell.getEdgeCount();i++){
                 var e = cell.getEdgeAt(i);
                 edgeSchemaVars = JSON.parse(e.getAttribute('schemaVars'));
-                net += `vlan-${edgeSchemaVars.name}`;
+                net += `${edgeSchemaVars.name}`;
                 if (i+1 < cell.getEdgeCount()){
                     net += ' ';
                 }
@@ -3400,7 +3407,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                                 var argval = obj[i][args[j]].toString(); // to catch false/boolean values
                                 if (typeof argval !== 'undefined' && argval != '') {
                                     argString += `${argval}`;
-                                    if (j < args.length - 1) {
+                                    if (j < args.length - 1 && obj[i][args[j+1]]) {
                                         argString += `,`;
                                     }
                                 }
@@ -3418,7 +3425,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                             var argval = obj[args[i]].toString(); // to catch false/boolean values
                             if (typeof argval !== 'undefined' && argval != '') {
                                 argString += `${argval}`;
-                                if (i < args.length - 1) {
+                                if (i < args.length - 1 && obj[args[i+1]]) {
                                     argString += `,`;
                                 }
                             }
@@ -3546,41 +3553,48 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
 
         var runBtn = mxUtils.button(mxResources.get('run'), function()
         {
-                // Removes all illegal control characters before parsing
-                var data = Graph.zapGremlins(mxUtils.trim(textarea.value));
+                progressInit(document.getElementsByClassName('geDiagramContainer')[0]);
 
-                let cmds = data.split('\n').map(l => {
-                  return l.trim();
-                }).filter(l => {
-                  return !(l === '' || l.startsWith('#'));
-                }).map(l => {
-                  return {
-                    command: l
-                  };
-                });
+                // a little hacky, but need to delay to allow spinner to render, since
+                // command execution wrecks DOM with large topos (TODO: use webworkers/async/etc.?)
+                setTimeout(function() {
+                    // Removes all illegal control characters before parsing
+                    var data = Graph.zapGremlins(mxUtils.trim(textarea.value));
 
-                var resetmm = [{command: "clear all"}];
-                if (checkbox.checked) {
-                  var tmp = [];
-                  tmp.push(...resetmm);
-                  tmp.push(...cmds);
-                  cmds = tmp;
-                }
+                    let cmds = data.split('\n').map(l => {
+                      return l.trim();
+                    }).filter(l => {
+                      return !(l === '' || l.startsWith('#'));
+                    }).map(l => {
+                      return {
+                        command: l
+                      };
+                    });
 
-                console.log(cmds);
+                    var resetmm = [{command: "clear all"}];
+                    if (checkbox.checked) {
+                      var tmp = [];
+                      tmp.push(...resetmm);
+                      tmp.push(...cmds);
+                      cmds = tmp;
+                    }
 
-                var responseDlg = new MiniResponseDialog(editorUi);
-                $.post('/commands', JSON.stringify(cmds), function(resp){
-                  editorUi.showDialog(responseDlg.container, 820, 600, true, false);
-                  responseDlg.init();
-                  for (let i = 0; i < resp.length; i++) {
-                    let rs  = resp[i];
-                    let cmd  = cmds[i];
-                    responseDlg.appendRow(cmd.command, rs);
-                  }
-                }, "json");
+                    // console.log(cmds);
+                    
+                    var responseDlg = new MiniResponseDialog(editorUi);
+                    $.post('/commands', JSON.stringify(cmds), function(resp){
+                      editorUi.showDialog(responseDlg.container, 600, 600, true, false, null, false);
+                      responseDlg.init();
+                      for (let i = 0; i < resp.length; i++) {
+                        let rs  = resp[i];
+                        let cmd  = cmds[i];
+                        responseDlg.appendRow(cmd.command, rs);
+                      }
+                    }, "json");
 
-                editorUi.hideDialog();
+                    progressDestroy();
+                    editorUi.hideDialog();
+                }, 300);
         });
         runBtn.className = 'geBtn gePrimaryBtn';
         formdiv.appendChild(runBtn);
@@ -3601,6 +3615,7 @@ EditMiniConfigDialog.showNewWindowOption = true;
 var MiniResponseDialog = function(editorUi)
 {
     var div = document.createElement('div');
+    div.style.overflow = 'auto';
 
     var header = document.createElement('h2');
     header.textContent = "Minimega Response";
@@ -3608,8 +3623,9 @@ var MiniResponseDialog = function(editorUi)
     header.style.marginBottom = "10px";
 
     var tdiv = document.createElement('div');
-    tdiv.style.overflowY = 'scroll';
-    tdiv.style.height = '500px';
+    tdiv.style['padding-right'] = "8px";
+    // tdiv.style.overflowY = 'scroll';
+    // tdiv.style.height = '500px';
 
     var table = document.createElement('table');
     table.setAttribute('wrap', 'off');
@@ -3617,10 +3633,10 @@ var MiniResponseDialog = function(editorUi)
     table.setAttribute('autocorrect', 'off');
     table.setAttribute('autocomplete', 'off');
     table.setAttribute('autocapitalize', 'off');
-    table.style.overflow = 'auto';
+    // table.style.overflow = 'auto';
     table.style.resize = 'none';
-    table.style.width = '800px';
-    table.style.height = '100%';
+    table.style.width = '100%';
+    // table.style.height = '100%';
     table.style.lineHeight = 'initial';
     table.style.marginBottom = '16px';
 
@@ -3685,24 +3701,31 @@ var MiniResponseDialog = function(editorUi)
     {
         editorUi.hideDialog();
     });
-    cancelBtn.className = 'geBtn';
 
-    if (editorUi.editor.cancelFirst)
-    {
-        formdiv.appendChild(cancelBtn);
-    }
+    cancelBtn.className = 'geBtn';
 
     var okBtn = mxUtils.button(mxResources.get('ok'), function()
     {
         editorUi.hideDialog();
     });
+
     okBtn.className = 'geBtn gePrimaryBtn';
-    formdiv.appendChild(okBtn);
+
+    var buttons = document.createElement('div');
+    buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:15px;height:40px;border-top:1px solid #ccc;padding-top:20px;margin-bottom:15px;'
     
-    if (!editorUi.editor.cancelFirst)
+    if (editorUi.editor.cancelFirst)
     {
-        formdiv.appendChild(cancelBtn);
+        buttons.appendChild(cancelBtn);
+        buttons.appendChild(okBtn);
     }
+    else
+    {
+        buttons.appendChild(okBtn);
+        buttons.appendChild(cancelBtn);
+    }
+    
+    formdiv.appendChild(buttons);
 
     this.container = div;
 };
@@ -3836,3 +3859,349 @@ var VariablesDialog = function(ui)
     };
 
 };
+
+// import JSON and parse to graph model
+var ImportJSONDialog = function(graph, ui) {
+
+    var inputElement = document.createElement('input');
+    inputElement.type = "file";
+    inputElement.id = "jsonimport";
+    inputElement.name = "jsonimport";
+    inputElement.style['margin-bottom'] = "15px";
+    // event listerner for file selection
+    inputElement.addEventListener('change', onChange);
+
+    var div = document.createElement('div');
+
+    var header = document.createElement('h2');
+    header.textContent = "Import JSON";
+    header.style.marginTop = "0";
+    header.style.marginBottom = "10px";
+    header.style.textAlign = 'left';
+
+    var editorContainer = document.createElement('div');
+    editorContainer.setAttribute('id', 'jsoneditor');
+    editorContainer.style.height = '100%';
+    editorContainer.style.position = 'relative';
+    // editorContainer.style['max-width'] ="600px";
+    // editorContainer.style.display = 'none';
+
+    var textarea = document.createElement('textarea');
+    textarea.setAttribute('readonly', 'readonly');
+    // textarea.value = JSON.stringify(json, null, 2);
+    textarea.setAttribute('id', 'jsonString');
+    textarea.setAttribute('wrap', 'off');
+    textarea.setAttribute('spellcheck', 'false');
+    textarea.setAttribute('autocorrect', 'off');
+    textarea.setAttribute('autocomplete', 'off');
+    textarea.setAttribute('autocapitalize', 'off');
+    textarea.style.overflow = 'auto';
+    textarea.style.resize = 'none';
+    textarea.style.width = '100%';
+    textarea.style.height = '420px';
+    textarea.style.lineHeight = 'initial';
+    textarea.style.marginBottom = '16px';
+
+    editorContainer.append(textarea);
+
+    div.appendChild(header);
+    div.appendChild(inputElement);
+    div.appendChild(editorContainer);
+
+    var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
+    {
+        ui.hideDialog.apply(ui, arguments);
+        // jsoneditor.destroy();
+    });
+    
+    cancelBtn.className = 'geBtn';
+    cancelBtn.innerHTML = 'Close';
+    
+    var applyBtn = mxUtils.button(mxResources.get('apply'), function()
+    {
+        try
+        {
+            // generate diagram here
+            ui.hideDialog.apply(ui, arguments);
+            progressInit(document.getElementsByClassName('geDiagramContainer')[0]);
+            // a little hacky, but need to delay to allow spinner to render, since
+            // diagram generation wrecks DOM with large topos (TODO: use webworkers/async/etc.?)
+            setTimeout(function() {
+                generateDiagram(graph, JSON.parse(textarea.value));
+            }, 300);
+            
+            
+        }
+        catch (e)
+        {
+            mxUtils.alert(e);
+        }
+
+        // jsoneditor.destroy();
+
+    });
+
+    applyBtn.className = 'geBtn gePrimaryBtn';
+
+    var buttons = document.createElement('div');
+    buttons.style.cssText = 'position:absolute;left:30px;right:30px;text-align:right;bottom:15px;height:40px;padding-top:20px;margin-bottom:15px;'
+
+    if (ui.editor.cancelFirst)
+    {
+        buttons.appendChild(cancelBtn);
+        buttons.appendChild(applyBtn);
+    }
+    else
+    {
+        buttons.appendChild(applyBtn);
+        buttons.appendChild(cancelBtn);
+    }
+
+    div.appendChild(buttons);
+    this.container = div;
+
+    // read JSON
+    function onChange(event) {
+        var reader = new FileReader();
+        reader.onload = onReaderLoad;
+        reader.readAsText(event.target.files[0]);
+    }
+    // render beautified JSON on read
+    function onReaderLoad(event){
+        try {
+            var obj = JSON.parse(event.target.result);
+            textarea.value = JSON.stringify(obj, null, 2);
+            applyBtn.removeAttribute('disabled');
+        }
+        catch (e) {
+            applyBtn.setAttribute('disabled', 'disabled');
+            textarea.value = "invalid";
+            mxUtils.alert(e);
+        }
+    }
+
+    // custom codec for nested objects
+    class JsonCodec extends mxObjectCodec {
+        constructor() {
+          super((value)=>{});
+        }
+        encode(value) {
+            const xmlDoc = mxUtils.createXmlDocument();
+            const newObject = xmlDoc.createElement("Object");
+            for(let prop in value) {
+              newObject.setAttribute(prop, value[prop]);
+            }
+            return newObject;
+        }
+        decode(model) {
+          return Object.keys(model.cells).map(
+            (iCell)=>{
+              const currentCell = model.getCell(iCell);
+              return (currentCell.value !== undefined)? currentCell : null;
+            }
+          ).filter((item)=> (item !== null));
+        }
+    }
+
+    // parser for JSON to graph model
+    // generates XML diagram
+    function generateDiagram(graph, json){
+        console.log('generate diagram');
+
+        graph.setConnectable(true);
+
+        //TODO: write parser to generate diagram from imported JSON
+        var enc = new JsonCodec();
+        var jsonNodes = json.nodes || []; // get nodes from JSON
+        var jsonVlans = json.vlans || []; // get edges/vlans from JSON
+        var host_count = 0;
+
+        let vertices = []; // stores nodes/vlan targets 
+        let switches = []; // stores switches
+        let edges = []; // stores edges/vlans
+        let vlans = {}; // stores vlans as keys with id, name, and targets properties
+
+        // must enforce some styling standarization for successful JSON mport
+        const devices = ['switch', 'router', 'firewall', 'desktop', 'server', 'mobile'];
+        const types = ['kvm', 'container'];
+        const stencilsDir = window.STENCIL_PATH; // image dir
+        const vertexStyleString = "shape=image;html=1;labelBackgroundColor=#ffffff;image=";
+        const edgeStyleString = "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;";
+
+        // create nodes, switches, and edges with schemaVars user object attribute
+        // for schema validation
+        // TODO: implement schema validation
+        const parent = graph.getDefaultParent();
+        // TODO: assign layers programatically 
+        // var hiddenLayer = graph.model.root.insert(new mxCell());
+        // var visibleLayer = graph.model.root.insert(new mxCell());
+        graph.getModel().beginUpdate();
+        try {
+            jsonNodes.map(
+                (node, idx)=> {
+                    // create node
+                    var obj = {};
+                    // if device prop exists and valid, use it; else, default is desktop
+                    var device = node.device || 'desktop';
+                    device = device.toLowerCase();
+                    if (!devices.includes(device)) {
+                        device = 'desktop';
+                    }
+                    node.device = device;
+                    // default to type kvm
+                    var type = node.type || 'kvm';
+                    type = type.toLowerCase();
+                    if (!types.includes(type)) {
+                        type = 'kvm';
+                    }
+                    node.type = type;
+                    // build node styling string based on device and type
+                    var imageDir = (type == 'kvm') ? "/virtual_machines" : "/containers";
+                    var imageType = (type == 'kvm') ? "vm" : "container";
+                    var styleString = vertexStyleString + stencilsDir + imageDir + "/" + device + "_blue_" + imageType + ".png";
+                    obj.style = styleString;
+                    obj.geometry = {width: 80, height: 80};
+                    obj.value = {};
+                    obj.value.schemaVars = JSON.stringify(node);
+                    obj.value.label = node.general.hostname || device + '_device_' + host_count;
+                    host_count++;
+                    const xmlNode = enc.encode(obj.value);
+                    var layer;
+                    var ifaces;
+                    try {
+                        ifaces = node.network.interfaces; 
+                    }
+                    catch {
+                        ifaces = null;
+                    }
+                    // TODO: move MGMT network to hidden layer
+                    // try {
+                    //     var hidden = ifaces.find(x => x.vlan === 'MGMT');
+                    //     if (hidden) {
+                    //         layer = hiddenLayer;
+                    //     }
+                    // }
+                    // catch {
+                    //     layer = visibleLayer;
+                    // }
+                    vertices[idx] = graph.insertVertex(parent, null, xmlNode, null, null, obj.geometry.width, obj.geometry.height, obj.style);
+                    // if node has an interface w/ vlan, save vlan as key and capture vertex as target
+                    // of implied switch
+                    if (ifaces) {
+                        for (var i = 0; i < ifaces.length; i++) {
+                            var name = ifaces[i].vlan;
+                            if (!vlans[name]) {
+                                var vlan = {"id": 'auto', "name": name, "type": type};
+                                vlan.targets = [];
+                                vlans[name] = vlan;
+                            }
+                            vlans[name].targets.push(vertices[idx]);
+                        }
+                    }
+                });
+            var idx = 0;
+            // create switch as source for each vlan and target
+            for (let [key, value] of Object.entries(vlans)) {
+                var type = value.type;
+                var imageDir = (type == 'kvm') ? "/virtual_machines" : "/containers";
+                var imageType = (type == 'kvm') ? "vm" : "container";
+                var styleString = vertexStyleString + stencilsDir + imageDir + "/switch_blue_" + imageType + ".png";
+                var vlanSwitch = {};
+                vlanSwitch.style = styleString;
+                vlanSwitch.geometry = {width: 80, height: 80};
+                vlanSwitch.value = {};
+                var obj = {};
+                obj.device = 'switch';
+                obj.hostname = value.name;
+                vlanSwitch.value.label = value.name;
+                obj.name = value.name;
+                obj.id = value.id;
+                vlanSwitch.value.schemaVars = JSON.stringify(obj);
+                const xmlSwitch = enc.encode(vlanSwitch.value);
+                switches[idx] = graph.insertVertex(parent, null, xmlSwitch, null, null, vlanSwitch.geometry.width, vlanSwitch.geometry.height, vlanSwitch.style);
+                var source = switches[idx];
+                // create edges
+                for (var i = 0; i < value.targets.length; i++) {
+                    var target = value.targets[i];
+                    var edge = {};
+                    edge.style = edgeStyleString;
+                    edge.value = {};
+                    edge.edge = true;
+                    var obj = {};
+                    obj.id = value.id;
+                    obj.name = value.name;
+                    edge.value.label = value.name
+                    edge.value.schemaVars = JSON.stringify(obj);
+                    const xmlEdge = enc.encode(edge.value);
+                    edges[i] = graph.insertEdge(parent, null, xmlEdge, source, target, edge.style);
+                }
+                idx++;
+            }
+            // if JSON has vlans, set id values
+            jsonVlans.map(
+                (vlan, idx)=> {
+                    var name = vlan.name;
+                    var id = vlan.id;
+                    for (var i = 0; i < switches.length; i++) {
+                        var value = graph.getModel().getValue(switches[i]);
+                        var schemaVars = JSON.parse(value.getAttribute('schemaVars'));
+                        if (schemaVars.name = name) {
+                            schemaVars.id = id;
+                            value = value.cloneNode(true);
+                            value.setAttribute('schemaVars', JSON.stringify(schemaVars));
+                            graph.getModel().setValue(switches[i], value);
+                            lookforvlan(graph, switches[i]);
+                        }
+                    }
+                });
+            // console.log(vertices), console.log(vlans), console.log(edges);
+        }
+        catch (e){
+            console.log(e);
+        }
+        finally {
+            // TODO: hide hidden layer
+            // graph.model.setVisible(hiddenLayer, false);
+            var layout = new mxFastOrganicLayout(graph); // organic layout algorithm for graph layout
+            layout.forceConstant = 150;
+            layout.execute(parent);
+            graph.getModel().endUpdate(); // Updates the display
+            progressDestroy();
+        }
+    }
+
+    this.init = function()
+    {
+        console.log('init import dialog');
+    };
+
+};
+
+// render progress bar loading indicator
+function progressInit(container) {
+    // var progressDiv = document.createElement('div');
+    // progressDiv.setAttribute('id', 'progressDiv');
+    // progressDiv.style.position = "fixed";
+    // progressDiv.style.left = "33.33%";
+    // progressDiv.style.top = "320px";
+    // progressDiv.style.width = "33.33%";
+    // progressDiv.style['z-index'] = "99999999";
+    // progressDiv.setAttribute('class', "progress");
+    // var progressBarDiv = document.createElement('div');
+    // progressBarDiv.setAttribute('class', "progress-bar progress-bar-striped active");
+    // progressBarDiv.setAttribute('role', "progressbar");
+    // progressBarDiv.style.width = "100%";
+    // progressBarDiv.innerHTML = "loading...";
+    var faSpinnerDiv = document.createElement('i');
+    faSpinnerDiv.setAttribute('id', 'loadingDiv')
+    faSpinnerDiv.setAttribute('class', 'fa fa-circle-o-notch fa-spin fa-3x fa-fw');
+    faSpinnerDiv.style.cssText = 'font-size:64px;color: #007bff;position: fixed;left: calc(50% - 32px);top: 50%;width: 64px;height: 64px;z-index: 9999999;';
+    // progressDiv.appendChild(progressBarDiv);
+    // container.appendChild(progressDiv);
+    container.appendChild(faSpinnerDiv);
+}
+
+// destroy progress bar
+function progressDestroy() {
+    document.getElementById('loadingDiv').remove();
+}

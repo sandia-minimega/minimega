@@ -30,8 +30,8 @@ EditorUi = function(editor, container, lightbox)
             }).then(function (blob) {
                 var reader = new FileReader()
                 reader.onload = function (e) {
-                    if (schemaType) {setSchema(e.target.result, schemaType);}
-                    else {loadParams(e.target.result);}
+                    if (schemaType) {callback(e.target.result, schemaType);}
+                    else {callback(e.target.result);}
                 }
                 reader.readAsText(blob)
             })
@@ -46,8 +46,8 @@ EditorUi = function(editor, container, lightbox)
         xobj.onreadystatechange = function () {
             if (xobj.readyState == 4) {
                 if (xobj.status == '200') {
-                    if (schemaType) {setSchema(xobj.responseText, schemaType)}
-                    else {loadParams(xobj.responseText);}
+                    if (schemaType) {callback(xobj.responseText, schemaType)}
+                    else {callback(xobj.responseText);}
                 }
                 else console.log(xobj.status)
             }
