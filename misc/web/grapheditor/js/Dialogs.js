@@ -3460,12 +3460,12 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
             }
         });
         textarea.value = config;
+        textarea.value += "## Starting all VM's\nvm start all\n\n";
         if (miniccc_commands.length > 0) textarea.value += "## miniccc commands\n"
         for(var i = 0; i < miniccc_commands.length; i++) {
             textarea.value += miniccc_commands[i]+"\n";
-            if (i == miniccc_commands.length - 1) {textarea.value += "\n";}
+            // if (i == miniccc_commands.length - 1) {textarea.value += "\n";}
         }
-        textarea.value += "## Starting all VM's\nvm start all\n";
 
         // expand variables
         // console.log(window.experiment_vars);
