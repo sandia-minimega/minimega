@@ -1,0 +1,109 @@
+{{ define "content" }}
+<p>
+The minimega repository includes more than just minimega. It also contains
+several supporting programs for building VM images, managing clusters, and
+generating traffic.
+</p>
+
+<h2>miniweb: web interface for minimega</h2>
+<p>
+miniweb is a standalone websever for minimega. See
+<a href="/articles/miniweb.article">miniweb's documentation</a> for more
+information.
+</p>
+
+<h2>vmbetter: Create Virtual Machine Images</h2>
+<p>
+vmbetter is a tool that takes a configuration file and outputs a
+minimega-bootable, Debian-based VM. It can create custom initrd images, CD
+ISOs, or QEMU-compatible hard disk images. You can specify a list of Debian
+packages to install, insert any additional files you wish, and give a list of
+commands to run after the filesystem has been built (to perform any last-minute
+configuration).
+</p>
+
+<h2>igor: Cluster Reservations</h2>
+<p>
+igor lets you make reservations and, on properly-configured clusters, set up
+reserved nodes to boot from user-specified kernel+initrd files. See
+<a href="/articles/igor.article">igor's documentation</a> for more information.
+</p>
+
+<h2>powerbot: Networked PDU Control</h2>
+<p>
+powerbot allows you to control outlets on networked Power Distribution Units.
+It currently supports TrippLite and Server Tech PDUs, and it's easy to add
+support for additonal devices!
+<a href="/articles/powerbot.article">powerbot's documentation</a> describes how
+to set up and use it.
+</p>
+
+<h2>rfbplay: Playback for VNC recordings</h2>
+<p>
+rfbplay plays vnc recordings created by minimega using `vnc fb record` in the
+browser or transcribes them using ffmpeg. See the
+<a href="/articles/vnc.article#TOC_3.">VNC documentation</a> for more
+information.
+</p>
+
+<h2>vncdrone: automated VNC replayer</h2>
+<p>
+vncdrone takes VNC kb/mouse recordings and replays them on compatible VMs. It
+looks at the recording filename, finds VMs using a disk with a matching
+filename (modulo the file extension), and start the vnc replay on all matching
+VMs.
+</p>
+
+<h2>nfcat: read minimega binary netflows</h2>
+<p>
+minimega's `capture` API can write netflow records in a binary format which can
+be read with nfcat. nfcat dumps the records to stdout in ASCII format.
+</p>
+
+<h2>minitest: runtime testing</h2>
+<p>
+minitest is a testing tool for minimega -- it uses a corpus of tests to
+determine whether minimega gets the expected response for a series of commands.
+See the <a href="/articles/minitest.article">minitest documentation</a> for
+more information.
+</p>
+
+<h2>minifuzzer: simple fuzzer for minimega</h2>
+<p>
+minifuzzer generates random minimega commands and runs them on a minimega
+instance to find crashes.
+</p>
+
+<h2>passwordify: modify credentials for ramdisk images</h2>
+
+<p>
+This utility installs a root password or root SSH keys in a ramdisk image. It
+is intended to help prevent interference between users on a cluster by
+implementing login controls on the bootable image. Running
+`sudo passwordify SOURCE NEW` will unpack the *source* ramdisk image, prompt
+for a root password, and re-pack it into the specified *new* file, leaving the
+source unchanged. The `-keys` flag allows you to specify an authorized_keys
+formatted file (one public key per line) to be installed in the ramdisk's
+`/root/.ssh/authorized_keys`; this can be used to allow key-based root login.
+Specifying the `-passwordless` flag will configure the image such that its own
+RSA keys are in its authorized_keys file, which will allow multiple nodes
+booted from the same image to ssh to each other without needing password input.
+</p>
+
+<h2>rond: standalone command-and-control server</h2>
+
+<p>
+minimega includes a `ron` server to provide command-and-control for VMs. rond
+is a standalone command-and-control server with its own CLI to control physical
+machines running miniccc.
+</p>
+
+<h2>vmconfiger: code generation</h2>
+
+<p>
+vmconfiger generates the `vm config` APIs automatically for minimega. Only
+developers that are changing the VMConfig structs will need to use this. It
+runs automatically with `go generate`.
+</p>
+
+{{ end }}

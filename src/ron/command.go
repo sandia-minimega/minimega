@@ -7,7 +7,6 @@ package ron
 import (
 	"fmt"
 	log "minilog"
-	"os"
 	"strings"
 )
 
@@ -33,10 +32,10 @@ type Command struct {
 
 	// Files to transfer to the client. Any path given in a file specified
 	// here will be rooted at <BASE>/files
-	FilesSend []*File
+	FilesSend []string
 
 	// Files to transfer back to the master
-	FilesRecv []*File
+	FilesRecv []string
 
 	// PID of the process to signal, -1 signals all processes
 	PID int
@@ -65,32 +64,9 @@ type Command struct {
 	Stderr string
 }
 
-type File struct {
-	Name string
-	Perm os.FileMode
-	Data []byte
-}
-
-func (f File) String() string {
-	return f.Name
-}
-
-func (f *File) Copy() *File {
-	f2 := &File{
-		Name: f.Name,
-		Perm: f.Perm,
-	}
-	f2.Data = append(f2.Data, f.Data...)
-
-	return f2
-}
-
 type Response struct {
 	// ID counter, must match the corresponding Command
 	ID int
-
-	// Names and data for uploaded files
-	Files []*File
 
 	// Output from responding command, if any
 	Stdout string
@@ -145,12 +121,8 @@ func (c *Command) Copy() *Command {
 	c2.Command = append(c2.Command, c.Command...)
 	c2.CheckedIn = append(c2.CheckedIn, c.CheckedIn...)
 
-	for _, f := range c.FilesSend {
-		c2.FilesSend = append(c2.FilesSend, f.Copy())
-	}
-	for _, f := range c.FilesRecv {
-		c2.FilesRecv = append(c2.FilesRecv, f.Copy())
-	}
+	c2.FilesSend = append(c2.FilesSend, c.FilesSend...)
+	c2.FilesRecv = append(c2.FilesRecv, c.FilesRecv...)
 
 	if c.Filter != nil {
 		c2.Filter = new(Filter)

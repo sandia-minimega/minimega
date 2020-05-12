@@ -1,0 +1,79 @@
+div#topbar {
+	margin: 0;
+	padding: .8em 1.2em;
+	font-size: 1.2em;
+	font-weight: normal;
+	background: #E0EBF5;
+	width: 100%;
+}
+
+div#page {
+	width: 100%;
+}
+
+div#page > .container,
+div#topbar > .container {
+	text-align: left;
+	margin-left: auto;
+	margin-right: auto;
+	padding: 0 20px;
+	/*width: 900px;*/
+}
+div#page.wide > .container,
+div#topbar.wide > .container {
+	width: auto;
+}
+
+div#footer {
+	text-align: center;
+	color: #666;
+	font-size: 14px;
+	margin: 40px 0;
+}
+
+.author p {
+	margin: 20, 0, 0, 0px;
+}
+
+div.code,
+div.output {
+	margin: 20px;
+	padding: 10px;
+	-webkit-border-radius: 5px;
+	-moz-border-radius: 5px;
+	border-radius: 5px;
+}
+
+div.code { background: #e9e9e9; }
+div.output { background: black; }
+div.output .stdout { color: #e6e6e6; }
+div.output .stderr { color: rgb(244, 74, 63); }
+div.output .system { color: rgb(255, 209, 77) }
+
+.buttons {
+	margin-left: 20px;
+}
+div.output .buttons {
+	margin-left: 0;
+	margin-bottom: 10px;
+}
+
+#toc {
+	float: right;
+	margin: 0px 10px;
+	padding: 10px;
+	border: 1px solid #e5ecf9;
+	background-color: white;
+	max-width: 33%;
+
+	-webkit-border-radius: 5px;
+	-moz-border-radius: 5px;
+	border-radius: 5px;
+}
+
+#toc ul, #toc a {
+	list-style-type: none;
+	padding-left: 10px;
+	color: black;
+	margin: 0px;
+}

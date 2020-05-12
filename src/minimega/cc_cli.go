@@ -219,10 +219,6 @@ func cliCCTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	log.Debug("got vm: %v %v", vm.GetID(), vm.GetName())
 	uuid := vm.GetUUID()
 
-	if c.BoolArgs["rtunnel"] {
-		return ns.ccServer.Reverse(ns.ccFilter, src, host, dst)
-	}
-
 	return ns.ccServer.Forward(uuid, src, host, dst)
 }
 
@@ -379,9 +375,7 @@ func cliCCFileRecv(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 
 	// Add new files to receive
 	for _, file := range c.ListArgs["file"] {
-		cmd.FilesRecv = append(cmd.FilesRecv, &ron.File{
-			Name: file,
-		})
+		cmd.FilesRecv = append(cmd.FilesRecv, file)
 	}
 
 	resp.Data = ns.NewCommand(cmd)

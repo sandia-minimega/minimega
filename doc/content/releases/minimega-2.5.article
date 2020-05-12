@@ -1,0 +1,253 @@
+minimega 2.5 release notes
+
+* Introduction
+
+The minimega team is pleased to announce the release of minimega 2.5. This
+release includes various improvements and numerous bug fixes. This release
+contains changes to the existing API which will improve user experience and
+programmability.
+
+* What's new
+
+** Major changes and milestones
+
+*** cc synchronization
+
+miniccc and the cc server now synchronize with magic bytes ("RON") before their
+handshake so that extra data from a previous connection can be flushed from
+their buffers. This allows VMs to be shutdown/`vm`start`'d and reconnect to the
+cc server. Because of the way minimega connects to the client, we only attempt
+to reconnect after a `vm`start`. If the VM restarts (i.e. with the in-guest
+restart mechanism), we currently do not detect this to attempt a reconnect.
+
+This changes requires users to update the miniccc binaries in their VMs.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1177][#1177]].
+
+*** cc mount API
+
+Extended miniccc to expose the guest filesystem to the host over the miniccc
+connection. This allows the filesystem to be mounted on the host or across the
+network on the head node.
+
+The [[/articles/tutorials/cc.article][command and control]] article has been
+updated to show its use.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1108][#1108]].
+
+*** ns snapshot API
+
+Added `ns`snapshot` which calls `vm`migrate` on all VMs in the namespace and
+writes a launch script to recreate those VMs from the migration files.
+
+This capability has very limited testing.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1081][#1081]].
+
+*** read API
+
+The `read` API now records the namespace that is active at the beginning of the
+read command and prepends it to all commands. To allow read scripts to change
+the namespace, the `read` API inspects commands and updates the namespace
+accordingly. This prevents issues where multiple read scripts run
+simultaneously in different namespaces.
+
+The `read` API also reports the line number when there is a parse error.
+
+PRs [[https://github.com/sandia-minimega/minimega/pull/977][#977]] and
+[[https://github.com/sandia-minimega/minimega/pull/1116][#1116]].
+
+*** -namespace flag
+
+Added `-namespace` flag to specify a namespace to use when running commands for
+the `-attach` and `-e` flags.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/970][#970]].
+
+** Additional new features
+
+*** tap mirror API
+
+Added `tap`mirror` API to create a mirror of a tap. This allows another VM to
+inspect the traffic from an experiment. See the
+[[/articles/mirror.article][article]] for an example.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1118][#1118]].
+
+*** log ring API
+
+Added `log`ring` API which tracks the most recent log messages in an in-memory
+ring buffer. The log ring can be created with an arbitrary size and can be
+dumped by calling `log`ring` with no arguments.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1121][#1121]].
+
+*** Improved QEMU integration
+
+Added `vm`config`cores` and `vm`config`machine` APIs allowing users to specify
+the number of cores and the machine type. The acceptable machine types, CPUs,
+and network drivers are based on what the binary `vm`config`qemu` reports.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1070][#1070]].
+
+*** tar: prefix
+
+Added support for `tar:` prefix which fetches and untars tarballs via meshage.
+Currently only untars if there is a single top-level directory. It untars to
+the same directory that contains the tarball.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1130][#1130]].
+
+*** file delete <GLOB>
+
+Added glob support to `file`delete`.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/972][#972]].
+
+*** vnc API
+
+Added support for running commands against multiple VMs in the same VNC
+command with an API similar to `vm`start`.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1158][#1158]].
+
+*** cc filter API
+
+Added support for all `vm`info` fields for `cc`filter` such as:
+
+    cc filter name=server
+    cc filter vlan=DMZ
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1161][#1161]].
+
+*** qemu
+
+Trim `-balloon` flag from the default QEMU args.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1165][#1165]].
+
+*** noVNC
+
+Upgraded noVNC to v1.0.0.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1110][#1110]].
+
+*** Documentation updates
+
+Added several new articles:
+
+- [[/articles/nat.article][Connecting to the Internet]]
+- [[/articles/newvm.article][Building a new VM]]
+- [[/articles/python.article][Python bindings]]
+- [[/articles/troubleshooting.article][Network Troubleshooting]]
+
+Removed Vyatta article (deprecated API removed in v2.4).￼
+
+** Auxiliary Tools
+
+*** miniweb
+
+Added support for namespaces to miniweb is several ways. First, users may now
+force a namespace by starting miniweb with the `-namespace` flag. Second, when
+miniweb is not forced into a namespace, users may specify namespaces in the
+URL. For example, http://localhost:9001/foo/vms will only show VMs in the "foo"
+namespace.
+
+Added montage page to show VM screenshots with minimal wrappings.
+
+PRs [[https://github.com/sandia-minimega/minimega/pull/876][#876]],
+[[https://github.com/sandia-minimega/minimega/pull/987][#987]], and
+[[https://github.com/sandia-minimega/minimega/pull/1157][#1157]].
+
+*** vmbetter
+
+Replaced `fdisk` with `sfdisk` to fix issues with newer versions of `fdisk`.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1164][#1164]].
+
+*** igor
+
+Improved show command.
+
+PRs [[https://github.com/sandia-minimega/minimega/pull/1159][#1159]] and
+[[https://github.com/sandia-minimega/minimega/pull/1160][#1160]].
+
+Added sync command.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1169][#1169]].
+
+* protonuke
+
+Added support for user-agent strings in HTTP requests and fix a reporting
+error with DNS hits/second.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1172][#1172]].
+
+* Bug fixes
+
+** vnc API with namespaces
+
+`vnc` API no longer reports `vm not found errors` when there are multiple hosts
+in the namespace and only one is running the target VM.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1125][#1125]].
+
+** disk API
+
+Fixed the `disk` API so that it returns an error when the partition is not
+specified and the disk has more than one partition.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1127][#1127]].
+
+** vm config coschedule API
+
+Allow `localhost` as value to `vm`config`coschedule`.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1134][#1134]].
+
+** vm tag API
+
+Fix bug in `vm`tag` where tags for all VMs were being shown instead of just
+those for the specified target.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1156][#1156]].
+
+** capture API
+
+Fix bug in `capture` where some arguments caused an `unreachable` error.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1167][#1167]].
+
+* vmbetter images
+
+Added Bro [[https://github.com/sandia-minimega/minimega/pull/1163][#1163]].
+
+Added minimal Ubuntu [[https://github.com/sandia-minimega/minimega/pull/1179][#1179]].
+
+* Availability
+
+minimega is available in several ways, both as pre-built distributions and
+source. See the [[/articles/installing.article][installing]] guide for more
+information.
+
+** Debian package
+
+minimega is available as an x86-64 debian package, available
+[[https://storage.googleapis.com/minimega-files/minimega-2.5.deb][here]]. It is
+known to work in debian 7 (wheezy) and 8 (testing/jessie) and ubuntu 16.04.
+
+** tarball
+
+A pre-built, x86-64 distribution is available in a single distributable tarball
+[[https://storage.googleapis.com/minimega-files/minimega-2.5.tar.bz2][here]].
+It should be sufficient to simply unpack the tarball and run tools from the
+`bin/` directory directly. Most default paths in minimega, vmbetter, and other
+tools are built to be used in this way (i.e. `bin/minimega`, which will then
+look for the web directory in `misc/web`).
+
+** Building from source
+
+Source of the entire distribution is available on
+[[https://github.com/sandia-minimega/minimega][Github]]. Follow the directions
+for cloning or forking minimega on github.com. In order to build minimega, you
+will need a Go 1.8+ compiler and libpcap headers.

@@ -1,0 +1,123 @@
+File transfer with minimega
+
+The minimega authors
+22 Mar 2016
+
+* Introduction
+
+This tutorial illustrates iomeshage, the meshage-based file transfer layer
+provided by minimega. iomeshage is a distributed file transfer layer that
+provides a means to very quickly copy files between minimega nodes. By
+leveraging minimega's meshage message passing protocol, iomeshage can exceed
+transfer speeds obtained with one-to-one copying.
+
+* Overview
+
+There are two ways to use iomeshage - through the `file` API and via an inline
+`file:` prefix available anywhere on the command line. In order for iomeshage
+to locate files on remote nodes, the files must be located in the `filepath`
+directory provided to minimega (by default `/tmp/minimega/files`).
+
+iomeshage supports transferring single files, globs (wildcard files such as
+foo*), and entire directories. Permissions on transferred files are preserved.
+
+*CAUTION*: iomeshage uses filenames (including the path) as the unique
+identifier for that file. For example, if two nodes have a file "foo", which is
+different on each node, iomeshage will have undefined behavior when
+transferring the file.
+
+** `file` API
+
+iomeshage can be invoked using the `file` API on any node. It doesn't matter
+which remote node the file is on, so long as it exists on at least one node.
+For example, to find and transfer a file 'foo' to the requesting node's
+filepath directory:
+
+	file get foo
+
+If the file exists, the command will return with no error. The `file` API is
+non-blocking - it will return immediately and enqueue the file transfer. To see
+the status of existing file transfers, use the `file`status` API:
+
+	minimega$ file get bigfile
+	minimega$ file status
+	host  | Filename | Temporary directory                    | Completed parts | Queued
+	foo   | bigfile  | /tmp/minimega/files/transfer_442933642 | 65/103          | false
+
+You can also list and delete files using the `file` API:
+
+	minimega$ file list
+	host  | dir | name    | size
+	foo   |     | bigfile | 1073741824
+	minimega$ file delete bigfile
+	minimega$ file list
+	minimega$
+
+File transfers are always done by 'pulling' the file to the requesting node.
+There is no way to transfer a file to a remote node directly. In such cases,
+you will need to tell the remote node to pull the file using the `mesh` API.
+For example, to have remote node `foo` pull a file `bar` from the mesh:
+
+	mesh send foo file get bar
+
+** file: prefix
+
+iomeshage can also be invoked anywhere on the command line by prefixing the
+file you want to transfer to the local node with `file:`. For example, if a
+remote node has a file `foo.qcow2`, and you want to use it locally as a disk
+image:
+
+	vm config disk file:foo.qcow2
+
+This will transfer the file foo.qcow2 to the local node, and block until the
+file transfer is complete. Once complete, the path will be replaced with local
+reference to the file:
+
+	minimega$ vm config disk file:foo.qcow2
+	minimega$ vm config disk
+	[/tmp/minimega/files/foo.qcow2]
+	minimega$
+
+Additionally, `file:` can by tab completed across the mesh in the same way as
+bash.
+
+** tar: prefix
+
+The `tar:` prefix fetches and untars tarballs via meshage, typically for use as
+a container filesystem:
+
+	minimega$ vm config filesystem tar:containerfs.tar.gz
+	minimega$ vm config filesystem
+	[/tmp/minimega/files/containerfs]
+	minimega$
+
+If the tarball contains more than a single top-level directory, it will return
+an error since the filesystem path is set to the top-level directory inside the
+tarball. If the tarball resides outside of the iomeshage directory, minimega
+will still untar the tarball if it exists on the local node running the
+container to the same directory where the tarball resides.
+
+** http://, https:// prefix
+
+Similar to the `file:` prefix, an HTTP(s) URL can be supplied anywhere minimega
+expects a file on disk. minimega will block while it downloads the file to the
+iomeshage directory. If the file already exists in iomeshage (on any node), the
+iomeshage version will be fetched instead of requesting the file from the URL.
+For example, to create a VM based on an Ubuntu cloud image:
+
+    minimega$ vm config disk https://uec-images.ubuntu.com/releases/14.04/release/ubuntu-14.04-server-cloudimg-amd64-disk1.img
+    minimega$ vm config disk
+    [/tmp/minimega/files/releases/14.04/release/ubuntu-14.04-server-cloudimg-amd64-disk1.img]
+    minimega$ file list
+    dir   | name              | size
+    <dir> | miniccc_responses | 40
+    <dir> | releases          | 60
+    minimega$ file list releases
+    dir   | name  | size
+    <dir> | 14.04 | 60
+    minimega$ file list releases/14.04
+    dir   | name    | size
+    <dir> | release | 60
+    minimega$ file list releases/14.04/release/
+    dir  | name                                         | size
+         | ubuntu-14.04-server-cloudimg-amd64-disk1.img | 259785216

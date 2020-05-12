@@ -149,6 +149,7 @@ func cliMeshageList(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 	case c.BoolArgs["all"]:
 		// combine keys into list
 		resp.Response = ranges.UnsplitList(keys)
+		resp.Data = keys
 	case c.BoolArgs["peers"]:
 		// reconstruct keys without local node
 		for i, v := range keys {
@@ -158,6 +159,7 @@ func cliMeshageList(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 			}
 		}
 		resp.Response = ranges.UnsplitList(keys)
+		resp.Data = keys
 	default:
 		// print adjacency list
 		for _, key := range keys {

@@ -1,0 +1,43 @@
+{/* Template for directory listing. */}
+
+{{ define "content" }}
+<h1>Documentation</h1>
+
+{{with .Path}}<h2>{{.}}</h2>{{end}}
+
+{{with .Articles}}
+<h4>Articles:</h4>
+<dl>
+{{range .}}
+<dd><a href="/{{.Path}}">{{.Title}}</a></dd>
+{{end}}
+</dl>
+{{end}}
+
+{{with .Slides}}
+<h4>Slide decks:</h4>
+<dl>
+{{range .}}
+<dd><a href="/{{.Path}}">{{.Name}}</a>: {{.Title}}</dd>
+{{end}}
+</dl>
+{{end}}
+
+{{with .Other}}
+<h4>Files:</h4>
+<dl>
+{{range .}}
+<dd><a href="/{{.Path}}">{{.Name}}</a></dd>
+{{end}}
+</dl>
+{{end}}
+
+{{with .Dirs}}
+<h4>Sub-directories:</h4>
+<dl>
+{{range .}}
+<dd><a href="/{{.Path}}">{{.Name}}</a></dd>
+{{end}}
+</dl>
+{{end}}
+{{ end }}

@@ -1,26 +1,43 @@
+# file big enough to fill memory
+background dd if=/dev/zero of=/tmp/minimega/files/cc_io.bigfile bs=1M count=512
+
 vm config filesystem $images/minicccfs
-vm config hostname foo
-vm config uuid a5e980ca-3958-48cc-92e9-93d50c0157ad
+vm config uuid 9e73ce1b-b93d-4594-8577-80d773b1fbb9
+vm config memory 512
 vm launch container foo
 vm start all
 
-# wait for clients to start
-shell sleep 10
+# wait for clients to start and dd to finish
+shell sleep 10s
 .columns uuid,hostname cc clients
 
-# create a large file, which helps expose races such as issue-775
-background dd if=/dev/zero of=/tmp/minimega/files/cc_io.bigfile bs=1M count=100
-shell sleep 5
-
-# send the file
+# test sending the file
 cc send cc_io.bigfile
 
-# make sure it's been delivered
-cc exec /bin/ls /tmp/miniccc/files/cc_io.bigfile
+shell sleep 20s
 
-# check results
-shell sleep 10
-cc responses 2
+# make sure sent properly
+cc exec du -sb /tmp/miniccc/files/cc_io.bigfile
+cc exec md5sum /tmp/miniccc/files/cc_io.bigfile
 
-# clean up everything
+# wait for execs to finish
+shell sleep 10s
+cc response all
+
+# test recv
+cc recv /tmp/miniccc/files/cc_io.bigfile
+
+shell sleep 20s
+cc commands
+
+# sanity check
+shell du -sb /tmp/minimega/files/cc_io.bigfile
+shell md5sum /tmp/minimega/files/cc_io.bigfile
+
+# make sure recv'd properly
+shell du -sb /tmp/minimega/files/miniccc_responses/4/9e73ce1b-b93d-4594-8577-80d773b1fbb9/tmp/miniccc/files/cc_io.bigfile
+shell md5sum /tmp/minimega/files/miniccc_responses/4/9e73ce1b-b93d-4594-8577-80d773b1fbb9/tmp/miniccc/files/cc_io.bigfile
+
+# housekeeping
 clear cc
+shell rm /tmp/minimega/files/cc_io.bigfile

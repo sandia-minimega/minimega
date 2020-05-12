@@ -1,0 +1,251 @@
+﻿Creating routers with minimega
+
+The minimega authors
+11 July 2016
+
+* Introduction
+
+`minirouter` is a simple tool, run in a VM, that orchestrates various router
+functions such as DHCP, DNS, IPv4/IPv6 assignments, and, of course, routing.
+The `minirouter` tool is interfaced by minimega's `router` API, described
+below, and the minimega distribution provides a prebuilt `minirouter` container
+image.
+
+`minirouter` currently supports several protocols and capabilities including
+DHCP, DNS, router advertisements, OSPF, and static routes. It can route in
+excess of 40 gigabits per second when running as a container.
+
+* Obtaining a minirouter image
+
+`minirouter` can run on bare metal, as a container, or a KVM image.
+
+** Prebuilt container image
+
+A prebuilt, busybox-based, container image is available
+[[https://storage.googleapis.com/minimega-files/minimega-2.3-minirouter.tar.bz2][here]].
+This image can be built using the build script in `misc/minirouter` in the
+minimega repo. The minirouter image is configured to start miniccc and
+minirouter at startup.
+
+** Building a KVM image
+
+You can also build a disk image for booting in KVM using vmbetter (see
+[[tutorials/vmbetter.article][the vmbetter tutorial for more information]])
+
+	$ ./bin/vmbetter -branch stable -level debug misc/vmbetter_configs/minirouter.conf
+
+** Running minirouter without an image
+
+minirouter is simply a Linux binary that can run on any Linux system. You
+do not specifically need to build an image to run it, although it is
+more convenient.
+
+To use minirouter, you must have the miniccc agent running, and
+minirouter must be able to access the miniccc tool and files directory
+(see `minirouter`-h` for default paths).
+
+`minirouter` uses `iptool`, `dnsmasq`, `dhclient`, and `bird`, all of which
+must be installed but not already running. `minirouter` must run as root.
+
+Beyond these few requirements, `minirouter` should run on most linux
+systems.
+
+* Starting minirouter
+
+VMs running the `minirouter` tool must have `miniccc` running as well (this is
+already configured in the prebuilt `minirouter` image). Configuring a
+`minirouter` image is similar to describing and launching a VM in minimega. One
+first describes the router parameters, and then commits the configuration,
+which causes the minirouter tool to set IPs and start other necessary tools on
+the router VM. `minirouter` VMs must be running before configuring the router,
+and configurations can be updated at runtime.
+
+The `router` API requires a VM name or ID when configuring a router. For
+example, to set a static IP on a running `minirouter` VM named 'foo':
+
+	minimega$ router foo interface 0 10.0.0.1/24
+	minimega$ router foo commit
+
+While the first command above sets the configuration for the router image, the
+second line actually commits the configuration by sending commands to
+minirouter over the command and control layer in minimega. Multiple
+configuration commands can be issued and then later committed with a single
+`commit` command.
+
+* Interfaces
+
+Routers often have statically assigned IP addresses and `minirouter`
+supports both IPv4 and IPv6 address specification using the `interface` API.
+For example, to add the IP 10.0.0.1/24 to the second interface on a
+`minirouter` VM:
+
+	minimega$ vm config net a b
+
+	# add an ip to interface b (index 1)
+	minimega$ router foo interface 1 10.0.0.1/24
+
+Multiple addresses can be added to the same interface as well:
+
+	minimega$ router foo interface 0 10.0.0.1/24
+	minimega$ router foo interface 0 2001:1::1/64
+
+minirouter can also assign loopback interfaces. These types of interfaces are 
+useful in routing processes (i.e. OSPF)
+
+	minimega$ router foo interface 1 11.0.0.1/32 lo
+
+* DHCP and DNS
+
+We use [[http://www.thekelleys.org.uk/dnsmasq/doc.html][dnsmasq]] to provide
+DHCP, router advertisements, and DNS capabilities in `minirouter`. dnsmasq has
+extensive support for various DHCP and DNS options, and `minirouter` uses a
+subset of common capabilities.
+
+** DHCP
+
+`minirouter` supports DHCP assignment of connected clients and supports both IP
+range and static IP assignment. `minirouter` also supports several DHCP
+options such as setting the default gateway and nameserver.
+
+For example, to serve the IP range 10.0.0.2 - 10.0.0.254 on a 10.0.0.0/24
+network, specify the network prefix and DHCP range:
+
+	minimega$ router foo dhcp 10.0.0.0 range 10.0.0.2 10.0.0.254
+
+You can also specify static IP assignments with a MAC/IP address pair:
+
+	minimega$ router foo dhcp 10.0.0.0 static 00:11:22:33:44:55 10.0.0.100
+
+Additionally, you can specify the default gateway and nameserver:
+
+	minimega$ router foo dhcp 10.0.0.0 router 10.0.0.254
+	minimega$ router foo dhcp 10.0.0.0 dns 8.8.8.8
+
+All of these DHCP options can be used together in a single DHCP specification,
+and multiple DHCP servers can be specified on a single `minirouter` instance
+(for serving DHCP on multiple interfaces/networks).
+
+** IPv6 Router Advertisements
+
+`minirouter` supports IPv6 router advertisements using the Neighbor Discovery
+Protocol to enable
+[[https://en.wikipedia.org/wiki/IPv6#Stateless_address_autoconfiguration_.28SLAAC.29][SLAAC]]
+addressing. To enable route advertisements simply provide the subnet. Only the
+subnet prefix is required as SLAAC addressing requires a /64 and is implied.
+
+	minimega$ router foo ra 2001:1:2:3::
+
+** DNS
+
+`minirouter` provides a simple mechanism to add `A` or `AAAA` records for
+any host/IP (including IPv6) pair. Simply specify the host and IP address of
+the record:
+
+	minimega$ router foo dns 1.2.3.4 foo.com
+
+* Routing
+
+`minirouter` uses the [[http://bird.network.cz/][bird routing daemon]] to
+provide routing using a variety of protocols. Currently, `minirouter` only
+supports static, OSPF and bgp routes.
+
+Bird is a lightweight routing daemon that scales well. In our tests we were
+able to scale minirouter with bird to at least 40 gigabit.
+
+** Static routes
+
+`minirouter` makes possible adding IPv4 or IPv6 static routes by simply
+specifying the destination network and net-hop IP. For example, to add a 
+static IPv4 route for the 1.2.3.0/24 network via 1.2.3.254:
+
+	minimega$ router foo route static 1.2.3.0/24 1.2.3.254
+
+Or to specify a default route:
+
+	minimega$ router foo route static 0.0.0.0/0 1.2.3.254
+
+IPv6 routes are added in the same way:
+
+	minimega$ router foo route static 2001:1:2:3::/64 2001:1:2:3::1
+
+You can also give names to static routes so you can combine multple routes
+under a single name. By doing so you can create simple filter or advertise
+this route in routing processes like OSPF and BGP. For example, setting a 
+static route with the name bar-route
+
+	minimega$ router foo route static 1.2.3.0/24 1.2.3.254 bar-route	
+
+** OSPF
+
+`minirouter` provides basic support for OSPF and OSPFv3 (IPv6 enabled OSPF) by
+specifying the OSPF area and *interface* to include in the area. OSPF generally
+supports specifying networks and many other options, which `minirouter` may add
+in the future. Specifying an interface (and all of the networks on
+that interface) is provided. Both OSPF and OSPFv3 are enabled by `minirouter`.
+You can also specify specific networks or static routes into the OSPF process.
+
+Interfaces are identified by the index in which they were added by the
+`vm`config`net` API. For example, to add the first and third network of the
+router VM to area 0 in an OSPF route:
+
+	minimega$ vm config net a b c
+
+	# add interface 'a', index 0
+	minimega$ router foo route ospf 0 0
+
+	# add interface 'c', index 2
+	minimega$ router foo route ospf 0 2
+
+Now lets say you want to advertise a network that is on index 1 but you do not 
+want interface 1 to participate in OSPF (i.e. its an Internet facing interface)
+	
+	# advertise network 10.0.0.0/24 in OSPF area 0
+	minimega$router foo route ospf 0 export 10.0.0.0/24 
+
+Say you want to advertise a specific static route(s) into the ospf process. 
+The export command provides this functionality
+
+	# advertise network default route 0.0.0.0/0 in OSPF area 0
+	minimega$router foo route static 0.0.0.0/0 1.2.3.254 default-route
+	minimega$router foo route ospf export default-route
+
+** BGP
+
+‘minirouter’ provides basic support for BGP on IPv4 Networks. Each BGP peering
+relationship or process needs to have a name, local information, neighbor 
+information and whats being exported. The local and neighbor information will 
+be IP address and AS numbers. You can additionally set up whats being exported 
+i.e. all learned routes or just routes specified. The filter keyword allows you
+to use named static routes for simple route filtering. More advanced route 
+filtering is planned. Route reflection can also be configured if you want to 
+configure a particular router to be a route reflector server by default all 
+routers are BGP route clients.
+
+For example R1 has an ip of 10.0.0.1 in AS 100 and R2 has an IP of 20.0.0.1 in 
+AS 20. We would like R1 just to announce the 10.0.0.0/24 network to R2 while on 
+R2 we want to advertise all learned routes. We could also optionally add 
+additional routes by adding more export statements to R2 
+
+To configure BGP:
+	
+	#Set up routes to be advertised by BGP
+	minimega$router R1 route static 10.0.0.0/24 0 bar-route
+
+	#BGP Config	
+	minimega$router R1 route bgp BgpToR2 local 10.0.0.1 100
+	minimega$router R1 route bgp BgpToR2 neighbor 20.0.0.1 200
+	minimega$router R1 route bgp BgpToR2 export filter bar-route
+
+	minimega$router R2 route bgp BgpToR1 local 20.0.0.1 200
+	minimega$router R2 route bgp BgpToR1 neighbor 10.0.0.1 100
+	minimega$router R2 route bgp BgpToR1 export all
+
+To configure route reflection:
+
+	 minimega$router R2 route bgp BgpToR1 rrclient
+	
+
+
+	
+	
+	

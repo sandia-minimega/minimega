@@ -1,0 +1,128 @@
+powerbot: A Power-Control Tool
+
+The minimega authors
+3 Mar 2015
+
+* Introduction
+
+powerbot is a tool in the vein of LLNL's "powerman"
+([[https://code.google.com/p/powerman/][google code]]), which can control
+networked Power Distribution Units (PDUs). We use it to turn our cluster nodes
+on and off; because the nodes netboot and don't maintain a root filesystem on
+disk, the fastest and easiest way to reboot them is by cycling power.
+
+** Compatibility
+
+powerbot was built to meet our specific needs at Sandia, so it currently only
+supports the PDUs we have used: a ServerTech device and a TrippLite. Because
+our needs are pretty simple, it should hopefully work on most ServerTech or
+TrippLite devices. It is also extremely easy to implement support for other
+devices, see tripplite.go and servertech.go for examples.
+
+* Usage
+
+powerbot commands consist of an action (on/off/cycle/status) and a list of
+nodes for which to perform the action. You can use ranges to specify multiple
+nodes. Here are some example commands:
+
+        $ powerbot on ccc1                # Turn on ccc1
+        $ powerbot off ccc[1-10]          # Turn off ccc1 through ccc10
+        $ powerbot cycle ccc[1-3,7,10-12] # Cycle power to nodes 1, 2, 3, 7, 10, 11, and 12
+        $ powerbot status ccc1            # Check the power status of ccc1
+
+* Build/Install
+
+** Building
+
+powerbot ships in the minimega distribution. Instructions for
+acquiring minimega binaries or building from source can be found in the
+[[installing.article][installation article]].
+
+** Installation
+
+The powerbot binary will be at minimega/bin/powerbot. Copy this somewhere
+convenient, like /usr/local/bin.
+
+You'll also need a config file in /etc/powerbot.conf. An example is provided in
+the minimega/src/powerbot directory and is reproduced here:
+
+        # Prefix for your nodes.
+        prefix	ccc
+        
+        # device specification
+        # device	<name>	<type>	<host>	<port>	<username>	<password>
+        device	p1	trippline	pdu 5214	localadmin		examplepw
+        
+        # node listing
+        # node	<nodename>	<pdu>	<outlet>
+        node  ccc1	   p1	 4
+        node  ccc2	   p1	 5
+        node  ccc3	   p1	 6
+        node  ccc4	   p1	 7
+        node  ccc5	   p1	 9
+        node  ccc6	   p1	 10
+        node  ccc7	   p1	 11
+        node  ccc8	   p1	 12
+        node  ccc9	   p1	 13
+        node  ccc10	   p1	 14
+        node  ccc11	   p1	 15
+        node  ccc12	   p1	 17
+        node  ccc13	   p1	 18
+        node  ccc14	   p1	 19
+
+The essential components of a config file are:
+
+- Prefix. This line specifies the prefix used in every hostname. In this example the hostnames look like ccc1, ccc2, etc., so our prefix is "ccc".
+- Devices. Each "device" line specifies an individual PDU in your system. Here we set up a device called "p1" (this name is internal to powerbot). It is a Tripp Lite PDU, so the device type is given as "tripplite" (see the list at the end of this document for supported PDU types). The device's hostname is "p1", although this can also be specified as an IP. This device listens for control connections on port 5214. We also specify a username and password to log in to the PDU.
+- Nodes. Each "node" line corresponds to a physical machine. We specify a node's name (such as "ccc1"), the PDU it is connected to ("p1"), and then the specific outlet on the PDU to which the node is connected. Different PDU manufacturers use different outlet specifications; Tripp Lite numbers 1-N, but for example Server Tech has names like ".AA1" and ".AB5".
+
+At this time, you can have only one prefix per configuration. If you must
+control multiple clusters with different prefixes, you can place another
+configuration file elsewhere and call "powerbot -config /path/to/conf" to use
+that instead.
+
+** Supported PDUs
+
+- "tripplite": Tripp Lite PDUs with the SNMPWEBCARD interface. Specify the port serving the telnet CLI; this should be 5214 by default.
+- "servertech": Server Tech PDUs with network interfaces. Specify the port serving the telnet CLI; this is usually port 23.
+
+** Adding PDU Support
+
+Your PDU may not be supported. To add a PDU, you simply need to define a type
+which conforms to the PDU interface:
+
+        type PDU interface {
+                On(map[string]string) error
+                Off(map[string]string) error
+                Cycle(map[string]string) error
+                Status(map[string]string) error
+        }
+
+Each function takes a map of node names (ccc1, etc.) to outlet names, so ccc1
+maps to 4 in the example configuration above. You may not need the node names
+for your implementation, but they can be useful for debugging.
+
+The file tripplite.go contains the implementation for a Tripp Lite PDU using
+the SNMPWEBCARD as found in many Tripp Lite products. It was specifically
+written for a PDU3VSR10L2130 model, but should work on others. Our specific
+device serves a telnet CLI on port 5214.
+
+Add your device code in a separate file, then insert it into the PDUtypes map
+in powerbot.go. You should now be able to configure devices with your new
+device type.
+
+Note that since powerbot does not have a daemon process, you will most likely
+have to log in for every command (see tripplite.go). This is simpler than
+attempting to keep a long-lived connection alive.
+
+Although this code is focused on networked PDUs, it should be very easy to code
+up a device that uses something like a serial port by passing other values in
+the "host" and "port" configuration fields. For instance, if the PDU is
+accessed via /dev/tty0 and doesn't need authentication, your device
+configuration line might look like this:
+
+        device  p2      serialpdu       /dev/tty0       nil     nil     nil
+
+We specify that it is a "serialpdu" device on /dev/tty0, and the un-needed port
+and username/password fields are given dummy values. (Note that no "serialpdu"
+device is implemented, this is just an example)

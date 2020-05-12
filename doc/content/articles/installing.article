@@ -1,0 +1,133 @@
+Installing minimega
+
+The minimega authors
+21 Sep 2017
+
+* Obtaining minimega
+
+There are two ways to get minimega: by downloading a pre-compiled binary
+distribution, or by building from source yourself. Using a binary distribution
+is more convenient, but building from source means you can get the most
+up-to-date development version if desired.
+
+** Binary distribution
+
+minimega is available as a prebuilt, x86-64 debian package, or as a standalone
+tarball. The debian package is known to work on debian 7-9 and is available
+[[https://storage.googleapis.com/minimega-files/minimega-2.6.deb][here]]. The
+latest debian release, debian 10 (buster), is known not to work.
+
+For other x86-64 systems, use the prebuilt tarball, available
+[[https://storage.googleapis.com/minimega-files/minimega-2.6.tar.bz2][here]].
+Simply unpack minimega and run it from the top level directory:
+
+	$ tar xjf minimega.tar.bz2 && cd minimega
+	$ ./bin/minimega
+
+You may find it convenient to place the minimega directory in `/opt`.
+
+** Building from source
+
+To build from source you will need [[http://golang.org][Go]] (version 1.10 or
+1.11) and libpcap headers. On a Debian-type system, you can install
+compile-time dependencies with:
+
+	$ apt-get install libpcap-dev
+
+Having installed the dependencies, grab the minimega source:
+
+       $ git clone git@github.com:sandia-minimega/minimega.git
+       $ cd minimega
+
+Next, check out the 2.6 release. If you wish to run the development version
+("tip") of minimega, skip this command.
+
+	$ git checkout 2.6
+
+Finally, compile minimega:
+
+       $ ./all.bash
+
+This will build and test each of the libraries and tools in the minimega
+distribution and create a bin/ sudirectory containing each of the minimega
+tools. If you have a Windows cross compiler for Go set up, it will also build
+windows binaries of several tools.
+
+* Deploying minimega
+
+minimega is a single binary and needs no configuration files. However, because
+minimega makes use of external programs, you'll need to have some things
+installed--see the section "System requirements and runtime dependencies"
+below.
+
+To deploy minimega to any number of nodes, simply copy the binary to each node.
+See [[usage.article][the usage article]] for information about launching
+minimega.
+
+Depending on your cluster configuration, it is also possible to have minimega
+deploy itself. By launching minimega on a single node, you can use the `deploy`
+API which will cause minimega to copy itself and run remotely using `ssh` on a
+provided list of nodes. See the [[api.article][API documentation]] on `deploy`
+for more information, or read the [[cluster.article][article on setting up a cluster]].
+
+** System requirements and runtime dependencies
+
+minimega is designed to be simple to deploy. It has only one runtime
+dependency, libpcap, which is included on almost all standard Linux distros.
+
+To launch containers, the kernel must support OverlayFS, which was added in
+Linux 3.18.
+
+minimega also has a number of external tools it executes. When you start
+minimega, it will check to see if each of the tools it may need are available
+in `$PATH`. Depending on your intended use case, you may not need every single
+external program.
+
+If you plan to launch and maintain VMs, you'll need the following programs at a
+minimum:
+
+- kvm - qemu-kvm with the kvm kernel module loaded (minimum version 1.6)
+- ip - ip tool for manipulating devices
+- ovs-vsctl - Open vSwitch switch control with daemon running and kernel module loaded (minimum version 1.11)
+- ovs-ofctl - Open vSwitch openflow control with daemon running and kernel module loaded
+
+We also recommend installing the following; they are not strictly necessary for
+basic VM use but are required for some more advanced operations:
+
+- dhclient - dhcp client
+- dnsmasq - DNS and DHCP server (minimum version 2.73)
+- qemu-nbd/qemu-img - tool for interacting with qemu disk images (in the Debian package "qemu-tools")
+- mkdosfs - used when creating router images
+- taskset - set CPU affinity for VMs
+- ntfs-3g - NTFS with write support for injecting files into NTFS images
+- ssh/scp - used to deploy minimega to other nodes in a cluster
+- tc - used by QoS API to set latency and bandwidth for VMs
+
+The following debian packages should install most of the dependencies:
+
+    openvswitch-switch qemu-kvm qemu-utils dnsmasq ntfs-3g iproute
+
+*** Grub note
+
+If you intend to run Linux containers, you need to have the `memory` cgroup
+enabled, but Debian (and some other distros) do not enable it by default. If
+you try to start a container and get an error, you may need to enable the
+memory cgroup.
+
+To enable it, add the following to your kernel boot parameters:
+
+	cgroup_enable=memory
+
+On Debian, you can do this by opening /etc/default/grub and adding that
+parameter to the `GRUB_CMDLINE_LINUX_DEFAULT` line. It should end up looking
+something like this:
+
+	GRUB_CMDLINE_LINUX_DEFAULT="quiet cgroup_enable=memory"
+
+Then run update-grub and reboot for the change to take effect.
+
+* Getting help
+
+The mailing list is the primary resource for both developers and users.
+
+.link https://groups.google.com/forum/#!forum/minimega-dev minimega mailing list
