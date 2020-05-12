@@ -14,6 +14,29 @@ Editor = function(chromeless, themes, model, graph, editable)
     this.undoManager = this.createUndoManager();
     this.status = '';
 
+    // TODO: implement localStorage to persist graph model
+    // localStorage.clear();
+    // var codec = new mxCodec();
+    // if (localStorage.getItem('model')) {
+    //     var doc = mxUtils.parseXml(localStorage.getItem('model'));
+    //     console.log(doc);
+    //     codec.decode(doc.documentElement, this.graph.getModel());
+    // }
+    // var xml = codec.encode(this.graph.getModel());
+    // console.log(xml);
+    // var xmlText = new XMLSerializer().serializeToString(xml);
+    // console.log(xmlText);
+    // localStorage.setItem('model', xmlText);
+    // console.log(localStorage.getItem('model'));
+    // window.onunload = function() {
+    //     console.log('save graph model to local storage');
+    //     var xml = codec.encode(this.graph.getModel());
+    //     console.log(xml);
+    //     var xmlText = new XMLSerializer().serializeToString(xml);
+    //     localStorage.setItem('model', xmlText);
+
+    // };
+
     this.getOrCreateFilename = function()
     {
         return this.filename || mxResources.get('drawing', [Editor.pageCounter]) + '.xml';
