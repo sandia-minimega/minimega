@@ -4162,8 +4162,10 @@ var ImportJSONDialog = function(graph, ui) {
         finally {
             // TODO: hide hidden layer
             // graph.model.setVisible(hiddenLayer, false);
-            var layout = new mxFastOrganicLayout(graph); // organic layout algorithm for graph layout
-            layout.forceConstant = 150;
+            var first = new mxFastOrganicLayout(graph); // organic layout algorithm for graph layout
+            first.forceConstant = 400;
+            var second = new mxParallelEdgeLayout(graph);
+            var layout = new mxCompositeLayout(graph, [first, second], first);
             layout.execute(parent);
             graph.getModel().endUpdate(); // Updates the display
             progressDestroy();
