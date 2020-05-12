@@ -46,7 +46,7 @@ docs/bindata.go: $(DOCUMENTATION) bin/go-bindata
 tmpl/bindata.go: $(TEMPLATES) bin/go-bindata
 	$(GOBIN)/go-bindata -pkg tmpl -prefix tmpl/templates -o tmpl/bindata.go tmpl/templates/...
 
-bin/phenix: $(GOSOURCES) docs/bindata.go tmpl/bindata.go
+bin/phenix: $(GOSOURCES) tmpl/bindata.go
 	mkdir -p bin
 	CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-X 'phenix/version.Version=$(VERSION)' -s -w" -trimpath -o bin/phenix cmd/main.go
 

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -12,12 +11,10 @@ import (
 	"phenix/api/config"
 	"phenix/api/experiment"
 	"phenix/api/vm"
-	"phenix/docs"
 	"phenix/store"
 	"phenix/util"
 	"phenix/version"
 
-	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v3"
 )
@@ -615,35 +612,37 @@ func main() {
 					},
 				},
 			},
-			{
-				Name:  "docs",
-				Usage: "serve documenation over HTTP",
-				Flags: []cli.Flag{
-					&cli.StringFlag{
-						Name:    "endpoint",
-						Aliases: []string{"e"},
-						Usage:   "endpoint to bind HTTP server to",
-						Value:   ":8080",
+			/*
+				{
+					Name:  "docs",
+					Usage: "serve documenation over HTTP",
+					Flags: []cli.Flag{
+						&cli.StringFlag{
+							Name:    "endpoint",
+							Aliases: []string{"e"},
+							Usage:   "endpoint to bind HTTP server to",
+							Value:   ":8080",
+						},
+					},
+					Action: func(ctx *cli.Context) error {
+						endpoint := ctx.String("endpoint")
+
+						fs := &assetfs.AssetFS{
+							Asset:     docs.Asset,
+							AssetDir:  docs.AssetDir,
+							AssetInfo: docs.AssetInfo,
+						}
+
+						http.Handle("/", http.FileServer(fs))
+
+						fmt.Printf("\nStarting documentation server at %s\n", endpoint)
+
+						http.ListenAndServe(endpoint, nil)
+
+						return nil
 					},
 				},
-				Action: func(ctx *cli.Context) error {
-					endpoint := ctx.String("endpoint")
-
-					fs := &assetfs.AssetFS{
-						Asset:     docs.Asset,
-						AssetDir:  docs.AssetDir,
-						AssetInfo: docs.AssetInfo,
-					}
-
-					http.Handle("/", http.FileServer(fs))
-
-					fmt.Printf("\nStarting documentation server at %s\n", endpoint)
-
-					http.ListenAndServe(endpoint, nil)
-
-					return nil
-				},
-			},
+			*/
 		},
 	}
 
