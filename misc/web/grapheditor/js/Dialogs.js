@@ -4181,6 +4181,8 @@ var ImportJSONDialog = function(graph, ui) {
 
 // render progress bar loading indicator
 function progressInit(container) {
+	// TODO: implement progress bar loading indicator
+	// to replace spinner icon
     // var progressDiv = document.createElement('div');
     // progressDiv.setAttribute('id', 'progressDiv');
     // progressDiv.style.position = "fixed";
