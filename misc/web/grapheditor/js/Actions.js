@@ -923,7 +923,7 @@ Actions.prototype.init = function()
             ext = '_' + mxClient.language;
         }
         
-        graph.openLink(RESOURCES_PATH + '/help' + ext + '.html');
+        graph.openLink('https://minimega.org/'); // RESOURCES_PATH + '/help' + ext + '.html'
     });
     
     var showingAbout = false;

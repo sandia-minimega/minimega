@@ -1252,23 +1252,18 @@
     },
     "advanced": {
       "$id": "#/nodes/properties/advanced",
-      "type": "array",
+      "type": "object",
       "title": "Advanced KVM Configuration",
-      "items": {
-        "$id": "#/nodes/properties/advanced_commands/items",
-        "type": "object",
-        "title": "config",
-        "properties": {
-          "qemu-append": {
-            "$id": "#/nodes/properties/advanced_commands/items/properties/qemu-append",
-            "type": "string",
-            "title": "qemu-append",
-            "default": "",
-            "examples": [
-              ""
-            ],
-            "pattern": ""
-          }
+      "properties": {
+        "qemu-append": {
+          "$id": "#/nodes/properties/advanced/properties/qemu-append",
+          "type": "string",
+          "title": "qemu-append",
+          "default": "",
+          "examples": [
+            ""
+          ],
+          "pattern": "^(.*)$"
         }
       }
     },
