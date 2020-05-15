@@ -77,7 +77,6 @@
       "title": "Hardware",
       "required": [
         "os_type",
-        "cpu",
         "vcpus",
         "memory",
         "drives"
@@ -87,7 +86,6 @@
           "$id": "#/nodes/properties/hardware/properties/cpu",
           "type": "string",
           "title": "cpu",
-          "default": "Broadwell",
           "examples": [
             "Broadwell",
             "Haswell",
@@ -1252,6 +1250,28 @@
         }
       }
     },
+    "advanced": {
+      "$id": "#/nodes/properties/advanced",
+      "type": "array",
+      "title": "Advanced KVM Configuration",
+      "items": {
+        "$id": "#/nodes/properties/advanced_commands/items",
+        "type": "object",
+        "title": "config",
+        "properties": {
+          "qemu-append": {
+            "$id": "#/nodes/properties/advanced_commands/items/properties/qemu-append",
+            "type": "string",
+            "title": "qemu-append",
+            "default": "",
+            "examples": [
+              ""
+            ],
+            "pattern": ""
+          }
+        }
+      }
+    },
     "miniccc_commands": {
       "$id": "#/nodes/properties/miniccc_commands",
       "type": "array",
@@ -1265,7 +1285,7 @@
         ],
         "properties": {
           "command": {
-            "$id": "#/nodes/properties/miniccc_commands/items/command",
+            "$id": "#/nodes/properties/miniccc_commands/items/properties/command",
             "type": "string",
             "title": "Command",
             "minLength": 1,

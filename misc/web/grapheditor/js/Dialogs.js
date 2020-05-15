@@ -1621,8 +1621,8 @@ function checkValue(graph, cell, ui) {
             // hack to parse default schema values
             var element = document.createElement("div");
             element.setAttribute('id', 'jsoneditor');
-            const editor = new JSONEditor(element, config);
-            schemaVars = editor.getEditor('root').value; 
+            const jsoneditor = new JSONEditor(element, config);
+            schemaVars = jsoneditor.getEditor('root').value; 
 
             schemaVars.type = type;
             schemaVars.device = device;

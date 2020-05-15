@@ -1177,7 +1177,7 @@
         ],
         "properties": {
           "command": {
-            "$id": "#/nodes/properties/miniccc_commands/items/command",
+            "$id": "#/nodes/properties/miniccc_commands/items/properties/command",
             "type": "string",
             "title": "Command",
             "minLength": 1,
