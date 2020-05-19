@@ -1,0 +1,144 @@
+VM Networking
+How to configure an experiment network
+
+The minimega miniclass series
+Sandia National Laboratories
+http://minimega.org/
+
+* Overview
+
+minimega uses software-defined networking to connect VMs on one or more virtual
+networks. These networks can span a single node, a cluster, or across clusters.
+
+See [[module14.slide][Module 14]] for more information about VM networking on a cluster.
+
+* APIs
+
+This module covers the following APIs:
+
+- `vm`config`networks`
+- `vlans`
+- `tap`
+- `bridge`
+
+* Configuring networks
+
+When configuring a VM, the user decides the bridge, VLAN, MAC, and driver for
+each VM interface. Endpoint VMs typically have a single interface while routers
+may have several.
+
+	vm config networks [netspec]...
+
+Where netspec is:
+
+	<bridge>,<VLAN>,<MAC>,<driver>
+
+Only the VLAN is mandatory -- the other fields have sane defaults.
+
+* What is a VLAN?
+
+A VLAN is an extra 12-bit identifier in the MAC frame that logically separates
+LANs that share the same physical network.
+
+VMs on the same VLAN are in the same LAN. VMs in different VLANs must be
+connected by a router that spans the VLANs.
+
+The 12-bit identifier means that there are 4,094 possible VLANs. 0x000, 0xFFF,
+and 0x001 are typically reserved.
+
+* Configuring networks, examples
+
+To connect a VM to VLANs 100 and 101:
+
+	vm config net 100 101
+
+To connect a VM to VLANs 100 and 101 with specific mac addresses:
+
+	vm config net 100,00:00:00:00:00:00 101,00:00:00:00:01:00
+
+To connect a VM to VLAN 100 on bridge0 and VLAN 200 on bridge1:
+
+	vm config net bridge0,100 bridge1,200
+
+To connect a VM to VLAN 100 on bridge0 with a specific mac:
+
+	vm config net bridge0,100,00:11:22:33:44:55
+
+To specify a specific driver, such as i82559c:
+
+	vm config net 100,i82559c
+
+* VLAN aliases
+
+In the previous example, we used explicit VLAN identifiers like 100 and 101.
+minimega support VLAN aliases to make them easier to work with:
+
+	vm config net DMZ CORE
+
+DMZ and CORE will automatically be assigned to an available VLAN identifier on
+their first use. Otherwise, they will mapped to the stored value.
+
+* VLAN aliases
+
+The `vlans` API allows users to print, add, and configure VLAN aliases:
+
+	minimega$ vlans
+	alias | vlan
+	CORE  | 102
+	DMZ   | 101
+
+You can manually add a VLAN using `vlans`add`:
+
+	vlans add FOO 1000
+
+To limit aliases to a particular identifier range, use `vlans`range`.
+
+* VLAN blacklist
+
+You may also blacklist identifiers that minimega should not use for new
+aliases:
+
+	minimega$ vlan blacklist 1000
+	minimega$ vlan blacklist
+	vlan
+	1000
+
+This happens automatically if you specify a VLAN identifier in
+`vm`config`networks`:
+
+	minimega$ vm config net 1001
+	minimega[minimega]$ vlan blacklist
+	vlan
+	1000
+	1001
+
+* Creating host taps
+
+Once VMs are running, it can be useful to access the VM network from the host.
+This is achieved by creating a host tap on the DMZ VLAN:
+
+	minimega$ tap create DMZ
+	mega_tap0
+
+This interface can be given an IP using external tools or directly in minimega:
+
+	tap create DMZ ip 10.0.0.1/24
+
+See [[/articles/nat.article][this article]] for how to connect a VM to the Internet.
+
+* Mirrors and trunks
+
+Accessing the "live" VM traffic can be useful to understand what the VMs are
+doing. There are two ways to do so: `tap`mirror` and `bridge`trunk`.
+
+`tap`mirror` mirrors one tap to another.
+
+`bridge`trunk` mirrors all traffic from the bridge to an interface.
+
+See [[/articles/mirror.article][this article]] on tap mirroring for more information. 
+
+minimega also supports capturing packets. You can read up on the capture API in the [[/articles/api.article][API Documentation]].
+
+* Next up…
+
+[[module06.slide][Module 06: Experimental network]]

@@ -1,0 +1,298 @@
+VM Physics
+How to manipulate VM device components with minimega
+
+The minimega miniclass series
+Sandia National Laboratories
+http://minimega.org/
+
+* Overview
+
+Many physical interactions can be emulated with VMs:
+
+- User ejects CD
+- User plugs in USB device
+- User disconnects network
+- Network has limited bandwidth or drops packets
+
+* APIs
+
+This module covers the following APIs:
+
+- `vm`cdrom` API
+- `vm`hotplug` API
+- `vm`netmod` API
+- `qos` API
+
+*  vm cdrom API
+
+By default, VMs are launched with an empty CD tray:
+
+    vm config cdrom
+
+We can insert and eject CDs using the `vm`cdrom` API
+
+    vm cdrom <eject,> <vm id or name>
+    vm cdrom <change,> <vm id or name> <path>
+
+Will eject or change an active VM's cdrom image.
+
+* vm cdrom examples
+
+Eject VM 0's cdrom:
+
+    vm cdrom eject 0
+
+Eject all VM cdroms:
+
+    vm cdrom eject all
+
+Change a VM to use a new ISO:
+
+    vm cdrom change 0 /tmp/debian.iso
+
+"vm cdrom change" implies that the current ISO will be ejected. 
+
+*  vm hotplug API - USB 2.0
+
+Similar to CDs, minimega allows the user to hotplug and manage USB devices.
+You can view connected usb drives with `show` and specify the vm (or all):
+
+    minimega$ vm hotplug show all
+    host   | hotplug ID | File
+    ubuntu | 0          | /home/ubuntu/mydrive.img
+
+Use `add` to hotplug a USB device. The following specifies USB 2.0:
+
+    vm hotplug add foo /foo 2.0
+
+You can disconnect USB drives with `remove`:
+
+    vm hotplug remove <vm> <hotplugID>
+
+* vm hotplug USB - Linux
+
+Drive images are easier to create for Linux guests, because you dont have to worry about partitioning. Here is an example method to create a drive image:
+
+    root@ubuntu:~# dd if=/dev/zero of=mydrive.img bs=1M count=1024
+    1024+0 records in
+    1024+0 records out
+    1073741824 bytes (1.1 GB) copied, 0.988975 s, 1.1 GB/s
+    root@ubuntu:~# mkfs.fat mydrive.img
+    mkfs.fat 3.0.26 (2014-03-07)
+    root@ubuntu:~# mkdir -p /mnt/mydrive
+    root@ubuntu:~# mount mydrive.img /mnt/mydrive
+    root@ubuntu:~# echo "This is a test" > /mnt/mydrive/test.txt
+    root@ubuntu:~# cat /mnt/mydrive/test.txt
+    This is a test
+    root@ubuntu:~# umount /mnt/mydrive
+    root@ubuntu:~# /home/ubuntu/minimega/bin/minimega -attach
+
+Once the drive is created we can hotplug the drive using the following command:
+
+    vm hotplug add MYVM /home/ubuntu/mydrive.img
+
+* vm hotplug USB - Windows
+
+With windows you need to create a valid partition table before formatting, as the next few slides demonstrate:
+
+    root@ubuntu:~# dd if=/dev/zero of=100.img bs=1024 count=102400
+    102400+0 records in
+    102400+0 records out
+    104857600 bytes (105 MB, 100 MiB) copied, 2.594 s, 40.4 MB/s
+    root@ubuntu:~# fdisk 100.img
+    
+    Welcome to fdisk (util-linux 2.27.1).
+    Changes will remain in memory only, until you decide to write them.
+    Be careful before using the write command.
+    
+    Device does not contain a recognized partition table.
+    Created a new DOS disklabel with disk identifier 0x3d1e2fa3.
+
+* Windows USB drive creation
+    
+    Command (m for help): n
+    Partition type
+      p   primary (0 primary, 0 extended, 4 free)
+      e   extended (container for logical partitions)
+    Select (default p): p
+    Partition number (1-4, default 1): 1
+    First sector (2048-204799, default 2048):
+    Last sector, +sectors or +size{K,M,G,T,P} (2048-204799, default 204799):
+    Created a new partition 1 of type 'Linux' and of size 99 MiB.
+    
+    Command (m for help): t
+    Selected partition 1
+    Partition type (type L to list all types): 7
+    Changed type of partition 'Linux' to 'HPFS/NTFS/exFAT'.
+    
+    Command (m for help): w
+    The partition table has been altered.
+    Syncing disks.
+
+* Windows USB drive creation
+    
+    root@ubuntu:~# kpartx -av 100.img
+    add map loop0p1 (252:0): 0 202752 linear 7:0 2048
+    root@ubuntu:~# mkfs.fat /dev/mapper/loop0p1 -n USB
+    mkfs.fat 3.0.28 (2015-05-16)
+    unable to get drive geometry, using default 255/63
+    
+    mkdir -p /mnt/mydrive
+    mount /dev/mapper/loop0p1 /mnt/mydrive
+    echo "This is a test" > /mnt/mydrive/test.txt
+    umount /mnt/mydrive
+
+    root@ubuntu:~# kpartx -dv 100.img
+    del devmap : loop0p1
+    loop deleted : /dev/loop0
+    
+
+* Windows USB drive creation
+
+Finally, we can take that device and plug it in with minimega:
+    
+    vm hotplug add w7 /home/ubuntu/100.img
+
+You can also create images of an existing flash drive using the `dd` command.
+
+    dd if=/dev/sdb of=myusb.img
+
+For windows, you can use `win32diskimager`
+
+* vm hotplug USB - non-disk images
+
+Using appends you can also pass through devices. Lets use lsusb to print the usb devices on a local server
+
+    root@ubuntu:~# lsusb
+    Bus 002 Device 003: ID 1234:5678 Brain Actuated Technologies
+    Bus 002 Device 002: ID 8087:0024 Intel Corp. Integrated Rate Matching Hub
+    Bus 002 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+    Bus 004 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+    Bus 003 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+    Bus 001 Device 004: ID 05ca:18c0 Ricoh Co., Ltd
+    Bus 001 Device 003: ID 8086:0189 Intel Corp.
+    Bus 001 Device 002: ID 8087:0024 Intel Corp. Integrated Rate Matching Hub
+    Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+
+* vm hotplug USB - non-disk images
+
+Using the same to connect a local  usb flash drive, we can  find out what bus and device number is assigned. 
+
+In this particular case the flash drive is named `Verbatim`.
+
+    root@ubuntu:~# lsusb
+    Bus 002 Device 003: ID 1234:5678 Brain Actuated Technologies
+    Bus 002 Device 004: ID 18a5:4123 Verbatim, Ltd
+    Bus 002 Device 002: ID 8087:0024 Intel Corp. Integrated Rate Matching Hub
+    Bus 002 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+    Bus 004 Device 001: ID 1d6b:0003 Linux Foundation 3.0 root hub
+    Bus 003 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+    Bus 001 Device 004: ID 05ca:18c0 Ricoh Co., Ltd
+    Bus 001 Device 003: ID 8086:0189 Intel Corp.
+    Bus 001 Device 002: ID 8087:0024 Intel Corp. Integrated Rate Matching Hub
+    Bus 001 Device 001: ID 1d6b:0002 Linux Foundation 2.0 root hub
+
+* vm hotplug USB - non-disk images
+
+Now lets create an append
+
+    clear vm config qemu-append
+    vm config qemu-append -usb -device usb-host,hostbus=2,hostaddr=4 -M q35
+
+Depending on your hardware you may need to add the -M q35 flag. 
+This changes the qemu usb host bus chipset from I440FX to ICH9.
+
+There a number of ways you can attach usb devices for instance you can reference the ID as well.
+
+    vm config qemu-append -usb -usbdevice host:18a5:4123 -M q35
+
+* vm netmod API
+
+In real networks, devices may move around and reconnect to the network in different locations. 
+
+The `vm`netmod` API allows users to move network connections for VMs.
+
+Using the API you can disconnect or move existing network connections for one or more VMs. 
+
+See `vm`start` for a full description of allowable targets.
+
+Network connections are indicated by their position in vm net (same order in vm info) and are zero indexed. 
+
+* vm netmod API examples
+
+To disconnect the first network connection from a VM named vm-0:
+
+    vm net disconnect vm-0 0
+
+To disconnect the second interface:
+
+    vm net disconnect vm-0 1
+
+To move a connection, specify the interface number, the new VLAN tag and optional bridge:
+
+    vm net vm-0 0 100 mega_bridge
+
+If the bridge name is omitted, the interface will be reconnected to the same bridge that it is already on. 
+
+If the interface is not connected to a bridge, it will be connected to the default bridge, "mega_bridge".
+
+* qos API
+
+Real-world networks have properties such as bandwidth, latency, and jitter. 
+
+The quality-of-service (`qos`) API allows users to emulate these properties on virtual links.
+
+    qos <add,> <vm target> <interface> <loss,> <percent>
+    qos <add,> <vm target> <interface> <delay,> <duration>
+    qos <add,> <vm target> <interface> <rate,> <bw> <kbit,mbit,gbit>
+
+The API places constraints on mega interfaces to emulate real networks. 
+
+Currently only applies qos constraints on the egress side / transmit direction. 
+
+qos constraints can be stacked with multiple calls to <add>, and must be specified explicitly. 
+
+Any existing constraints will be overwritten by additional calls to <add>. 
+
+VM can be specified with the same target syntax as the "vm start" api.
+
+
+* qos
+
+Note that qos is namespace aware, and any qos commands will be matched to target vms within the currently active namespace.
+
+qos constraints include:
+
+    loss : packets will be randomly dropped with a specified probability
+    delay : delay packets for specified unit of time (ms, ns, etc)
+    rate : impose a maximum bandwidth on an interface in kbit, mbit, or gbit
+
+Note: due to limitations of the underlying tool, "tc", you can only add rate or loss/delay to a VM. 
+
+Enabling loss or delay will disable rate and vice versa.
+
+qos applies only to traffic received by the VM (which is "egress" traffic on the mega_tap interface on the host) -- traffic sent by the VM ("ingress" on the mega_tap interface on the host) is not policed to the desired rate. 
+
+* qos API examples
+
+Randomly drop packets on the 0th interface for vms foo0, 1, and 2 with probably 0.25%
+
+    qos add foo[0-2] 0 loss 0.25
+
+Add a 100ms delay to every packet on the 0th interface for vm foo and bar
+
+    qos add foo,bar 0 delay 100ms
+
+Rate limit the 0th interface on all vms in the active namespace to 1mbit/s
+
+    qos add all 0 rate 1 mbit
+
+Clear qos
+
+    clear qos foo all
+
+See "vm start" for a full description of allowable targets.
+
+* Next up…
+
+[[module13.slide][Module 13: Namespaces]]

@@ -1,0 +1,247 @@
+VM Orchestration
+How to define and launch Virtual Machines
+
+The minimega miniclass series
+Sandia National Laboratories
+http://minimega.org/
+
+
+* experiment design  
+
+These are some of the things you'll need to think about before building your environment
+
+-- topology - what does the environment look like?
+-- VM images - which OS? preload software, or push at runtime?
+-- instrumentation, data capture - how do we measure and collect the data we want?
+
+The answers to these questions impact how you will deploy your VMs. Such as
+
+- The image used for the VM
+- Network configuration
+- physical charactersitics of the VM
+-- cpu
+-- memory
+-- etc.
+
+* Configure, Launch, Start
+
+Once you have settled on what the VM properties in your experiment should be, you'll need a way to define those properties and deploy those VMs. minimega provides an easy way to define and deploy your VMs.
+
+There are essentially 3 steps to deploying VMs in minimega:
+
+
+1. CONFIGURE VM properties with minimega's 'vm config' API
+
+2. LAUNCH a number of VMs with the configuration described
+
+- Repeat steps 1 and 2 until all VMs in your experiment are launched.
+
+3. START all the VMs
+
+
+* vm config - the heart of minimega
+
+- Use 'vm config' to define the properties of the VMs you want to launch such as
+-- memory
+-- vcpus
+-- net
+-- KVM or Container?
+
+- minimega supports a variety of VM images
+-- disk (qcow, qc2, etc.)
+-- CD (.iso)
+-- Kernel/Initrd (kvm)
+-- Filesystem (container)
+
+For a detailed explanation of Virtual Machine Types, please visit [[/articles/vmtypes.article][the article]] on minimega.org.
+
+* Configuring a VM
+
+- minimega requires very little configuration to launch a VM
+- only a vm image is required to be set in order to launch
+- from start to finish there are exactly three steps to launching a VM
+-- start minimega
+-- set an image in vm config
+-- launch and start the vm(s)
+
+- We've already covered starting minimega, let's look at the other two
+
+* Configuring and Launching VMs
+
+- Set an image with vm config using one of the below
+.mega module03_content/disk.mm
+
+- Launch a number of VMs you specify, and minimega will name them automatically.
+-- Alternatively, you can specify the names, and even the numerical range that is appended:
+.mega module03_content/launch.mm
+
+* 
+
+- or launch containers
+.mega module03_content/launch_c.mm
+- A state of ERROR would mean something failed.
+-- use 'flush' to clear out VMs in the ERROR or QUIT states
+.mega module03_content/flush.mm
+- This lets you adjust your config and correct any issues to try again.
+
+
+* Starting vms
+- We are not running yet! To start the VM use:
+.mega module03_content/start.mm
+- This puts the VM in the RUNNING state
+- Use 'vm info' to confirm running state and other details:
+.mega module03_content/vminfo.mm
+
+
+* Stopping VMs
+.mega module03_content/mdk.mm
+
+* VM States
+
+.image module03_content/states.png 400 _
+
+* A Closer Look at VM CONFIG
+
+There are many configuration options available to you, so we will try to focus on the common options first. You can find a comprehensive list at the end of this module.
+
+    Memory:           2048
+    VCPUs:            1
+    Networks:         []
+    Snapshot:         true
+    Tags:             {}
+
+- Memory: Configures the amount of physical memory to allocate (in megabytes).
+- VCPUs: Configures the number of virtual CPUs to allocate for a VM.
+- Networks: Specify Network(s) by VLAN, MAC address, and network device (e.g. e1000)
+- Snapshot: default = true. Set false if you want changes made to the VM to be persistent.
+- Tags: User-specified tags (<key> [value]). Ex. vm config tags router true
+
+* KVM configuration:
+
+
+    Disk Paths:         []
+    CDROM Path:
+    Kernel Path:
+    Initrd Path:
+
+
+- Disk Paths: Attach one or more disks to a vm. Any supported by QEMU is valid.
+
+- CDROM Path: Attach a cdrom to a VM. Will automatically be set as boot device.
+
+- Kernel Path: Attach a kernel image to a VM.
+
+- Initrd Path: Attach an initrd image to a VM.
+
+Note: One of either Disk, CD, or Kernel+Initrd must be specified to launch a kvm
+
+* Container configuration:
+    Filesystem Path:
+    Hostname:
+    Init:            [/init]
+    Pre-init:
+
+- Filesystem Path: Configure the filesystem to use for launching a container.
+- Hostname: Set a hostname for a container before launching the init program.
+- Init: Set the init program and args to exec into upon container launch.
+
+Note: Filesystem is required to launch a container
+
+* Base Directory
+
+minimega creates a number of files that describe and allow control of virtual machines.
+By default, it keeps these files in "/tmp/minimega" unless modified via the -base flag at startup.
+
+Likewise, minimega uses /tmp/minimega/files/ as a default directory for working with files.
+If you reference files, in vm config for example, it will look for those files relative to this base directory.
+
+If you attempt to run minimega while another instance is already running, it will exit with an error that the base directory is already in use.
+
+The base directory is important when connecting to an already running minimega instance with the attach or e flags, as those modes both look for the minimega command socket in a specified base directory.
+
+
+* A simple example
+
+.mega module03_content/simple.mm
+
+* The Results in miniweb:
+
+.image module03_content/simple_01.png 550 _
+
+* VM Config - the full list
+    host: VM configuration:
+    Memory:           2048
+    VCPUs:            1
+    Networks:         []
+    Snapshot:         true
+    UUID:
+    Schedule host:
+    Coschedule limit: -1
+    Colocate:
+    Backchannel:      true
+    Tags:             {}
+
+
+- Memory: Configures the amount of physical memory to allocate (in megabytes).
+- VCPUs: Configures the number of virtual CPUs to allocate for a VM.
+- Networks: Specify Network(s) by VLAN, MAC address, and network device for qemu to use (e.g. e1000)
+
+* 
+- Snapshot: true = changes to VM are not persistent.
+- UUID: Assign a UUID if desired, otherwise a random value is assigned
+- Schedule host: Set a host where the VM should be scheduled.
+- Coschedule limit: Specify max # of VMs that can be scheduled on the same host as the VM. -1 = no limit; 0 = vm scheduled by itself
+- Colocate: Colocate this VM with another VM
+- Backchannel: Enable/disable serial command and control layer for this VM.
+- Tags: User-specified tags (<key> [value]). Ex. vm config tags router true
+
+* KVM configuration:
+
+    Migrate Path:
+    Disk Paths:         []
+    CDROM Path:
+    Kernel Path:
+    Initrd Path:
+    Kernel Append:      []
+    QEMU Path:          kvm
+    QEMU Append:        []
+    SerialPorts:        0
+    Virtio-SerialPorts: 0
+    Machine:
+    CPU:                host
+    Cores:              1
+
+
+- Migrate Path: A migration image to boot with that was previously generated with 'vm migrate'
+- Disk Paths: Attach one or more disks to a vm. Any supported by QEMU is valid.
+* 
+- CDROM Path: Attach a cdrom to a VM. Will automatically be set as boot device.
+- Kernel Path: Attach a kernel image to a VM.
+- Initrd Path: Attach an initrd image to a VM.
+- Kernel Append: Add an append string to a kernel set with vm kernel.
+- QEMU Path: Set the QEMU binary name to invoke.
+- QEMU Append: Add additional arguments to be passed to the QEMU instance.
+- SerialPorts: Specify the serial ports that will be created for the VM to use.
+- Virtio-SerialPorts: Specify the virtio-serial ports that will be created for the VM to use
+- Machine: Specify the machine type. See 'qemu -M help' for supported machine types.
+- CPU: Set the virtual CPU architecture. See 'qemu -cpu help' for supported CPUs.
+- Cores: Set the number of CPU cores per socket.
+
+* Container configuration:
+    Filesystem Path:
+    Hostname:
+    Init:            [/init]
+    Pre-init:
+    FIFOs:           0
+    Volumes:
+
+- Filesystem Path: Configure the filesystem to use for launching a container.
+- Hostname: Set a hostname for a container before launching the init program.
+- Init: Set the init program and args to exec into upon container launch.
+- Pre-init: allows running processes before isolation mechanisms are enabled.
+- FIFOs: Set the number of named pipes to include in the container for container-host communication.
+- Volumes: Attach one or more volumes to a container.
+
+* Next Up...
+
+[[module04.slide][Module 04: miniweb]]
