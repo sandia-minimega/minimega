@@ -9,7 +9,7 @@ import (
 type Network struct {
 	Interfaces []Interface `json:"interfaces" yaml:"interfaces"`
 	Routes     []Route     `json:"routes" yaml:"routes"`
-	OSPF       *OSPF       `json:"ospf" yaml:"ospf"`
+	OSPF       *OSPF       `json:"ospf" yaml:"ospf" mapstructure:"ospf"`
 	Rulesets   []Ruleset   `json:"rulesets" yaml:"rulesets"`
 }
 
@@ -38,20 +38,20 @@ type Route struct {
 }
 
 type OSPF struct {
-	RouterID        string `json:"router_id" yaml:"router_id"`
-	Areas           []Area `json:"areas" yaml:"areas"`
-	DeadInterval    int    `json:"dead_interval" yaml:"dead_interval"`
-	HelloInterval   int    `json:"hello_interval" yaml:"hello_interval"`
-	RetransInterval int    `json:"retransmission_interval" yaml:"retransmission_interval"`
+	RouterID               string `json:"router_id" yaml:"router_id" mapstructure:"router_id"`
+	Areas                  []Area `json:"areas" yaml:"areas" mapstructure:"areas"`
+	DeadInterval           int    `json:"dead_interval" yaml:"dead_interval" mapstructure:"dead_interval"`
+	HelloInterval          int    `json:"hello_interval" yaml:"hello_interval" mapstructure:"hello_interval"`
+	RetransmissionInterval int    `json:"retransmission_interval" yaml:"retransmission_interval" mapstructure:"retransmission_interval"`
 }
 
 type Area struct {
-	AreaID       int           `json:"area_id" yaml:"area_id"`
-	AreaNetworks []AreaNetwork `json:"area_networks" yaml:"area_networks"`
+	AreaID       int           `json:"area_id" yaml:"area_id" mapstructure:"area_id"`
+	AreaNetworks []AreaNetwork `json:"area_networks" yaml:"area_networks" mapstructure:"area_networks"`
 }
 
 type AreaNetwork struct {
-	Network string `json:"networks" yaml:"networks"`
+	Network string `json:"network" yaml:"network" mapstructure:"network"`
 }
 
 type Ruleset struct {
