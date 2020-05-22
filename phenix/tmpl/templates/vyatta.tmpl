@@ -12,7 +12,7 @@ interfaces {
             ospf {
                 dead-interval {{ $node.Network.OSPF.DeadInterval }}
                 hello-interval {{ $node.Network.OSPF.HelloInterval }}
-                retransmit-interval {{ $node.Network.OSPF.RetransInterval }}
+                retransmit-interval {{ $node.Network.OSPF.RetransmissionInterval }}
                 transmit-delay 1
             }
         }
@@ -93,8 +93,8 @@ protocols {
 {{ if $node.Network.OSPF }}
     {{ range $areas := $node.Network.OSPF.Areas }}
         area {{ $areas.AreaID }} {
-        {{ range $areas.AreaNetworks }}
-            network {{ $areas.AreaNetwork.Network }}
+        {{ range $networks := $areas.AreaNetworks }}
+            network {{ $networks.Network }}
         {{ end }}
         }
     {{ end }}
