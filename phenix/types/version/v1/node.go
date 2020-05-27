@@ -64,7 +64,7 @@ type Drive struct {
 	Image           string `json:"image" yaml:"image"`
 	Interface       string `json:"interface" yaml:"interface"`
 	CacheMode       string `json:"cache_mode" yaml:"cache_mode"`
-	InjectPartition *int   `json:"inject_partition" yaml:"inject_partition"`
+	InjectPartition *int   `json:"inject_partition" yaml:"inject_partition" mapstructure:"inject_partition"`
 }
 
 type Injection struct {

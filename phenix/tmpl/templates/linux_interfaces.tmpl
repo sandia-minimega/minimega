@@ -2,13 +2,14 @@
 auto lo
 iface lo inet loopback
     {{ range $idx, $iface := .Network.Interfaces }}
+auto eth{{ $idx }}
 allow-hotplug eth{{ $idx }}
         {{ if eq $iface.Address "" }}
-iface eth{{ $idx }} manual
+iface eth{{ $idx }} inet manual
         {{ else if eq $iface.Proto "dhcp" }}
-iface eth{{ $idx }} dhcp
+iface eth{{ $idx }} inet dhcp
         {{ else }}
-iface eth{{ $idx }} static
+iface eth{{ $idx }} inet static
 address {{ $iface.Address }}
 netmask {{ $iface.NetworkMask }}
             {{ if ne $iface.Gateway "" }}
@@ -17,13 +18,14 @@ gateway {{ $iface.Gateway }}
         {{ end }}
     {{ end }}
     {{ range $idx, $iface := .Network.Interfaces }}
+auto ens{{ add $idx 1 }}
 allow-hotplug ens{{ add $idx 1 }}
         {{ if eq $iface.Address "" }}
-iface ens{{ add $idx 1 }} manual
+iface ens{{ add $idx 1 }} inet manual
         {{ else if eq $iface.Proto "dhcp" }}
-iface ens{{ add $idx 1 }} dhcp
+iface ens{{ add $idx 1 }} inet dhcp
         {{ else }}
-iface ens{{ add $idx 1 }} static
+iface ens{{ add $idx 1 }} inet static
 address {{ $iface.Address }}
 netmask {{ $iface.NetworkMask }}
             {{ if ne $iface.Gateway "" }}
