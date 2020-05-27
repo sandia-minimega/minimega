@@ -185,7 +185,7 @@ Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 	{ // vm flush
 		HelpShort: "discard information about quit or failed VMs",
 		HelpLong: `
-Flush one or more running virtual machines. Discard information about VMs that
+Flush one or more virtual machines. Discard information about VMs that
 have either quit or encountered an error. This will remove VMs with a state of
 "quit" or "error" from vm info. Names of VMs that have been flushed may be
 reused.
@@ -196,8 +196,8 @@ target. See "vm start" for a full description of allowable targets.`,
 			"vm <flush,>",
 			"vm <flush,> <vm target>",
 		},
-		Call: wrapBroadcastCLI(cliVMApply),
-		Suggest: wrapVMSuggest((VM_QUIT|VM_ERROR), true),
+		Call:    wrapBroadcastCLI(cliVMApply),
+		Suggest: wrapVMSuggest((VM_QUIT | VM_ERROR), true),
 	},
 	{ // vm hotplug
 		HelpShort: "add and remove USB drives",
@@ -464,7 +464,7 @@ func cliVMApply(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 	case c.BoolArgs["kill"]:
 		return ns.VMs.Kill(c.StringArgs["vm"])
 	case c.BoolArgs["flush"]:
-		if (len(c.StringArgs["vm"]) == 0) {
+		if len(c.StringArgs["vm"]) == 0 {
 			return ns.VMs.FlushAll(ns.ccServer)
 		} else {
 			return ns.VMs.Flush(c.StringArgs["vm"], ns.ccServer)
