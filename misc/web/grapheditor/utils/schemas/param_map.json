@@ -18,8 +18,10 @@
             "name": "net",
             "path": "network.interfaces",
             "args": [
+                "bridge",
                 "vlan",
-                "mac"
+                "mac",
+                "driver"
             ]
         },
         {

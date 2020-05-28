@@ -76,6 +76,8 @@ EditorUi = function(editor, container, lightbox)
     loadFile(window.UTILS_PATH + '/schemas/edge_schema.json', 'application/json', 'vlan', setSchema);
     // set experimentVars schema
     loadFile(window.UTILS_PATH + '/schemas/vars_schema.json', 'application/json', 'vars', setSchema);
+    // set diagraming schema
+    loadFile(window.UTILS_PATH + '/schemas/diagraming_schema.json', 'application/json', 'diagraming', setSchema);
 
     // get minimega param->schema mapping
     loadFile(window.UTILS_PATH + '/schemas/param_map.json', 'application/json', null, loadParams);
@@ -115,13 +117,49 @@ EditorUi = function(editor, container, lightbox)
         }
     });
 
+    // used to remove vlans from vertex/node when respective vlan edge is deleted
+    graph.addListener(mxEvent.CELLS_REMOVED, function(sender, evt)
+    {
+        var cells = evt.getProperty('cells');
+        for(var i = 0; i < cells.length; i++) {
+            if (cells[i].isEdge() && cells[i].hasAttribute('schemaVars')) {
+                var edge = cells[i];
+                var source = edge.source;
+                var target = edge.target;
+                var vlan = JSON.parse(edge.getAttribute('schemaVars')).name;
+                if (source){
+                    if (source.hasAttribute('schemaVars')){
+                        try {
+                            removeNodeVlans(graph, source, vlan);
+                        }
+                        catch (e) {
+                            console.log(e);
+                        }
+                    }
+                }
+                if (target) {
+                    if (target.hasAttribute('schemaVars')){
+                        try {
+                            removeNodeVlans(graph, target, vlan);
+                        }
+                        catch {
+
+                        }
+                    }
+                }
+            }
+        }
+    });
+
     // sets cell defaults when cell is connected
     // ensures all methods to add edges are captured
     graph.addListener(mxEvent.CELL_CONNECTED, function(sender, evt)
     {
         var edge = evt.getProperty('edge');
+        checkValue(graph, edge);
         var source = edge.source;
         var target = edge.target;
+        var previous = evt.getProperty('previous');
         var terminal = evt.getProperty('terminal');
         if (source){
             checkValue(graph, source);
@@ -131,6 +169,49 @@ EditorUi = function(editor, container, lightbox)
             checkValue(graph, target);
             lookforvlan(graph, target);
         }
+        if (previous) {
+            // delete vlan from previously connected node
+            if (previous.hasAttribute('schemaVars')) {
+                try {
+                    var vlan = JSON.parse(edge.getAttribute('schemaVars')).name;
+                    removeNodeVlans(graph, previous, vlan);
+                }
+                catch {
+                    // console.log(e);
+                }
+            }
+        }
+    });
+
+    // override prototype method to disable dblclick on edge
+    graph.dblClick = function(evt, cell)
+    {
+        var mxe = new mxEventObject(mxEvent.DOUBLE_CLICK, 'event', evt, 'cell', cell);
+        this.fireEvent(mxe);
+
+        if (cell.hasAttribute('schemaVars')) {
+            self.showDataDialog(cell);
+        }
+        else {
+            if (this.isEnabled() && !mxEvent.isConsumed(evt) && !mxe.isConsumed() &&
+                cell != null && this.isCellEditable(cell) && !this.isEditing(cell))
+            {
+                this.startEditingAtCell(cell, evt);
+                mxEvent.consume(evt);
+            }
+        }
+    }
+
+    // catch dblclick label change
+    graph.addListener(mxEvent.LABEL_CHANGED, function(sender, evt)
+    {
+        var cell = evt. getProperty('cell');
+        var label = evt.getProperty('value');
+        var value = graph.getModel().getValue(cell);
+        value = value.cloneNode(true);
+        value.setAttribute('label', label);
+        graph.getModel().setValue(cell, value);
+        checkValue(graph, cell);
     });
 
     graph.convertValueToString = function(cell)

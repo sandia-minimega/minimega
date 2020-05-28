@@ -155,9 +155,21 @@
       "type": "object",
       "title": "Network",
       "required": [
+        "router",
         "interfaces"
       ],
       "properties": {
+        "router": {
+          "$id": "#/properties/network/properties/router",
+          "type": "string",
+          "title": "Router API",
+          "enum": [
+            "other",
+            "minirouter"
+          ],
+          "default": "other",
+          "pattern": "^(.*)$"
+        },
         "interfaces": {
           "$id": "#/nodes/properties/network/properties/interfaces",
           "type": "array",
@@ -166,7 +178,12 @@
             "$id": "#/nodes/properties/network/properties/interfaces/items",
             "type": "object",
             "title": "Interface",
-            "oneOf": [{
+            "oneOf": [
+              {
+                "$ref": "#/definitions/manual_iface",
+                "title": "Manual"
+              },
+              {
                 "$ref": "#/definitions/static_iface",
                 "title": "Static"
               },
@@ -1222,6 +1239,12 @@
             false
           ]
         },
+        "bridge": {
+          "type": "string",
+          "title": "bridge",
+          "default": "auto",
+          "pattern": "^(.*)$"
+        },
         "mac": {
           "type": "string",
           "title": "mac",
@@ -1230,6 +1253,12 @@
             "00:11:22:33:44:55:66"
           ],
           "pattern": "^([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]){2}$"
+        },
+        "driver": {
+          "type": "string",
+          "title": "driver",
+          "enum": ["e1000", "i82559c"],
+          "default": "e1000"
         },
         "mtu": {
           "type": "integer",
@@ -1298,6 +1327,12 @@
           "pattern": "^[\\w-]+$"
         }
       }
+    },
+    "manual_iface": {
+      "allOf": [{
+          "$ref": "#/definitions/iface"
+        }
+      ]
     },
     "static_iface": {
       "allOf": [{

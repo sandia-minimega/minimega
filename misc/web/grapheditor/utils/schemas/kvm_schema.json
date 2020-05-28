@@ -1,5 +1,4 @@
 {
-  "$id": "#/nodes",
   "type": "object",
   "title": "Node",
   "required": [
@@ -10,14 +9,14 @@
   ],
   "properties": {
     "device": {
-      "$id": "#/nodes/properties/device",
+      "$id": "#/properties/device",
       "type": "string",
       "title": "Device",
       "readonly": true,
       "pattern": "^(.*)$"
     },
     "type": {
-      "$id": "#/nodes/properties/type",
+      "$id": "#/properties/type",
       "type": "string",
       "title": "Type",
       "default": "kvm",
@@ -25,13 +24,13 @@
       "pattern": "^(.*)$"
     },
     "general": {
-      "$id": "#/nodes/properties/general",
+      "$id": "#/properties/general",
       "type": "object",
       "title": "General",
       "required": ["hostname", "snapshot"],
       "properties": {
         "hostname": {
-          "$id": "#/nodes/properties/general/properties/hostname",
+          "$id": "#/properties/general/properties/hostname",
           "type": "string",
           "title": "Hostname",
           "minLength": 1,
@@ -42,7 +41,7 @@
           "pattern": "^[\\w-]+$"
         },
         "description": {
-          "$id": "#/nodes/properties/general/properties/description",
+          "$id": "#/properties/general/properties/description",
           "type": "string",
           "title": "description",
           "default": "",
@@ -52,7 +51,7 @@
           "pattern": "^(.*)$"
         },
         "snapshot": {
-          "$id": "#/nodes/properties/general/properties/snapshot",
+          "$id": "#/properties/general/properties/snapshot",
           "type": "boolean",
           "title": "snapshot",
           "default": true,
@@ -61,7 +60,7 @@
           ]
         },
         "do_not_boot": {
-          "$id": "#/nodes/properties/general/properties/do_not_boot",
+          "$id": "#/properties/general/properties/do_not_boot",
           "type": "boolean",
           "title": "do_not_boot",
           "default": false,
@@ -72,7 +71,7 @@
       }
     },
     "hardware": {
-      "$id": "#/nodes/properties/hardware",
+      "$id": "#/properties/hardware",
       "type": "object",
       "title": "Hardware",
       "required": [
@@ -83,7 +82,7 @@
       ],
       "properties": {
         "cpu": {
-          "$id": "#/nodes/properties/hardware/properties/cpu",
+          "$id": "#/properties/hardware/properties/cpu",
           "type": "string",
           "title": "cpu",
           "examples": [
@@ -95,7 +94,7 @@
           "pattern": "^(.*)$"
         },
         "vcpus": {
-          "$id": "#/nodes/properties/hardware/properties/vcpus",
+          "$id": "#/properties/hardware/properties/vcpus",
           "type": "string",
           "title": "vcpus",
           "default": "1",
@@ -105,7 +104,7 @@
           "pattern": "^(.*)$"
         },
         "memory": {
-          "$id": "#/nodes/properties/hardware/properties/memory",
+          "$id": "#/properties/hardware/properties/memory",
           "type": "string",
           "title": "memory",
           "default": "2048",
@@ -115,7 +114,7 @@
           "pattern": "^(.*)$"
         },
         "os_type": {
-          "$id": "#/nodes/properties/hardware/properties/os_type",
+          "$id": "#/properties/hardware/properties/os_type",
           "type": "string",
           "title": "os_type",
           "enum": ["windows", "linux", "rhel", "centos"],
@@ -129,35 +128,35 @@
           "pattern": "^(.*)$"
         },
         "cdrom": {
-          "$id": "#/nodes/properties/hardware/properties/cdrom",
+          "$id": "#/properties/hardware/properties/cdrom",
           "type": "string",
           "title": "cdrom",
           "examples": [],
           "pattern": "^(.*)$"
         },
         "kernel": {
-          "$id": "#/nodes/properties/hardware/properties/kernel",
+          "$id": "#/properties/hardware/properties/kernel",
           "type": "string",
           "title": "kernel",
           "examples": [],
           "pattern": "^(.*)$"
         },
         "initrd": {
-          "$id": "#/nodes/properties/hardware/properties/initrd",
+          "$id": "#/properties/hardware/properties/initrd",
           "type": "string",
           "title": "initrd",
           "examples": [],
           "pattern": "^(.*)$"
         },
         "migrate": {
-          "$id": "#/nodes/properties/hardware/properties/migrate",
+          "$id": "#/properties/hardware/properties/migrate",
           "type": "string",
           "title": "migrate",
           "examples": [],
           "pattern": "^(.*)$"
         },
         "serial-ports": {
-          "$id": "#/nodes/properties/hardware/properties/serial-ports",
+          "$id": "#/properties/hardware/properties/serial-ports",
           "type": "string",
           "title": "serial-ports",
           "default": "1",
@@ -167,7 +166,7 @@
           "pattern": "^(.*)$"
         },
         "virtio-ports": {
-          "$id": "#/nodes/properties/hardware/properties/virtio-ports",
+          "$id": "#/properties/hardware/properties/virtio-ports",
           "type": "string",
           "title": "virtio-ports",
           "default": "1",
@@ -177,11 +176,11 @@
           "pattern": "^(.*)$"
         },
         "drives": {
-          "$id": "#/nodes/properties/hardware/properties/drives",
+          "$id": "#/properties/hardware/properties/drives",
           "type": "array",
           "title": "Drives",
           "items": {
-            "$id": "#/nodes/properties/hardware/properties/drives/items",
+            "$id": "#/properties/hardware/properties/drives/items",
             "type": "object",
             "title": "Drive",
             "required": [
@@ -189,7 +188,7 @@
             ],
             "properties": {
               "image": {
-                "$id": "#/nodes/properties/hardware/properties/drives/items/properties/image",
+                "$id": "#/properties/hardware/properties/drives/items/properties/image",
                 "type": "string",
                 "title": "Image",
                 "minLength": 1,
@@ -200,7 +199,7 @@
                 "pattern": "^(.*)$"
               },
               "interface": {
-                "$id": "#/nodes/properties/hardware/properties/drives/items/properties/interface",
+                "$id": "#/properties/hardware/properties/drives/items/properties/interface",
                 "type": "string",
                 "title": "interface",
                 "enum": ["ahci", "ide", "scsi", "sd", "mtd", "floppy", "pflash", "virtio"],
@@ -211,7 +210,7 @@
                 "pattern": "^(.*)$"
               },
               "cache_mode": {
-                "$id": "#/nodes/properties/hardware/properties/drives/items/properties/cache_mode",
+                "$id": "#/properties/hardware/properties/drives/items/properties/cache_mode",
                 "type": "string",
                 "title": "cache_mode",
                 "enum": ["none", "writeback", "unsafe", "directsync", "writethrough"],
@@ -222,9 +221,10 @@
                 "pattern": "^(.*)$"
               },
               "inject_partition": {
-                "$id": "#/nodes/properties/hardware/properties/drives/items/properties/inject_partition",
+                "$id": "#/properties/hardware/properties/drives/items/properties/inject_partition",
                 "type": "string",
                 "title": "inject_partition",
+                "description": "phenix topology parameter",
                 "default": "1",
                 "examples": [
                   "2"
@@ -237,22 +237,39 @@
       }
     },
     "network": {
-      "$id": "#/nodes/properties/network",
+      "$id": "#/properties/network",
       "type": "object",
       "title": "Network",
       "required": [
+        "router",
         "interfaces"
       ],
       "properties": {
+        "router": {
+          "$id": "#/properties/network/properties/router",
+          "type": "string",
+          "title": "Router API",
+          "enum": [
+            "other",
+            "minirouter"
+          ],
+          "default": "other",
+          "pattern": "^(.*)$"
+        },
         "interfaces": {
-          "$id": "#/nodes/properties/network/properties/interfaces",
+          "$id": "#/properties/network/properties/interfaces",
           "type": "array",
           "title": "Interfaces",
           "items": {
-            "$id": "#/nodes/properties/network/properties/interfaces/items",
+            "$id": "#/properties/network/properties/interfaces/items",
             "type": "object",
             "title": "Interface",
-            "oneOf": [{
+            "oneOf": [
+              {
+                "$ref": "#/definitions/manual_iface",
+                "title": "Manual"
+              },
+              {
                 "$ref": "#/definitions/static_iface",
                 "title": "Static"
               },
@@ -268,10 +285,10 @@
           }
         },
         "routes": {
-          "$id": "#/nodes/properties/network/properties/routes",
+          "$id": "#/properties/network/properties/routes",
           "type": "array",
           "items": {
-            "$id": "#/nodes/properties/network/properties/routes/items",
+            "$id": "#/properties/network/properties/routes/items",
             "type": "object",
             "title": "Route",
             "required": [
@@ -281,7 +298,7 @@
             ],
             "properties": {
               "destination": {
-                "$id": "#/nodes/properties/network/properties/routes/items/properties/destination",
+                "$id": "#/properties/network/properties/routes/items/properties/destination",
                 "type": "string",
                 "title": "Destination",
                 "minLength": 1,
@@ -292,7 +309,7 @@
                 "pattern": "^(.*)$"
               },
               "next": {
-                "$id": "#/nodes/properties/network/properties/routes/items/properties/next",
+                "$id": "#/properties/network/properties/routes/items/properties/next",
                 "type": "string",
                 "title": "Next",
                 "minLength": 1,
@@ -303,7 +320,7 @@
                 "pattern": "^(.*)$"
               },
               "cost": {
-                "$id": "#/nodes/properties/network/properties/routes/items/properties/cost",
+                "$id": "#/properties/network/properties/routes/items/properties/cost",
                 "type": "string",
                 "title": "Cost",
                 "minLength": 1,
@@ -317,7 +334,7 @@
           }
         },
         "ospf": {
-          "$id": "#/nodes/properties/network/properties/ospf",
+          "$id": "#/properties/network/properties/ospf",
           "type": "object",
           "title": "Ospf",
           "required": [
@@ -326,7 +343,7 @@
           ],
           "properties": {
             "router_id": {
-              "$id": "#/nodes/properties/network/properties/ospf/properties/router_id",
+              "$id": "#/properties/network/properties/ospf/properties/router_id",
               "type": "string",
               "title": "Router_id",
               "default": "",
@@ -336,11 +353,11 @@
               "pattern": "^(.*)$"
             },
             "areas": {
-              "$id": "#/nodes/properties/network/properties/ospf/properties/areas",
+              "$id": "#/properties/network/properties/ospf/properties/areas",
               "type": "array",
               "title": "Areas",
               "items": {
-                "$id": "#/nodes/properties/network/properties/ospf/properties/areas/items",
+                "$id": "#/properties/network/properties/ospf/properties/areas/items",
                 "type": "object",
                 "title": "Area",
                 "required": [
@@ -349,7 +366,7 @@
                 ],
                 "properties": {
                   "area_id": {
-                    "$id": "#/nodes/properties/network/properties/ospf/properties/areas/items/properties/area_id",
+                    "$id": "#/properties/network/properties/ospf/properties/areas/items/properties/area_id",
                     "type": "string",
                     "title": "Area_id",
                     "default": "",
@@ -359,11 +376,11 @@
                     "pattern": "^(.*)$"
                   },
                   "area_networks": {
-                    "$id": "#/nodes/properties/network/properties/ospf/properties/areas/items/properties/area_networks",
+                    "$id": "#/properties/network/properties/ospf/properties/areas/items/properties/area_networks",
                     "type": "array",
                     "title": "Area_networks",
                     "items": {
-                      "$id": "#/nodes/properties/network/properties/ospf/properties/areas/items/properties/area_networks/items",
+                      "$id": "#/properties/network/properties/ospf/properties/areas/items/properties/area_networks/items",
                       "type": "object",
                       "title": "Area Network",
                       "required": [
@@ -371,7 +388,7 @@
                       ],
                       "properties": {
                         "network": {
-                          "$id": "#/nodes/properties/network/properties/ospf/properties/areas/items/properties/area_networks/items/properties/network",
+                          "$id": "#/properties/network/properties/ospf/properties/areas/items/properties/area_networks/items/properties/network",
                           "type": "string",
                           "title": "Network",
                           "default": "",
@@ -389,11 +406,11 @@
           }
         },
         "rulesets": {
-          "$id": "#/nodes/properties/network/properties/rulesets",
+          "$id": "#/properties/network/properties/rulesets",
           "type": "array",
           "title": "Rulesets",
           "items": {
-            "$id": "#/nodes/properties/network/properties/rulesets/items",
+            "$id": "#/properties/network/properties/rulesets/items",
             "type": "object",
             "title": "Ruleset",
             "required": [
@@ -403,7 +420,7 @@
             ],
             "properties": {
               "name": {
-                "$id": "#/nodes/properties/network/properties/rulesets/items/properties/name",
+                "$id": "#/properties/network/properties/rulesets/items/properties/name",
                 "type": "string",
                 "title": "Name",
                 "minLength": 1,
@@ -414,7 +431,7 @@
                 "pattern": "^(.*)$"
               },
               "description": {
-                "$id": "#/nodes/properties/network/properties/rulesets/items/properties/description",
+                "$id": "#/properties/network/properties/rulesets/items/properties/description",
                 "type": "string",
                 "title": "Description",
                 "default": "",
@@ -424,7 +441,7 @@
                 "pattern": "^(.*)$"
               },
               "default": {
-                "$id": "#/nodes/properties/network/properties/rulesets/items/properties/default",
+                "$id": "#/properties/network/properties/rulesets/items/properties/default",
                 "type": "string",
                 "title": "Default",
                 "minLength": 1,
@@ -435,11 +452,11 @@
                 "pattern": "^(.*)$"
               },
               "rules": {
-                "$id": "#/nodes/properties/network/properties/rulesets/items/properties/rules",
+                "$id": "#/properties/network/properties/rulesets/items/properties/rules",
                 "type": "array",
                 "title": "Rules",
                 "items": {
-                  "$id": "#/nodes/properties/network/properties/rulesets/items/properties/rules/items",
+                  "$id": "#/properties/network/properties/rulesets/items/properties/rules/items",
                   "type": "object",
                   "title": "Rule",
                   "required": [
@@ -449,7 +466,7 @@
                   ],
                   "properties": {
                     "id": {
-                      "$id": "#/nodes/properties/network/properties/rulesets/items/properties/rules/items/properties/id",
+                      "$id": "#/properties/network/properties/rulesets/items/properties/rules/items/properties/id",
                       "type": "string",
                       "title": "Id",
                       "minLength": 1,
@@ -460,7 +477,7 @@
                       "pattern": "^(.*)$"
                     },
                     "description": {
-                      "$id": "#/nodes/properties/network/properties/rulesets/items/properties/rules/items/properties/description",
+                      "$id": "#/properties/network/properties/rulesets/items/properties/rules/items/properties/description",
                       "type": "string",
                       "title": "Description",
                       "default": "",
@@ -470,7 +487,7 @@
                       "pattern": "^(.*)$"
                     },
                     "action": {
-                      "$id": "#/nodes/properties/network/properties/rulesets/items/properties/rules/items/properties/action",
+                      "$id": "#/properties/network/properties/rulesets/items/properties/rules/items/properties/action",
                       "type": "string",
                       "title": "Action",
                       "enum": [
@@ -487,7 +504,7 @@
                       "pattern": "^(.*)$"
                     },
                     "protocol": {
-                      "$id": "#/nodes/properties/network/properties/rulesets/items/properties/rules/items/properties/protocol",
+                      "$id": "#/properties/network/properties/rulesets/items/properties/rules/items/properties/protocol",
                       "type": "string",
                       "title": "Protocol",
                       "enum": [
@@ -506,7 +523,7 @@
                       "pattern": "^(.*)$"
                     },
                     "source": {
-                      "$id": "#/nodes/properties/network/properties/rulesets/items/properties/rules/items/properties/source",
+                      "$id": "#/properties/network/properties/rulesets/items/properties/rules/items/properties/source",
                       "type": "object",
                       "title": "Source",
                       "required": [
@@ -514,7 +531,7 @@
                       ],
                       "properties": {
                         "address": {
-                          "$id": "#/nodes/properties/network/properties/rulesets/items/properties/rules/items/properties/source/properties/address",
+                          "$id": "#/properties/network/properties/rulesets/items/properties/rules/items/properties/source/properties/address",
                           "type": "string",
                           "title": "Address",
                           "default": "",
@@ -525,7 +542,7 @@
                           "pattern": "^(.*)$"
                         },
                         "port": {
-                          "$id": "#/nodes/properties/network/properties/rulesets/items/properties/rules/items/properties/source/properties/port",
+                          "$id": "#/properties/network/properties/rulesets/items/properties/rules/items/properties/source/properties/port",
                           "type": "string",
                           "title": "Port",
                           "default": "",
@@ -537,7 +554,7 @@
                       }
                     },
                     "destination": {
-                      "$id": "#/nodes/properties/network/properties/rulesets/items/properties/rules/items/properties/destination",
+                      "$id": "#/properties/network/properties/rulesets/items/properties/rules/items/properties/destination",
                       "type": "object",
                       "title": "Destination",
                       "required": [
@@ -545,7 +562,7 @@
                       ],
                       "properties": {
                         "address": {
-                          "$id": "#/nodes/properties/network/properties/rulesets/items/properties/rules/items/properties/source/properties/address",
+                          "$id": "#/properties/network/properties/rulesets/items/properties/rules/items/properties/source/properties/address",
                           "type": "string",
                           "title": "Address",
                           "default": "",
@@ -556,7 +573,7 @@
                           "pattern": "^(.*)$"
                         },
                         "port": {
-                          "$id": "#/nodes/properties/network/properties/rulesets/items/properties/rules/items/properties/destination/properties/port",
+                          "$id": "#/properties/network/properties/rulesets/items/properties/rules/items/properties/destination/properties/port",
                           "type": "string",
                           "title": "Port",
                           "default": "",
@@ -576,11 +593,11 @@
       }
     },
     "injections": {
-      "$id": "#/nodes/properties/injections",
+      "$id": "#/properties/injections",
       "type": "array",
       "title": "Injections",
       "items": {
-        "$id": "#/nodes/properties/injections/items",
+        "$id": "#/properties/injections/items",
         "type": "object",
         "title": "Injection",
         "required": [
@@ -589,7 +606,7 @@
         ],
         "properties": {
           "src": {
-            "$id": "#/nodes/properties/injections/properties/src",
+            "$id": "#/properties/injections/properties/src",
             "type": "string",
             "title": "Src",
             "minLength": 1,
@@ -600,7 +617,7 @@
             "pattern": "^(.*)$"
           },
           "dst": {
-            "$id": "#/nodes/properties/injections/properties/dst",
+            "$id": "#/properties/injections/properties/dst",
             "type": "string",
             "title": "Dst",
             "minLength": 1,
@@ -611,7 +628,7 @@
             "pattern": "^(.*)$"
           },
           "description": {
-            "$id": "#/nodes/properties/injections/properties/description",
+            "$id": "#/properties/injections/properties/description",
             "type": "string",
             "title": "description",
             "default": "",
@@ -624,12 +641,12 @@
       }
     },
     "metadata": {
-      "$id": "#/nodes/properties/metadata",
+      "$id": "#/properties/metadata",
       "type": "object",
       "title": "Metadata",
       "properties": {
         "infrastructure": {
-          "$id": "#/nodes/properties/metadata/properties/infrastructure",
+          "$id": "#/properties/metadata/properties/infrastructure",
           "type": "string",
           "title": "Infrastructure",
           "enum": ["power-transmission", "batch-process"],
@@ -641,7 +658,7 @@
           "pattern": "^(.*)$"
         },
         "provider": {
-          "$id": "#/nodes/properties/metadata/properties/provider",
+          "$id": "#/properties/metadata/properties/provider",
           "type": "string",
           "title": "Provider",
           "default": "power-provider",
@@ -652,7 +669,7 @@
           "pattern": "^(.*)$"
         },
         "simulator": {
-          "$id": "#/nodes/properties/metadata/properties/simulator",
+          "$id": "#/properties/metadata/properties/simulator",
           "type": "string",
           "title": "Simulator",
           "enum": ["Dummy", "PSSE", "PyPower", "PowerWorld", "PowerWorldDynamics", "OpenDSS", "Simulink"],
@@ -663,7 +680,7 @@
           "pattern": "^(.*)$"
         },
         "publish_endpoint": {
-          "$id": "#/nodes/properties/metadata/properties/publish_endpoint",
+          "$id": "#/properties/metadata/properties/publish_endpoint",
           "type": "string",
           "title": "Publish_endpoint",
           "default": "udp://*;239.0.0.1:40000",
@@ -673,7 +690,7 @@
           "pattern": "^(.*)$"
         },
         "cycle_time": {
-          "$id": "#/nodes/properties/metadata/properties/cycle_time",
+          "$id": "#/properties/metadata/properties/cycle_time",
           "type": "string",
           "title": "Cycle_time",
           "default": "500",
@@ -683,11 +700,11 @@
           "pattern": "^(.*)$"
         },
         "dnp3": {
-          "$id": "#/nodes/properties/metadata/properties/dnp3",
+          "$id": "#/properties/metadata/properties/dnp3",
           "type": "array",
           "title": "Dnp3",
           "items": {
-            "$id": "#/nodes/properties/metadata/properties/dnp3/items",
+            "$id": "#/properties/metadata/properties/dnp3/items",
             "type": "object",
             "title": "DNP3 Metadata",
             "required": [
@@ -696,7 +713,7 @@
             ],
             "properties": {
               "type": {
-                "$id": "#/nodes/properties/metadata/properties/dnp3/items/properties/type",
+                "$id": "#/properties/metadata/properties/dnp3/items/properties/type",
                 "type": "string",
                 "title": "Type",
                 "default": "",
@@ -706,7 +723,7 @@
                 "pattern": "^(.*)$"
               },
               "name": {
-                "$id": "#/nodes/properties/metadata/properties/dnp3/items/properties/name",
+                "$id": "#/properties/metadata/properties/dnp3/items/properties/name",
                 "type": "string",
                 "title": "Name",
                 "default": "",
@@ -716,7 +733,7 @@
                 "pattern": "^(.*)$"
               },
               "analog-read": {
-                "$id": "#/nodes/properties/metadata/properties/dnp3/items/properties/analog-read",
+                "$id": "#/properties/metadata/properties/dnp3/items/properties/analog-read",
                 "type": "array",
                 "title": "The Analog-read Schema",
                 "items": {
@@ -730,7 +747,7 @@
                   ],
                   "properties": {
                     "field": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3/items/properties/analog-read/items/properties/field",
+                      "$id": "#/properties/metadata/properties/dnp3/items/properties/analog-read/items/properties/field",
                       "type": "string",
                       "title": "The Field Schema",
                       "default": "",
@@ -740,7 +757,7 @@
                       "pattern": "^(.*)$"
                     },
                     "register_number": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3/items/properties/analog-read/items/properties/register_number",
+                      "$id": "#/properties/metadata/properties/dnp3/items/properties/analog-read/items/properties/register_number",
                       "type": "integer",
                       "title": "The Register_number Schema",
                       "default": 0,
@@ -749,7 +766,7 @@
                       ]
                     },
                     "register_type": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3/items/properties/analog-read/items/properties/register_type",
+                      "$id": "#/properties/metadata/properties/dnp3/items/properties/analog-read/items/properties/register_type",
                       "type": "string",
                       "title": "The Register_type Schema",
                       "default": "",
@@ -762,7 +779,7 @@
                 }
               },
               "binary-read": {
-                "$id": "#/nodes/properties/metadata/properties/dnp3/items/properties/binary-read",
+                "$id": "#/properties/metadata/properties/dnp3/items/properties/binary-read",
                 "type": "array",
                 "title": "The Binary-read Schema",
                 "items": {
@@ -776,7 +793,7 @@
                   ],
                   "properties": {
                     "field": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3/items/properties/binary-read/items/properties/field",
+                      "$id": "#/properties/metadata/properties/dnp3/items/properties/binary-read/items/properties/field",
                       "type": "string",
                       "title": "The Field Schema",
                       "default": "",
@@ -786,7 +803,7 @@
                       "pattern": "^(.*)$"
                     },
                     "register_number": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3/items/properties/binary-read/items/properties/register_number",
+                      "$id": "#/properties/metadata/properties/dnp3/items/properties/binary-read/items/properties/register_number",
                       "type": "integer",
                       "title": "The Register_number Schema",
                       "default": 0,
@@ -795,7 +812,7 @@
                       ]
                     },
                     "register_type": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3/items/properties/binary-read/items/properties/register_type",
+                      "$id": "#/properties/metadata/properties/dnp3/items/properties/binary-read/items/properties/register_type",
                       "type": "string",
                       "title": "The Register_type Schema",
                       "default": "",
@@ -808,7 +825,7 @@
                 }
               },
               "binary-read-write": {
-                "$id": "#/nodes/properties/metadata/properties/dnp3/items/properties/binary-read-write",
+                "$id": "#/properties/metadata/properties/dnp3/items/properties/binary-read-write",
                 "type": "array",
                 "title": "The Binary-read-write Schema",
                 "items": {
@@ -822,7 +839,7 @@
                   ],
                   "properties": {
                     "field": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3/items/properties/binary-read-write/items/properties/field",
+                      "$id": "#/properties/metadata/properties/dnp3/items/properties/binary-read-write/items/properties/field",
                       "type": "string",
                       "title": "The Field Schema",
                       "default": "",
@@ -832,7 +849,7 @@
                       "pattern": "^(.*)$"
                     },
                     "register_number": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3/items/properties/binary-read-write/items/properties/register_number",
+                      "$id": "#/properties/metadata/properties/dnp3/items/properties/binary-read-write/items/properties/register_number",
                       "type": "integer",
                       "title": "The Register_number Schema",
                       "default": 0,
@@ -841,7 +858,7 @@
                       ]
                     },
                     "register_type": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3/items/properties/binary-read-write/items/properties/register_type",
+                      "$id": "#/properties/metadata/properties/dnp3/items/properties/binary-read-write/items/properties/register_type",
                       "type": "string",
                       "title": "The Register_type Schema",
                       "default": "",
@@ -857,11 +874,11 @@
           }
         },
         "dnp3-serial": {
-          "$id": "#/nodes/properties/metadata/properties/dnp3-serial",
+          "$id": "#/properties/metadata/properties/dnp3-serial",
           "type": "array",
           "title": "Dnp3-serial",
           "items": {
-            "$id": "#/nodes/properties/metadata/properties/dnp3-serial/items",
+            "$id": "#/properties/metadata/properties/dnp3-serial/items",
             "type": "object",
             "title": "DNP3-serial Metadata",
             "required": [
@@ -870,7 +887,7 @@
             ],
             "properties": {
               "type": {
-                "$id": "#/nodes/properties/metadata/properties/dnp3-serial/items/properties/type",
+                "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/type",
                 "type": "string",
                 "title": "Type",
                 "default": "",
@@ -880,7 +897,7 @@
                 "pattern": "^(.*)$"
               },
               "name": {
-                "$id": "#/nodes/properties/metadata/properties/dnp3-serial/items/properties/name",
+                "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/name",
                 "type": "string",
                 "title": "Name",
                 "default": "",
@@ -890,7 +907,7 @@
                 "pattern": "^(.*)$"
               },
               "analog-read": {
-                "$id": "#/nodes/properties/metadata/properties/dnp3-serial/items/properties/analog-read",
+                "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/analog-read",
                 "type": "array",
                 "title": "The Analog-read Schema",
                 "items": {
@@ -904,7 +921,7 @@
                   ],
                   "properties": {
                     "field": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3-serial/items/properties/analog-read/items/properties/field",
+                      "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/analog-read/items/properties/field",
                       "type": "string",
                       "title": "The Field Schema",
                       "default": "",
@@ -914,7 +931,7 @@
                       "pattern": "^(.*)$"
                     },
                     "register_number": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3-serial/items/properties/analog-read/items/properties/register_number",
+                      "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/analog-read/items/properties/register_number",
                       "type": "integer",
                       "title": "The Register_number Schema",
                       "default": 0,
@@ -923,7 +940,7 @@
                       ]
                     },
                     "register_type": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3-serial/items/properties/analog-read/items/properties/register_type",
+                      "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/analog-read/items/properties/register_type",
                       "type": "string",
                       "title": "The Register_type Schema",
                       "default": "",
@@ -936,7 +953,7 @@
                 }
               },
               "binary-read": {
-                "$id": "#/nodes/properties/metadata/properties/dnp3-serial/items/properties/binary-read",
+                "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/binary-read",
                 "type": "array",
                 "title": "The Binary-read Schema",
                 "items": {
@@ -950,7 +967,7 @@
                   ],
                   "properties": {
                     "field": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3-serial/items/properties/binary-read/items/properties/field",
+                      "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/binary-read/items/properties/field",
                       "type": "string",
                       "title": "The Field Schema",
                       "default": "",
@@ -960,7 +977,7 @@
                       "pattern": "^(.*)$"
                     },
                     "register_number": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3-serial/items/properties/binary-read/items/properties/register_number",
+                      "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/binary-read/items/properties/register_number",
                       "type": "integer",
                       "title": "The Register_number Schema",
                       "default": 0,
@@ -969,7 +986,7 @@
                       ]
                     },
                     "register_type": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3-serial/items/properties/binary-read/items/properties/register_type",
+                      "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/binary-read/items/properties/register_type",
                       "type": "string",
                       "title": "The Register_type Schema",
                       "default": "",
@@ -982,7 +999,7 @@
                 }
               },
               "binary-read-write": {
-                "$id": "#/nodes/properties/metadata/properties/dnp3-serial/items/properties/binary-read-write",
+                "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/binary-read-write",
                 "type": "array",
                 "title": "The Binary-read-write Schema",
                 "items": {
@@ -996,7 +1013,7 @@
                   ],
                   "properties": {
                     "field": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3-serial/items/properties/binary-read-write/items/properties/field",
+                      "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/binary-read-write/items/properties/field",
                       "type": "string",
                       "title": "The Field Schema",
                       "default": "",
@@ -1006,7 +1023,7 @@
                       "pattern": "^(.*)$"
                     },
                     "register_number": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3-serial/items/properties/binary-read-write/items/properties/register_number",
+                      "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/binary-read-write/items/properties/register_number",
                       "type": "integer",
                       "title": "The Register_number Schema",
                       "default": 0,
@@ -1015,7 +1032,7 @@
                       ]
                     },
                     "register_type": {
-                      "$id": "#/nodes/properties/metadata/properties/dnp3-serial/items/properties/binary-read-write/items/properties/register_type",
+                      "$id": "#/properties/metadata/properties/dnp3-serial/items/properties/binary-read-write/items/properties/register_type",
                       "type": "string",
                       "title": "The Register_type Schema",
                       "default": "",
@@ -1031,11 +1048,11 @@
           }
         },
         "modbus": {
-          "$id": "#/nodes/properties/metadata/properties/modbus",
+          "$id": "#/properties/metadata/properties/modbus",
           "type": "array",
           "title": "Modbus",
           "items": {
-            "$id": "#/nodes/properties/metadata/properties/modbus/items",
+            "$id": "#/properties/metadata/properties/modbus/items",
             "type": "object",
             "title": "Modbus Metadata",
             "required": [
@@ -1044,7 +1061,7 @@
             ],
             "properties": {
               "type": {
-                "$id": "#/nodes/properties/metadata/properties/modbus/items/properties/type",
+                "$id": "#/properties/metadata/properties/modbus/items/properties/type",
                 "type": "string",
                 "title": "Type",
                 "default": "",
@@ -1054,7 +1071,7 @@
                 "pattern": "^(.*)$"
               },
               "name": {
-                "$id": "#/nodes/properties/metadata/properties/modbus/items/properties/name",
+                "$id": "#/properties/metadata/properties/modbus/items/properties/name",
                 "type": "string",
                 "title": "Name",
                 "default": "",
@@ -1064,11 +1081,11 @@
                 "pattern": "^(.*)$"
               },
               "analog-read": {
-                "$id": "#/nodes/properties/metadata/properties/modbus/items/properties/analog-read",
+                "$id": "#/properties/metadata/properties/modbus/items/properties/analog-read",
                 "type": "array",
                 "title": "The Analog-read Schema",
                 "items": {
-                  "$id": "#/nodes/properties/metadata/properties/modbus/items/properties/analog-read/items",
+                  "$id": "#/properties/metadata/properties/modbus/items/properties/analog-read/items",
                   "type": "object",
                   "title": "The Items Schema",
                   "required": [
@@ -1078,7 +1095,7 @@
                   ],
                   "properties": {
                     "field": {
-                      "$id": "#/nodes/properties/metadata/properties/modbus/items/properties/analog-read/items/properties/field",
+                      "$id": "#/properties/metadata/properties/modbus/items/properties/analog-read/items/properties/field",
                       "type": "string",
                       "title": "The Field Schema",
                       "default": "",
@@ -1088,7 +1105,7 @@
                       "pattern": "^(.*)$"
                     },
                     "register_number": {
-                      "$id": "#/nodes/properties/metadata/properties/modbus/items/properties/analog-read/items/properties/register_number",
+                      "$id": "#/properties/metadata/properties/modbus/items/properties/analog-read/items/properties/register_number",
                       "type": "integer",
                       "title": "The Register_number Schema",
                       "default": 0,
@@ -1097,7 +1114,7 @@
                       ]
                     },
                     "register_type": {
-                      "$id": "#/nodes/properties/metadata/properties/modbus/items/properties/analog-read/items/properties/register_type",
+                      "$id": "#/properties/metadata/properties/modbus/items/properties/analog-read/items/properties/register_type",
                       "type": "string",
                       "title": "The Register_type Schema",
                       "default": "",
@@ -1110,7 +1127,7 @@
                 }
               },
               "binary-read": {
-                "$id": "#/nodes/properties/metadata/properties/modbus/items/properties/binary-read",
+                "$id": "#/properties/metadata/properties/modbus/items/properties/binary-read",
                 "type": "array",
                 "title": "The Binary-read Schema",
                 "items": {
@@ -1124,7 +1141,7 @@
                   ],
                   "properties": {
                     "field": {
-                      "$id": "#/nodes/properties/metadata/properties/modbus/items/properties/binary-read/items/properties/field",
+                      "$id": "#/properties/metadata/properties/modbus/items/properties/binary-read/items/properties/field",
                       "type": "string",
                       "title": "The Field Schema",
                       "default": "",
@@ -1134,7 +1151,7 @@
                       "pattern": "^(.*)$"
                     },
                     "register_number": {
-                      "$id": "#/nodes/properties/metadata/properties/modbus/items/properties/binary-read/items/properties/register_number",
+                      "$id": "#/properties/metadata/properties/modbus/items/properties/binary-read/items/properties/register_number",
                       "type": "integer",
                       "title": "The Register_number Schema",
                       "default": 0,
@@ -1143,7 +1160,7 @@
                       ]
                     },
                     "register_type": {
-                      "$id": "#/nodes/properties/metadata/properties/modbus/items/properties/binary-read/items/properties/register_type",
+                      "$id": "#/properties/metadata/properties/modbus/items/properties/binary-read/items/properties/register_type",
                       "type": "string",
                       "title": "The Register_type Schema",
                       "default": "",
@@ -1156,7 +1173,7 @@
                 }
               },
               "binary-read-write": {
-                "$id": "#/nodes/properties/metadata/properties/modbus/items/properties/binary-read-write",
+                "$id": "#/properties/metadata/properties/modbus/items/properties/binary-read-write",
                 "type": "array",
                 "title": "The Binary-read-write Schema",
                 "items": {
@@ -1170,7 +1187,7 @@
                   ],
                   "properties": {
                     "field": {
-                      "$id": "#/nodes/properties/metadata/properties/modbus/items/properties/binary-read-write/items/properties/field",
+                      "$id": "#/properties/metadata/properties/modbus/items/properties/binary-read-write/items/properties/field",
                       "type": "string",
                       "title": "The Field Schema",
                       "default": "",
@@ -1180,7 +1197,7 @@
                       "pattern": "^(.*)$"
                     },
                     "register_number": {
-                      "$id": "#/nodes/properties/metadata/properties/modbus/items/properties/binary-read-write/items/properties/register_number",
+                      "$id": "#/properties/metadata/properties/modbus/items/properties/binary-read-write/items/properties/register_number",
                       "type": "integer",
                       "title": "The Register_number Schema",
                       "default": 0,
@@ -1189,7 +1206,7 @@
                       ]
                     },
                     "register_type": {
-                      "$id": "#/nodes/properties/metadata/properties/modbus/items/properties/binary-read-write/items/properties/register_type",
+                      "$id": "#/properties/metadata/properties/modbus/items/properties/binary-read-write/items/properties/register_type",
                       "type": "string",
                       "title": "The Register_type Schema",
                       "default": "",
@@ -1205,7 +1222,7 @@
           }
         },
         "logic": {
-          "$id": "#/nodes/properties/metadata/properties/logic",
+          "$id": "#/properties/metadata/properties/logic",
           "type": "string",
           "title": "Logic",
           "default": "",
@@ -1215,11 +1232,11 @@
           "pattern": "^(.*)$"
         },
         "connected_rtus": {
-          "$id": "#/nodes/properties/metadata/properties/connected_rtus",
+          "$id": "#/properties/metadata/properties/connected_rtus",
           "type": "array",
           "title": "Connected RTUs",
           "items": {
-            "$id": "#/nodes/properties/metadata/properties/connected_rtus/items",
+            "$id": "#/properties/metadata/properties/connected_rtus/items",
             "type": "string",
             "title": "RTU",
             "default": "",
@@ -1240,7 +1257,7 @@
           ]
         },
         "manual_register_config": {
-          "$id": "#/nodes/properties/metadata/properties/manual_register_config",
+          "$id": "#/properties/metadata/properties/manual_register_config",
           "type": "string",
           "title": "Manual register configuration",
           "default": "false",
@@ -1251,12 +1268,15 @@
       }
     },
     "advanced": {
-      "$id": "#/nodes/properties/advanced",
+      "$id": "#/properties/advanced",
       "type": "object",
       "title": "Advanced KVM Configuration",
+      "required": [
+        "qemu-append"
+      ],
       "properties": {
         "qemu-append": {
-          "$id": "#/nodes/properties/advanced/properties/qemu-append",
+          "$id": "#/properties/advanced/properties/qemu-append",
           "type": "string",
           "title": "qemu-append",
           "default": "",
@@ -1268,11 +1288,11 @@
       }
     },
     "miniccc_commands": {
-      "$id": "#/nodes/properties/miniccc_commands",
+      "$id": "#/properties/miniccc_commands",
       "type": "array",
       "title": "miniccc Commands",
       "items": {
-        "$id": "#/nodes/properties/miniccc_commands/items",
+        "$id": "#/properties/miniccc_commands/items",
         "type": "string",
         "title": "Command",
         "required": [
@@ -1280,7 +1300,7 @@
         ],
         "properties": {
           "command": {
-            "$id": "#/nodes/properties/miniccc_commands/items/properties/command",
+            "$id": "#/properties/miniccc_commands/items/properties/command",
             "type": "string",
             "title": "Command",
             "minLength": 1,
@@ -1325,6 +1345,12 @@
             false
           ]
         },
+        "bridge": {
+          "type": "string",
+          "title": "bridge",
+          "default": "auto",
+          "pattern": "^(.*)$"
+        },
         "mac": {
           "type": "string",
           "title": "mac",
@@ -1333,6 +1359,12 @@
             "00:11:22:33:44:55:66"
           ],
           "pattern": "^([0-9a-fA-F]{2}[:-]){5}([0-9a-fA-F]){2}$"
+        },
+        "driver": {
+          "type": "string",
+          "title": "driver",
+          "enum": ["e1000", "i82559c"],
+          "default": "e1000"
         },
         "mtu": {
           "type": "integer",
@@ -1401,6 +1433,12 @@
           "pattern": "^[\\w-]+$"
         }
       }
+    },
+    "manual_iface": {
+      "allOf": [{
+          "$ref": "#/definitions/iface"
+        }
+      ]
     },
     "static_iface": {
       "allOf": [{
