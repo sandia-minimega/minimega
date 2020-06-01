@@ -59,6 +59,29 @@ spec:
         udp_port: 8989
         baud_rate: 9600
         device: /dev/ttyS0
+  - type: VirtualMachine
+    general:
+      hostname: AD1
+      snapshot: true
+    hardware:
+      os_type: windows
+      drives:
+      - image: win-svr-2k8.qc2
+    network:
+      interfaces:
+      - name: IF0
+        vlan: ot
+        address: 192.168.10.250
+        mask: 24
+        gateway: 192.168.10.254
+        proto: static
+        type: ethernet
+      - name: mgmt
+        vlan: MGMT
+        address: 172.16.10.3
+        mask: 16
+        proto: static
+        type: ethernet
   - type: Router
     labels:
       ntp-server: "true"

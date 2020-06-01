@@ -1,59 +1,71 @@
 Import-Module C:\Windows\System32\UIAutomation.0.8.7B3.NET35\UIAutomation.dll
-echo 'Configuring network interfaces...'
+
+Write-Output "Configuring network interfaces..."
 $wmi = gwmi win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"'
-{{ range $idx, $iface := $node.Network.Interfaces }}
-{{/* TODO: need to create netmask from cidr */}}
-{{ $mask == NetmaskFromCidr( $iface.Mask )}}
+
+{{ $length := len .Network.Interfaces }}
+
+{{ range $idx, $iface := .Network.Interfaces }}
+  {{ $mask := $iface.NetworkMask }}
 Do {
-    {{ $length := len $iface }}
-    {{ if gt $length 1 }}
-    $status = $wmi[{{ $idx }}].EnableStatic('{{ $iface.Address }}', '{{ $mask }}')
-    {{ else }}
-    $status = $wmi.EnableStatic('{{ $iface.Address }}', '{{ $mask }}')
-    {{ end }}
-    Start-Sleep -Milliseconds 500
+  {{ if gt $length 1 }}
+  $status = $wmi[{{ $idx }}].EnableStatic('{{ $iface.Address }}', '{{ $mask }}')
+  {{ else }}
+  $status = $wmi.EnableStatic('{{ $iface.Address }}', '{{ $mask }}')
+  {{ end }}
+  Start-Sleep -Milliseconds 500
 } While ($status.ReturnValue -eq 2147786788)
-    {{ if ne $iface.Gateway "" }}
-        {{ if gt $length 1 }}
+
+  {{ if ne $iface.Gateway "" }}
+    {{ if gt $length 1 }}
 $wmi[{{ $idx }}].SetGateways('{{ $iface.Gateway }}', 1) | Out-Null
-        {{ else }}
-│ $wmi.SetGateways('{{ $iface.Gateway }}', 1) | Out-Null
-        {{ end }}
+    {{ else }}
+$wmi.SetGateways('{{ $iface.Gateway }}', 1) | Out-Null
     {{ end }}
+  {{ end }}
 {{ end }}
-echo 'Done.'
+
+Write-Output "Done."
 
 $ErrorActionPreference = [System.Management.Automation.ActionPreference]::SilentlyContinue
-echo 'Checking for restart...'
+
+Write-Output "Checking for restart..."
+
 $countdown = 5
 Do {
-    Start-Sleep -s 1
-    $countDown--
-    $restart = Get-UIAWindow -Name "Microsoft Windows" | get-UIAButton -n "Restart Later"
- } Until ($restart -or ($countDown -le 0))
- $restart | Invoke-UIAButtonClick | Out-Null
- echo 'Ignoring restart.'
+  Start-Sleep -s 1
+  $countDown--
+  $restart = Get-UIAWindow -Name "Microsoft Windows" | get-UIAButton -n "Restart Later"
+} Until ($restart -or ($countDown -le 0))
 
- echo 'Changing hostname'
- {{/* Is this Windows variable? */}}
- $host_name = hostname
- if (( $host_name -eq "{{ .General.Hostname }}" ) -or ("{{ .General.Hostnam }} -like "*provider*")) {
-    Write-Output "Deleting hostname script..."
-    While (Test-Path C:\startup.ps1) {
-        Start-Sleep -m 500
-        Remove-Item $MyInvocation.InvocationName
-    }
- } else {
-    Write-Output "Changing hostname"
+$restart | Invoke-UIAButtonClick | Out-Null
 
-    $computer_info = Get-WmiObject -Class Win32_ComputerSystem
-    $computer_info.Rename("{{ .General.Hostname }}")
+Write-Output "Ignoring restart."
+Write-Output "Changing hostname."
 
-    Write-Output "Hostname changed.  Restarting..."
-    echo 'Deleting configuration script...'
-    While (Test-Path C:\startup.ps1) {
-        Start-Sleep -m 500
-        Remove-Item $MyInvocation.InvocationName
-    }
-    Restart-Computer
- }
+{{/* Is this Windows variable? */}}
+$host_name = hostname
+
+if (( $host_name -eq "{{ .General.Hostname }}" ) -or ("{{ .General.Hostname }} -like "*provider*")) {
+  Write-Output "Deleting hostname script..."
+  While (Test-Path C:\startup.ps1) {
+    Start-Sleep -m 500
+    Remove-Item $MyInvocation.InvocationName
+  }
+} else {
+  Write-Output "Changing hostname"
+
+  $computer_info = Get-WmiObject -Class Win32_ComputerSystem
+  $computer_info.Rename("{{ .General.Hostname }}")
+
+  Write-Output "Deleting configuration script..."
+
+  While (Test-Path C:\startup.ps1) {
+    Start-Sleep -m 500
+    Remove-Item $MyInvocation.InvocationName
+  }
+
+  Write-Output "Hostname changed.  Restarting..."
+
+  Restart-Computer
+}
