@@ -48,8 +48,8 @@ type General struct {
 	Hostname    string `json:"hostname" yaml:"hostname"`
 	Description string `json:"description" yaml:"description"`
 	VMType      VMType `json:"vm_type" yaml:"vm_type" mapstructure:"vm_type"`
-	Snapshot    bool   `json:"snapshot" yaml:"snapshot"`
-	DoNotBoot   bool   `json:"do_not_boot" yaml:"do_not_boot"`
+	Snapshot    *bool  `json:"snapshot" yaml:"snapshot"`
+	DoNotBoot   *bool  `json:"do_not_boot" yaml:"do_not_boot" structs:"do_not_boot" mapstructure:"do_not_boot"`
 }
 
 type Hardware struct {
@@ -76,6 +76,16 @@ type Injection struct {
 func (this *Node) SetDefaults() {
 	if this.General.VMType == VMType_NotSet {
 		this.General.VMType = VMType_KVM
+	}
+
+	if this.General.Snapshot == nil {
+		snapshot := true
+		this.General.Snapshot = &snapshot
+	}
+
+	if this.General.DoNotBoot == nil {
+		dnb := false
+		this.General.DoNotBoot = &dnb
 	}
 
 	if this.Hardware.CPU == CPU_NotSet {
