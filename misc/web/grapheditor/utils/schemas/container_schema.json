@@ -1242,7 +1242,7 @@
         "bridge": {
           "type": "string",
           "title": "bridge",
-          "default": "auto",
+          "default": "",
           "pattern": "^(.*)$"
         },
         "mac": {

@@ -1709,8 +1709,6 @@ function checkValue(graph, cell, ui) {
             value.setAttribute('label', `${schemaVars.device}_device_${host_count}`);
             host_count++;
 
-            // value.setAttribute('minirouter', false);
-
             if (typeof schemaVars.hardware === 'undefined') schemaVars.hardware = {};
             schemaVars.hardware.os_type = 'linux';
 
@@ -2165,14 +2163,6 @@ var EditDataDialog = function(ui, cell)
 
         div.appendChild(editorContainer);
 
-        // var checkbox = document.createElement('input');
-        // checkbox.type = "checkbox";
-
-        // var checkboxLabel = document.createElement('label');
-        // checkboxLabel.textContent = 'VM has minirouter?';
-
-        // div.appendChild(checkbox);
-
         var cancelBtn = mxUtils.button(mxResources.get('cancel'), function()
         {
             ui.hideDialog.apply(ui, arguments);
@@ -2255,6 +2245,7 @@ var EditDataDialog = function(ui, cell)
             const errors = jsoneditor.validate();
             if (errors.length) {applyBtn.setAttribute('disabled', 'disabled');}
             else {applyBtn.removeAttribute('disabled');}
+            listenToDynamicElements();
         });
         
         var buttons = document.createElement('div');
@@ -2278,17 +2269,37 @@ var EditDataDialog = function(ui, cell)
         ui.showDialog(this.container, 480, 420, true, false, null, false); 
 
         // hack to resolve jsoneditor bug where disabled field is enabled when using properties dropdown
+        // adds listeners to dynamically-created elements in jsoneditor window
         // https://github.com/jdorn/json-editor/pull/716
-        [...document.querySelectorAll('#jsoneditor .json-editor-btn-edit_properties, #jsoneditor select')].forEach(function(item) {
-            item.addEventListener('click', function() {
-                try {
-                    disableFields();
-                }
-                catch (e) {
-                   // console.log(e);
+        function listenToDynamicElements() {
+            [...document.querySelectorAll('#jsoneditor .json-editor-btn-edit_properties')].forEach(function(item) {
+                if (item.getAttribute('listener') != 'click') {
+                    item.addEventListener('click', function() {
+                        item.setAttribute('listener', 'click');
+                        try {
+                            disableFields();
+                        }
+                        catch (e) {
+                           // console.log(e);
+                        }
+                    });
                 }
             });
-        });
+            [...document.querySelectorAll('#jsoneditor select')].forEach(function(item) {
+                if (item.getAttribute('listener') != 'change') {
+                    item.addEventListener('change', function() {
+                        item.setAttribute('listener', 'change');
+                        try {
+                            disableFields();
+                        }
+                        catch (e) {
+                           // console.log(e);
+                        }
+                    });
+                }
+            });
+        }
+        listenToDynamicElements();
 
     };
 
@@ -3497,15 +3508,18 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         textarea.style.lineHeight = 'initial';
         textarea.style.marginBottom = '16px';
 
-        var edgeSchemaVars;
         //Walk through all existing edges
+        var edgeArray = [];
         edges.forEach(cell => {
             // checkValue(graph, cell);
             if (cell.hasAttribute('schemaVars')) {
-                edgeSchemaVars = JSON.parse(cell.getAttribute('schemaVars'));
-                if (typeof edgeSchemaVars.name !== 'undefined' && edgeSchemaVars.name != '') {
-                    if (!vlans_in_use.hasOwnProperty(edgeSchemaVars.name)){
-                        vlans_in_use[edgeSchemaVars.name]=true;
+                var vlan = JSON.parse(cell.getAttribute('schemaVars'));
+                if (typeof vlan.name !== 'undefined' && vlan.name != '') {
+                    if (!vlans_in_use.hasOwnProperty(vlan.name)){
+                        vlans_in_use[vlan.name]=true;
+                    }
+                    if (edgeArray.filter(function(e) { return e.name == vlan.name; }).length <= 0 && vlan.id != 'auto') {
+                        edgeArray.push(vlan);
                     }
                 }
             }
@@ -3581,104 +3595,74 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
             count++;
 
             var clear = "";
-            var net = "";
-            var edgeVlans = []; // used to catch manually added (unconnected) interfaces+vlans
-
-            for (var i =0; i< cell.getEdgeCount();i++){
-                var e = cell.getEdgeAt(i);
-                if (!e.hasAttribute('schemaVars')) {
-                    continue;
-                }
-                edgeSchemaVars = JSON.parse(e.getAttribute('schemaVars'));
-                net += `${edgeSchemaVars.name}`;
-                edgeVlans.push(edgeSchemaVars.name);
-                if (i+1 < cell.getEdgeCount()){
-                    net += ' ';
-                }
-            }
-            // get manually added (or those with no edge) interface vlans for net config
-            try {
-                for (var i = 0; i < schemaVars.network.interfaces.length; i++) {
-                    if (edgeVlans.indexOf(schemaVars.network.interfaces[i].vlan) < 0) {
-                        if (net != "") {
-                            net += ' ';
-                        }
-                        net += schemaVars.network.interfaces[i].vlan;
-                    }
-                }
-            }
-            catch {
-                // console.log('interface object does not exist');
-            }
-            // console.log('this is prev_dev[network]'), console.log(prev_dev["network"]);
-            if (net == "" && typeof prev_dev["network"] !== 'undefined'){
-                delete prev_dev["network"];
-                clear += "clear vm config net \n";
-            }
-            else {
-                // if (cell.getAttribute("network") != net){
-                //     cell.setAttribute("network",net);
-                // }
-                if (prev_dev["network"] != net && net != ""){
-                    prev_dev["network"] = net;
-                    config += `vm config net ${net} \n`;
-                }
-            }
-
             // Generate configuration for parameters
             parameters.forEach(function(p) {
                 var name = p.name;
                 var path = getPath(p.path);
                 var args = p.args;
                 var argString = ``; // append config command arguments
+                var argVals;
                 // if it has a configuration for the parameter set it
+                var obj = schemaVars;
                 try {
-                    var obj = schemaVars;
                     for (p in path) {
                         obj = obj[path[p]];
                     }
-                    if (Array.isArray(obj) && obj.length > 0) {
-                        for (var i = 0; i < obj.length; i++) {
-                            for (var j = 0; j < args.length; j++) {
+                }
+                catch (e) {
+                    // console.log(e);
+                    return; 
+                }
+                if (Array.isArray(obj) && obj.length > 0) {
+                    for (var i = 0; i < obj.length; i++) {
+                        argVals = [];
+                        for (var j = 0; j < args.length; j++) {
+                            try {
                                 var argval = obj[i][args[j]].toString(); // to catch false/boolean values
-                                if (typeof argval !== 'undefined' && argval != '') {
-                                    argString += `${argval}`;
-                                    if (j < args.length - 1 && obj[i][args[j+1]]) {
-                                        argString += `,`;
+                                // explicit lookup for vlans with IDs; use ID instead of alias
+                                if (name == 'net' && args[j] == 'vlan') {
+                                    if (edgeArray.filter(function(e) { return e.name == argval; }).length > 0) {
+                                        argval = edgeArray.filter(function(e) { return e.name == argval; })[0].id;
                                     }
                                 }
-                                else{
-                                    continue;
+                                if (argval && argval != '') {
+                                    argVals.push(argval); 
                                 }
                             }
-                            if (i < obj.length - 1 && obj.length != 1) {
-                                argString += ` `;
+                            catch (e) {
+                                // console.log(e);
                             }
                         }
-                    }
-                    else if (typeof obj !== 'undefined') {
-                        for (var i = 0; i < args.length; i++) {
-                            var argval = obj[args[i]].toString(); // to catch false/boolean values
-                            if (typeof argval !== 'undefined' && argval != '') {
-                                argString += `${argval}`;
-                                if (i < args.length - 1 && obj[args[i+1]]) {
-                                    argString += `,`;
-                                }
-                            }
+                        argString += argVals.join(',');
+                        if (i < obj.length - 1 && obj.length != 1) {
+                            argString += ` `;
                         }
                     }
                 }
-                catch (e) { // parameter search ran into an undefined property
-                    // console.log(e);
+                else if (typeof obj !== 'undefined') {
+                    argVals = [];
+                    for (var i = 0; i < args.length; i++) {
+                        try {
+                            var argval = obj[args[i]].toString(); // to catch false/boolean values
+                            if (argval && argval != '') {
+                                argVals.push(argval);
+                            }
+                        }
+                        catch (e) {
+                            // console.log(e);
+                        }
+                    }
+                    argString += argVals.join(',');
                 }
                 var value = argString;
                 if (name == 'hostname' && schemaVars.type == 'kvm') value = '';
-                if (prev_dev[name] != value && value != '' && name != "net"){
+                // If new config for a parameter exists, set it
+                if (prev_dev[name] != value && value != ''){ //  && name != "net"
                     prev_dev[name] = value;
                     config += `vm config ${name} ${value} \n`;
                 }
-                // If there is no configuration for a parameter and the previous device had one clear it
-                if (name != "net" && prev_dev.hasOwnProperty(name) && value == '') {
+                else if (prev_dev.hasOwnProperty(name) && value == '') { // && name != "net" 
+                    // If there is no configuration for a parameter and the previous device had one clear it
                     delete prev_dev[name];
                     clear += `clear vm config ${name}\n`;
                 }
