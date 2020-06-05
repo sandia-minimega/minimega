@@ -4,8 +4,7 @@ set -e
 
 if ! id -u minimega >/dev/null 2>&1; then
     echo "Adding minimega user."
-    adduser --quiet --system --group --no-create-home --home /run/minimega \
-        --gecos "minimega user" minimega
+    useradd --system --no-create-home --home-dir /run/minimega minimega
 else
     echo "minimega user already exists."
 fi
