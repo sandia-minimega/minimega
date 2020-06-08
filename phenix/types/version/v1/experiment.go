@@ -7,15 +7,21 @@ import (
 )
 
 type Schedule map[string]string
+type VLANAliases map[string]int
+
+type VLANSpec struct {
+	Aliases VLANAliases `json:"aliases" yaml:"aliases" structs:"aliases" mapstructure:"aliases"`
+	Min     int         `json:"min" yaml:"min" structs:"min" mapstructure:"min"`
+	Max     int         `json:"max" yaml:"max" structs:"max" mapstructure:"max"`
+}
 
 type ExperimentSpec struct {
 	ExperimentName string        `json:"experimentName" yaml:"experimentName" structs:"experimentName"`
 	BaseDir        string        `json:"baseDir" yaml:"baseDir" structs:"baseDir"`
 	Topology       *TopologySpec `json:"topology" yaml:"topology"`
 	Scenario       *ScenarioSpec `json:"scenario" yaml:"scenario"`
+	VLANs          *VLANSpec     `json:"vlans" yaml:"vlans" structs:"vlans" mapstructure:"vlans"`
 	Schedules      Schedule      `json:"schedules" yaml:"schedules"`
-	VLANMin        int           `json:"vlanMin" yaml:"vlanMin" structs:"vlanMin"`
-	VLANMax        int           `json:"vlanMax" yaml:"vlanMax" structs:"vlanMax"`
 	RunLocal       bool          `json:"runLocal" yaml:"runLocal" structs:"runLocal"`
 }
 
@@ -34,7 +40,33 @@ func (this *ExperimentSpec) SetDefaults() {
 		}
 	}
 
+	if this.VLANs == nil {
+		this.VLANs = new(VLANSpec)
+	}
+
+	if this.VLANs.Aliases == nil {
+		this.VLANs.Aliases = make(VLANAliases)
+	}
+
+	if this.Schedules == nil {
+		this.Schedules = make(Schedule)
+	}
+
 	this.Topology.SetDefaults()
+}
+
+func (this VLANSpec) Validate() error {
+	for k, v := range this.Aliases {
+		if this.Min != 0 && v < this.Min {
+			return fmt.Errorf("topology VLAN %s (VLAN ID %d) is less than experiment min VLAN ID of %d", k, v, this.Min)
+		}
+
+		if this.Max != 0 && v > this.Max {
+			return fmt.Errorf("topology VLAN %s (VLAN ID %d) is greater than experiment min VLAN ID of %d", k, v, this.Max)
+		}
+	}
+
+	return nil
 }
 
 func (this ExperimentSpec) VerifyScenario() error {

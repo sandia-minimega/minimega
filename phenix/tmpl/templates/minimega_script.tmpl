@@ -1,10 +1,18 @@
 namespace {{ .ExperimentName }}
 ns queueing true
 
-{{- if .RunLocal -}}
+{{ if and (ne .VLANs.Min 0) (ne .VLANs.Max 0) }}
+vlans range {{ .VLANs.Min }} {{ .VLANs.Max }}
+{{- end }}
+
+{{- range $alias, $id := .VLANs.Aliases }}
+vlans add {{ $alias }} {{ $id }}
+{{- end }}
+
+{{ if .RunLocal }}
 ns del-host all
 ns add-host localhost
-{{- end -}}
+{{- end }}
 
 {{- range .Topology.Nodes }}
 {{/* added space to place hostname above relevant block */}}

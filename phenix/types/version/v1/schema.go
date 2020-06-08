@@ -19,11 +19,6 @@ components:
           title: Nodes
           items:
             $ref: "#/components/schemas/Node"
-        vlans:
-          type: array
-          title: VLANs
-          items:
-            $ref: "#/components/schemas/VLAN"
     Scenario:
       type: object
       required:
@@ -52,23 +47,28 @@ components:
           minLength: 1
         baseDir:
           type: string
-    VLAN:
-      type: object
-      title: VLAN
-      required:
-      - name
-      - id
-      properties:
-        name:
-          type: string
-          title: Name
-          minLength: 1
-          example: SCADAPWR
-        id:
-          type: integer
-          title: VLAN ID
-          minLength: 1
-          example: 101
+        vlans:
+          type: object
+          title: VLANs
+          properties:
+            aliases:
+              type: object
+              title: Aliases
+              additionalProperties:
+                type: integer
+              example:
+                MGMT: 200
+            min:
+              type: integer
+            max:
+              type: integer
+        schedule:
+          type: object
+          title: Schedule
+          additionalProperties:
+            type: string
+          example:
+            ADServer: compute1
     Node:
       type: object
       title: Node
@@ -84,7 +84,6 @@ components:
           - Firewall
           - Printer
           - Router
-          - SCEPTRE
           - Server
           - Switch
           - VirtualMachine
@@ -100,11 +99,11 @@ components:
               type: string
               title: Hostname
               minLength: 1
-              example: power-provider
+              example: ADServer
             description:
               type: string
               title: Description
-              example: SCEPTRE power solver
+              example: Active Directory Server
             vm_type:
               type: string
               title: VM (Emulation) Type

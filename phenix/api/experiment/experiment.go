@@ -214,7 +214,7 @@ func create(c *types.Config) error {
 
 // Start starts the experiment with the given name. It returns any errors
 // encountered while starting the experiment.
-func Start(name string) error {
+func Start(name string, dryrun bool) error {
 	c, _ := types.NewConfig("experiment/" + name)
 
 	if err := store.Get(c); err != nil {
@@ -247,12 +247,14 @@ func Start(name string) error {
 		return fmt.Errorf("generating minimega script: %w", err)
 	}
 
-	if err := mm.ReadScriptFromFile(filename); err != nil {
-		return fmt.Errorf("reading minimega script: %w", err)
-	}
+	if !dryrun {
+		if err := mm.ReadScriptFromFile(filename); err != nil {
+			return fmt.Errorf("reading minimega script: %w", err)
+		}
 
-	if err := mm.LaunchVMs(exp.ExperimentName); err != nil {
-		return fmt.Errorf("launching experiment VMs: %w", err)
+		if err := mm.LaunchVMs(exp.ExperimentName); err != nil {
+			return fmt.Errorf("launching experiment VMs: %w", err)
+		}
 	}
 
 	c.Status = map[string]interface{}{"startTime": time.Now().Format(time.RFC3339)}
@@ -272,7 +274,7 @@ func Start(name string) error {
 
 // Stop stops the experiment with the given name. It returns any errors
 // encountered while stopping the experiment.
-func Stop(name string) error {
+func Stop(name string, dryrun bool) error {
 	c, _ := types.NewConfig("experiment/" + name)
 
 	if err := store.Get(c); err != nil {
@@ -289,8 +291,10 @@ func Stop(name string) error {
 		return fmt.Errorf("applying apps to experiment: %w", err)
 	}
 
-	if err := mm.ClearNamespace(exp.ExperimentName); err != nil {
-		return fmt.Errorf("killing experiment VMs: %w", err)
+	if !dryrun {
+		if err := mm.ClearNamespace(exp.ExperimentName); err != nil {
+			return fmt.Errorf("killing experiment VMs: %w", err)
+		}
 	}
 
 	c.Spec = structs.MapDefaultCase(exp, structs.CASESNAKE)
@@ -298,6 +302,42 @@ func Stop(name string) error {
 
 	if err := store.Update(c); err != nil {
 		return fmt.Errorf("updating experiment config: %w", err)
+	}
+
+	return nil
+}
+
+func Save(opts ...SaveOption) error {
+	o := newSaveOptions(opts...)
+
+	if o.name == "" {
+		return fmt.Errorf("experiment name required")
+	}
+
+	c, _ := types.NewConfig("experiment/" + o.name)
+
+	if err := store.Get(c); err != nil {
+		return fmt.Errorf("getting experiment %s from store: %w", o.name, err)
+	}
+
+	if o.spec == nil {
+		if o.saveNilSpec {
+			c.Spec = nil
+		}
+	} else {
+		c.Spec = structs.MapDefaultCase(o.spec, structs.CASESNAKE)
+	}
+
+	if o.status == nil {
+		if o.saveNilStatus {
+			c.Status = nil
+		}
+	} else {
+		c.Status = structs.MapDefaultCase(o.status, structs.CASESNAKE)
+	}
+
+	if err := store.Update(c); err != nil {
+		return fmt.Errorf("saving experiment config: %w", err)
 	}
 
 	return nil

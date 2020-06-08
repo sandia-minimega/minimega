@@ -11,6 +11,7 @@ import (
 	"phenix/api/config"
 	"phenix/api/experiment"
 	"phenix/api/image"
+	"phenix/api/vlan"
 	"phenix/api/vm"
 	"phenix/store"
 	v1 "phenix/types/version/v1"
@@ -297,10 +298,22 @@ func main() {
 						},
 					},
 					{
-						Name:  "start",
-						Usage: "start an experiment",
+						Name:      "start",
+						Usage:     "start an experiment",
+						ArgsUsage: "[flags] <exp>",
+						Flags: []cli.Flag{
+							&cli.BoolFlag{
+								Name:  "dry-run",
+								Usage: "do everything but actually call out to minimega",
+							},
+						},
 						Action: func(ctx *cli.Context) error {
-							if err := experiment.Start(ctx.Args().First()); err != nil {
+							var (
+								exp    = ctx.Args().First()
+								dryrun = ctx.Bool("dry-run")
+							)
+
+							if err := experiment.Start(exp, dryrun); err != nil {
 								return cli.Exit(err, 1)
 							}
 
@@ -308,10 +321,22 @@ func main() {
 						},
 					},
 					{
-						Name:  "stop",
-						Usage: "stop an experiment",
+						Name:      "stop",
+						Usage:     "stop an experiment",
+						ArgsUsage: "[flags] <exp>",
+						Flags: []cli.Flag{
+							&cli.BoolFlag{
+								Name:  "dry-run",
+								Usage: "do everything but actually call out to minimega",
+							},
+						},
 						Action: func(ctx *cli.Context) error {
-							if err := experiment.Stop(ctx.Args().First()); err != nil {
+							var (
+								exp    = ctx.Args().First()
+								dryrun = ctx.Bool("dry-run")
+							)
+
+							if err := experiment.Stop(exp, dryrun); err != nil {
 								return cli.Exit(err, 1)
 							}
 
@@ -319,14 +344,26 @@ func main() {
 						},
 					},
 					{
-						Name:  "restart",
-						Usage: "restart an experiment",
+						Name:      "restart",
+						Usage:     "restart an experiment",
+						ArgsUsage: "[flags] <exp>",
+						Flags: []cli.Flag{
+							&cli.BoolFlag{
+								Name:  "dry-run",
+								Usage: "do everything but actually call out to minimega",
+							},
+						},
 						Action: func(ctx *cli.Context) error {
-							if err := experiment.Stop(ctx.Args().First()); err != nil {
+							var (
+								exp    = ctx.Args().First()
+								dryrun = ctx.Bool("dry-run")
+							)
+
+							if err := experiment.Stop(exp, dryrun); err != nil {
 								return cli.Exit(err, 1)
 							}
 
-							if err := experiment.Start(ctx.Args().First()); err != nil {
+							if err := experiment.Start(exp, dryrun); err != nil {
 								return cli.Exit(err, 1)
 							}
 
@@ -900,6 +937,117 @@ func main() {
 
 							if err := image.Remove(name, overlays, packages, scripts); err != nil {
 								return cli.Exit(err, 1)
+							}
+
+							return nil
+						},
+					},
+				},
+			},
+			{
+				Name:  "vlan",
+				Usage: "phenix VLAN management",
+				Subcommands: []*cli.Command{
+					{
+						Name:      "alias",
+						Usage:     "view or set VLAN alias",
+						ArgsUsage: "[flags] [experiment] [alias] [vlan]",
+						Flags: []cli.Flag{
+							&cli.BoolFlag{
+								Name:    "force",
+								Aliases: []string{"f"},
+								Usage:   "force update on set action if alias already exists",
+							},
+						},
+						Action: func(ctx *cli.Context) error {
+							switch ctx.NArg() {
+							case 0:
+								info, err := vlan.Aliases()
+								if err != nil {
+									return cli.Exit(err, 1)
+								}
+
+								util.PrintTableOfVLANAliases(os.Stdout, info)
+							case 1:
+								info, err := vlan.Aliases(vlan.Experiment(ctx.Args().First()))
+								if err != nil {
+									return cli.Exit(err, 1)
+								}
+
+								util.PrintTableOfVLANAliases(os.Stdout, info)
+							case 3:
+								var (
+									exp   = ctx.Args().Get(0)
+									alias = ctx.Args().Get(1)
+									id    = ctx.Args().Get(2)
+									force = ctx.Bool("force")
+								)
+
+								vid, err := strconv.Atoi(id)
+								if err != nil {
+									return cli.Exit("VLAN ID provided not a valid integer", 1)
+								}
+
+								if err := vlan.SetAlias(vlan.Experiment(exp), vlan.Alias(alias), vlan.ID(vid), vlan.Force(force)); err != nil {
+									return cli.Exit(err, 1)
+								}
+							default:
+								return cli.Exit("unexpected number of arguments provided", 1)
+							}
+
+							return nil
+						},
+					},
+					{
+						Name:      "range",
+						Usage:     "view or set VLAN range",
+						ArgsUsage: "[flags] [experiment] [min] [max]",
+						Flags: []cli.Flag{
+							&cli.BoolFlag{
+								Name:    "force",
+								Aliases: []string{"f"},
+								Usage:   "force update on set action if range is already set",
+							},
+						},
+						Action: func(ctx *cli.Context) error {
+							switch ctx.NArg() {
+							case 0:
+								info, err := vlan.Ranges()
+								if err != nil {
+									return cli.Exit(err, 1)
+								}
+
+								util.PrintTableOfVLANRanges(os.Stdout, info)
+							case 1:
+								info, err := vlan.Ranges(vlan.Experiment(ctx.Args().First()))
+								if err != nil {
+									return cli.Exit(err, 1)
+								}
+
+								util.PrintTableOfVLANRanges(os.Stdout, info)
+							case 3:
+								var (
+									exp   = ctx.Args().Get(0)
+									min   = ctx.Args().Get(1)
+									max   = ctx.Args().Get(2)
+									force = ctx.Bool("force")
+								)
+
+								vmin, err := strconv.Atoi(min)
+								if err != nil {
+									return cli.Exit("VLAN min ID provided not a valid integer", 1)
+								}
+
+								vmax, err := strconv.Atoi(max)
+								if err != nil {
+									return cli.Exit("VLAN max ID provided not a valid integer", 1)
+								}
+
+								if err := vlan.SetRange(vlan.Experiment(exp), vlan.Min(vmin), vlan.Max(vmax), vlan.Force(force)); err != nil {
+									return cli.Exit(err, 1)
+								}
+							default:
+								return cli.Exit("unexpected number of arguments provided", 1)
 							}
 
 							return nil

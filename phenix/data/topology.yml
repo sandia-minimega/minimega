@@ -17,14 +17,14 @@ spec:
       - name: IF0
         vlan: ot
         address: 192.168.10.1
-        mask: 24.
+        mask: 24
         gateway: 192.168.10.254
         proto: static
         type: ethernet
       - name: mgmt
         vlan: MGMT
         address: 172.16.10.1
-        mask: 16.
+        mask: 16
         proto: static
         type: ethernet
   - type: VirtualMachine
@@ -40,24 +40,24 @@ spec:
       - name: IF0
         vlan: ot
         address: 192.168.10.2
-        mask: 24.
+        mask: 24
         gateway: 192.168.10.254
         proto: static
         type: ethernet
       - name: mgmt
         vlan: MGMT
         address: 172.16.10.2
-        mask: 16.
+        mask: 16
         proto: static
         type: ethernet
       - name: S0
         vlan: foobar
         address: 10.0.0.1
-        mask: 24.
+        mask: 24
         proto: static
         type: serial
-        udp_port: 8989.
-        baud_rate: 9600.
+        udp_port: 8989
+        baud_rate: 9600
         device: /dev/ttyS0
   - type: Router
     labels:
@@ -74,7 +74,7 @@ spec:
       - name: IF0
         vlan: mgmt
         address: 172.16.10.254
-        mask: 16.
+        mask: 16
         proto: static
         type: ethernet
         ruleset_in: test
@@ -82,10 +82,10 @@ spec:
       - name: test
         default: drop
         rules:
-        - id: 10.
+        - id: 10
           action: accept
           protocol: all
           source:
             address: 1.1.1.1
-            port: 53.
+            port: 53
         

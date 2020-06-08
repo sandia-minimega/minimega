@@ -3,11 +3,13 @@ package util
 import (
 	"fmt"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"phenix/types"
+	v1 "phenix/types/version/v1"
 
 	"github.com/olekukonko/tablewriter"
 )
@@ -52,7 +54,7 @@ func PrintTableOfExperiments(writer io.Writer, exps ...types.Experiment) {
 			exp.Metadata.Annotations["topology"],
 			exp.Metadata.Annotations["scenario"],
 			exp.Status.StartTime,
-			strconv.Itoa(len(exp.Spec.Topology.Nodes)),
+			fmt.Sprintf("%d", len(exp.Spec.Topology.Nodes)),
 			"",
 			strings.Join(apps, ", "),
 		})
@@ -106,6 +108,56 @@ func PrintTableOfImageConfigs(writer io.Writer, imgs ...types.Image) {
 			strings.Join(img.Spec.Overlays, ", "),
 			strings.Join(img.Spec.Packages, ", "),
 		})
+	}
+
+	table.Render()
+}
+
+func PrintTableOfVLANAliases(writer io.Writer, info map[string]v1.VLANAliases) {
+	table := tablewriter.NewWriter(writer)
+	table.SetHeader([]string{"Experiment", "VLAN Alias", "VLAN ID"})
+
+	var experiments []string
+
+	for exp := range info {
+		experiments = append(experiments, exp)
+	}
+
+	sort.Strings(experiments)
+
+	for _, exp := range experiments {
+		var aliases []string
+
+		for alias := range info[exp] {
+			aliases = append(aliases, alias)
+		}
+
+		sort.Strings(aliases)
+
+		for _, alias := range aliases {
+			table.Append([]string{exp, alias, fmt.Sprintf("%d", int(info[exp][alias]))})
+		}
+	}
+
+	table.Render()
+}
+
+func PrintTableOfVLANRanges(writer io.Writer, info map[string][2]int) {
+	table := tablewriter.NewWriter(writer)
+	table.SetHeader([]string{"Experiment", "VLAN Range"})
+
+	var experiments []string
+
+	for exp := range info {
+		experiments = append(experiments, exp)
+	}
+
+	sort.Strings(experiments)
+
+	for _, exp := range experiments {
+		r := fmt.Sprintf("%d - %d", info[exp][0], info[exp][1])
+
+		table.Append([]string{exp, r})
 	}
 
 	table.Render()

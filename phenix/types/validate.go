@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"phenix/types/version"
@@ -19,7 +20,15 @@ func ValidateConfigSpec(c Config) error {
 		return fmt.Errorf("getting validator for config: %w", err)
 	}
 
-	if err := v.VisitJSON(c.Spec); err != nil {
+	// FIXME: using JSON marshal/unmarshal to get Go types converted to JSON
+	// types. This is mainly needed for Go int types, since JSON only has float64.
+	// There's a better way to do this, but it requires an update to the openapi3
+	// package we're using.
+	data, _ := json.Marshal(c.Spec)
+	var spec interface{}
+	json.Unmarshal(data, &spec)
+
+	if err := v.VisitJSON(spec); err != nil {
 		return fmt.Errorf("validating config spec against schema: %w", err)
 	}
 
