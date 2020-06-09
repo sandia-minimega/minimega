@@ -22,7 +22,7 @@ type Image struct {
 	Compress  bool     `json:"compress" yaml:"compress"`
 	Size      string   `json:"size" yaml:"size"`
 	Mirror    string   `json:"mirror" yaml:"mirror"`
-	DebAppend string   `json:"deb_append" yaml:"deb_append"`
+	DebAppend string   `json:"deb_append" yaml:"deb_append" structs:"deb_append" mapstructure:"deb_append"`
 	Packages  []string `json:"packages" yaml:"packages"`
 	Overlays  []string `json:"overlays" yaml:"overlays"`
 	Scripts   []string `json:"default_script" yaml:"default_script"`

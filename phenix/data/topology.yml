@@ -12,6 +12,11 @@ spec:
       os_type: linux
       drives:
       - image: bennu.qc2
+    injections:
+      - src: foo/bar/sucka.fish
+        dst: /data/sucka.fish
+      - src: /foo/bar/sucka/fish.sh
+        dst: /data/fish.sh
     network:
       interfaces:
       - name: IF0

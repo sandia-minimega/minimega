@@ -670,26 +670,31 @@ func main() {
 								Name:    "size",
 								Aliases: []string{"z"},
 								Usage:   "image size to use",
+								Value: "5G",
 							},
 							&cli.StringFlag{
 								Name:    "variant",
 								Aliases: []string{"v"},
 								Usage:   "image variant to use",
+								Value: "minbase",
 							},
 							&cli.StringFlag{
 								Name:    "release",
 								Aliases: []string{"r"},
-								Usage:   "os release codename (defaults to bionic)",
+								Usage:   "os release codename",
+								Value: "bionic",
 							},
 							&cli.StringFlag{
 								Name:    "mirror",
 								Aliases: []string{"m"},
-								Usage:   "debootstrap mirror (must match release, defaults to http://us.archive.ubuntu.com/ubuntu/)",
+								Usage:   "debootstrap mirror (must match release)",
+								Value:   "http://us.archive.ubuntu.com/ubuntu/",
 							},
 							&cli.StringFlag{
 								Name:    "format",
 								Aliases: []string{"f"},
-								Usage:   "format of disk image (defaults to raw)",
+								Usage:   "format of disk image",
+								Value:   "raw",
 							},
 							&cli.BoolFlag{
 								Name:    "compress",
@@ -712,9 +717,9 @@ func main() {
 								Usage:   "list of scripts to include in addition to the default one (separated by comma)",
 							},
 							&cli.StringFlag{
-								Name:    "debootstrap_append",
+								Name:    "debootstrap-append",
 								Aliases: []string{"d"},
-								Usage:   "additional arguments to debootstrap",
+								Usage:   "additional arguments to debootstrap (default: --components=main,restricted,universe,multiverse)",
 							},
 						},
 						Action: func(ctx *cli.Context) error {
@@ -727,7 +732,7 @@ func main() {
 							img.Mirror = ctx.String("mirror")
 							img.Format = v1.Format(ctx.String("format"))
 							img.Compress = ctx.Bool("compress")
-							img.DebAppend = ctx.String("debootstrap_append")
+							img.DebAppend = ctx.String("debootstrap-append")
 
 							if overlays := ctx.String("overlays"); overlays != "" {
 								img.Overlays = strings.Split(overlays, ",")

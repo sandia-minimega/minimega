@@ -17,7 +17,7 @@ steps:
   - unpack-rootfs: root
   - debootstrap: {{ .Release }}
     mirror: {{ .Mirror }}
-    options: "{{ .PackageList }} {{- .DebAppend }} {{ .Verbose }}"
+    options: "{{ .PackageList }} {{ .DebAppend }} {{ .Verbose }}"
     target: root
     unless: rootfs_unpacked
   {{- if .Cache  }}

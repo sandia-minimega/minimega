@@ -75,17 +75,14 @@ var PACKAGES_MINGUI = []string{
 	"xserver-xorg-video-vesa",
 	"xinit",
 	"xfce4-terminal",
-	"qupzilla",
+	"xfce4",
+	"python3-cffi-backend",
 }
 
 var PACKAGES_MINGUI_KALI = []string{
 	"ca-certificates-java",
 	"openjdk-8-jre-headless",
 	"kali-desktop-xfce",
-}
-
-var PACKAGES_MINGUI_BIONIC = []string{
-	"xfce4",
 }
 
 var PACKAGES_BRASH = []string{
@@ -95,4 +92,17 @@ var PACKAGES_BRASH = []string{
 	"ftp",
 	"pv",
 	"python3",
+}
+
+var PACKAGES_COMPONENTS = []string{
+	"main",
+	"restricted",
+	"universe",
+	"multiverse",
+}
+
+var PACKAGES_COMPONENTS_KALI = []string{
+	"main",
+	"contrib",
+	"non-free",
 }

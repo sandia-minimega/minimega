@@ -14,6 +14,8 @@ ns del-host all
 ns add-host localhost
 {{- end }}
 
+{{ $basedir := .BaseDir }}
+
 {{- range .Topology.Nodes }}
 {{/* added space to place hostname above relevant block */}}
 ## VM: {{ .General.Hostname }} ##
@@ -21,7 +23,7 @@ ns add-host localhost
     {{ $firstDrive := index .Hardware.Drives 0 }}
 disk snapshot {{ $firstDrive.Image }} {{ $.SnapshotName .General.Hostname }} 
         {{- if gt (len .Injections) 0 }}
-disk inject {{ $.SnapshotName .General.Hostname  }}:{{ $firstDrive.GetInjectPartition }} files {{ .FileInjects }}
+disk inject {{ $.SnapshotName .General.Hostname }}:{{ $firstDrive.GetInjectPartition }} files {{ .FileInjects $basedir }}
         {{- end }}
     {{- end }}
 clear vm config

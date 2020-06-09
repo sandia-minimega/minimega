@@ -105,11 +105,15 @@ func (this *Node) SetDefaults() {
 	}
 }
 
-func (this Node) FileInjects() string {
+func (this Node) FileInjects(basedir string) string {
 	injects := make([]string, len(this.Injections))
 
 	for i, inject := range this.Injections {
-		injects[i] = inject.Src + ":" + inject.Dst
+		if strings.HasPrefix(inject.Src, "/") {
+			injects[i] = inject.Src + ":" + inject.Dst
+		} else {
+			injects[i] = basedir + "/" + inject.Src + ":" + inject.Dst
+		}
 	}
 
 	return strings.Join(injects, " ")
