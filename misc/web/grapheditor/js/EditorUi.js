@@ -133,7 +133,7 @@ EditorUi = function(editor, container, lightbox)
                             removeNodeVlans(graph, source, vlan);
                         }
                         catch (e) {
-                            console.log(e);
+                            // console.log(e);
                         }
                     }
                 }

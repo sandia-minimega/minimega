@@ -1878,7 +1878,10 @@ function lookforvlan(graph, cell, toSwitch=null){
                 if (!ec.hasAttribute('schemaVars')) {
                     continue;
                 }
-                lookforvlan(graph, ec, prevName);
+                // prevent infinite loop
+                if (JSON.parse(ec.getAttribute('schemaVars')).device != 'switch') {
+                    lookforvlan(graph, ec, prevName);
+                }
             }
         }
         return;
@@ -1921,10 +1924,16 @@ function lookforvlan(graph, cell, toSwitch=null){
             // console.log(connectedVlanIdx);
             var eth = 'eth' + connectedVlanIdx;
             var e = cell.getEdgeAt(i);
+
+            // if edge is a diagraming edge, continue
             if (checkEdgeDiagraming(graph, e)) {
                 continue;
             }
-            // checkValue(graph, e);
+            // if edge is disconnected, continue
+            if (!e.source || !e.target) {
+                continue;
+            }
+
             var edgevalue = graph.getModel().getValue(e);
             edgevalue = edgevalue.cloneNode(true);
             edgeSchemaVars = JSON.parse(e.getAttribute('schemaVars'));
@@ -3557,6 +3566,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
         var prev_dev = {};
         var schemaVars;
         var miniccc_commands = [];
+        var networks = [];
         vertices.forEach(cell => {
 
             if (!cell.hasAttribute('schemaVars')) {
@@ -3594,6 +3604,13 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
             graph.getModel().setValue(cell, value);
             count++;
 
+            if (schemaVars.network) {
+                var netObj = schemaVars.network;
+                netObj.hostname = name;    
+                netObj.router = schemaVars.network.router ? schemaVars.network.router : 'other';
+                networks.push(netObj);
+            }
+
             var clear = "";
             // Generate configuration for parameters
             parameters.forEach(function(p) {
@@ -3611,7 +3628,7 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
                 }
                 catch (e) {
                     // console.log(e);
-                    return; 
+                    // return; 
                 }
                 if (Array.isArray(obj) && obj.length > 0) {
                     for (var i = 0; i < obj.length; i++) {
@@ -3680,14 +3697,80 @@ var EditMiniConfigDialog = function(editorUi,vertices,edges)
             }
         });
         textarea.value = config;
-        textarea.value += "## Starting all VM's\nvm start all\n\n";
-        if (miniccc_commands.length > 0) textarea.value += "## miniccc commands\n"
+        textarea.value += "## Starting all VM's\nvm start all\n";
+
+        // router commands
+        // console.log(networks);
+        if (networks.length > 0) {
+            textarea.value += "\n## router commands\n";
+        }
+        networks.forEach(network => {
+            try {
+                var routerType = network.router;
+                for (var i = 0; i < network.interfaces.length; i++) {
+                    var hostname = network.hostname;
+                    var iface = null;
+                    var ipAddr = null;
+                    var ipMask = null;
+                    var gateway = null;
+                    var dhcp = false;
+                    if (network.interfaces[i].proto) {
+                        if (network.interfaces[i].proto == 'dhcp') {
+                            dhcp = true;
+                        }
+                    }
+                    if (network.interfaces[i].name) {
+                        iface = network.interfaces[i].name;
+                    }
+                    if (network.interfaces[i].address) {
+                        ipAddr = network.interfaces[i].address;
+                    }
+                    if (network.interfaces[i].mask) {
+                        ipMask = network.interfaces[i].mask;
+                    }
+                    if (network.interfaces[i].gateway) {
+                        gateway = network.interfaces[i].gateway;
+                    }
+                    if (iface && ((ipAddr && ipMask) || dhcp)) {
+                        if (routerType == 'minirouter') {
+                            var ipString =  !dhcp ? (ipAddr + '/' + ipMask) : 'dhcp';
+                            textarea.value += `router ${hostname} ${iface} network ${ipString}\n`;
+                        }
+                        else {
+                            if (!dhcp) {
+                                textarea.value += `cc exec ip addr add ${ipAddr}/${ipMask} dev ${iface}\n`;
+                            }
+                            else {
+                                textarea.value += `cc exec dhclient ${iface}\n`;
+                            }
+                        }
+                    }
+                    if (gateway) {
+                        if (routerType == 'minirouter') {
+                            textarea.value += `router ${hostname} gw ${gateway}\n`;
+                        }
+                        else {
+                            textarea.value += `cc exec ip route add 0.0.0.0/0 via ${gateway}\n`;
+                        }
+                    }
+                }
+                if (routerType == 'minirouter') {
+                    textarea.value += `router ${hostname} commit\n`;
+                }
+            }
+            catch (e) {
+                // console.log(e);
+            }
+        });
+
+        // miniccc commands
+        if (miniccc_commands.length > 0) textarea.value += "\n## miniccc commands\n"
         for(var i = 0; i < miniccc_commands.length; i++) {
             textarea.value += miniccc_commands[i]+"\n";
             // if (i == miniccc_commands.length - 1) {textarea.value += "\n";}
         }
 
-        // expand variables
+        // apply experiment variables
         // console.log(window.experiment_vars);
         if (window.experiment_vars != undefined)
         {
@@ -4245,12 +4328,13 @@ var ImportJSONDialog = function(graph, ui) {
         const devices = ['switch', 'router', 'firewall', 'desktop', 'server', 'mobile'];
         const types = ['kvm', 'container'];
         const stencilsDir = window.STENCIL_PATH; // image dir
-        const vertexStyleString = "shape=image;html=1;labelBackgroundColor=#ffffff;image=";
-        const edgeStyleString = "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;";
+        const vertexStyleString = "shape=image;html=1;labelBackgroundColor=#ffffff;verticalAlign=top;verticalLabelPosition=bottom;image=";
+        const edgeStyleString = "edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;verticalAlign=top;verticalLabelPosition=bottom;";
 
         // create nodes, switches, and edges with schemaVars user object attribute
         // for schema validation
         // TODO: implement schema validation
+        graph.getModel().clear(); // clear current graph model
         const parent = graph.getDefaultParent();
         // TODO: assign layers programatically 
         // var hiddenLayer = graph.model.root.insert(new mxCell());

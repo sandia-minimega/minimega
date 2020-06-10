@@ -276,6 +276,7 @@ Actions.prototype.init = function()
 
     this.addAction('delete', function(evt)
     {
+        // passing true deletes cell and its connected edges
         deleteCells(evt != null && mxEvent.isShiftDown(evt));
     }, null, null, 'Delete');
     this.addAction('deleteAll', function()
