@@ -16,6 +16,19 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// ConfigHook is a function to be called during the different lifecycle stages
+// of a config. The passed config can be updated by the hook functions as
+// necessary, and an error can be returned if the lifecycle stage should be
+// halted.
+type ConfigHook func(string, *types.Config) error
+
+var hooks = make(map[string][]ConfigHook)
+
+// RegisterConfigHook registers a ConfigHook for the given config kind.
+func RegisterConfigHook(kind string, hook ConfigHook) {
+	hooks[kind] = append(hooks[kind], hook)
+}
+
 func Init() error {
 	for _, name := range AssetNames() {
 		var c types.Config
@@ -170,6 +183,19 @@ func Create(path string, validate bool) (*types.Config, error) {
 		}
 	}
 
+	for _, hook := range hooks[c.Kind] {
+		if err := hook("create", c); err != nil {
+			return nil, fmt.Errorf("calling config hook: %w", err)
+		}
+
+		if validate {
+			// Validate again since config hooks can modify the config.
+			if err := types.ValidateConfigSpec(*c); err != nil {
+				return nil, fmt.Errorf("validating config after config hook: %w", err)
+			}
+		}
+	}
+
 	if err := store.Create(c); err != nil {
 		return nil, fmt.Errorf("storing config: %w", err)
 	}
@@ -229,6 +255,14 @@ func Edit(name string) (*types.Config, error) {
 	}
 
 	c.Spec = spec
+
+	// TODO: validate after edit
+
+	for _, hook := range hooks[c.Kind] {
+		if err := hook("edit", c); err != nil {
+			return nil, fmt.Errorf("calling config hook: %w", err)
+		}
+	}
 
 	if err := store.Update(c); err != nil {
 		return nil, fmt.Errorf("updating config in store: %w", err)
