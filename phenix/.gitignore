@@ -1,5 +1,5 @@
-docs/bindata.go
-docs/site
+.devcontainer
+.vscode
 
 phenix.bdb
 

@@ -38,8 +38,8 @@ func ConnectVMInterface(opts ...Option) error {
 	return DefaultMM.ConnectVMInterface(opts...)
 }
 
-func DisonnectVMInterface(opts ...Option) error {
-	return DefaultMM.DisonnectVMInterface(opts...)
+func DisconnectVMInterface(opts ...Option) error {
+	return DefaultMM.DisconnectVMInterface(opts...)
 }
 
 func StartVMCapture(opts ...Option) error {
@@ -56,4 +56,8 @@ func GetExperimentCaptures(opts ...Option) []types.Capture {
 
 func GetVMCaptures(opts ...Option) []types.Capture {
 	return DefaultMM.GetVMCaptures(opts...)
+}
+
+func GetClusterHosts() (types.Hosts, error) {
+	return DefaultMM.GetClusterHosts()
 }

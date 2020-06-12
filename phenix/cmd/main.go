@@ -10,6 +10,7 @@ import (
 
 	"phenix/api/config"
 	"phenix/api/experiment"
+	"phenix/api/experiment/schedule"
 	"phenix/api/image"
 	"phenix/api/vlan"
 	"phenix/api/vm"
@@ -293,6 +294,40 @@ func main() {
 							}
 
 							fmt.Printf("experiment %s deleted\n", name)
+
+							return nil
+						},
+					},
+					{
+						Name:      "schedule",
+						Usage:     "schedule an experiment",
+						ArgsUsage: "[flags] <exp> <algorithm>",
+						Flags: []cli.Flag{
+							&cli.BoolFlag{
+								Name:  "list",
+								Usage: "show a list of available schedulers",
+							},
+						},
+						Action: func(ctx *cli.Context) error {
+							if ctx.Bool("list") {
+								schedulers := schedule.List()
+
+								fmt.Printf("\nSchedulers: %s\n\n", strings.Join(schedulers, ", "))
+								return nil
+							}
+
+							if ctx.Args().Len() != 2 {
+								return cli.Exit("must provide all arguments", 1)
+							}
+
+							var (
+								exp  = ctx.Args().Get(0)
+								algo = ctx.Args().Get(1)
+							)
+
+							if err := experiment.Schedule(exp, algo); err != nil {
+								return cli.Exit(err, 1)
+							}
 
 							return nil
 						},

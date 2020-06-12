@@ -10,6 +10,16 @@ func (this *TopologySpec) SetDefaults() {
 	}
 }
 
+func (this TopologySpec) FindNodeByName(name string) *Node {
+	for _, node := range this.Nodes {
+		if node.General.Hostname == name {
+			return node
+		}
+	}
+
+	return nil
+}
+
 // FindNodesWithLabels finds all nodes in the topology containing at least one
 // of the labels provided. Take note that the node does not have to have all the
 // labels provided, just one.

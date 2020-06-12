@@ -253,7 +253,7 @@ func (Minimega) ConnectVMInterface(opts ...Option) error {
 	return nil
 }
 
-func (Minimega) DisonnectVMInterface(opts ...Option) error {
+func (Minimega) DisconnectVMInterface(opts ...Option) error {
 	o := NewOptions(opts...)
 
 	cmd := mmcli.NewNamespacedCommand(o.ns)
@@ -337,6 +337,43 @@ func (this Minimega) GetVMCaptures(opts ...Option) []types.Capture {
 	return keep
 }
 
+func (Minimega) GetClusterHosts() (types.Hosts, error) {
+	// Get headnode details
+	hosts, err := processNamespaceHosts("minimega")
+	if err != nil {
+		return nil, fmt.Errorf("processing headnode details: %w", err)
+	}
+
+	head := hosts[0]
+	head.Name = head.Name + " (headnode)"
+	head.Schedulable = false
+
+	cluster := []types.Host{head}
+
+	// Used below to ensure the headnode doesn't show up in the list of
+	// cluster nodes twice.
+	headnode := hosts[0].Name
+
+	// Get compute nodes details
+	hosts, err = processNamespaceHosts("__phenix__")
+	if err != nil {
+		return nil, fmt.Errorf("processing compute nodes details: %w", err)
+	}
+
+	for _, host := range hosts {
+		// This will happen if the headnode is included as a compute node
+		// (ie. when there's only one node in the cluster).
+		if host.Name == headnode {
+			continue
+		}
+
+		host.Schedulable = true
+		cluster = append(cluster, host)
+	}
+
+	return cluster, nil
+}
+
 func flush(ns string) error {
 	cmd := mmcli.NewNamespacedCommand(ns)
 	cmd.Command = "vm flush"
@@ -359,4 +396,37 @@ func inject(disk string, part int, injects ...string) error {
 	}
 
 	return nil
+}
+
+func processNamespaceHosts(namespace string) (types.Hosts, error) {
+	cmd := mmcli.NewNamespacedCommand(namespace)
+	cmd.Command = "host"
+
+	var (
+		hosts  types.Hosts
+		status = mmcli.RunTabular(cmd)
+	)
+
+	for _, row := range status {
+		host := types.Host{Name: row["host"]}
+		host.CPUs, _ = strconv.Atoi(row["cpus"])
+		host.CPUCommit, _ = strconv.Atoi(row["cpucommit"])
+		host.Load = strings.Split(row["load"], " ")
+		host.MemUsed, _ = strconv.Atoi(row["memused"])
+		host.MemTotal, _ = strconv.Atoi(row["memtotal"])
+		host.MemCommit, _ = strconv.Atoi(row["memcommit"])
+		host.VMs, _ = strconv.Atoi(row["vms"])
+
+		host.Tx, _ = strconv.ParseFloat(row["tx"], 64)
+		host.Rx, _ = strconv.ParseFloat(row["rx"], 64)
+		host.Bandwidth = fmt.Sprintf("rx: %.1f / tx: %.1f", host.Rx, host.Tx)
+		host.NetCommit, _ = strconv.Atoi(row["netcommit"])
+
+		uptime, _ := time.ParseDuration(row["uptime"])
+		host.Uptime = uptime.Seconds()
+
+		hosts = append(hosts, host)
+	}
+
+	return hosts, nil
 }

@@ -2,7 +2,7 @@ package mm
 
 import "phenix/types"
 
-var DefaultMM = new(Minimega)
+var DefaultMM MM = new(Minimega)
 
 type MM interface {
 	ReadScriptFromFile(string) error
@@ -23,4 +23,6 @@ type MM interface {
 	StopVMCapture(...Option) error
 	GetExperimentCaptures(...Option) []types.Capture
 	GetVMCaptures(...Option) []types.Capture
+
+	GetClusterHosts() (types.Hosts, error)
 }

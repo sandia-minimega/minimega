@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"phenix/api/experiment/schedule"
 	"phenix/app"
 	"phenix/internal/mm"
 	"phenix/store"
@@ -208,6 +209,45 @@ func create(c *types.Config) error {
 	}
 
 	c.Spec = structs.MapDefaultCase(exp, structs.CASESNAKE)
+
+	return nil
+}
+
+// Schedule applies the given scheduling algorithm to the experiment with the
+// given name. It returns any errors encountered while scheduling the
+// experiment.
+func Schedule(name, algo string) error {
+	c, _ := types.NewConfig("experiment/" + name)
+
+	if err := store.Get(c); err != nil {
+		return fmt.Errorf("getting experiment %s from store: %w", name, err)
+	}
+
+	status := new(v1.ExperimentStatus)
+
+	if err := mapstructure.Decode(c.Status, status); err != nil {
+		return fmt.Errorf("decoding experiment status: %w", err)
+	}
+
+	if status.StartTime != "" {
+		return fmt.Errorf("experiment already running (started at: %s)", status.StartTime)
+	}
+
+	exp := new(v1.ExperimentSpec)
+
+	if err := mapstructure.Decode(c.Spec, exp); err != nil {
+		return fmt.Errorf("decoding experiment spec: %w", err)
+	}
+
+	if err := schedule.Schedule(algo, exp); err != nil {
+		return fmt.Errorf("running scheduler algorithm: %w", err)
+	}
+
+	c.Spec = structs.MapDefaultCase(exp, structs.CASESNAKE)
+
+	if err := store.Update(c); err != nil {
+		return fmt.Errorf("updating experiment config: %w", err)
+	}
 
 	return nil
 }
