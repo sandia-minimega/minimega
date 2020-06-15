@@ -69,6 +69,7 @@ start() {
     echo "minimega already running as pid $old_pid"
     return 1
   fi
+  ulimit -n 1024000 -u 4096000
   mkdir -p $MM_RUN_PATH
   pushd $MINIMEGA_DIR &>/dev/null
   $MINIMEGA_DIR/bin/minimega -base=$MM_RUN_PATH -filepath=$MM_FILEPATH -degree=$MM_MESH_DEGREE -nostdin=$MM_DAEMON -context=$MM_CONTEXT -port=$MM_PORT -level=$MM_LOG_LEVEL -logfile=$MM_LOG_FILE ${@:1} &> /dev/null &
