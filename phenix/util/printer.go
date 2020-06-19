@@ -75,6 +75,7 @@ func PrintTableOfVMs(writer io.Writer, vms ...types.VM) {
 	table.SetColWidth(50)
 
 	for _, vm := range vms {
+		
 		var (
 			running = strconv.FormatBool(vm.Running)
 			ifaces  []string
