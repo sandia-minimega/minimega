@@ -14,7 +14,7 @@ import (
 	"phenix/tmpl"
 	"phenix/types"
 	v1 "phenix/types/version/v1"
-	"phenix/util"
+	"phenix/util/shell"
 
 	"github.com/activeshadow/structs"
 	"github.com/mitchellh/mapstructure"
@@ -251,7 +251,7 @@ func Build(name, verbosity string, cache bool) error {
 		return fmt.Errorf("generate vmdb config from template: %w", err)
 	}
 
-	if !util.ShellCommandExists("vmdb2") {
+	if !shell.CommandExists("vmdb2") {
 		return fmt.Errorf("vmdb2 app does not exist in your path")
 	}
 

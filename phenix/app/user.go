@@ -1,14 +1,13 @@
 package app
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os/exec"
 
 	v1 "phenix/types/version/v1"
-	"phenix/util"
+	"phenix/util/shell"
 )
 
 var ErrUserAppNotFound = errors.New("user app not found")
@@ -54,7 +53,7 @@ func (this UserApp) Cleanup(spec *v1.ExperimentSpec) error {
 func (this UserApp) shellOut(action Action, spec *v1.ExperimentSpec) error {
 	cmdName := "phenix-" + this.options.Name
 
-	if !util.ShellCommandExists(cmdName) {
+	if !shell.CommandExists(cmdName) {
 		return fmt.Errorf("external user app %s does not exist in your path: %w", cmdName, ErrUserAppNotFound)
 	}
 
@@ -63,24 +62,35 @@ func (this UserApp) shellOut(action Action, spec *v1.ExperimentSpec) error {
 		return fmt.Errorf("marshaling experiment spec to JSON: %w", err)
 	}
 
-	var (
-		stdOut bytes.Buffer
-		stdErr bytes.Buffer
-	)
+	/*
+		var (
+			stdOut bytes.Buffer
+			stdErr bytes.Buffer
+		)
+	*/
 
-	cmd := exec.Command(cmdName, string(action))
-	cmd.Stdin = bytes.NewBuffer(data)
-	cmd.Stdout = &stdOut
-	cmd.Stderr = &stdErr
+	opts := []shell.Option{
+		shell.Command(cmdName),
+		shell.Args(string(action)),
+		shell.Stdin(data),
+		/*
+			shell.Stdin(bytes.NewBuffer(data)),
+			shell.Stdout(&stdOut),
+			shell.Stderr(&stdErr),
+		*/
+	}
 
-	if err := cmd.Run(); err != nil {
+	// if err := shell.ExecCommand(context.Background(), opts...); err != nil {
+
+	stdOut, stdErr, err := shell.ExecCommand(context.Background(), opts...)
+	if err != nil {
 		// FIXME: improve on this
-		fmt.Printf(string(stdErr.Bytes()))
+		fmt.Printf(string(stdErr))
 
 		return fmt.Errorf("user app %s command %s failed: %w", this.options.Name, cmdName, err)
 	}
 
-	if err := json.Unmarshal(stdOut.Bytes(), spec); err != nil {
+	if err := json.Unmarshal(stdOut, spec); err != nil {
 		return fmt.Errorf("unmarshaling experiment spec from JSON: %w", err)
 	}
 

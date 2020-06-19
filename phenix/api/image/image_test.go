@@ -30,7 +30,7 @@ func TestImageTemplate(t *testing.T) {
 
 	var buf bytes.Buffer
 
-	if err := tmpl.GenerateFromTemplate("vmdb2.tmpl", img, &buf); err != nil {
+	if err := tmpl.GenerateFromTemplate("vmdb.tmpl", img, &buf); err != nil {
 		t.Log(err)
 		t.FailNow()
 	}

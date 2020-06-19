@@ -27,21 +27,21 @@ func (this *Startup) Configure(spec *v1.ExperimentSpec) error {
 			continue
 		}
 
-		// loop through nodes
-		if node.Hardware.OSType == v1.OSType_Linux || node.Hardware.OSType == v1.OSType_RHEL || node.Hardware.OSType == v1.OSType_CentOS {
-			var keep []*v1.Injection
+		var keep []*v1.Injection
 
-			// delete any exisitng interface injections
-			for _, inject := range node.Injections {
-				if inject.Dst == "interfaces" || inject.Dst == "startup.ps1" {
-					continue
-				}
-
-				keep = append(keep, inject)
+		// delete any exisitng interface injections
+		for _, inject := range node.Injections {
+			if inject.Dst == "interfaces" || inject.Dst == "startup.ps1" {
+				continue
 			}
 
-			node.Injections = keep
+			keep = append(keep, inject)
+		}
 
+		node.Injections = keep
+
+		// loop through nodes
+		if node.Hardware.OSType == v1.OSType_Linux || node.Hardware.OSType == v1.OSType_RHEL || node.Hardware.OSType == v1.OSType_CentOS {
 			// if vm is centos or rhel, need a separate file per interface
 			if node.Hardware.OSType == v1.OSType_RHEL || node.Hardware.OSType == v1.OSType_CentOS {
 				for idx := range node.Network.Interfaces {
@@ -75,23 +75,23 @@ func (this *Startup) Configure(spec *v1.ExperimentSpec) error {
 				}
 
 				node.Injections = append(node.Injections, a, b, c)
-			} else if node.Hardware.OSType == v1.OSType_Windows {
-				var (
-					startupFile = startupDir + "/" + node.General.Hostname + "-startup.ps1"
-					schedFile   = startupDir + "/startup-scheduler.cmd"
-				)
-
-				a := &v1.Injection{
-					Src: startupFile,
-					Dst: "startup.ps1",
-				}
-				b := &v1.Injection{
-					Src: schedFile,
-					Dst: "ProgramData/Microsoft/Windows/Start Menu/Programs/StartUp/startup_scheduler.cmd",
-				}
-
-				node.Injections = append(node.Injections, a, b)
 			}
+		} else if node.Hardware.OSType == v1.OSType_Windows {
+			var (
+				startupFile = startupDir + "/" + node.General.Hostname + "-startup.ps1"
+				schedFile   = startupDir + "/startup-scheduler.cmd"
+			)
+
+			a := &v1.Injection{
+				Src: startupFile,
+				Dst: "startup.ps1",
+			}
+			b := &v1.Injection{
+				Src: schedFile,
+				Dst: "ProgramData/Microsoft/Windows/Start Menu/Programs/StartUp/startup_scheduler.cmd",
+			}
+
+			node.Injections = append(node.Injections, a, b)
 		}
 	}
 

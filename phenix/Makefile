@@ -28,17 +28,39 @@ clean:
 	-rm tmpl/bindata.go
 
 .PHONY: install-build-deps
-install-build-deps: bin/go-bindata
+install-build-deps: bin/go-bindata bin/mockgen
 
 .PHONY: remove-build-deps
 remove-build-deps:
 	$(RM) bin/go-bindata
+	$(RM) bin/mockgen
 
 bin/go-bindata:
 	go install github.com/go-bindata/go-bindata/v3/go-bindata
 
+bin/mockgen:
+	go install github.com/golang/mock/mockgen
+
+.PHONY: generate-bindata
+generate-bindata: tmpl/bindata.go
+
 tmpl/bindata.go: $(TEMPLATES) bin/go-bindata
 	$(GOBIN)/go-bindata -pkg tmpl -prefix tmpl/templates -o tmpl/bindata.go tmpl/templates/...
+
+.PHONY: generate-mocks
+generate-mocks: app/mock.go internal/mm/mock.go store/mock.go util/shell/mock.go
+
+app/mock.go: app/app.go bin/mockgen
+	$(GOBIN)/mockgen -self_package phenix/app -destination app/mock.go -package app phenix/app App
+
+internal/mm/mock.go: internal/mm/mm.go bin/mockgen
+	$(GOBIN)/mockgen -self_package phenix/internal/mm -destination internal/mm/mock.go -package mm phenix/internal/mm MM
+
+store/mock.go: store/store.go bin/mockgen
+	$(GOBIN)/mockgen -self_package phenix/store -destination store/mock.go -package store phenix/store Store
+
+util/shell/mock.go: util/shell/shell.go bin/mockgen
+	$(GOBIN)/mockgen -self_package phenix/util/shell -destination util/shell/mock.go -package shell phenix/util/shell Shell
 
 bin/phenix: $(GOSOURCES) tmpl/bindata.go
 	mkdir -p bin

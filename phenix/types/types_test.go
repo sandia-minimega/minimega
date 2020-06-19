@@ -67,13 +67,13 @@ func TestConfig(t *testing.T) {
 		t.FailNow()
 	}
 
-	t.Logf("%+v", c)
+	// t.Logf("%+v", c)
 
-	spec, err := version.GetVersionedSpecForKind(c.Kind, c.APIVersion())
+	_, err := version.GetVersionedSpecForKind(c.Kind, c.APIVersion())
 	if err != nil {
 		t.Log(err)
 		t.FailNow()
 	}
 
-	t.Logf("%+v", spec)
+	// t.Logf("%+v", spec)
 }

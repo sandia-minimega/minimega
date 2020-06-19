@@ -3,4 +3,6 @@ docs/site
 
 phenix.bdb
 
+mock.go
+
 tmpl/bindata.go
