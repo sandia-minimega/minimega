@@ -21,7 +21,7 @@ func Connect(expName, vmName string, iface int, vlan string) error {
 // experiment from the VLAN it's currently connected to (if any). It returns any
 // errors encountered while disconnecting the interface.
 func Disonnect(expName, vmName string, iface int) error {
-	err := mm.DisonnectVMInterface(mm.NS(expName), mm.VM(vmName), mm.ConnectInterface(iface))
+	err := mm.DisconnectVMInterface(mm.NS(expName), mm.VM(vmName), mm.ConnectInterface(iface))
 	if err != nil {
 		return fmt.Errorf("disconnecting VM interface: %w", err)
 	}
