@@ -1,4 +1,4 @@
-package schedule
+package scheduler
 
 import (
 	"fmt"
@@ -13,6 +13,14 @@ func init() {
 }
 
 type subnetCompute struct{}
+
+func (subnetCompute) Init(...Option) error {
+	return nil
+}
+
+func (subnetCompute) Name() string {
+	return "subnet-compute"
+}
 
 func (subnetCompute) Schedule(spec *v1.ExperimentSpec) error {
 	if len(spec.Topology.Nodes) == 0 {

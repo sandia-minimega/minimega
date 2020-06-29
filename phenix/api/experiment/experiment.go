@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"phenix/api/experiment/schedule"
 	"phenix/app"
 	"phenix/internal/mm"
+	"phenix/scheduler"
 	"phenix/store"
 	"phenix/tmpl"
 	"phenix/types"
@@ -239,7 +239,7 @@ func Schedule(name, algo string) error {
 		return fmt.Errorf("decoding experiment spec: %w", err)
 	}
 
-	if err := schedule.Schedule(algo, exp); err != nil {
+	if err := scheduler.Schedule(algo, exp); err != nil {
 		return fmt.Errorf("running scheduler algorithm: %w", err)
 	}
 

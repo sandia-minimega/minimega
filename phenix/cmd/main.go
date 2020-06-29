@@ -10,10 +10,10 @@ import (
 
 	"phenix/api/config"
 	"phenix/api/experiment"
-	"phenix/api/experiment/schedule"
 	"phenix/api/image"
 	"phenix/api/vlan"
 	"phenix/api/vm"
+	"phenix/scheduler"
 	"phenix/store"
 	v1 "phenix/types/version/v1"
 	"phenix/util"
@@ -310,7 +310,7 @@ func main() {
 						},
 						Action: func(ctx *cli.Context) error {
 							if ctx.Bool("list") {
-								schedulers := schedule.List()
+								schedulers := scheduler.List()
 
 								fmt.Printf("\nSchedulers: %s\n\n", strings.Join(schedulers, ", "))
 								return nil
@@ -705,19 +705,19 @@ func main() {
 								Name:    "size",
 								Aliases: []string{"z"},
 								Usage:   "image size to use",
-								Value: "5G",
+								Value:   "5G",
 							},
 							&cli.StringFlag{
 								Name:    "variant",
 								Aliases: []string{"v"},
 								Usage:   "image variant to use",
-								Value: "minbase",
+								Value:   "minbase",
 							},
 							&cli.StringFlag{
 								Name:    "release",
 								Aliases: []string{"r"},
 								Usage:   "os release codename",
-								Value: "bionic",
+								Value:   "bionic",
 							},
 							&cli.StringFlag{
 								Name:    "mirror",

@@ -51,7 +51,7 @@ func (this UserApp) Cleanup(spec *v1.ExperimentSpec) error {
 }
 
 func (this UserApp) shellOut(action Action, spec *v1.ExperimentSpec) error {
-	cmdName := "phenix-" + this.options.Name
+	cmdName := "phenix-app-" + this.options.Name
 
 	if !shell.CommandExists(cmdName) {
 		return fmt.Errorf("external user app %s does not exist in your path: %w", cmdName, ErrUserAppNotFound)
@@ -62,25 +62,11 @@ func (this UserApp) shellOut(action Action, spec *v1.ExperimentSpec) error {
 		return fmt.Errorf("marshaling experiment spec to JSON: %w", err)
 	}
 
-	/*
-		var (
-			stdOut bytes.Buffer
-			stdErr bytes.Buffer
-		)
-	*/
-
 	opts := []shell.Option{
 		shell.Command(cmdName),
 		shell.Args(string(action)),
 		shell.Stdin(data),
-		/*
-			shell.Stdin(bytes.NewBuffer(data)),
-			shell.Stdout(&stdOut),
-			shell.Stderr(&stdErr),
-		*/
 	}
-
-	// if err := shell.ExecCommand(context.Background(), opts...); err != nil {
 
 	stdOut, stdErr, err := shell.ExecCommand(context.Background(), opts...)
 	if err != nil {

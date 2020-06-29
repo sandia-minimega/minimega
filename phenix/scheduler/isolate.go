@@ -1,4 +1,4 @@
-package schedule
+package scheduler
 
 import (
 	"fmt"
@@ -12,6 +12,14 @@ func init() {
 }
 
 type isolateExperiment struct{}
+
+func (isolateExperiment) Init(...Option) error {
+	return nil
+}
+
+func (isolateExperiment) Name() string {
+	return "isolate-experiment"
+}
 
 func (isolateExperiment) Schedule(spec *v1.ExperimentSpec) error {
 	if len(spec.Topology.Nodes) == 0 {

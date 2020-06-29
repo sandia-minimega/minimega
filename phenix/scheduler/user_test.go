@@ -1,4 +1,4 @@
-package app
+package scheduler
 
 import (
 	"context"
@@ -12,10 +12,11 @@ import (
 )
 
 func TestUserAppNotFound(t *testing.T) {
-	app := GetApp("foobar")
+	scheduler := new(userScheduler)
+	scheduler.Init(Name("foobar"))
 
-	if app.Name() != "foobar" {
-		t.Logf("unexpected user app %s", app.Name())
+	if scheduler.Name() != "foobar" {
+		t.Logf("unexpected user scheduler %s", scheduler.Name())
 		t.FailNow()
 	}
 
@@ -26,26 +27,27 @@ func TestUserAppNotFound(t *testing.T) {
 
 	shell.DefaultShell = m
 
-	m.EXPECT().CommandExists(gomock.Eq("phenix-app-foobar")).Return(false)
+	m.EXPECT().CommandExists(gomock.Eq("phenix-scheduler-foobar")).Return(false)
 
-	err := app.Configure(new(v1.ExperimentSpec))
+	err := scheduler.Schedule(new(v1.ExperimentSpec))
 
 	if err == nil {
 		t.Log("expected error")
 		t.FailNow()
 	}
 
-	if !errors.Is(err, ErrUserAppNotFound) {
-		t.Log("expected UserAppNotFound error")
+	if !errors.Is(err, ErrUserSchedulerNotFound) {
+		t.Log("expected UserSchedulerNotFound error")
 		t.FailNow()
 	}
 }
 
 func TestUserAppFound(t *testing.T) {
-	app := GetApp("foobar")
+	scheduler := new(userScheduler)
+	scheduler.Init(Name("foobar"))
 
-	if app.Name() != "foobar" {
-		t.Logf("unexpected user app %s", app.Name())
+	if scheduler.Name() != "foobar" {
+		t.Logf("unexpected user scheduler %s", scheduler.Name())
 		t.FailNow()
 	}
 
@@ -53,7 +55,7 @@ func TestUserAppFound(t *testing.T) {
 	defer ctrl.Finish()
 
 	m := shell.NewMockShell(ctrl)
-	m.EXPECT().CommandExists(gomock.Eq("phenix-app-foobar")).Return(true)
+	m.EXPECT().CommandExists(gomock.Eq("phenix-scheduler-foobar")).Return(true)
 
 	opts := []shell.Option{}
 
@@ -61,7 +63,7 @@ func TestUserAppFound(t *testing.T) {
 
 	shell.DefaultShell = m
 
-	err := app.Configure(new(v1.ExperimentSpec))
+	err := scheduler.Schedule(new(v1.ExperimentSpec))
 
 	if err != nil {
 		t.Logf("unexpected error %v", err)

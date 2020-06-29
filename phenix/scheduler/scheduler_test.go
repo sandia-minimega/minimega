@@ -1,4 +1,4 @@
-package schedule
+package scheduler
 
 import v1 "phenix/types/version/v1"
 

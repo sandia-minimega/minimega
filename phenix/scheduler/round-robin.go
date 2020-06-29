@@ -1,4 +1,4 @@
-package schedule
+package scheduler
 
 import (
 	"fmt"
@@ -11,6 +11,14 @@ func init() {
 }
 
 type roundRobin struct{}
+
+func (roundRobin) Init(...Option) error {
+	return nil
+}
+
+func (roundRobin) Name() string {
+	return "round-robin"
+}
 
 func (roundRobin) Schedule(spec *v1.ExperimentSpec) error {
 	if len(spec.Topology.Nodes) == 0 {

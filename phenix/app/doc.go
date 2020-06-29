@@ -14,13 +14,16 @@ Default Apps
 Custom User Apps
 
 Custom user apps are interacted with through STDIN and STDOUT. The phenix
-`user.go` app will pass a JSON blob through STDOUT. This JSON blob will
-contain the experiment data based on the latest version of the `Experiment`
-schema. The phenix will block further actions and wait for STDOUT return of
-an updated JSON blob from the custom user app. In addition to the JSON blob,
-the custom user app should exit with a value of 0. If the custom user app is
-returning log(s) or any error messages, those should be written to STDERR
-(and in the case of an error, the exit value should be non-0).
+`user.go` app will pass a single argument to the custom user app for the
+current configuration stage, and JSON blob to the custom user app through
+STDIN. This JSON blob will contain the experiment data based on the latest
+version of the `Experiment` schema. The phenix will block further actions and
+wait for STDOUT return of an updated JSON blob from the custom user app. In
+addition to the JSON blob, the custom user app should exit with a value of 0.
+If the custom user app is returning log(s) or any error messages, those
+should be written to STDERR (and in the case of an error, the exit value
+should be non-0). Custom user apps must 1) be in the user's PATH, 2) be
+executable, and 3) follow the naming convention `phenix-app-<name>`.
 
 Example Custom User App
 
