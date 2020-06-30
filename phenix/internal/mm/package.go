@@ -61,3 +61,7 @@ func GetVMCaptures(opts ...Option) []types.Capture {
 func GetClusterHosts() (types.Hosts, error) {
 	return DefaultMM.GetClusterHosts()
 }
+
+func GetVLANs(opts ...Option) (map[string]int, error) {
+	return DefaultMM.GetVLANs(opts...)
+}

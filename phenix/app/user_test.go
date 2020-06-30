@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	v1 "phenix/types/version/v1"
+	"phenix/types"
 	"phenix/util/shell"
 
 	gomock "github.com/golang/mock/gomock"
@@ -28,7 +28,7 @@ func TestUserAppNotFound(t *testing.T) {
 
 	m.EXPECT().CommandExists(gomock.Eq("phenix-app-foobar")).Return(false)
 
-	err := app.Configure(new(v1.ExperimentSpec))
+	err := app.Configure(new(types.Experiment))
 
 	if err == nil {
 		t.Log("expected error")
@@ -61,7 +61,7 @@ func TestUserAppFound(t *testing.T) {
 
 	shell.DefaultShell = m
 
-	err := app.Configure(new(v1.ExperimentSpec))
+	err := app.Configure(new(types.Experiment))
 
 	if err != nil {
 		t.Logf("unexpected error %v", err)

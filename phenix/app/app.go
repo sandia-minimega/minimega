@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	v1 "phenix/types/version/v1"
+	"phenix/types"
 )
 
 func init() {
@@ -22,8 +22,8 @@ type Action string
 
 const (
 	ACTIONCONFIG    Action = "configure"
-	ACTIONSTART     Action = "start"
-	ACTIONPOSTSTART Action = "postStart"
+	ACTIONPRESTART  Action = "pre-start"
+	ACTIONPOSTSTART Action = "post-start"
 	ACTIONCLEANUP   Action = "cleanup"
 )
 
@@ -71,24 +71,24 @@ type App interface {
 
 	// Configure is called for an app at the `configure` experiment lifecycle
 	// phase.
-	Configure(*v1.ExperimentSpec) error
+	Configure(*types.Experiment) error
 
-	// Start is called for an app at the `start` experiment lifecycle phase.
-	Start(*v1.ExperimentSpec) error
+	// Start is called for an app at the `pre-start` experiment lifecycle phase.
+	PreStart(*types.Experiment) error
 
-	// PostStart is called for an app at the `postStart` experiment lifecycle
+	// PostStart is called for an app at the `post-start` experiment lifecycle
 	// phase.
-	PostStart(*v1.ExperimentSpec) error
+	PostStart(*types.Experiment) error
 
 	// Cleanup is called for an app at the `cleanup` experiment lifecycle
 	// phase.
-	Cleanup(*v1.ExperimentSpec) error
+	Cleanup(*types.Experiment) error
 }
 
 // ApplyApps applies all the default phenix apps and any configured user apps to
 // the given experiment for the given lifecycle phase. It returns any errors
 // encountered while applying the apps.
-func ApplyApps(action Action, spec *v1.ExperimentSpec) error {
+func ApplyApps(action Action, exp *types.Experiment) error {
 	var err error
 
 	for _, a := range DefaultApps() {
@@ -96,13 +96,19 @@ func ApplyApps(action Action, spec *v1.ExperimentSpec) error {
 		case ACTIONCONFIG:
 			fmt.Printf("configuring experiment with default '%s' app\n", a.Name())
 
-			err = a.Configure(spec)
-		case ACTIONSTART:
-			fmt.Printf("starting experiment with default '%s' app\n", a.Name())
+			err = a.Configure(exp)
+		case ACTIONPRESTART:
+			fmt.Printf("pre-starting experiment with default '%s' app\n", a.Name())
 
-			err = a.Start(spec)
+			err = a.PreStart(exp)
 		case ACTIONPOSTSTART:
+			fmt.Printf("post-starting experiment with default '%s' app\n", a.Name())
+
+			err = a.PostStart(exp)
 		case ACTIONCLEANUP:
+			fmt.Printf("cleaning up experiment with default '%s' app\n", a.Name())
+
+			err = a.Cleanup(exp)
 		}
 
 		if err != nil {
@@ -110,21 +116,27 @@ func ApplyApps(action Action, spec *v1.ExperimentSpec) error {
 		}
 	}
 
-	if spec.Scenario != nil && spec.Scenario.Apps != nil {
-		for _, e := range spec.Scenario.Apps.Experiment {
+	if exp.Spec.Scenario != nil && exp.Spec.Scenario.Apps != nil {
+		for _, e := range exp.Spec.Scenario.Apps.Experiment {
 			a := GetApp(e.Name)
 
 			switch action {
 			case ACTIONCONFIG:
 				fmt.Printf("configuring experiment with '%s' user app\n", a.Name())
 
-				err = a.Configure(spec)
-			case ACTIONSTART:
-				fmt.Printf("starting experiment with '%s' user app\n", a.Name())
+				err = a.Configure(exp)
+			case ACTIONPRESTART:
+				fmt.Printf("pre-starting experiment with '%s' user app\n", a.Name())
 
-				err = a.Start(spec)
+				err = a.PreStart(exp)
 			case ACTIONPOSTSTART:
+				fmt.Printf("post-starting experiment with '%s' user app\n", a.Name())
+
+				err = a.PostStart(exp)
 			case ACTIONCLEANUP:
+				fmt.Printf("cleaning up experiment with '%s' user app\n", a.Name())
+
+				err = a.Cleanup(exp)
 			}
 
 			if err != nil {
@@ -137,20 +149,26 @@ func ApplyApps(action Action, spec *v1.ExperimentSpec) error {
 			}
 		}
 
-		for _, h := range spec.Scenario.Apps.Host {
+		for _, h := range exp.Spec.Scenario.Apps.Host {
 			a := GetApp(h.Name)
 
 			switch action {
 			case ACTIONCONFIG:
 				fmt.Printf("configuring experiment with '%s' user app\n", a.Name())
 
-				err = a.Configure(spec)
-			case ACTIONSTART:
-				fmt.Printf("starting experiment with '%s' user app\n", a.Name())
+				err = a.Configure(exp)
+			case ACTIONPRESTART:
+				fmt.Printf("pre-starting experiment with '%s' user app\n", a.Name())
 
-				err = a.Start(spec)
+				err = a.PreStart(exp)
 			case ACTIONPOSTSTART:
+				fmt.Printf("post-starting experiment with '%s' user app\n", a.Name())
+
+				err = a.PreStart(exp)
 			case ACTIONCLEANUP:
+				fmt.Printf("cleaning up experiment with '%s' user app\n", a.Name())
+
+				err = a.Cleanup(exp)
 			}
 
 			if err != nil {

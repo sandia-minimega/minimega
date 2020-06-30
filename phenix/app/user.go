@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	v1 "phenix/types/version/v1"
+	"phenix/types"
 	"phenix/util/shell"
 )
 
@@ -26,40 +26,48 @@ func (this UserApp) Name() string {
 	return this.options.Name
 }
 
-func (this UserApp) Configure(spec *v1.ExperimentSpec) error {
-	if err := this.shellOut(ACTIONCONFIG, spec); err != nil {
+func (this UserApp) Configure(exp *types.Experiment) error {
+	if err := this.shellOut(ACTIONCONFIG, exp); err != nil {
 		return fmt.Errorf("running user app: %w", err)
 	}
 
 	return nil
 }
 
-func (this UserApp) Start(spec *v1.ExperimentSpec) error {
-	if err := this.shellOut(ACTIONSTART, spec); err != nil {
+func (this UserApp) PreStart(exp *types.Experiment) error {
+	if err := this.shellOut(ACTIONPRESTART, exp); err != nil {
 		return fmt.Errorf("running user app: %w", err)
 	}
 
 	return nil
 }
 
-func (this UserApp) PostStart(spec *v1.ExperimentSpec) error {
+func (this UserApp) PostStart(exp *types.Experiment) error {
+	if err := this.shellOut(ACTIONPOSTSTART, exp); err != nil {
+		return fmt.Errorf("running user app: %w", err)
+	}
+
 	return nil
 }
 
-func (this UserApp) Cleanup(spec *v1.ExperimentSpec) error {
+func (this UserApp) Cleanup(exp *types.Experiment) error {
+	if err := this.shellOut(ACTIONCLEANUP, exp); err != nil {
+		return fmt.Errorf("running user app: %w", err)
+	}
+
 	return nil
 }
 
-func (this UserApp) shellOut(action Action, spec *v1.ExperimentSpec) error {
+func (this UserApp) shellOut(action Action, exp *types.Experiment) error {
 	cmdName := "phenix-app-" + this.options.Name
 
 	if !shell.CommandExists(cmdName) {
 		return fmt.Errorf("external user app %s does not exist in your path: %w", cmdName, ErrUserAppNotFound)
 	}
 
-	data, err := json.Marshal(spec)
+	data, err := json.Marshal(exp)
 	if err != nil {
-		return fmt.Errorf("marshaling experiment spec to JSON: %w", err)
+		return fmt.Errorf("marshaling experiment to JSON: %w", err)
 	}
 
 	opts := []shell.Option{
@@ -76,8 +84,17 @@ func (this UserApp) shellOut(action Action, spec *v1.ExperimentSpec) error {
 		return fmt.Errorf("user app %s command %s failed: %w", this.options.Name, cmdName, err)
 	}
 
-	if err := json.Unmarshal(stdOut, spec); err != nil {
-		return fmt.Errorf("unmarshaling experiment spec from JSON: %w", err)
+	var result types.Experiment
+
+	if err := json.Unmarshal(stdOut, &result); err != nil {
+		return fmt.Errorf("unmarshaling experiment from JSON: %w", err)
+	}
+
+	switch action {
+	case ACTIONCONFIG, ACTIONPRESTART:
+		exp.Spec = result.Spec
+	case ACTIONPOSTSTART, ACTIONCLEANUP:
+		exp.Status.Apps[this.options.Name] = result.Status.Apps[this.options.Name]
 	}
 
 	return nil

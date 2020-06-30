@@ -5,7 +5,7 @@ import (
 )
 
 type Experiment struct {
-	Metadata ConfigMetadata       // experiment configuration metadata
-	Spec     *v1.ExperimentSpec   // reference to latest versioned experiment spec
-	Status   *v1.ExperimentStatus // reference to latest versioned experiment status
+	Metadata ConfigMetadata       `json:"metadata" yaml:"metadata"` // experiment configuration metadata
+	Spec     *v1.ExperimentSpec   `json:"spec" yaml:"spec"`         // reference to latest versioned experiment spec
+	Status   *v1.ExperimentStatus `json:"status" yaml:"status"`     // reference to latest versioned experiment status
 }

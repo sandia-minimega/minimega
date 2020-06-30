@@ -25,4 +25,5 @@ type MM interface {
 	GetVMCaptures(...Option) []types.Capture
 
 	GetClusterHosts() (types.Hosts, error)
+	GetVLANs(...Option) (map[string]int, error)
 }

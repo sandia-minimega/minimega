@@ -192,23 +192,25 @@ func CreateFromConfig(c *types.Config) error {
 }
 
 func create(c *types.Config) error {
-	exp := new(v1.ExperimentSpec)
+	var spec v1.ExperimentSpec
 
-	if err := mapstructure.Decode(c.Spec, exp); err != nil {
+	if err := mapstructure.Decode(c.Spec, &spec); err != nil {
 		return fmt.Errorf("decoding experiment spec: %w", err)
 	}
 
-	exp.SetDefaults()
+	spec.SetDefaults()
 
-	if err := exp.VerifyScenario(); err != nil {
+	if err := spec.VerifyScenario(); err != nil {
 		return fmt.Errorf("verifying experiment scenario: %w", err)
 	}
 
-	if err := app.ApplyApps(app.ACTIONCONFIG, exp); err != nil {
+	exp := types.Experiment{Metadata: c.Metadata, Spec: &spec}
+
+	if err := app.ApplyApps(app.ACTIONCONFIG, &exp); err != nil {
 		return fmt.Errorf("applying apps to experiment: %w", err)
 	}
 
-	c.Spec = structs.MapDefaultCase(exp, structs.CASESNAKE)
+	c.Spec = structs.MapDefaultCase(spec, structs.CASESNAKE)
 
 	return nil
 }
@@ -261,9 +263,9 @@ func Start(name string, dryrun bool) error {
 		return fmt.Errorf("getting experiment %s from store: %w", name, err)
 	}
 
-	status := new(v1.ExperimentStatus)
+	var status v1.ExperimentStatus
 
-	if err := mapstructure.Decode(c.Status, status); err != nil {
+	if err := mapstructure.Decode(c.Status, &status); err != nil {
 		return fmt.Errorf("decoding experiment status: %w", err)
 	}
 
@@ -271,19 +273,21 @@ func Start(name string, dryrun bool) error {
 		return fmt.Errorf("experiment already running (started at: %s)", status.StartTime)
 	}
 
-	exp := new(v1.ExperimentSpec)
+	var spec v1.ExperimentSpec
 
-	if err := mapstructure.Decode(c.Spec, exp); err != nil {
+	if err := mapstructure.Decode(c.Spec, &spec); err != nil {
 		return fmt.Errorf("decoding experiment spec: %w", err)
 	}
 
-	if err := app.ApplyApps(app.ACTIONSTART, exp); err != nil {
+	exp := types.Experiment{Metadata: c.Metadata, Spec: &spec, Status: &status}
+
+	if err := app.ApplyApps(app.ACTIONPRESTART, &exp); err != nil {
 		return fmt.Errorf("applying apps to experiment: %w", err)
 	}
 
-	filename := fmt.Sprintf("%s/mm_files/%s.mm", exp.BaseDir, exp.ExperimentName)
+	filename := fmt.Sprintf("%s/mm_files/%s.mm", exp.Spec.BaseDir, exp.Spec.ExperimentName)
 
-	if err := tmpl.CreateFileFromTemplate("minimega_script.tmpl", exp, filename); err != nil {
+	if err := tmpl.CreateFileFromTemplate("minimega_script.tmpl", exp.Spec, filename); err != nil {
 		return fmt.Errorf("generating minimega script: %w", err)
 	}
 
@@ -292,18 +296,34 @@ func Start(name string, dryrun bool) error {
 			return fmt.Errorf("reading minimega script: %w", err)
 		}
 
-		if err := mm.LaunchVMs(exp.ExperimentName); err != nil {
+		if err := mm.LaunchVMs(exp.Spec.ExperimentName); err != nil {
 			return fmt.Errorf("launching experiment VMs: %w", err)
 		}
+
+		schedule := make(v1.Schedule)
+
+		for _, vm := range mm.GetVMInfo(mm.NS(exp.Spec.ExperimentName)) {
+			schedule[vm.Name] = vm.Host
+		}
+
+		status.Schedules = schedule
+
+		vlans, err := mm.GetVLANs(mm.NS(exp.Spec.ExperimentName))
+		if err != nil {
+			return fmt.Errorf("processing experiment VLANs: %w", err)
+		}
+
+		status.VLANs = vlans
 	}
 
-	c.Status = map[string]interface{}{"startTime": time.Now().Format(time.RFC3339)}
+	status.StartTime = time.Now().Format(time.RFC3339)
 
-	if err := app.ApplyApps(app.ACTIONPOSTSTART, exp); err != nil {
+	if err := app.ApplyApps(app.ACTIONPOSTSTART, &exp); err != nil {
 		return fmt.Errorf("applying apps to experiment: %w", err)
 	}
 
-	c.Spec = structs.MapDefaultCase(exp, structs.CASESNAKE)
+	c.Spec = structs.MapDefaultCase(spec, structs.CASESNAKE)
+	c.Status = structs.MapDefaultCase(status, structs.CASESNAKE)
 
 	if err := store.Update(c); err != nil {
 		return fmt.Errorf("updating experiment config: %w", err)
@@ -321,23 +341,31 @@ func Stop(name string, dryrun bool) error {
 		return fmt.Errorf("getting experiment %s from store: %w", name, err)
 	}
 
-	exp := new(v1.ExperimentSpec)
+	var spec v1.ExperimentSpec
 
-	if err := mapstructure.Decode(c.Spec, exp); err != nil {
+	if err := mapstructure.Decode(c.Spec, &spec); err != nil {
 		return fmt.Errorf("decoding experiment spec: %w", err)
 	}
 
-	if err := app.ApplyApps(app.ACTIONCLEANUP, exp); err != nil {
+	var status v1.ExperimentStatus
+
+	if err := mapstructure.Decode(c.Status, &status); err != nil {
+		return fmt.Errorf("decoding experiment spec: %w", err)
+	}
+
+	exp := types.Experiment{Metadata: c.Metadata, Spec: &spec, Status: &status}
+
+	if err := app.ApplyApps(app.ACTIONCLEANUP, &exp); err != nil {
 		return fmt.Errorf("applying apps to experiment: %w", err)
 	}
 
 	if !dryrun {
-		if err := mm.ClearNamespace(exp.ExperimentName); err != nil {
+		if err := mm.ClearNamespace(exp.Spec.ExperimentName); err != nil {
 			return fmt.Errorf("killing experiment VMs: %w", err)
 		}
 	}
 
-	c.Spec = structs.MapDefaultCase(exp, structs.CASESNAKE)
+	c.Spec = structs.MapDefaultCase(spec, structs.CASESNAKE)
 	c.Status = nil
 
 	if err := store.Update(c); err != nil {

@@ -374,6 +374,30 @@ func (Minimega) GetClusterHosts() (types.Hosts, error) {
 	return cluster, nil
 }
 
+func (Minimega) GetVLANs(opts ...Option) (map[string]int, error) {
+	o := NewOptions(opts...)
+
+	cmd := mmcli.NewNamespacedCommand(o.ns)
+	cmd.Command = "vlans"
+
+	var (
+		vlans  = make(map[string]int)
+		status = mmcli.RunTabular(cmd)
+	)
+
+	for _, row := range status {
+		alias := row["alias"]
+		id, err := strconv.Atoi(row["vlan"])
+		if err != nil {
+			return nil, fmt.Errorf("converting VLAN ID to integer: %w", err)
+		}
+
+		vlans[alias] = id
+	}
+
+	return vlans, nil
+}
+
 func flush(ns string) error {
 	cmd := mmcli.NewNamespacedCommand(ns)
 	cmd.Command = "vm flush"

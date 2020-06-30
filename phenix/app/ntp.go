@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"phenix/tmpl"
+	"phenix/types"
 	v1 "phenix/types/version/v1"
 )
 
@@ -19,14 +20,14 @@ func (NTP) Name() string {
 	return "ntp"
 }
 
-func (this *NTP) Configure(spec *v1.ExperimentSpec) error {
-	ntpServers := spec.Topology.FindNodesWithLabels("ntp-server")
+func (this *NTP) Configure(exp *types.Experiment) error {
+	ntpServers := exp.Spec.Topology.FindNodesWithLabels("ntp-server")
 
 	if len(ntpServers) != 0 {
 		// Just take first server if more than one are labeled.
 		node := ntpServers[0]
 
-		ntpDir := spec.BaseDir + "/ntp"
+		ntpDir := exp.Spec.BaseDir + "/ntp"
 		ntpFile := ntpDir + "/" + node.General.Hostname + "_ntp"
 
 		if err := os.MkdirAll(ntpDir, 0755); err != nil {
@@ -63,8 +64,8 @@ func (this *NTP) Configure(spec *v1.ExperimentSpec) error {
 	return nil
 }
 
-func (this NTP) Start(spec *v1.ExperimentSpec) error {
-	ntpServers := spec.Topology.FindNodesWithLabels("ntp-server")
+func (this NTP) PreStart(exp *types.Experiment) error {
+	ntpServers := exp.Spec.Topology.FindNodesWithLabels("ntp-server")
 
 	if len(ntpServers) != 0 {
 		// Just take first server if more than one are labeled.
@@ -79,7 +80,7 @@ func (this NTP) Start(spec *v1.ExperimentSpec) error {
 			}
 		}
 
-		ntpDir := spec.BaseDir + "/ntp"
+		ntpDir := exp.Spec.BaseDir + "/ntp"
 		ntpFile := ntpDir + "/" + node.General.Hostname + "_ntp"
 
 		if node.Type == "Router" {
@@ -100,10 +101,10 @@ func (this NTP) Start(spec *v1.ExperimentSpec) error {
 	return nil
 }
 
-func (NTP) PostStart(spec *v1.ExperimentSpec) error {
+func (NTP) PostStart(exp *types.Experiment) error {
 	return nil
 }
 
-func (NTP) Cleanup(spec *v1.ExperimentSpec) error {
+func (NTP) Cleanup(exp *types.Experiment) error {
 	return nil
 }

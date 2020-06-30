@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"phenix/tmpl"
+	"phenix/types"
 	v1 "phenix/types/version/v1"
 )
 
@@ -19,9 +20,9 @@ func (Serial) Name() string {
 	return "serial"
 }
 
-func (Serial) Configure(spec *v1.ExperimentSpec) error {
+func (Serial) Configure(exp *types.Experiment) error {
 	// loop through nodes
-	for _, node := range spec.Topology.Nodes {
+	for _, node := range exp.Spec.Topology.Nodes {
 		// We only care about configuring serial interfaces on Linux VMs.
 		// TODO: handle rhel and centos OS types.
 		if node.Hardware.OSType != v1.OSType_Linux {
@@ -40,7 +41,7 @@ func (Serial) Configure(spec *v1.ExperimentSpec) error {
 
 		if serial {
 			// update injections to include serial type (src and dst)
-			serialFile := spec.BaseDir + "/startup/" + node.General.Hostname + "-serial.bash"
+			serialFile := exp.Spec.BaseDir + "/startup/" + node.General.Hostname + "-serial.bash"
 
 			a := &v1.Injection{
 				Src:         serialFile,
@@ -49,13 +50,13 @@ func (Serial) Configure(spec *v1.ExperimentSpec) error {
 			}
 
 			b := &v1.Injection{
-				Src:         spec.BaseDir + "/startup/serial-startup.service",
+				Src:         exp.Spec.BaseDir + "/startup/serial-startup.service",
 				Dst:         "/etc/systemd/system/serial-startup.service",
 				Description: "",
 			}
 
 			c := &v1.Injection{
-				Src:         spec.BaseDir + "/startup/symlinks/serial-startup.service",
+				Src:         exp.Spec.BaseDir + "/startup/symlinks/serial-startup.service",
 				Dst:         "/etc/systemd/system/multi-user.target.wants/serial-startup.service",
 				Description: "",
 			}
@@ -67,9 +68,9 @@ func (Serial) Configure(spec *v1.ExperimentSpec) error {
 	return nil
 }
 
-func (Serial) Start(spec *v1.ExperimentSpec) error {
+func (Serial) PreStart(exp *types.Experiment) error {
 	// loop through nodes
-	for _, node := range spec.Topology.Nodes {
+	for _, node := range exp.Spec.Topology.Nodes {
 		// We only care about configuring serial interfaces on Linux VMs.
 		// TODO: handle rhel and centos OS types.
 		if node.Hardware.OSType != v1.OSType_Linux {
@@ -86,7 +87,7 @@ func (Serial) Start(spec *v1.ExperimentSpec) error {
 		}
 
 		if serial != nil {
-			startupDir := spec.BaseDir + "/startup"
+			startupDir := exp.Spec.BaseDir + "/startup"
 
 			if err := os.MkdirAll(startupDir, 0755); err != nil {
 				return fmt.Errorf("creating experiment startup directory path: %w", err)
@@ -120,10 +121,10 @@ func (Serial) Start(spec *v1.ExperimentSpec) error {
 	return nil
 }
 
-func (Serial) PostStart(spec *v1.ExperimentSpec) error {
+func (Serial) PostStart(exp *types.Experiment) error {
 	return nil
 }
 
-func (Serial) Cleanup(spec *v1.ExperimentSpec) error {
+func (Serial) Cleanup(exp *types.Experiment) error {
 	return nil
 }

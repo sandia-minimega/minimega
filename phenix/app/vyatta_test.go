@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"phenix/types"
 	v1 "phenix/types/version/v1"
 )
 
@@ -66,16 +67,18 @@ func TestVyattaApp(t *testing.T) {
 		},
 	}
 
+	exp := &types.Experiment{Spec: spec}
+
 	app := GetApp("vyatta")
 
-	if err := app.Configure(spec); err != nil {
+	if err := app.Configure(exp); err != nil {
 		t.Log(err)
 		t.FailNow()
 	}
 
 	checkConfigureExpected(t, nodes, expected)
 
-	if err := app.Start(spec); err != nil {
+	if err := app.PreStart(exp); err != nil {
 		t.Log(err)
 		t.FailNow()
 	}

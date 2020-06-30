@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"phenix/tmpl"
+	"phenix/types"
 	v1 "phenix/types/version/v1"
 )
 
@@ -19,14 +20,14 @@ func (Vyatta) Name() string {
 	return "vyatta"
 }
 
-func (Vyatta) Configure(spec *v1.ExperimentSpec) error {
+func (Vyatta) Configure(exp *types.Experiment) error {
 	// loop through nodes
-	for _, node := range spec.Topology.Nodes {
+	for _, node := range exp.Spec.Topology.Nodes {
 		if !strings.EqualFold(node.Type, "router") {
 			continue
 		}
 
-		vyattaFile := spec.BaseDir + "/vyatta/" + node.General.Hostname + ".boot"
+		vyattaFile := exp.Spec.BaseDir + "/vyatta/" + node.General.Hostname + ".boot"
 
 		a := &v1.Injection{
 			Src:         vyattaFile,
@@ -40,9 +41,9 @@ func (Vyatta) Configure(spec *v1.ExperimentSpec) error {
 	return nil
 }
 
-func (Vyatta) Start(spec *v1.ExperimentSpec) error {
+func (Vyatta) PreStart(exp *types.Experiment) error {
 	var (
-		ntpServers = spec.Topology.FindNodesWithLabels("ntp-server")
+		ntpServers = exp.Spec.Topology.FindNodesWithLabels("ntp-server")
 		ntpAddr    string
 	)
 
@@ -57,7 +58,7 @@ func (Vyatta) Start(spec *v1.ExperimentSpec) error {
 	}
 
 	// loop through nodes
-	for _, node := range spec.Topology.Nodes {
+	for _, node := range exp.Spec.Topology.Nodes {
 		if !strings.EqualFold(node.Type, "router") {
 			continue
 		}
@@ -67,7 +68,7 @@ func (Vyatta) Start(spec *v1.ExperimentSpec) error {
 			"ntp-addr": ntpAddr,
 		}
 
-		vyattaDir := spec.BaseDir + "/vyatta"
+		vyattaDir := exp.Spec.BaseDir + "/vyatta"
 
 		if err := os.MkdirAll(vyattaDir, 0755); err != nil {
 			return fmt.Errorf("creating experiment vyatta directory path: %w", err)
@@ -83,10 +84,10 @@ func (Vyatta) Start(spec *v1.ExperimentSpec) error {
 	return nil
 }
 
-func (Vyatta) PostStart(spec *v1.ExperimentSpec) error {
+func (Vyatta) PostStart(exp *types.Experiment) error {
 	return nil
 }
 
-func (Vyatta) Cleanup(spec *v1.ExperimentSpec) error {
+func (Vyatta) Cleanup(exp *types.Experiment) error {
 	return nil
 }

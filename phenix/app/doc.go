@@ -1,6 +1,5 @@
 /*
 Phenix apps customize experiments using metadata.
-Phenix apps allow for the customization of experiments using metadata present
 
 Default Apps
 
@@ -25,6 +24,22 @@ should be written to STDERR (and in the case of an error, the exit value
 should be non-0). Custom user apps must 1) be in the user's PATH, 2) be
 executable, and 3) follow the naming convention `phenix-app-<name>`.
 
+On the command line, the user app should expect the experiment stage to be
+passed as the one and only argument: configure, pre-start, post-start, or
+cleanup.
+
+On STDIN, the user app should expect the JSON form of the `types.Experiment`
+struct to be passed.
+
+ON STDOUT, the user app should return the JSON form of the experiment,
+whether or not it was modified. For `configure` and `pre-start` stages, only
+modifications to the experiment spec are saved. For `post-start` and
+`cleanup` stages, only modifications to the `apps` experiment status key
+(which is expected to be a JSON object) are saved. It's best practice for
+each user app to add a top-level key to the `apps` JSON object with the
+name of the user app as the key and any metadata in a JSON object as the
+value.
+
 Example Custom User App
 
   import json, sys
@@ -37,17 +52,17 @@ Example Custom User App
       eprint("must pass exactly one argument on the command line")
       sys.exit(1)
 
+    exp = json.loads(sys.stdin.read())
+
     # This user app only cares about the configure stage.
     if sys.argv[1] != 'configure':
-      print(json.dumps(spec))
+      print(json.dumps(exp['spec']))
       sys.exit(0)
 
-    spec = json.loads(sys.stdin.read())
-
-    for n in spec['topology']['nodes']:
+    for n in exp['spec']['topology']['nodes']:
       for d in n['hardware']['drives']:
         d['image'] = 'm$.qc2'
 
-    print(json.dumps(spec))
+    print(json.dumps(exp))
 */
 package app
