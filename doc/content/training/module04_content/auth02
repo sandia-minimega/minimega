@@ -1,0 +1,18 @@
+$ cat minimega.passwd
+[
+    {
+        "path": "/",
+        "username": "jon",
+        "password": "<password_hash>"
+    },
+    {
+        "path": "/vm/fritz",
+        "username": "fritz",
+        "password": "<password_hash>"
+    },
+    {
+        "path": "/vm/john",
+        "username": "john",
+        "password": "<password_hash>"
+    }
+]

@@ -9,6 +9,7 @@ import (
 
 // Show stores data received from "igor show -json"
 type Show struct {
+	Error                                       string
 	LastUpdated                                 time.Time
 	Prefix                                      string
 	RangeStart, RangeEnd, RackWidth, RackHeight int

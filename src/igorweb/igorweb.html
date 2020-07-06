@@ -25,6 +25,7 @@
         <i>Web</i>
       </span>
 
+      {{if eq .Error ""}} <!-- Go Template -->
       <div
         class="clickable"
         id="newbutton"
@@ -50,10 +51,12 @@
           </g>
         </svg>
       </div>
+      {{end}} <!-- Go Template -->
     </nav>
 
     <alert :message="alertMessage"></alert>
 
+    {{if eq .Error ""}} <!-- Go Template -->
     <reservation-info v-on:res-action="handleReservationAction"></reservation-info>
 
     <new-reservation-modal ref="newResModal"></new-reservation-modal>
@@ -61,6 +64,23 @@
     <delete-reservation-modal ref="deleteModal"></delete-reservation-modal>
     <power-modal ref="powerModal"></power-modal>
     <extend-reservation-modal ref="extendModal"></extend-reservation-modal>
+    {{else}} <!-- Go Template -->
+    <div class="modal-backdrop fade show"></div>
+    <div id="error" class="modal fade show" style="display: block;">
+      <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+          <div class="modal-header m-3">
+            <h5 class="modal-title text-center col-12">
+              <b>Error loading igor</b>
+            </h5>
+          </div>
+          <div class="modal-body m-3">
+            <p class="text-centered">{{.Error}}</p> <!-- Go Template -->
+          </div>
+        </div>
+      </div>
+    </div>
+    {{end}} <!-- Go Template -->
   </div>
 
   <!-- Scripts -->

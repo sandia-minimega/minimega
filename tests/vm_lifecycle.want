@@ -61,3 +61,18 @@ foo2 | RUNNING
 ## vm kill all
 ## vm flush
 ## .columns name,state vm info
+## vm launch kvm foo[0-2]
+## .columns name,state vm info
+name | state
+foo0 | BUILDING
+foo1 | BUILDING
+foo2 | BUILDING
+## vm kill foo0
+## vm flush foo0
+## .columns name,state vm info
+name | state
+foo1 | BUILDING
+foo2 | BUILDING
+## vm kill all
+## vm flush all
+## .columns name,state vm info

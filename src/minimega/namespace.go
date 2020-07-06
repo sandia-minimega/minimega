@@ -209,7 +209,7 @@ func (n *Namespace) Destroy() error {
 
 	// Kill and flush all the VMs
 	n.Kill(Wildcard)
-	n.Flush(n.ccServer)
+	n.FlushAll(n.ccServer)
 
 	// Stop ron server
 	n.ccServer.Destroy()
