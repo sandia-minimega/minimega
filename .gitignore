@@ -1,7 +1,6 @@
-pkg
 bin
 volatile
-src/version/version.go
+internal/version/version.go
 *.swp
 *.pyc
 __pycache__

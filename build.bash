@@ -1,5 +1,6 @@
 #!/bin/bash
 
+MODULE="github.com/sandia-minimega/minimega"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 . $SCRIPT_DIR/env.bash
@@ -12,7 +13,9 @@ echo "package version
 var (
 	Revision = \"$VERSION\"
 	Date     = \"$DATE\"
-)" > $SCRIPT_DIR/src/version/version.go
+)" > $SCRIPT_DIR/internal/version/version.go
+
+DIRECTORY_ARRAY=("$SCRIPT_DIR/cmd $SCRIPT_DIR/cmd/plumbing $SCRIPT_DIR/internal $SCRIPT_DIR/pkg")
 
 # build packages with race detection
 #echo "BUILD RACE PACKAGES (linux)"
@@ -32,32 +35,27 @@ var (
 
 # build packages
 echo "BUILD PACKAGES (linux)"
-for i in `ls $SCRIPT_DIR/src | grep -v vendor | grep -v plumbing`
-do
-	echo $i
-	go install $i
-	if [[ $? != 0 ]]; then
-		exit 1
-	fi
+for i in ${DIRECTORY_ARRAY[@]}; do
+    for j in `ls $i | grep -v vendor | grep -v plumbing`
+    do
+        echo $j
+        go install $i/$j
+        if [[ $? != 0 ]]; then
+            exit 1
+        fi
+    done
 done
-for i in `ls $SCRIPT_DIR/src/plumbing`
-do
-	echo $i
-	go install plumbing/$i
-	if [[ $? != 0 ]]; then
-		exit 1
-	fi
-done
-echo
 
 # build windows packages
 echo "BUILD PACKAGES (windows)"
-for i in "protonuke" "miniccc"; do
-    echo $i
-    GOOS=windows go build -o $SCRIPT_DIR/bin/$i.exe $i
-    if [[ $? != 0 ]]; then
-        exit 1
-    fi
+for i in ${DIRECTORY_ARRAY[@]}; do
+    for j in `ls $i | grep -E "protonuke|miniccc"`; do
+        echo $j
+        GOOS=windows go build -o $SCRIPT_DIR/bin/$j.exe $i/$j
+        if [[ $? != 0 ]]; then
+            exit 1
+        fi
+    done
 done
 echo
 
