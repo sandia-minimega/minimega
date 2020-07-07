@@ -37,6 +37,7 @@ func init() {
 func main() {
 	app := &cli.App{
 		Name:    "phenix",
+		UsageText: "phenix [global options] <command>",
 		Version: version.Version,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -84,13 +85,17 @@ func main() {
 		},
 		Commands: []*cli.Command{
 			{
-				Name:    "config",
-				Aliases: []string{"cfg"},
-				Usage:   "phenix config management",
+				Name:        "config",
+				Usage:       "configuration management",
+				UsageText:   "phenix config [command options] <command>", // not showing up as expected
+				Description: "used to manage the three kinds of configurations; kind can be topology, experiment, or scenario",
+				Aliases:     []string{"cfg"},
 				Subcommands: []*cli.Command{
 					{
-						Name:  "list",
-						Usage: "list known phenix configs",
+						Name:        "list",
+						Usage:       "table of configuration(s)",
+						UsageText:   "phenix config list",
+						Description: "used to display a table of available configurations",
 						Action: func(ctx *cli.Context) error {
 							configs, err := config.List(ctx.Args().First())
 
@@ -102,7 +107,7 @@ func main() {
 							fmt.Println()
 
 							if len(configs) == 0 {
-								fmt.Println("no configs currently exist")
+								fmt.Println("there are no configurations available")
 							} else {
 								util.PrintTableOfConfigs(os.Stdout, configs)
 							}
@@ -113,19 +118,21 @@ func main() {
 						},
 					},
 					{
-						Name:  "get",
-						Usage: "get phenix config",
+						Name:        "get",
+						Usage:       "get a configuration",
+						UsageText:   "phenix config get <config kind>/<config name>",
+						Description: "used to get a specific configuration; kind can be topology, experiment, or scenario",
 						Flags: []cli.Flag{
 							&cli.StringFlag{
 								Name:    "output",
 								Aliases: []string{"o"},
-								Usage:   "output format (yaml, json)",
+								Usage:   "configuration output format can be yaml or json",
 								Value:   "yaml",
 							},
 							&cli.BoolFlag{
 								Name:    "pretty",
 								Aliases: []string{"p"},
-								Usage:   "pretty print JSON output",
+								Usage:   "pretty print the json output",
 							},
 						},
 						Action: func(ctx *cli.Context) error {
@@ -171,17 +178,19 @@ func main() {
 						},
 					},
 					{
-						Name:  "create",
-						Usage: "create phenix config(s)",
+						Name:        "create",
+						Usage:       "create a configuration",
+						UsageText:   "phenix config create </path/to/filename(s)>",
+						Description: "used to create a configuration from file(s); file types can be yaml or json",
 						Flags: []cli.Flag{
 							&cli.BoolFlag{
 								Name:  "skip-validation",
-								Usage: "skip config spec validation against schema",
+								Usage: "skip configuration spec validation against schema",
 							},
 						},
 						Action: func(ctx *cli.Context) error {
 							if ctx.Args().Len() == 0 {
-								return cli.Exit("No configuration file(s) provided", 1)
+								return cli.Exit("no configuration file(s) were provided", 1)
 							}
 
 							for _, f := range ctx.Args().Slice() {
@@ -191,37 +200,41 @@ func main() {
 									return cli.Exit(err.Humanize(), 1)
 								}
 
-								fmt.Printf("%s/%s configuration created\n", c.Kind, c.Metadata.Name)
+								fmt.Printf("%s/%s configuration was created\n", c.Kind, c.Metadata.Name)
 							}
 
 							return nil
 						},
 					},
 					{
-						Name:  "edit",
-						Usage: "edit phenix config",
+						Name:        "edit",
+						Usage:       "edit a configuration",
+						UsageText:   "phenix config edit <config kind>/<config name>",
+						Description: "used to edit a configuration with the default system editor; kind can be topology, experiment, or scenario",
 						Action: func(ctx *cli.Context) error {
 							c, err := config.Edit(ctx.Args().First())
 							if err != nil {
 								if config.IsConfigNotModified(err) {
-									return cli.Exit("No changes made to config", 0)
+									return cli.Exit("no changes were made to the configuration", 0)
 								}
 
 								err := util.HumanizeError(err, "Unable to edit given config")
 								return cli.Exit(err.Humanize(), 1)
 							}
 
-							fmt.Printf("%s/%s config updated\n", c.Kind, c.Metadata.Name)
+							fmt.Printf("%s/%s configuration was updated\n", c.Kind, c.Metadata.Name)
 
 							return nil
 						},
 					},
 					{
-						Name:  "delete",
-						Usage: "delete phenix config(s)",
+						Name:        "delete",
+						Usage:       "delete a configuration",
+						UsageText:   "phenix config delete <config kind>/<config name>",
+						Description: "used to delete a configuration; kind can be topology, experiment, or scenario",
 						Action: func(ctx *cli.Context) error {
 							if ctx.Args().Len() == 0 {
-								return cli.Exit("No configurations provided", 1)
+								return cli.Exit("no configuration(s) were provided", 1)
 							}
 
 							for _, c := range ctx.Args().Slice() {
@@ -230,7 +243,7 @@ func main() {
 									return cli.Exit(err.Humanize(), 1)
 								}
 
-								fmt.Printf("%s configuration deleted\n", c)
+								fmt.Printf("%s configuration was deleted\n", c)
 							}
 
 							return nil
@@ -239,9 +252,11 @@ func main() {
 				},
 			},
 			{
-				Name:    "experiment",
-				Aliases: []string{"exp"},
-				Usage:   "phenix experiment management",
+				Name:        "experiment",
+				Usage:       "experiment management",
+				UsageText:   "phenix experiment [command options] <command>", // not showing up as expected
+				Description: "used to manage experiment(s)",
+				Aliases:     []string{"exp"},
 				Subcommands: []*cli.Command{
 					{
 						Name:  "apps",
@@ -272,8 +287,10 @@ func main() {
 						},
 					},
 					{
-						Name:  "list",
-						Usage: "list all experiments",
+						Name:        "list",
+						Usage:       "table of experiments",
+						UsageText:   "phenix experiment list",
+						Description: "used to display a table of available experiments",
 						Action: func(ctx *cli.Context) error {
 							exps, err := experiment.List()
 							if err != nil {
@@ -286,18 +303,20 @@ func main() {
 						},
 					},
 					{
-						Name:  "create",
-						Usage: "create a new experiment",
+						Name:        "create",
+						Usage:       "create an experiment",
+						UsageText:   "phenix experiment create [command options]",
+						Description: "used to create an experiment from an existing configuration; can be a topology, or topology and scenario",
 						Flags: []cli.Flag{
 							&cli.StringFlag{
 								Name:    "topology",
 								Aliases: []string{"t"},
-								Usage:   "name of existing topology to use",
+								Usage:   "name of an existing topology to use",
 							},
 							&cli.StringFlag{
 								Name:    "scenario",
 								Aliases: []string{"s"},
-								Usage:   "name of existing scenario to use",
+								Usage:   "name of an existing scenario to use (optional)",
 							},
 							&cli.StringFlag{
 								Name:    "base-dir",
@@ -309,7 +328,7 @@ func main() {
 							name := ctx.Args().First()
 
 							if name == "" {
-								return cli.Exit("must provide experiment name", 1)
+								return cli.Exit("must provide an experiment name", 1)
 							}
 
 							var (
@@ -319,7 +338,7 @@ func main() {
 							)
 
 							if topology == "" {
-								return cli.Exit("must provide topology name", 1)
+								return cli.Exit("must provide a topology name", 1)
 							}
 
 							if err := experiment.Create(name, topology, scenario, baseDir); err != nil {
@@ -330,13 +349,15 @@ func main() {
 						},
 					},
 					{
-						Name:  "delete",
-						Usage: "delete an experiment",
+						Name:        "delete",
+						Usage:       "delete an experiment",
+						UsageText:   "phenix experiment delete <experiment name>",
+						Description: "used to delete an exisitng experiment; experiment must be stopped",
 						Action: func(ctx *cli.Context) error {
 							name := ctx.Args().First()
 
 							if name == "" {
-								return cli.Exit("must provide experiment name", 1)
+								return cli.Exit("must provide an experiment name", 1)
 							}
 
 							exp, err := experiment.Get(ctx.Args().First())
@@ -354,7 +375,7 @@ func main() {
 								return cli.Exit(err.Humanize(), 1)
 							}
 
-							fmt.Printf("experiment %s deleted\n", name)
+							fmt.Printf("experiment %s was deleted\n", name)
 
 							return nil
 						},
@@ -382,9 +403,11 @@ func main() {
 						},
 					},
 					{
-						Name:      "start",
-						Usage:     "start an experiment",
-						ArgsUsage: "[flags] <exp>",
+						Name:        "start",
+						Usage:       "start an experiment",
+						UsageText:   "phenix experiment start <experiment name>",
+						Description: "used to start a stopped experiment",
+						ArgsUsage:   "[flags] <exp>",
 						Flags: []cli.Flag{
 							&cli.BoolFlag{
 								Name:  "dry-run",
@@ -406,9 +429,11 @@ func main() {
 						},
 					},
 					{
-						Name:      "stop",
-						Usage:     "stop an experiment",
-						ArgsUsage: "[flags] <exp>",
+						Name:        "stop",
+						Usage:       "stop an experiment",
+						UsageText:   "phenix experiment stop <experiment name>",
+						Description: "used to stop a running experiment",
+						ArgsUsage:   "[flags] <exp>",
 						Flags: []cli.Flag{
 							&cli.BoolFlag{
 								Name:  "dry-run",
@@ -430,9 +455,11 @@ func main() {
 						},
 					},
 					{
-						Name:      "restart",
-						Usage:     "restart an experiment",
-						ArgsUsage: "[flags] <exp>",
+						Name:        "restart",
+						Usage:       "restart an experiment",
+						UsageText:   "phenix experiment restart <experiment name>",
+						Description: "used to restart a running experiment",
+						ArgsUsage:   "[flags] <exp>",
 						Flags: []cli.Flag{
 							&cli.BoolFlag{
 								Name:  "dry-run",
@@ -461,12 +488,16 @@ func main() {
 				},
 			},
 			{
-				Name:  "vm",
-				Usage: "phenix VM management",
+				Name:        "vm",
+				Usage:       "virtual machine management",
+				UsageText:   "phenix vm [command options] <command>", // not showing up as expected
+				Description: "used to manage virtual machine(s)",
 				Subcommands: []*cli.Command{
 					{
-						Name:  "info",
-						Usage: "show VM info",
+						Name:        "info",
+						Usage:       "table of virtual machine(s)",
+						UsageText:   "phenix vm info <experiment name>/<vm name>",
+						Description: "used to display a table of virtual machine(s) for a specific experiment; virtual machine name is optional, when included will display only that vm",
 						Action: func(ctx *cli.Context) error {
 							// Should look like `exp` or `exp/vm`
 							parts := strings.Split(ctx.Args().First(), "/")
@@ -496,11 +527,13 @@ func main() {
 						},
 					},
 					{
-						Name:  "pause",
-						Usage: "pause running VM",
+						Name:        "pause",
+						Usage:       "pause a running virtual machine",
+						UsageText:   "phenix vm pause <experiment name> <vm name>",
+						Description: "used to pause a running virtual machine for a speific experiment",
 						Action: func(ctx *cli.Context) error {
 							if ctx.Args().Len() != 2 {
-								return cli.Exit("must provide experiment and VM name", 1)
+								return cli.Exit("must provide an experiment and virtual machine name", 1)
 							}
 
 							var (
@@ -517,11 +550,13 @@ func main() {
 						},
 					},
 					{
-						Name:  "resume",
-						Usage: "resume paused VM",
+						Name:        "resume",
+						Usage:       "resume a paused virtual machine",
+						UsageText:   "phenix vm resume <experiment name> <vm name>",
+						Description: "used to resume a paused virtul machine for a specific experiment",
 						Action: func(ctx *cli.Context) error {
 							if ctx.Args().Len() != 2 {
-								return cli.Exit("must provide experiment and VM name", 1)
+								return cli.Exit("must provide an experiment and virtual machine name", 1)
 							}
 
 							var (
@@ -538,29 +573,31 @@ func main() {
 						},
 					},
 					{
-						Name:      "redeploy",
-						Usage:     "redeploy running VM",
-						ArgsUsage: "<exp> <vm>",
+						Name:        "redeploy",
+						Usage:       "redeploy a running virtual machine",
+						UsageText:   "phenix vm redeploy [command options] <experiment name> <vm name>",
+						Description: "used to redeploy a running virtual machine for a specific experiment; several values can be modified",
+						ArgsUsage:   "<exp> <vm>",
 						Flags: []cli.Flag{
 							&cli.IntFlag{
 								Name:    "cpu",
 								Aliases: []string{"c"},
-								Usage:   "number of VM CPUs (1-8 is valid)",
+								Usage:   "number of vm cpus (1-8 is valid)",
 							},
 							&cli.IntFlag{
 								Name:    "mem",
 								Aliases: []string{"m"},
-								Usage:   "amount of memory in MB (512, 1024, 2048, 3072, 4096, 8192, 12288, 16384 are valid)",
+								Usage:   "amount of memory in megabytes (512, 1024, 2048, 3072, 4096, 8192, 12288, 16384 are valid)",
 							},
 							&cli.StringFlag{
 								Name:    "disk",
 								Aliases: []string{"d"},
-								Usage:   "VM backing disk image",
+								Usage:   "vm backing disk image",
 							},
 							&cli.BoolFlag{
 								Name:    "replicate-injects",
 								Aliases: []string{"r"},
-								Usage:   "recreate disk snapshot and VM injections",
+								Usage:   "recreate disk snapshot and vm injections",
 							},
 							&cli.IntFlag{
 								Name:    "partition",
@@ -584,7 +621,7 @@ func main() {
 							)
 
 							if cpu != 0 && (cpu < 1 || cpu > 8) {
-								return cli.Exit("CPUs must be 1-8 only", 1)
+								return cli.Exit("cpus can only be 1-8", 1)
 							}
 
 							if mem != 0 && (mem < 512 || mem > 16384 || mem%512 != 0) {
@@ -608,9 +645,11 @@ func main() {
 						},
 					},
 					{
-						Name:      "kill",
-						Usage:     "kill (delete) running or paused VM",
-						ArgsUsage: "<exp> <vm>",
+						Name:        "kill",
+						Usage:       "kill a running or paused virtual machine",
+						UsageText:   "phenix vm kill <experiment name> <vm name>",
+						Description: "used to kill or delete a running or paused virtual machine for a specific experiment",
+						ArgsUsage:   "<exp> <vm>",
 						Action: func(ctx *cli.Context) error {
 							if ctx.Args().Len() != 2 {
 								return cli.Exit("must provide all arguments", 1)
@@ -630,19 +669,24 @@ func main() {
 						},
 					},
 					{
-						Name:  "set",
-						Usage: "set config value for VM in stopped experiment",
+						Name:        "set",
+						Usage:       "set configuration value for a virtual machine",
+						UsageText:   "phenix vm set {{ TO DO }}",
+						Description: "used to set a configuration value for a virtual machine in a stopped experiment",
 						Action: func(ctx *cli.Context) error {
 							return cli.Exit("This command is not yet implemented. For now, you can edit the experiment directly.", 1)
 						},
 					},
 					{
-						Name:  "net",
-						Usage: "modify network connectivity for running VM",
+						Name:        "net",
+						Usage:       "modify network connectivity for a virtual machine",
+						UsageText:   "phenix vm net {{ TO DO }}", // not showing up as expected
+						Description: "used to modify the network connectivity for a virtual machine in a running experiment",
 						Subcommands: []*cli.Command{
 							{
 								Name:      "connect",
-								Usage:     "connect a VM interface to a VLAN",
+								Usage:     "connect a vm interface to a vlan",
+								UsageText: "phenix vm net connect <experiment name> <vm name> <iface index> <vlan name>", // vlan name or identifier?
 								ArgsUsage: "<exp> <vm> <iface index> <vlan>",
 								Action: func(ctx *cli.Context) error {
 									if ctx.Args().Len() != 4 {
@@ -657,7 +701,7 @@ func main() {
 
 									iface, err := strconv.Atoi(ctx.Args().Get(2))
 									if err != nil {
-										return cli.Exit("interface index must be an integer", 1)
+										return cli.Exit("the network interface index must be an integer", 1)
 									}
 
 									if err := vm.Connect(expName, vmName, iface, vlan); err != nil {
@@ -670,7 +714,8 @@ func main() {
 							},
 							{
 								Name:      "disconnect",
-								Usage:     "disconnect a VM interface",
+								Usage:     "disconnect a vm interface",
+								UsageText: "phenix vm net disconnect <experiment name> <vm name> <iface index>",
 								ArgsUsage: "<exp> <vm> <iface index>",
 								Action: func(ctx *cli.Context) error {
 									if ctx.Args().Len() != 3 {
@@ -684,7 +729,7 @@ func main() {
 
 									iface, err := strconv.Atoi(ctx.Args().Get(2))
 									if err != nil {
-										return cli.Exit("interface index must be an integer", 1)
+										return cli.Exit("the network interface index must be an integer", 1)
 									}
 
 									if err := vm.Disonnect(expName, vmName, iface); err != nil {
@@ -698,12 +743,15 @@ func main() {
 						},
 					},
 					{
-						Name:  "capture",
-						Usage: "modify network packet captures for running VM",
+						Name:        "capture",
+						Usage:       "modify network packet captures for a virutal machine",
+						UsageText:   "phenix vm capture {{ TO DO }}",
+						Description: "used to modify the network packet captures for a virtual machine in a running experiment",
 						Subcommands: []*cli.Command{
 							{
 								Name:      "start",
-								Usage:     "start a packet capture on a VM interface",
+								Usage:     "start a packet capture",
+								UsageText: "phenix vm capture start <experiment name> <vm name> <iface index> </path/to/out file>",
 								ArgsUsage: "<exp> <vm> <iface index> <out file>",
 								Action: func(ctx *cli.Context) error {
 									if ctx.Args().Len() != 4 {
@@ -718,7 +766,7 @@ func main() {
 
 									iface, err := strconv.Atoi(ctx.Args().Get(2))
 									if err != nil {
-										return cli.Exit("interface index must be an integer", 1)
+										return cli.Exit("the network interface index must be an integer", 1)
 									}
 
 									if err := vm.StartCapture(expName, vmName, iface, out); err != nil {
@@ -731,7 +779,8 @@ func main() {
 							},
 							{
 								Name:      "stop",
-								Usage:     "stop packet captures for a VM",
+								Usage:     "stop packet capture(s)",
+								UsageText: "phenix vm capture stop <experiment name> <vm name>",
 								ArgsUsage: "<exp> <vm>",
 								Action: func(ctx *cli.Context) error {
 									if ctx.Args().Len() != 2 {
@@ -757,12 +806,14 @@ func main() {
 			},
 			{
 				Name:  "image",
-				Usage: "phenix Image management",
+				Usage: "virtual disk image management",
 				Subcommands: []*cli.Command{
 					{
-						Name:      "create",
-						Usage:     "create configuration from which to build an image",
-						ArgsUsage: "[flags] <name>",
+						Name:        "create",
+						Usage:       "create image configuration",
+						UsageText:   "phenix image create [flag(s)] <image name>",
+						Description: "used to create a virtual disk image configuration from which to build an image; flags are optional",
+						ArgsUsage:   "[flags] <name>",
 						Flags: []cli.Flag{
 							&cli.StringFlag{
 								Name:    "size",
@@ -779,7 +830,7 @@ func main() {
 							&cli.StringFlag{
 								Name:    "release",
 								Aliases: []string{"r"},
-								Usage:   "os release codename",
+								Usage:   "os release code name",
 								Value:   "bionic",
 							},
 							&cli.StringFlag{
@@ -797,7 +848,7 @@ func main() {
 							&cli.BoolFlag{
 								Name:    "compress",
 								Aliases: []string{"c"},
-								Usage:   "compress image after creation",
+								Usage:   "compress image after creation (does not apply to raw image)",
 							},
 							&cli.StringFlag{
 								Name:    "overlays",
@@ -854,7 +905,9 @@ func main() {
 					},
 					{
 						Name:      "create-from",
-						Usage:     "create a new configuration from an existing one",
+						Usage:     "create image configuration from existing one",
+						UsageText: "phenix image create-from [flag(s)] <existing name> <new name>",
+						Description: "used to create a new virtual disk image configuration from an existing one; flags are optional, if used they will be added to the exisiting configuration",
 						ArgsUsage: "[flags] <name> <saveas>",
 						Flags: []cli.Flag{
 							&cli.StringFlag{
@@ -899,9 +952,11 @@ func main() {
 						},
 					},
 					{
-						Name:      "build",
-						Usage:     "build an image from a configuration",
-						ArgsUsage: "[flags] <name>",
+						Name:        "build",
+						Usage:       "build an image",
+						UsageText:   "phenix image build [flag(s)] <configuration name>",
+						Description: "used to build a new virtual disk using an exisitng configuration",
+						ArgsUsage:   "[flags] <name>",
 						Flags: []cli.Flag{
 							&cli.StringFlag{
 								Name:    "verbosity",
@@ -916,7 +971,7 @@ func main() {
 						},
 						Action: func(ctx *cli.Context) error {
 							if ctx.Args().First() == "" {
-								return cli.Exit("name of config to build is required", 1)
+								return cli.Exit("name of configuration to build the disk image is required", 1)
 							}
 
 							var (
@@ -934,9 +989,10 @@ func main() {
 						},
 					},
 					{
-						Name:      "list",
-						Usage:     "prints a list of image build configuration",
-						ArgsUsage: "",
+						Name:        "list",
+						Usage:       "table of image configuration(s)",
+						UsageText:   "phenix image list",
+						Description: "used to display a table of exisitng virtual disk image configuration(s); includes size, vairant, release, overlays, and packages",
 						Action: func(ctx *cli.Context) error {
 							imgs, err := image.List()
 							if err != nil {
@@ -950,9 +1006,11 @@ func main() {
 						},
 					},
 					{
-						Name:      "delete",
-						Usage:     "delete image build configuration by name",
-						ArgsUsage: "<name>",
+						Name:        "delete",
+						Usage:       "delete image configuration",
+						UsageText:   "phenix image delete <image name>",
+						Description: "used to delete an existing virtual disk image configuration by name",
+						ArgsUsage:   "<name>",
 						Action: func(ctx *cli.Context) error {
 							name := ctx.Args().First()
 
@@ -972,7 +1030,9 @@ func main() {
 					},
 					{
 						Name:      "append",
-						Usage:     "append scripts, packages, and/or overlays to image build config",
+						Usage:     "append to an image configuration",
+						UsageText: "phenix image append [flag(s)] <image name>",
+						Description: "used to add scripts, packages, and/or overlays to an existing virtual disk image configuration",
 						ArgsUsage: "[flags] <name>",
 						Flags: []cli.Flag{
 							&cli.StringFlag{
@@ -1013,8 +1073,10 @@ func main() {
 					},
 					{
 						Name:      "remove",
-						Usage:     "remove scripts, packages, and/or overlays from an image build config",
-						ArgsUsage: "[flags] <name>",
+						Usage:     "remove from an image configuration",
+						UsageText: "phenix image remove [flag(s)] <image name>",
+						Description: "used to remove scripts, packages, and/or overlays to an existing virtual disk image configuration",
+						ArgsUsage: "[flags] <name>>",
 						Flags: []cli.Flag{
 							&cli.StringFlag{
 								Name:    "overlays",
@@ -1056,12 +1118,14 @@ func main() {
 			},
 			{
 				Name:  "vlan",
-				Usage: "phenix VLAN management",
+				Usage: "vlan management",
 				Subcommands: []*cli.Command{
 					{
-						Name:      "alias",
-						Usage:     "view or set VLAN alias",
-						ArgsUsage: "[flags] [experiment] [alias] [vlan]",
+						Name:        "alias",
+						Usage:       "view or set a vlan alias",
+						UsageText:   "phenix vlan alias [flag(s)] <experiment name> <alias name> <vlan name>", // is it vlan name or index or ??
+						Description: "used to view or set an alias for a given vlan",
+						ArgsUsage:   "[flags] [experiment] [alias] [vlan]",
 						Flags: []cli.Flag{
 							&cli.BoolFlag{
 								Name:    "force",
@@ -1097,7 +1161,7 @@ func main() {
 
 								vid, err := strconv.Atoi(id)
 								if err != nil {
-									return cli.Exit("VLAN ID provided not a valid integer", 1)
+									return cli.Exit("the vlan identifier provided is not a valid integer", 1)
 								}
 
 								if err := vlan.SetAlias(vlan.Experiment(exp), vlan.Alias(alias), vlan.ID(vid), vlan.Force(force)); err != nil {
@@ -1113,7 +1177,9 @@ func main() {
 					},
 					{
 						Name:      "range",
-						Usage:     "view or set VLAN range",
+						Usage:     "view or set a vlan range",
+						UsageText: "phenix vlan range [flag(s)] <experiment name> <range minimum> <range maximum>",
+						Description: "used to view or set a range for a given vlan",
 						ArgsUsage: "[flags] [experiment] [min] [max]",
 						Flags: []cli.Flag{
 							&cli.BoolFlag{
@@ -1150,12 +1216,12 @@ func main() {
 
 								vmin, err := strconv.Atoi(min)
 								if err != nil {
-									return cli.Exit("VLAN min ID provided not a valid integer", 1)
+									return cli.Exit("the vlan range minimum identifier provided not a valid integer", 1)
 								}
 
 								vmax, err := strconv.Atoi(max)
 								if err != nil {
-									return cli.Exit("VLAN max ID provided not a valid integer", 1)
+									return cli.Exit("the vlan range maximum identifier provided not a valid integer", 1)
 								}
 
 								if err := vlan.SetRange(vlan.Experiment(exp), vlan.Min(vmin), vlan.Max(vmax), vlan.Force(force)); err != nil {
