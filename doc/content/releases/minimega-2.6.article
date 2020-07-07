@@ -16,7 +16,7 @@ programmability.
 Allows users to create mirrors between VM taps so that VMs can monitor the
 traffic of other VMs.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1221][#1221]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1221][#1221]].
 
 *** vm config colocate API
 
@@ -24,7 +24,7 @@ To support `tap`mirror` which needs VMs to be scheduled on the same host, we
 added the `vm`config`colocate` API to specify that the new VM should be
 scheduled on the same host as an existing VM.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1222][#1222]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1222][#1222]].
 
 *** Disk snapshots
 
@@ -33,16 +33,16 @@ the disks when the VM first launches. These are saved in the VM instance
 directory and can be saved in the future. minimega now warns if you configure a
 VM with more than 4 IDE disks.
 
-PRs [[https://github.com/sandia-minimega/minimega/pull/1284][#1284]],
-[[https://github.com/sandia-minimega/minimega/pull/1302][#1302]],
-[[https://github.com/sandia-minimega/minimega/pull/1347][#1347]].
+PRs [[https://github.com/sandia-minimega/minimega/v2/pull/1284][#1284]],
+[[https://github.com/sandia-minimega/minimega/v2/pull/1302][#1302]],
+[[https://github.com/sandia-minimega/minimega/v2/pull/1347][#1347]].
 
 *** GRE meshes for namespace
 
 Automatically creates GRE or VXLAN tunnels on a separate bridge for a
 namespace. Very experimental and subject to change.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1263][#1263]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1263][#1263]].
 
 ** Additional new features
 
@@ -50,21 +50,21 @@ PR [[https://github.com/sandia-minimega/minimega/pull/1263][#1263]].
 
 Reduce the overhead for minicli to parse commands.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1184][#1184]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1184][#1184]].
 
 *** miniclient redial
 
 Too many minimega -e's can cause minimega's listen queue to fill up and start
 rejecting new miniclients. Add redial/backoff when we detect a temporary error.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1185][#1185]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1185][#1185]].
 
 *** optimize API
 
 Make the optimize API mostly work with namespaces. `hugepages` and `affinity`
 can be set per namespace. `ksm` is set globally.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1199][#1199]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1199][#1199]].
 
 *** file stream API
 
@@ -74,13 +74,13 @@ to the way minimega processes commands, this works for small files but large
 files will cause minimega to wait until the file is fully downloaded before
 continuing.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1126][#1126]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1126][#1126]].
 
 *** vm config vga, vm config sockets, vm config threads APIs
 
 Add new APIs to set additional QEMU parameters.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1240][#1240]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1240][#1240]].
 
 *** ns dry-run API
 
@@ -89,7 +89,7 @@ placement as needed before running it. Rename ns schedules to ns schedule
 status. Fix bug in schedule status where launched VMs weren't being counted
 properly.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1247][#1247]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1247][#1247]].
 
 *** vnc API
 
@@ -97,49 +97,49 @@ Many improvements to the underlying code. Add `WaitForIt` and `ClickIt` events
 to vnc playback. Uses a template image to wait for a something to appear on the
 screen (`WaitForIt`) and then click the center of it (`ClickIt`).
 
-PRs [[https://github.com/sandia-minimega/minimega/pull/1267][#1267]],
-[[https://github.com/sandia-minimega/minimega/pull/1280][#1280]].
+PRs [[https://github.com/sandia-minimega/minimega/v2/pull/1267][#1267]],
+[[https://github.com/sandia-minimega/minimega/v2/pull/1280][#1280]].
 
 *** Instance symlinks
 
 minimega now creates symlinks so that users can reference VMs in the minimega
 directory by namespace and UUID.
 
-PRs [[https://github.com/sandia-minimega/minimega/pull/1287][#1287]],
-[[https://github.com/sandia-minimega/minimega/pull/1338][#1338]].
+PRs [[https://github.com/sandia-minimega/minimega/v2/pull/1287][#1287]],
+[[https://github.com/sandia-minimega/minimega/v2/pull/1338][#1338]].
 
 *** vm cdrom API
 
 Add "force" option to the eject API.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1272][#1272]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1272][#1272]].
 
 *** vm config virtio-ports API
 
 Users can now specify a list of named virtio ports or a number of virtio
 ports to automatically generate names for (old behavior).
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1296][#1296]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1296][#1296]].
 
 *** VM names
 
 minimega now sanitizes VM names since it creates directories and argument
 strings using them.
 
-PRs [[https://github.com/sandia-minimega/minimega/pull/1304][#1304]],
-[[https://github.com/sandia-minimega/minimega/pull/1315][#1315]].
+PRs [[https://github.com/sandia-minimega/minimega/v2/pull/1304][#1304]],
+[[https://github.com/sandia-minimega/minimega/v2/pull/1315][#1315]].
 
 *** deploy API
 
 Add subcommands to specify files to write `stdout` and `stderr` to.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1263][#1263]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1263][#1263]].
 
 *** bridge API
 
 Add subcommand to configure bridge. Add `key` option to differentiate tunnels.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1263][#1263]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1263][#1263]].
 
 *** mesh API and host completion
 
@@ -148,19 +148,19 @@ PR [[https://github.com/sandia-minimega/minimega/pull/1263][#1263]].
 `ns`del-hosts`. Add `mesh`list`peers` and `mesh`list`all` subcommands. Resolve
 `localhost` for `vm`config`schedule`.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1319][#1319]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1319][#1319]].
 
 *** cc tunnel API
 
 Allow tunnels to be specified based on VM name or UUID.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1342][#1342]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1342][#1342]].
 
 *** vm launch API
 
 Add option to specify a saved VM config name to launch.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1326][#1326]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1326][#1326]].
 
 *** Output coalescing
 
@@ -168,35 +168,35 @@ minimega now coalescing repeated patterns in output strings as opposed to just
 prefixes. For example, `foo1.bar` and `foo2.bar` would coalesce to
 `foo[1-2].bar`.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1327][#1327]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1327][#1327]].
 
 *** cc APIs
 
 Shove the command ID into the `Data` field of responses so that scripts can
 easily determine which command they issued.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1346][#1346]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1346][#1346]].
 
 *** Dependencies checks
 
 minimega now warns if it does not detect the `kvm` kernel module.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1348][#1348]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1348][#1348]].
 
 *** vm flush API
 
 Allow flushes to occur in parallel, speeding up flushing large experiments.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1353][#1353]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1353][#1353]].
 
 *** Documentation updates
 
 Updated several articles. The layout for articles was updated to include the
 header and sidebar.
 
-PRs [[https://github.com/sandia-minimega/minimega/pull/1207][#1207]],
-[[https://github.com/sandia-minimega/minimega/pull/1237][#1237]],
-[[https://github.com/sandia-minimega/minimega/pull/1246][#1246]].
+PRs [[https://github.com/sandia-minimega/minimega/v2/pull/1207][#1207]],
+[[https://github.com/sandia-minimega/minimega/v2/pull/1237][#1237]],
+[[https://github.com/sandia-minimega/minimega/v2/pull/1246][#1246]].
 
 ** Auxiliary Tools
 
@@ -204,7 +204,7 @@ PRs [[https://github.com/sandia-minimega/minimega/pull/1207][#1207]],
 
 Sort errors to make tests more reliable.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1250][#1250]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1250][#1250]].
 
 *** igor
 
@@ -215,7 +215,7 @@ separate repo with separate release notes during the next release cycle.
 
 Add support for basic BGP routing.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1206][#1206]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1206][#1206]].
 
 *** vmbetter
 
@@ -225,17 +225,17 @@ specify the disk format (currently allows qcow, qcow2, raw, and vmdk). Rename
 `-qcowsize` to `-size`. Change the default mbr location so that it matches
 debian.
 
-PRs [[https://github.com/sandia-minimega/minimega/pull/1241][#1241]],
-[[https://github.com/sandia-minimega/minimega/pull/1305][#1305]],
-[[https://github.com/sandia-minimega/minimega/pull/1321][#1321]].
+PRs [[https://github.com/sandia-minimega/minimega/v2/pull/1241][#1241]],
+[[https://github.com/sandia-minimega/minimega/v2/pull/1305][#1305]],
+[[https://github.com/sandia-minimega/minimega/v2/pull/1321][#1321]].
 
 *** Python bindings
 
 Improve performance using readline. Drop timeout option since we cannot use
 readline in non-blocking mode. Add `as_dict` helper.
 
-PRs [[https://github.com/sandia-minimega/minimega/pull/1316][#1316]],
-[[https://github.com/sandia-minimega/minimega/pull/1335][#1335]].
+PRs [[https://github.com/sandia-minimega/minimega/v2/pull/1316][#1316]],
+[[https://github.com/sandia-minimega/minimega/v2/pull/1335][#1335]].
 
 *** miniweb
 
@@ -243,9 +243,9 @@ Revert noVNC back to previous version due to problems with v1.0.0. Change
 `-console` flag to string to allow specifying a path to minimega's domain
 socket. Add new VM page to launch a VM from a saved config.
 
-PRs [[https://github.com/sandia-minimega/minimega/pull/1277][#1277]],
-[[https://github.com/sandia-minimega/minimega/pull/1318][#1318]],
-[[https://github.com/sandia-minimega/minimega/pull/1326][#1326]].
+PRs [[https://github.com/sandia-minimega/minimega/v2/pull/1277][#1277]],
+[[https://github.com/sandia-minimega/minimega/v2/pull/1318][#1318]],
+[[https://github.com/sandia-minimega/minimega/v2/pull/1326][#1326]].
 
 * Bug fixes
 
@@ -253,71 +253,71 @@ PRs [[https://github.com/sandia-minimega/minimega/pull/1277][#1277]],
 
 Automatically create the volume source if it does not exist.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1208][#1208]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1208][#1208]].
 
 ** Filesystem does not exist
 
 If a container filesystem does not exist, minimega will now print a more useful
 error message.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1244][#1244]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1244][#1244]].
 
 ** Clogged containers
 
 Fix issues with container filesystems failing to unmount.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1245][#1245]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1245][#1245]].
 
 ** Quoting with minimega -e
 
 Fix an issue with quoted commands.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1294][#1294]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1294][#1294]].
 
 ** vm qmp API
 
 The API now attempts to unmarshal the JSON object before sending it to QMP to
 prevent malformed JSON from borking the connection.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1273][#1273]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1273][#1273]].
 
 ** vm config schedule API
 
 minimega will now return an error if the host is not in the namespace at the
 time `vm`config`schedule` is called.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1303][#1303]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1303][#1303]].
 
 ** Properly handle connection errors
 
 Fix a rare crash in minimega due to connection errors.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1325][#1325]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1325][#1325]].
 
 ** cc response API
 
 Fix missing responses when using prefixes.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1341][#1341]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1341][#1341]].
 
 ** vm config cpu API
 
 Fix bug where we ignored the first line of output in versions where QEMU does
 not include a header.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1328][#1328]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1328][#1328]].
 
 ** vm info API
 
 Fix a bug where the VM PID was not copied to the head node.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1352][#1352]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1352][#1352]].
 
 ** .alias API
 
 Fix double expansion and only replace the first full word on a line.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1362][#1362]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1362][#1362]].
 
 * Availability
 
@@ -344,6 +344,6 @@ look for the web directory in `misc/web`).
 ** Building from source
 
 Source of the entire distribution is available on
-[[https://github.com/sandia-minimega/minimega][Github]]. Follow the directions
+[[https://github.com/sandia-minimega/minimega/v2][Github]]. Follow the directions
 for cloning or forking minimega on github.com. In order to build minimega, you
 will need a Go 1.10+ compiler and libpcap headers.

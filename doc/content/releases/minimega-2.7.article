@@ -21,7 +21,7 @@ which can be found on minimega.org/training.
 minibuilder allows the user to quickly and easily design and configure VM
 networks using a web interface built into miniweb. 
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1429][#1429]]
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1429][#1429]]
 
 
 *** mini101: Training course for minimega
@@ -32,7 +32,7 @@ modules that cover nearly every aspect of using minimega and its various tools.
 Training course modules can be found at 
 [[https://minimega.org/training][minimega.org/training]].
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1404][#1404]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1404][#1404]].
 
 
 *** igorweb: A web interface to igor
@@ -44,7 +44,7 @@ package.
 `igorweb` is its own package separate from `igor` and issues commands to `igor`. 
 So, `igor` works without `igorweb`, but `igorweb` can't work without `igor`.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1371][#1371]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1371][#1371]].
 
 
 *** Upgraded dependency packages
@@ -56,8 +56,8 @@ supported. Upgrades to
 - `dataTables` (1.10.12 -> 1.10.20)
 - `bootstrap` (3.3.5 -> 4.3.1)
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1409][#1409]], 
-PR [[https://github.com/sandia-minimega/minimega/pull/1382][#1382]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1409][#1409]], 
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1382][#1382]].
 
 
 *** Docker File for minimega
@@ -66,7 +66,7 @@ Dockerfile to build a minimega docker image
 docker-compose script to run a minimega docker container using the image
 README with details
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1428][#1428]]
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1428][#1428]]
 
 
 *** vncdrone: Improved VNC automation
@@ -79,7 +79,7 @@ work stage, logout) For example, you can have a drone
 - randomly pick vnc files to do work
 - log out 
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1406][#1406]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1406][#1406]].
 
 
 ** Additional New Features
@@ -93,7 +93,7 @@ This PR Changes 'all' VM flush method to 'FlushAll()'.
 - Updated help strings to reflect enhancement.
 - Backwards compatible with old `vm flush` behavior
 
-PR [[https://github.com/sandia-minimega/minimega/issues/1392][#1392]].
+PR [[https://github.com/sandia-minimega/minimega/v2/issues/1392][#1392]].
 
 
 *** minimega: use "actual path" from qemu-img for backing image if present
@@ -104,7 +104,7 @@ run qemu-img info from a different directory, or you pass the absolute path of
 the image to qemu-img info, then the (actual path: ...) item is present. 
 minimega always passes the full path of a disk image to qemu-img info.
 
-PR [[https://github.com/sandia-minimega/minimega/issues/1437][#1437]].
+PR [[https://github.com/sandia-minimega/minimega/v2/issues/1437][#1437]].
 
 
 *** minimega: package python bindings
@@ -112,7 +112,7 @@ PR [[https://github.com/sandia-minimega/minimega/issues/1437][#1437]].
 Packaging the minimega python bindings would allow users to easily install them 
 into their python environments with pip.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1415][#1415]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1415][#1415]].
 
 
 *** minimega: create minimega group in deb package and use it in init script
@@ -129,7 +129,7 @@ This is achieved by running the following after starting minimega:
   
 in the systemctl script or by minimega on startup.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1414][#1414]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1414][#1414]].
 
 
 *** minimega: vm net add
@@ -139,7 +139,7 @@ specify some attributes - bridge, vlan, mac, and driver
 - Does not work for containers
 - Does not include the remove feature
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1363][#1363]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1363][#1363]].
 
 
 *** igor: Specify VLAN for a reservation 
@@ -147,7 +147,7 @@ PR [[https://github.com/sandia-minimega/minimega/pull/1363][#1363]].
 Allows users to specify which VLAN they'd like a reservation to connect to. 
 `-vlan `can be specified for `sub` and `edit`
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1369][#1369]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1369][#1369]].
 
 
 *** igor: Pause activity
@@ -156,15 +156,15 @@ Adds the ability to pause `igor` activity. When igor is paused, attempts to
 `sub`, `show`, `del`, or other commands will fail and display a configurable 
 message. `igorweb` will display the same message.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1403][#1403]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1403][#1403]].
 
 
 *** igor: Enhanced logging
 
 Logging now include all relevant reservation information
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1395][#1395]], 
-PR [[https://github.com/sandia-minimega/minimega/pull/1399][#1399]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1395][#1395]], 
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1399][#1399]].
 
 
 *** igor: extend clarification
@@ -175,7 +175,7 @@ because we were adding it to the time remaining in their reservation. Now, we
 specify that the requested time, plus the time remaining, is what exceeds the 
 limit.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1432][#1432]]
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1432][#1432]]
 
 
 * Bug Fixes
@@ -191,7 +191,7 @@ On newer distros, `ip link add` actually respects the `iface` name
 given within the container `netns`, whereas it didn't before and just gave the 
 `vethX` as expected.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1378][#1378]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1378][#1378]].
 
 
 *** Fixed error checking on '`vm config net`' when only using containers
@@ -199,7 +199,7 @@ PR [[https://github.com/sandia-minimega/minimega/pull/1378][#1378]].
 Throws warning instead of an error when running just with containers (no 
 installation of `kvm/qemu`) 
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1380][#1380]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1380][#1380]].
 
 
 *** Fixed vm name check for rtunnel
@@ -207,7 +207,7 @@ PR [[https://github.com/sandia-minimega/minimega/pull/1380][#1380]].
 Fixes issue with reverse tunnel error by changing when the name check for a VM 
 occurs.
 
-PR [[https://github.com/sandia-minimega/minimega/issues/1384][#1384]].
+PR [[https://github.com/sandia-minimega/minimega/v2/issues/1384][#1384]].
 
 
 *** QOS Update
@@ -215,7 +215,7 @@ PR [[https://github.com/sandia-minimega/minimega/issues/1384][#1384]].
 Clarification for qos help and fixed an issue with burst computation where 
 setting rate to kbits would result in a 0 burst value, causing an error in TC.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1381][#1381]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1381][#1381]].
 
 
 *** minimega.namespace_cli: don't use loopback addresses for GRE tunnels
@@ -223,7 +223,7 @@ PR [[https://github.com/sandia-minimega/minimega/pull/1381][#1381]].
 This prohibits loopback addresses from being used as endpoints in bridges in 
 cliNamespaceBridge in minimega.namespace_cli.go.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1419][#1419]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1419][#1419]].
 
 
 ** igor
@@ -234,14 +234,14 @@ PR [[https://github.com/sandia-minimega/minimega/pull/1419][#1419]].
 Fixes an issue where deleting future reservations clobbers network settings for 
 active reservations.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1391][#1391]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1391][#1391]].
 
 
 *** Allow uninstall/clear for expired reservations
 
 Fixes an issue where the network is not cleared when a reservation expires.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1401][#1401]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1401][#1401]].
 
 
 *** Fix for the igor stats test to avoid issues with Daylight Savings Time
@@ -249,7 +249,7 @@ PR [[https://github.com/sandia-minimega/minimega/pull/1401][#1401]].
 The stats test was failing (twice a year, it would seem) due to time changes 
 affecting test outcome.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1405][#1405]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1405][#1405]].
 
 
 
@@ -259,7 +259,7 @@ PR [[https://github.com/sandia-minimega/minimega/pull/1405][#1405]].
 *** Forcing the href update before reload as the order of operations is 
 otherwise not guaranteed.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1364][#1364]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1364][#1364]].
 
 
 ** misc
@@ -270,7 +270,7 @@ PR [[https://github.com/sandia-minimega/minimega/pull/1364][#1364]].
 ubuntu 16.04 gives different output for ldd from ubuntu 18.04 this quick change 
 makes it so you can build containers on 16.04
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1426][#1426]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1426][#1426]].
 
 
 *** Update so git treats build artifacts of uminirouter as ignored.
@@ -278,7 +278,7 @@ PR [[https://github.com/sandia-minimega/minimega/pull/1426][#1426]].
 Changed perms on build.bash files from 664 to 775 so users don't get a git 
 modified flag upon changing it themselves.
 
-PR [[https://github.com/sandia-minimega/minimega/pull/1417][#1417]].
+PR [[https://github.com/sandia-minimega/minimega/v2/pull/1417][#1417]].
 
 
 * Availability
@@ -302,7 +302,7 @@ then look for the web directory in `misc/web`).
 
 ** Building from source
 Source of the entire distribution is available on 
-[[https://github.com/sandia-minimega/minimega][Github]]. Follow the directions 
+[[https://github.com/sandia-minimega/minimega/v2][Github]]. Follow the directions 
 for cloning or forking minimega on github.com. In order to build minimega, you 
 will need a Go 1.12+ compiler and libpcap headers.
 

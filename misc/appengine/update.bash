@@ -2,7 +2,7 @@
 
 # stop on error
 
-URL=https://github.com/sandia-minimega/minimega.git
+URL=https://github.com/sandia-minimega/minimega/v2.git
 ROOT=$(go env GOPATH)
 SDKFILE=google-cloud-sdk-299.0.0-linux-x86_64.tar.gz
 SDKURL=https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/$SDKFILE

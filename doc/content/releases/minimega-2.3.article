@@ -293,6 +293,6 @@ look for the web directory in `misc/web`).
 ** Building from source
 
 Source of the entire distribution is available on
-[[https://github.com/sandia-minimega/minimega][github]]. Follow the directions
+[[https://github.com/sandia-minimega/minimega/v2][github]]. Follow the directions
 for cloning or forking minimega on github.com. In order to build minimega, you
 will need a Go 1.6+ compiler, libreadline, and libpcap headers.
