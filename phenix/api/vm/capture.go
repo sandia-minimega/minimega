@@ -20,6 +20,18 @@ var (
 // file in PCAP format. It returns any errors encountered while starting the
 // packet capture.
 func StartCapture(expName, vmName string, iface int, out string) error {
+	if expName == "" {
+		return fmt.Errorf("no experiment name provided")
+	}
+
+	if vmName == "" {
+		return fmt.Errorf("no VM name provided")
+	}
+
+	if out == "" {
+		return fmt.Errorf("no output file provided")
+	}
+
 	vm, err := Get(expName, vmName)
 	if err != nil {
 		return fmt.Errorf("getting VM details: %w", err)
@@ -64,6 +76,14 @@ func StartCapture(expName, vmName string, iface int, out string) error {
 // provided when the capture was started. It returns any errors encountered
 // while stopping the packet captures.
 func StopCaptures(expName, vmName string) error {
+	if expName == "" {
+		return fmt.Errorf("no experiment name provided")
+	}
+
+	if vmName == "" {
+		return fmt.Errorf("no VM name provided")
+	}
+
 	captures := mm.GetVMCaptures(mm.NS(expName), mm.VM(vmName))
 
 	if captures == nil {

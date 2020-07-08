@@ -16,6 +16,10 @@ var vlanAliasRegex = regexp.MustCompile(`(.*) \(\d*\)`)
 // experiment is running. It returns a slice of VM structs and any errors
 // encountered while gathering them.
 func List(expName string) ([]types.VM, error) {
+	if expName == "" {
+		return nil, fmt.Errorf("no experiment name provided")
+	}
+
 	exp, err := experiment.Get(expName)
 	if err != nil {
 		return nil, fmt.Errorf("getting experiment %s: %w", expName, err)
@@ -56,8 +60,8 @@ func List(expName string) ([]types.VM, error) {
 			vm.Taps = details.Taps
 			vm.Uptime = details.Uptime
 
-			// Reset slice of IPv4 addresses so we can be sure to align them
-			// correctly with minimega networks below.
+			// Reset slice of IPv4 addresses so we can be sure to align them correctly
+			// with minimega networks below.
 			vm.IPv4 = make([]string, len(details.Networks))
 
 			// Since we get the IP from the experiment config, but the network name
@@ -88,6 +92,14 @@ func List(expName string) ([]types.VM, error) {
 // running VM details. It returns a pointer to a VM struct, and any errors
 // encountered while retrieving the VM.
 func Get(expName, vmName string) (*types.VM, error) {
+	if expName == "" {
+		return nil, fmt.Errorf("no experiment name provided")
+	}
+
+	if vmName == "" {
+		return nil, fmt.Errorf("no VM name provided")
+	}
+
 	exp, err := experiment.Get(expName)
 	if err != nil {
 		return nil, fmt.Errorf("getting experiment %s: %w", expName, err)
@@ -137,21 +149,22 @@ func Get(expName, vmName string) (*types.VM, error) {
 	vm.Taps = details[0].Taps
 	vm.Uptime = details[0].Uptime
 
-	// Reset slice of IPv4 addresses so we can be sure to align them
-	// correctly with minimega networks below.
-	vm.IPv4 = nil
+	// Reset slice of IPv4 addresses so we can be sure to align them correctly
+	// with minimega networks below.
+	vm.IPv4 = make([]string, len(details[0].Networks))
 
-	// Since we get the IP from the database, but the network name
-	// from minimega (to preserve iface to network ordering), make
-	// sure the ordering of IPs matches the odering of networks. We
-	// could just use a map here, but then the iface to network
-	// ordering that minimega ensures would be lost.
-	for _, nw := range details[0].Networks {
-		// At this point, `nw` will look something like `EXP_1 (101)`.
-		// In the database, we just have `EXP_1` so we need to use
-		// that portion from minimega as the `Interfaces` map key.
+	// Since we get the IP from the experiment config, but the network name from
+	// minimega (to preserve iface to network ordering), make sure the ordering of
+	// IPs matches the odering of networks. We could just use a map here, but then
+	// the iface to network ordering that minimega ensures would be lost.
+	for idx, nw := range details[0].Networks {
+		// At this point, `nw` will look something like `EXP_1 (101)`. In the exp,
+		// we just have `EXP_1` so we need to use that portion from minimega as the
+		// `Interfaces` map key.
 		if match := vlanAliasRegex.FindStringSubmatch(nw); match != nil {
-			vm.IPv4 = append(vm.IPv4, vm.Interfaces[match[1]])
+			vm.IPv4[idx] = vm.Interfaces[match[1]]
+		} else {
+			vm.IPv4[idx] = "n/a"
 		}
 	}
 
@@ -161,6 +174,14 @@ func Get(expName, vmName string) (*types.VM, error) {
 // Pause stops a running VM with the given name in the experiment with the given
 // name. It returns any errors encountered while pausing the VM.
 func Pause(expName, vmName string) error {
+	if expName == "" {
+		return fmt.Errorf("no experiment name provided")
+	}
+
+	if vmName == "" {
+		return fmt.Errorf("no VM name provided")
+	}
+
 	err := StopCaptures(expName, vmName)
 	if err != nil && !errors.Is(err, ErrNoCaptures) {
 		return fmt.Errorf("stopping captures for VM %s in experiment %s: %w", vmName, expName, err)
@@ -176,6 +197,14 @@ func Pause(expName, vmName string) error {
 // Resume starts a paused VM with the given name in the experiment with the
 // given name. It returns any errors encountered while resuming the VM.
 func Resume(expName, vmName string) error {
+	if expName == "" {
+		return fmt.Errorf("no experiment name provided")
+	}
+
+	if vmName == "" {
+		return fmt.Errorf("no VM name provided")
+	}
+
 	if err := mm.StartVM(mm.NS(expName), mm.VM(vmName)); err != nil {
 		return fmt.Errorf("resuming VM: %w", err)
 	}
@@ -188,6 +217,14 @@ func Resume(expName, vmName string) error {
 // redeployed VM, such as CPU, memory, and disk options. It returns any errors
 // encountered while redeploying the VM.
 func Redeploy(expName, vmName string, opts ...RedeployOption) error {
+	if expName == "" {
+		return fmt.Errorf("no experiment name provided")
+	}
+
+	if vmName == "" {
+		return fmt.Errorf("no VM name provided")
+	}
+
 	o := newRedeployOptions(opts...)
 
 	var injects []string
@@ -236,6 +273,14 @@ func Redeploy(expName, vmName string, opts ...RedeployOption) error {
 // Kill deletes a VM with the given name in the experiment with the given name.
 // It returns any errors encountered while killing the VM.
 func Kill(expName, vmName string) error {
+	if expName == "" {
+		return fmt.Errorf("no experiment name provided")
+	}
+
+	if vmName == "" {
+		return fmt.Errorf("no VM name provided")
+	}
+
 	if err := mm.KillVM(mm.NS(expName), mm.VM(vmName)); err != nil {
 		return fmt.Errorf("killing VM: %w", err)
 	}

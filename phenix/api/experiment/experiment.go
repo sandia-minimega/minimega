@@ -53,6 +53,10 @@ func List() ([]types.Experiment, error) {
 // the given experiment, and any errors encountered while retrieving the
 // experiment.
 func Get(name string) (*types.Experiment, error) {
+	if name == "" {
+		return nil, fmt.Errorf("no experiment name provided")
+	}
+
 	c, _ := types.NewConfig("experiment/" + name)
 
 	if err := store.Get(c); err != nil {

@@ -54,6 +54,10 @@ func List(which string) (types.Configs, error) {
 // generic `map[string]interface{}` fields. It's up to the caller to convert
 // these fields into the appropriate types.
 func Get(name string) (*types.Config, error) {
+	if name == "" {
+		return nil, fmt.Errorf("no config name provided")
+	}
+
 	c, err := types.NewConfig(name)
 	if err != nil {
 		return nil, err
@@ -111,6 +115,10 @@ func Create(path string, validate bool) (*types.Config, error) {
 // `IsConfigNotModified` function. It returns the updated config and any errors
 // encountered while editing the config.
 func Edit(name string) (*types.Config, error) {
+	if name == "" {
+		return nil, fmt.Errorf("no config name provided")
+	}
+
 	c, err := types.NewConfig(name)
 	if err != nil {
 		return nil, err
@@ -163,6 +171,10 @@ func Edit(name string) (*types.Config, error) {
 // are removed. It returns any errors encountered while removing the config from
 // the store.
 func Delete(name string) error {
+	if name == "" {
+		return fmt.Errorf("no config name provided")
+	}
+
 	if name == "all" {
 		configs, _ := List("all")
 
