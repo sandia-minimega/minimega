@@ -51,12 +51,34 @@ func main() {
 				Usage:   "log verbosity (0 - 10)",
 				EnvVars: []string{"PHENIX_LOG_VERBOSITY"},
 			},
+			&cli.StringFlag{
+				Name:    "log.error-file",
+				Aliases: []string{"e"},
+				Usage:   "log fatal errors to file",
+				Value:   "phenix.err",
+				EnvVars: []string{"PHENIX_LOG_ERROR_FILE"},
+			},
+			&cli.BoolFlag{
+				Name:    "log.error-stderr",
+				Aliases: []string{"vvv"},
+				Usage:   "log fatal errors to STDERR",
+				EnvVars: []string{"PHENIX_LOG_ERROR_STDERR"},
+			},
 		},
 		Before: func(ctx *cli.Context) error {
 			if err := store.Init(store.Endpoint(ctx.String("store.endpoint"))); err != nil {
 				return cli.Exit(err, 1)
 			}
 
+			if err := util.InitFatalLogWriter(ctx.String("log.error-file"), ctx.Bool("log.error-stderr")); err != nil {
+				msg := fmt.Sprintf("Unable to initialize fatal log writer: %v", err)
+				return cli.Exit(msg, 1)
+			}
+
+			return nil
+		},
+		After: func(ctx *cli.Context) error {
+			util.CloseLogWriter()
 			return nil
 		},
 		Commands: []*cli.Command{
@@ -72,7 +94,8 @@ func main() {
 							configs, err := config.List(ctx.Args().First())
 
 							if err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to list known configs")
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							fmt.Println()
@@ -107,14 +130,16 @@ func main() {
 						Action: func(ctx *cli.Context) error {
 							c, err := config.Get(ctx.Args().First())
 							if err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to get given config")
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							switch ctx.String("output") {
 							case "yaml":
 								m, err := yaml.Marshal(c)
 								if err != nil {
-									return cli.Exit(fmt.Errorf("marshaling config to YAML: %w", err), 1)
+									err := util.HumanizeError(err, "Unable to convert config to YAML")
+									return cli.Exit(err.Humanize(), 1)
 								}
 
 								fmt.Println(string(m))
@@ -131,12 +156,14 @@ func main() {
 								}
 
 								if err != nil {
-									return cli.Exit(fmt.Errorf("marshaling config to JSON: %w", err), 1)
+									err := util.HumanizeError(err, "Unable to convert config to JSON")
+									return cli.Exit(err.Humanize(), 1)
 								}
 
 								fmt.Println(string(m))
 							default:
-								return cli.Exit(fmt.Sprintf("unrecognized output format '%s'\n", ctx.String("output")), 1)
+								err := util.HumanizeError(fmt.Errorf("unrecognized output format %s", ctx.String("output")), "")
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							return nil
@@ -153,13 +180,14 @@ func main() {
 						},
 						Action: func(ctx *cli.Context) error {
 							if ctx.Args().Len() == 0 {
-								return cli.Exit("no config files provided", 1)
+								return cli.Exit("No config file(s) provided", 1)
 							}
 
 							for _, f := range ctx.Args().Slice() {
 								c, err := config.Create(f, !ctx.Bool("skip-validation"))
 								if err != nil {
-									return cli.Exit(err, 1)
+									err := util.HumanizeError(err, "Unable to create config "+f)
+									return cli.Exit(err.Humanize(), 1)
 								}
 
 								fmt.Printf("%s/%s config created\n", c.Kind, c.Metadata.Name)
@@ -175,10 +203,11 @@ func main() {
 							c, err := config.Edit(ctx.Args().First())
 							if err != nil {
 								if config.IsConfigNotModified(err) {
-									return cli.Exit("no changes made to config", 0)
+									return cli.Exit("No changes made to config", 0)
 								}
 
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to edit given config")
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							fmt.Printf("%s/%s config updated\n", c.Kind, c.Metadata.Name)
@@ -191,12 +220,13 @@ func main() {
 						Usage: "delete phenix config(s)",
 						Action: func(ctx *cli.Context) error {
 							if ctx.Args().Len() == 0 {
-								return cli.Exit("no config(s) provided", 1)
+								return cli.Exit("No config(s) provided", 1)
 							}
 
 							for _, c := range ctx.Args().Slice() {
 								if err := config.Delete(c); err != nil {
-									return cli.Exit(err, 1)
+									err := util.HumanizeError(err, "Unable to delete config "+c)
+									return cli.Exit(err.Humanize(), 1)
 								}
 
 								fmt.Printf("%s deleted\n", c)

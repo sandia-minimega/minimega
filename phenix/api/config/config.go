@@ -8,6 +8,7 @@ import (
 	"phenix/store"
 	"phenix/types"
 	v1 "phenix/types/version/v1"
+	"phenix/util"
 	"phenix/util/editor"
 
 	"github.com/mitchellh/mapstructure"
@@ -36,7 +37,7 @@ func List(which string) (types.Configs, error) {
 	case "image":
 		configs, err = store.List("Image")
 	default:
-		return nil, fmt.Errorf("unknown config kind provided")
+		return nil, util.HumanizeError(fmt.Errorf("unknown config kind provided: %s", which), "")
 	}
 
 	if err != nil {
@@ -55,7 +56,7 @@ func List(which string) (types.Configs, error) {
 // these fields into the appropriate types.
 func Get(name string) (*types.Config, error) {
 	if name == "" {
-		return nil, fmt.Errorf("no config name provided")
+		return nil, util.HumanizeError(fmt.Errorf("no config name provided"), "")
 	}
 
 	c, err := types.NewConfig(name)
