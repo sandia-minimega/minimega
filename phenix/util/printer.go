@@ -71,6 +71,8 @@ func PrintTableOfVMs(writer io.Writer, vms ...types.VM) {
 	table := tablewriter.NewWriter(writer)
 
 	table.SetHeader([]string{"Host", "Name", "Running", "Disk", "Interfaces", "Uptime"})
+	table.SetAutoWrapText(false)
+	table.SetColWidth(50)
 
 	for _, vm := range vms {
 		var (
@@ -80,7 +82,7 @@ func PrintTableOfVMs(writer io.Writer, vms ...types.VM) {
 		)
 
 		for idx, nw := range vm.Networks {
-			ifaces = append(ifaces, fmt.Sprintf("%s - %s", vm.IPv4[idx], nw))
+			ifaces = append(ifaces, fmt.Sprintf("ID: %d, IP: %s, VLAN: %s", idx, vm.IPv4[idx], nw))
 		}
 
 		if vm.Running {
