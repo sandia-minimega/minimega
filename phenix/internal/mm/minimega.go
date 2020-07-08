@@ -75,14 +75,21 @@ func (this Minimega) GetVMInfo(opts ...Option) types.VMs {
 		s := row["vlan"]
 		s = strings.TrimPrefix(s, "[")
 		s = strings.TrimSuffix(s, "]")
+		s = strings.TrimSpace(s)
 
-		vm.Networks = strings.Split(s, ", ")
+		if s != "" {
+			vm.Networks = strings.Split(s, ", ")
+		}
 
 		s = row["tap"]
 		s = strings.TrimPrefix(s, "[")
 		s = strings.TrimSuffix(s, "]")
+		s = strings.TrimSpace(s)
 
-		vm.Taps = strings.Split(s, ", ")
+		if s != "" {
+			vm.Taps = strings.Split(s, ", ")
+		}
+
 		vm.Captures = this.GetVMCaptures(opts...)
 
 		uptime, err := time.ParseDuration(row["uptime"])

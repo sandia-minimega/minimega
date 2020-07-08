@@ -58,19 +58,21 @@ func List(expName string) ([]types.VM, error) {
 
 			// Reset slice of IPv4 addresses so we can be sure to align them
 			// correctly with minimega networks below.
-			vm.IPv4 = nil
+			vm.IPv4 = make([]string, len(details.Networks))
 
-			// Since we get the IP from the database, but the network name
-			// from minimega (to preserve iface to network ordering), make
-			// sure the ordering of IPs matches the odering of networks. We
-			// could just use a map here, but then the iface to network
-			// ordering that minimega ensures would be lost.
-			for _, nw := range details.Networks {
-				// At this point, `nw` will look something like `EXP_1 (101)`.
-				// In the database, we just have `EXP_1` so we need to use
-				// that portion from minimega as the `Interfaces` map key.
+			// Since we get the IP from the experiment config, but the network name
+			// from minimega (to preserve iface to network ordering), make sure the
+			// ordering of IPs matches the odering of networks. We could just use a
+			// map here, but then the iface to network ordering that minimega ensures
+			// would be lost.
+			for idx, nw := range details.Networks {
+				// At this point, `nw` will look something like `EXP_1 (101)`. In the
+				// experiment config, we just have `EXP_1` so we need to use that
+				// portion from minimega as the `Interfaces` map key.
 				if match := vlanAliasRegex.FindStringSubmatch(nw); match != nil {
-					vm.IPv4 = append(vm.IPv4, vm.Interfaces[match[1]])
+					vm.IPv4[idx] = vm.Interfaces[match[1]]
+				} else {
+					vm.IPv4[idx] = "n/a"
 				}
 			}
 		}
