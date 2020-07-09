@@ -1,0 +1,11 @@
+apiVersion: phenix.sandia.gov/v1
+kind: Experiment
+metadata:
+  name: inf
+  annotations:
+    topology: inf_topo
+    scenario: inf_scenario
+spec:
+  vlans:
+    aliases:
+      MGMT: 200

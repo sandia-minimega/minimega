@@ -1,0 +1,9 @@
+apiVersion: phenix.sandia.gov/v1
+kind: Image
+metadata:
+  name: foobar
+spec:
+  release: bionic
+  format: qcow2
+  size: 5G
+  mirror: http://archive.us.ubuntu.com

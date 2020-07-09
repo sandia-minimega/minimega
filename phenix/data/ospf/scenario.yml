@@ -1,0 +1,13 @@
+apiVersion: phenix.sandia.gov/v1
+kind: Scenario
+metadata:
+  name: inf_scenario
+  annotations:
+    topology: inf_topo
+spec:
+  apps:
+    experiment:     
+    - name: test-user-app
+      # The map associated w/ the app name here would contain any
+      # configuration details needed to configure the app.
+      metadata: {}
