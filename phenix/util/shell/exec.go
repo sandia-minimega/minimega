@@ -2,13 +2,38 @@ package shell
 
 import (
 	"bytes"
-	context "context"
+	"context"
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 )
 
 type shell struct{}
+
+func (shell) FindCommandsWithPrefix(prefix string) []string {
+	var commands []string
+
+	args := strings.Split(os.Getenv("PATH"), ":")
+	args = append(args, "-type", "f", "-executable", "-name", prefix+"*")
+
+	cmd := exec.Command("find", args...)
+
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil
+	}
+
+	for _, c := range strings.Split(string(out), "\n") {
+		if c != "" {
+			base := filepath.Base(c)
+			commands = append(commands, strings.TrimPrefix(base, prefix))
+		}
+	}
+
+	return commands
+}
 
 func (shell) CommandExists(cmd string) bool {
 	err := exec.Command("which", cmd).Run()

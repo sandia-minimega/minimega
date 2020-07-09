@@ -6,6 +6,10 @@ import (
 
 var DefaultShell Shell = new(shell)
 
+func FindCommandsWithPrefix(prefix string) []string {
+	return DefaultShell.FindCommandsWithPrefix(prefix)
+}
+
 func CommandExists(cmd string) bool {
 	return DefaultShell.CommandExists(cmd)
 }
