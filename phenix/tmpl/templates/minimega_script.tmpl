@@ -6,7 +6,9 @@ vlans range {{ .VLANs.Min }} {{ .VLANs.Max }}
 {{- end }}
 
 {{- range $alias, $id := .VLANs.Aliases }}
+  {{ if ne $id 0 }}
 vlans add {{ $alias }} {{ $id }}
+  {{- end }}
 {{- end }}
 
 {{ if .RunLocal }}

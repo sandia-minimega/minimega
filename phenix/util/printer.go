@@ -55,7 +55,7 @@ func PrintTableOfExperiments(writer io.Writer, exps ...types.Experiment) {
 			exp.Metadata.Annotations["scenario"],
 			exp.Status.StartTime,
 			fmt.Sprintf("%d", len(exp.Spec.Topology.Nodes)),
-			"",
+			fmt.Sprintf("%d", len(exp.Spec.VLANs.Aliases)),
 			strings.Join(apps, ", "),
 		})
 

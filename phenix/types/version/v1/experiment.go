@@ -26,7 +26,7 @@ type ExperimentSpec struct {
 }
 
 type ExperimentStatus struct {
-	StartTime string                 `json:"startTime" yaml:"startTime"`
+	StartTime string                 `json:"startTime" yaml:"startTime" structs:"startTime" mapstructure:"startTime"`
 	Schedules Schedule               `json:"schedules" yaml:"schedules"`
 	Apps      map[string]interface{} `json:"apps" yaml:"apps"`
 	VLANs     VLANAliases            `json:"vlans" yaml:"vlans" structs:"vlans" mapstructure:"vlans"`
@@ -56,6 +56,14 @@ func (this *ExperimentSpec) SetDefaults() {
 	}
 
 	this.Topology.SetDefaults()
+
+	for _, n := range this.Topology.Nodes {
+		for _, i := range n.Network.Interfaces {
+			if _, ok := this.VLANs.Aliases[i.VLAN]; !ok {
+				this.VLANs.Aliases[i.VLAN] = 0
+			}
+		}
+	}
 }
 
 func (this VLANSpec) Validate() error {
