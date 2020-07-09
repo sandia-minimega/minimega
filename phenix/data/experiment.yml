@@ -3,5 +3,5 @@ kind: Experiment
 metadata:
   name: foobar
   annotations:
-    topology: foo-bar-topo
-    scenario: foo-bar-scenario
+    topology: foobar
+    scenario: foobar

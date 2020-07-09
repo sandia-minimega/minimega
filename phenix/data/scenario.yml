@@ -1,9 +1,9 @@
 apiVersion: phenix.sandia.gov/v1
 kind: Scenario
 metadata:
-  name: foo-bar-scenario
+  name: foobar
   annotations:
-    topology: foo-bar-topo
+    topology: foobar
 spec:
   apps:
     experiment:
@@ -14,13 +14,13 @@ spec:
     host:
     - name: protonuke
       hosts:
-      - hostname: turbine-01 # hostname of topology node to apply it to
+      - hostname: host-00 # hostname of topology node to apply it to
         metadata:
           # protonuke app metadata for this topology node
           args: -logfile /var/log/protonuke.log -level debug -http -https -smtp -ssh 192.168.100.100
     - name: wireguard
       hosts:
-      - hostname: turbine-01
+      - hostname: host-00 # hostname of topology node to apply it to
         metadata:
           # wireguard app metadata for this topology node
           infrastructure:
