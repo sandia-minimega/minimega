@@ -5,7 +5,7 @@ setup(
     packages = find_packages(),
     entry_points = {
         'console_scripts' : [
-            'phenix-app-test-user-app = app.__main__:main'
+            'phenix-app-test-user-app = test_user_app.__main__:main'
         ]
     }
 )

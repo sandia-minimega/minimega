@@ -5,7 +5,7 @@ setup(
     packages = find_packages(),
     entry_points = {
         'console_scripts' : [
-            'phenix-scheduler-test-user-scheduler = app.__main__:main'
+            'phenix-scheduler-test-user-scheduler = test_user_scheduler.__main__:main'
         ]
     }
 )

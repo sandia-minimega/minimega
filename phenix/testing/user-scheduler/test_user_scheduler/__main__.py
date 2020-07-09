@@ -11,10 +11,9 @@ def main() :
         sys.exit(1)
 
     spec = json.loads(sys.stdin.read())
-    sched = spec.schedules
 
     for n in spec['topology']['nodes']:
-        for h in n['general']['hostname']:
-            sched[h] = 'compute0'
+        h = n['general']['hostname']
+        spec['schedules'][h] = 'compute0'
 
     print(json.dumps(spec))
