@@ -214,7 +214,7 @@ func create(c *types.Config) error {
 		return fmt.Errorf("applying apps to experiment: %w", err)
 	}
 
-	c.Spec = structs.MapDefaultCase(spec, structs.CASESNAKE)
+	c.Spec = structs.MapDefaultCase(exp.Spec, structs.CASESNAKE)
 
 	return nil
 }
@@ -326,8 +326,8 @@ func Start(name string, dryrun bool) error {
 		return fmt.Errorf("applying apps to experiment: %w", err)
 	}
 
-	c.Spec = structs.MapDefaultCase(spec, structs.CASESNAKE)
-	c.Status = structs.MapDefaultCase(status, structs.CASESNAKE)
+	c.Spec = structs.MapDefaultCase(exp.Spec, structs.CASESNAKE)
+	c.Status = structs.MapDefaultCase(exp.Status, structs.CASESNAKE)
 
 	if err := store.Update(c); err != nil {
 		return fmt.Errorf("updating experiment config: %w", err)
@@ -369,7 +369,7 @@ func Stop(name string, dryrun bool) error {
 		}
 	}
 
-	c.Spec = structs.MapDefaultCase(spec, structs.CASESNAKE)
+	c.Spec = structs.MapDefaultCase(exp.Spec, structs.CASESNAKE)
 	c.Status = nil
 
 	if err := store.Update(c); err != nil {
