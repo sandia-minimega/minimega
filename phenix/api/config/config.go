@@ -87,7 +87,7 @@ func Create(path string, validate bool) (*types.Config, error) {
 		return nil, fmt.Errorf("creating new config from file: %w", err)
 	}
 
-	if c.Kind == "Experiment" && c.Spec == nil {
+	if c.Kind == "Experiment" {
 		if err := experiment.CreateFromConfig(c); err != nil {
 			return nil, fmt.Errorf("creating experiment config spec: %w", err)
 		}

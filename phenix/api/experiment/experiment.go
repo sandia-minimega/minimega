@@ -168,10 +168,15 @@ func CreateFromConfig(c *types.Config) error {
 		return fmt.Errorf("topology doesn't exist")
 	}
 
-	c.Spec = map[string]interface{}{
-		"experimentName": c.Metadata.Name,
-		"topology":       topo.Spec,
+	if c.Spec == nil {
+		c.Spec = make(map[string]interface{})
 	}
+
+	if _, ok := c.Spec["experimentName"]; !ok {
+		c.Spec["experimentName"] = c.Metadata.Name
+	}
+
+	c.Spec["topology"] = topo.Spec
 
 	if scenarioName != "" {
 		scenario, _ := types.NewConfig("scenario/" + scenarioName)
@@ -295,7 +300,9 @@ func Start(name string, dryrun bool) error {
 		return fmt.Errorf("generating minimega script: %w", err)
 	}
 
-	if !dryrun {
+	if dryrun {
+		status.VLANs = spec.VLANs.Aliases
+	} else {
 		if err := mm.ReadScriptFromFile(filename); err != nil {
 			return fmt.Errorf("reading minimega script: %w", err)
 		}
@@ -345,15 +352,19 @@ func Stop(name string, dryrun bool) error {
 		return fmt.Errorf("getting experiment %s from store: %w", name, err)
 	}
 
-	var spec v1.ExperimentSpec
-
-	if err := mapstructure.Decode(c.Spec, &spec); err != nil {
-		return fmt.Errorf("decoding experiment spec: %w", err)
-	}
-
 	var status v1.ExperimentStatus
 
 	if err := mapstructure.Decode(c.Status, &status); err != nil {
+		return fmt.Errorf("decoding experiment spec: %w", err)
+	}
+
+	if status.StartTime == "" {
+		return fmt.Errorf("experiment isn't running")
+	}
+
+	var spec v1.ExperimentSpec
+
+	if err := mapstructure.Decode(c.Spec, &spec); err != nil {
 		return fmt.Errorf("decoding experiment spec: %w", err)
 	}
 
@@ -369,8 +380,10 @@ func Stop(name string, dryrun bool) error {
 		}
 	}
 
+	exp.Status.StartTime = ""
+
 	c.Spec = structs.MapDefaultCase(exp.Spec, structs.CASESNAKE)
-	c.Status = nil
+	c.Status = structs.MapDefaultCase(exp.Status, structs.CASESNAKE)
 
 	if err := store.Update(c); err != nil {
 		return fmt.Errorf("updating experiment config: %w", err)

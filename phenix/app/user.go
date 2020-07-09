@@ -94,7 +94,13 @@ func (this UserApp) shellOut(action Action, exp *types.Experiment) error {
 	case ACTIONCONFIG, ACTIONPRESTART:
 		exp.Spec = result.Spec
 	case ACTIONPOSTSTART, ACTIONCLEANUP:
-		exp.Status.Apps[this.options.Name] = result.Status.Apps[this.options.Name]
+		if metadata, ok := result.Status.Apps[this.options.Name]; ok {
+			if exp.Status.Apps == nil {
+				exp.Status.Apps = make(map[string]interface{})
+			}
+
+			exp.Status.Apps[this.options.Name] = metadata
+		}
 	}
 
 	return nil
