@@ -13,6 +13,7 @@ import (
 	"phenix/api/image"
 	"phenix/api/vlan"
 	"phenix/api/vm"
+	"phenix/app"
 	"phenix/scheduler"
 	"phenix/store"
 	v1 "phenix/types/version/v1"
@@ -243,6 +244,34 @@ func main() {
 				Usage:   "phenix experiment management",
 				Subcommands: []*cli.Command{
 					{
+						Name:  "apps",
+						Usage: "list available experiment apps",
+						Action: func(ctx *cli.Context) error {
+							apps := app.List()
+
+							if len(apps) == 0 {
+								fmt.Printf("\nApps: none\n\n")
+							}
+
+							fmt.Printf("\nApps: %s\n\n", strings.Join(apps, ", "))
+							return nil
+						},
+					},
+					{
+						Name:  "schedulers",
+						Usage: "list available experiment schedulers",
+						Action: func(ctx *cli.Context) error {
+							schedulers := scheduler.List()
+
+							if len(schedulers) == 0 {
+								fmt.Printf("\nSchedulers: none\n\n")
+							}
+
+							fmt.Printf("\nSchedulers: %s\n\n", strings.Join(schedulers, ", "))
+							return nil
+						},
+					},
+					{
 						Name:  "list",
 						Usage: "list all experiments",
 						Action: func(ctx *cli.Context) error {
@@ -331,21 +360,8 @@ func main() {
 					{
 						Name:      "schedule",
 						Usage:     "schedule an experiment",
-						ArgsUsage: "[flags] <exp> <algorithm>",
-						Flags: []cli.Flag{
-							&cli.BoolFlag{
-								Name:  "list",
-								Usage: "show a list of available schedulers",
-							},
-						},
+						ArgsUsage: "<exp> <algorithm>",
 						Action: func(ctx *cli.Context) error {
-							if ctx.Bool("list") {
-								schedulers := scheduler.List()
-
-								fmt.Printf("\nSchedulers: %s\n\n", strings.Join(schedulers, ", "))
-								return nil
-							}
-
 							if ctx.Args().Len() != 2 {
 								return cli.Exit("must provide all arguments", 1)
 							}

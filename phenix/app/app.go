@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"phenix/types"
+	"phenix/util/shell"
 )
 
 func init() {
@@ -31,6 +32,37 @@ var (
 	apps        = make(map[string]App)
 	defaultApps []string
 )
+
+func List() []string {
+	var names []string
+
+	for name := range apps {
+		// Don't include app that wraps external user apps.
+		if name == "user-shell" {
+			continue
+		}
+
+		var exclude bool
+
+		// Don't include default apps in the list since they always get applied.
+		for _, d := range defaultApps {
+			if name == d {
+				exclude = true
+				break
+			}
+		}
+
+		if !exclude {
+			names = append(names, name)
+		}
+	}
+
+	for _, name := range shell.FindCommandsWithPrefix("phenix-app-") {
+		names = append(names, name)
+	}
+
+	return names
+}
 
 // GetApp returns the initialized phenix app with the given name. If an app with
 // the given name is not known internally, it returns the generic `user-shell`

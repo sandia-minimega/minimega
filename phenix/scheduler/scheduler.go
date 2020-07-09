@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	v1 "phenix/types/version/v1"
+	"phenix/util/shell"
 )
 
 var schedulers = make(map[string]Scheduler)
@@ -24,6 +25,10 @@ func List() []string {
 	var names []string
 
 	for name := range schedulers {
+		names = append(names, name)
+	}
+
+	for _, name := range shell.FindCommandsWithPrefix("phenix-scheduler-") {
 		names = append(names, name)
 	}
 
