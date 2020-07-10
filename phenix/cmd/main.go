@@ -36,8 +36,9 @@ func init() {
 
 func main() {
 	app := &cli.App{
-		Name:    "phenix",
-		UsageText: "phenix [global options] <command>",
+		Name:      "phenix",
+		Usage:     "a cli application for phenix",
+		UsageText: "phenix [global options]\n     or\n   phenix command",
 		Version: version.Version,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
