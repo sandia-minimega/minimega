@@ -16,8 +16,11 @@ import (
 // template.
 func GenerateFromTemplate(name string, data interface{}, w io.Writer) error {
 	funcs := template.FuncMap{
-		"add": func(a, b int) int {
+		"addInt": func(a, b int) int {
 			return a + b
+		},
+		"derefBool": func(b *bool) bool {
+			return *b
 		},
 	}
 

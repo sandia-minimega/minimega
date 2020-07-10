@@ -1,7 +1,7 @@
 namespace {{ .ExperimentName }}
 ns queueing true
 
-{{ if and (ne .VLANs.Min 0) (ne .VLANs.Max 0) }}
+{{- if and (ne .VLANs.Min 0) (ne .VLANs.Max 0) }}
 vlans range {{ .VLANs.Min }} {{ .VLANs.Max }}
 {{- end }}
 
@@ -11,39 +11,43 @@ vlans add {{ $alias }} {{ $id }}
   {{- end }}
 {{- end }}
 
-{{ if .RunLocal }}
+{{- if .RunLocal }}
 ns del-host all
 ns add-host localhost
 {{- end }}
 
-{{ $basedir := .BaseDir }}
+{{- $basedir := .BaseDir }}
 
 {{- range .Topology.Nodes }}
 {{/* added space to place hostname above relevant block */}}
 ## VM: {{ .General.Hostname }} ##
-    {{- if .General.Snapshot -}}
-    {{ $firstDrive := index .Hardware.Drives 0 }}
+    {{- if (derefBool .General.DoNotBoot) }}
+## DoNotBoot: {{ derefBool .General.DoNotBoot }} ##
+    {{- else }}
+        {{- if (derefBool .General.Snapshot) -}}
+        {{ $firstDrive := index .Hardware.Drives 0 }}
 disk snapshot {{ $firstDrive.Image }} {{ $.SnapshotName .General.Hostname }} 
-        {{- if gt (len .Injections) 0 }}
+            {{- if gt (len .Injections) 0 }}
 disk inject {{ $.SnapshotName .General.Hostname }}:{{ $firstDrive.GetInjectPartition }} files {{ .FileInjects $basedir }}
+            {{- end }}
         {{- end }}
-    {{- end }}
 clear vm config
-    {{- if ne (index $.Schedules .General.Hostname) "" }}
+        {{- if ne (index $.Schedules .General.Hostname) "" }}
 vm config schedule {{ index $.Schedules .General.Hostname }}
-    {{- end }}
+        {{- end }}
 vm config vcpus {{ .Hardware.VCPU }}
 vm config cpu {{ .Hardware.CPU }}
 vm config memory {{ .Hardware.Memory }}
 vm config snapshot {{ .General.Snapshot }}
-    {{- if .General.Snapshot }}
+        {{- if .General.Snapshot }}
 vm config disk {{ .Hardware.DiskConfig ($.SnapshotName .General.Hostname) }}
-    {{- else }}
+        {{- else }}
 vm config disk {{ .Hardware.DiskConfig "" }}
-    {{- end }}
-    {{- if eq .Hardware.OSType "linux" }}
+        {{- end }}
+        {{- if eq .Hardware.OSType "linux" }}
 vm config qemu-append -vga qxl
-    {{- end }}
+        {{- end }}
 vm config net {{ .Network.InterfaceConfig }}
 vm launch {{ .General.VMType }} {{ .General.Hostname }}
+    {{- end }}
 {{- end }}
