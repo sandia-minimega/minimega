@@ -18,14 +18,14 @@ gateway {{ $iface.Gateway }}
         {{ end }}
     {{ end }}
     {{ range $idx, $iface := .Network.Interfaces }}
-auto ens{{ add $idx 1 }}
-allow-hotplug ens{{ add $idx 1 }}
+auto ens{{ addInt $idx 1 }}
+allow-hotplug ens{{ addInt $idx 1 }}
         {{ if eq $iface.Address "" }}
-iface ens{{ add $idx 1 }} inet manual
+iface ens{{ addInt $idx 1 }} inet manual
         {{ else if eq $iface.Proto "dhcp" }}
-iface ens{{ add $idx 1 }} inet dhcp
+iface ens{{ addInt $idx 1 }} inet dhcp
         {{ else }}
-iface ens{{ add $idx 1 }} inet static
+iface ens{{ addInt $idx 1 }} inet static
 address {{ $iface.Address }}
 netmask {{ $iface.NetworkMask }}
             {{ if ne $iface.Gateway "" }}
