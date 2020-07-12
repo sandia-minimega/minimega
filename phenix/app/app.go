@@ -33,6 +33,7 @@ var (
 	defaultApps []string
 )
 
+// List returns a list of non-default phenix applications.
 func List() []string {
 	var names []string
 

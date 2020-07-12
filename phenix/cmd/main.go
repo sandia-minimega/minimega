@@ -991,7 +991,7 @@ func main() {
 					{
 						Name:      "remove",
 						Usage:     "remove scripts, packages, and/or overlays from an image build config",
-						ArgsUsage: "[flags] <name>>",
+						ArgsUsage: "[flags] <name>",
 						Flags: []cli.Flag{
 							&cli.StringFlag{
 								Name:    "overlays",
@@ -1135,6 +1135,54 @@ func main() {
 							default:
 								return cli.Exit("unexpected number of arguments provided", 1)
 							}
+
+							return nil
+						},
+					},
+				},
+			},
+			{
+				Name:    "util",
+				Usage:   "phenix utility commands",
+				Subcommands: []*cli.Command{
+					{
+						Name:  "app-json",
+						Usage: "print application JSON input for given experiment to STDOUT",
+						ArgsUsage: "<experiment>",
+						Flags: []cli.Flag{
+							&cli.BoolFlag{
+								Name:    "pretty",
+								Aliases: []string{"p"},
+								Usage:   "pretty print JSON output",
+							},
+						},
+						Action: func(ctx *cli.Context) error {
+							name := ctx.Args().First()
+
+							if name == "" {
+								return cli.Exit("no experiment provided", 1)
+							}
+
+							exp, err := experiment.Get(name)
+							if err != nil {
+								err := util.HumanizeError(err, "Unable to get provided experiment " + name)
+								return cli.Exit(err.Humanize(), 1)
+							}
+
+							var m []byte
+
+							if ctx.Bool("pretty") {
+								m, err = json.MarshalIndent(exp, "", "  ")
+							} else {
+								m, err = json.Marshal(exp)
+							}
+
+							if err != nil {
+								err := util.HumanizeError(err, "Unable to convert experiment to JSON")
+								return cli.Exit(err.Humanize(), 1)
+							}
+
+							fmt.Println(string(m))
 
 							return nil
 						},
