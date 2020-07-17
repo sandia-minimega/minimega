@@ -107,13 +107,20 @@ naming scheme:
 
 Note: VM names cannot be integers or reserved words (e.g. "all").
 
+Users may specify a saved config explicity rather than use the current one, for
+example:
+
+	vm config save endpoint
+	[other commands]
+	vm launch kvm 5 endpoint
+
 If queueing is enabled (see "ns"), VMs will be queued for launching until "vm
 launch" is called with no additional arguments. This allows the scheduler to
 better allocate resources across the cluster.`,
 		Patterns: []string{
 			"vm launch",
-			"vm launch <kvm,> <name or count>",
-			"vm launch <container,> <name or count>",
+			"vm launch <kvm,> <name or count> [config]",
+			"vm launch <container,> <name or count> [config]",
 		},
 		Call: wrapSimpleCLI(cliVMLaunch),
 	},
@@ -178,13 +185,19 @@ Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 	{ // vm flush
 		HelpShort: "discard information about quit or failed VMs",
 		HelpLong: `
-Discard information about VMs that have either quit or encountered an error.
-This will remove any VMs with a state of "quit" or "error" from vm info. Names
-of VMs that have been flushed may be reused.`,
+Flush one or more virtual machines. Discard information about VMs that
+have either quit or encountered an error. This will remove VMs with a state of
+"quit" or "error" from vm info. Names of VMs that have been flushed may be
+reused.
+
+Note running without arguments results in the same behavior as using the "all"
+target. See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
 			"vm <flush,>",
+			"vm <flush,> <vm target>",
 		},
-		Call: wrapBroadcastCLI(cliVMApply),
+		Call:    wrapBroadcastCLI(cliVMApply),
+		Suggest: wrapVMSuggest((VM_QUIT | VM_ERROR), true),
 	},
 	{ // vm hotplug
 		HelpShort: "add and remove USB drives",
@@ -451,7 +464,11 @@ func cliVMApply(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 	case c.BoolArgs["kill"]:
 		return ns.VMs.Kill(c.StringArgs["vm"])
 	case c.BoolArgs["flush"]:
-		return ns.VMs.Flush(ns.ccServer)
+		if len(c.StringArgs["vm"]) == 0 {
+			return ns.VMs.FlushAll(ns.ccServer)
+		} else {
+			return ns.VMs.Flush(c.StringArgs["vm"], ns.ccServer)
+		}
 	}
 
 	return unreachable()
@@ -590,8 +607,17 @@ func cliVMLaunch(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 	// adding VM to queue
 	if len(c.StringArgs) > 0 {
-		// create a local copy of the current VMConfig
-		vmConfig := ns.vmConfig.Copy()
+		// create a local copy of the current or specified VMConfig
+		var vmConfig VMConfig
+
+		if name := c.StringArgs["config"]; name != "" {
+			if _, ok := ns.savedVMConfig[name]; !ok {
+				return fmt.Errorf("config %v does not exist", name)
+			}
+			vmConfig = ns.savedVMConfig[name].Copy()
+		} else {
+			vmConfig = ns.vmConfig.Copy()
+		}
 
 		vmType, err := findVMType(c.BoolArgs)
 		if err != nil {

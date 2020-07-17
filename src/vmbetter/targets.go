@@ -226,17 +226,22 @@ func BuildTargets(buildPath string, c vmconfig.Config) error {
 	return nil
 }
 
-// Buildqcow2 creates a qcow2 image using qemu-img, qemu-nbd, sfdisk,
-// mkfs.ext3, cp, and extlinux.
-func Buildqcow2(buildPath string, c vmconfig.Config) error {
+// BuildDisk creates a disk image using qemu-img, qemu-nbd, sfdisk, mkfs.ext3,
+// cp, and extlinux.
+func BuildDisk(buildPath string, c vmconfig.Config) error {
+	switch *f_format {
+	case "qcow", "qcow2", "raw", "vmdk":
+	default:
+		return fmt.Errorf("unknown disk format: %v", *f_format)
+	}
+
 	targetName := strings.Split(filepath.Base(c.Path), ".")[0]
 	if *f_target != "" {
 		targetName = *f_target
 	}
 	log.Debugln("using target name:", targetName)
 
-	err := nbd.Modprobe()
-	if err != nil {
+	if err := nbd.Modprobe(); err != nil {
 		return err
 	}
 
@@ -245,27 +250,26 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		return err
 	}
 
-	// Final qcow2 target
-	targetqcow2 := fmt.Sprintf("%v/%v.qcow2", wd, targetName)
-	// Temporary file for building qcow2 file, will be renamed to targetqcow2
-	tmpqcow2 := fmt.Sprintf("%v/%v.qcow2.tmp", wd, targetName)
+	// Final disk target
+	out := filepath.Join(wd, targetName+"."+*f_format)
+	// Temporary file, will be renamed to out
+	outTmp := out + ".tmp"
 
-	err = createQcow2(tmpqcow2, *f_qcowsize)
-	if err != nil {
+	if err := createDisk(outTmp, *f_diskSize, *f_format); err != nil {
 		return err
 	}
 
 	// Cleanup our temporary building file
 	defer func() {
 		// Check if file exists
-		if _, err := os.Stat(tmpqcow2); err == nil {
-			if err = os.Remove(tmpqcow2); err != nil {
+		if _, err := os.Stat(outTmp); err == nil {
+			if err = os.Remove(outTmp); err != nil {
 				log.Errorln(err)
 			}
 		}
 	}()
 
-	dev, err := nbd.ConnectImage(tmpqcow2)
+	dev, err := nbd.ConnectImage(outTmp)
 	if err != nil {
 		return err
 	}
@@ -277,57 +281,49 @@ func Buildqcow2(buildPath string, c vmconfig.Config) error {
 		}
 	}()
 
-	err = partitionQcow2(dev)
+	if err = partitionDisk(dev); err != nil {
+		return err
+	}
+
+	if err := formatDisk(dev + "p1"); err != nil {
+		return err
+	}
+
+	mountPath, err := mountDisk(dev + "p1")
 	if err != nil {
 		return err
 	}
 
-	err = formatQcow2(dev + "p1")
-	if err != nil {
-		return err
-	}
-
-	mountPath, err := mountQcow2(dev + "p1")
-	if err != nil {
-		return err
-	}
-
-	err = copyQcow2(buildPath, mountPath)
-	if err != nil {
-		err2 := umountQcow2(mountPath)
-		if err2 != nil {
+	if err := copyDisk(buildPath, mountPath); err != nil {
+		if err2 := umountDisk(mountPath); err2 != nil {
 			log.Errorln(err2)
 		}
 		return err
 	}
 
-	err = extlinux(mountPath)
-	if err != nil {
-		err2 := umountQcow2(mountPath)
-		if err2 != nil {
+	if err := extlinux(mountPath); err != nil {
+		if err2 := umountDisk(mountPath); err2 != nil {
 			log.Errorln(err2)
 		}
 		return err
 	}
 
-	err = umountQcow2(mountPath)
-	if err != nil {
+	if err := umountDisk(mountPath); err != nil {
 		return err
 	}
 
-	err = extlinuxMBR(dev, *f_mbr)
-	if err != nil {
+	if err = extlinuxMBR(dev, *f_mbr); err != nil {
 		return err
 	}
 
-	return os.Rename(tmpqcow2, targetqcow2)
+	return os.Rename(outTmp, out)
 }
 
-// createQcow2 creates a target qcow2 image using qemu-img. Size specifies the
+// createDisk creates a target disk image using qemu-img. Size specifies the
 // size of the image in bytes but optional suffixes such as "K" and "G" can be
 // used. See qemu-img(8) for details.
-func createQcow2(target, size string) error {
-	// create our qcow image
+func createDisk(target, size, format string) error {
+	// create our disk image
 	p := process("qemu-img")
 	cmd := &exec.Cmd{
 		Path: p,
@@ -335,7 +331,7 @@ func createQcow2(target, size string) error {
 			p,
 			"create",
 			"-f",
-			"qcow2",
+			format,
 			target,
 			size,
 		},
@@ -360,9 +356,9 @@ func createQcow2(target, size string) error {
 	return cmd.Run()
 }
 
-// partitionQcow2 partitions the provided device creating one primary partition
+// partitionDisk partitions the provided device creating one primary partition
 // that is the size of the whole device and bootable.
-func partitionQcow2(dev string) error {
+func partitionDisk(dev string) error {
 	// partition with fdisk
 	p := process("sfdisk")
 	cmd := &exec.Cmd{
@@ -402,8 +398,8 @@ func partitionQcow2(dev string) error {
 	return cmd.Wait()
 }
 
-// formatQcow2 formats a partition with the default linux filesystem type.
-func formatQcow2(dev string) error {
+// formatDis formats a partition with the default linux filesystem type.
+func formatDisk(dev string) error {
 	// make an ext3 filesystem
 	p := process("mkfs")
 	cmd := &exec.Cmd{
@@ -433,9 +429,9 @@ func formatQcow2(dev string) error {
 	return cmd.Run()
 }
 
-// mountQcow2 mounts a partition to a temporary directory. If successful,
+// mountDisk mounts a partition to a temporary directory. If successful,
 // returns the path to that temporary directory.
-func mountQcow2(dev string) (string, error) {
+func mountDisk(dev string) (string, error) {
 	// mount the filesystem
 	mountPath, err := ioutil.TempDir("", "vmbetter_mount_")
 	if err != nil {
@@ -475,8 +471,8 @@ func mountQcow2(dev string) (string, error) {
 	return mountPath, nil
 }
 
-// copyQcow2 recursively copies files from src to dst using cp.
-func copyQcow2(src, dst string) error {
+// copyDisk recursively copies files from src to dst using cp.
+func copyDisk(src, dst string) error {
 	// copy everything over
 	p := process("cp")
 	cmd := &exec.Cmd{
@@ -560,9 +556,8 @@ func extlinux(path string) error {
 	return ioutil.WriteFile(filepath.Join(path, "/boot/extlinux.conf"), []byte(extlinuxConfig), os.FileMode(0660))
 }
 
-// umountQcow2 unmounts qcow2 image that was previously mounted with
-// mountQcow2.
-func umountQcow2(path string) error {
+// umountDisk unmounts disk image that was previously mounted with mountDisk.
+func umountDisk(path string) error {
 	// unmount
 	p := process("umount")
 	cmd := &exec.Cmd{

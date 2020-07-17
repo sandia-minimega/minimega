@@ -10,6 +10,7 @@ import (
 	"flag"
 	log "minilog"
 	"net/http"
+	"os"
 	"present"
 	"strings"
 )
@@ -33,5 +34,12 @@ func main() {
 		http.Handle("/socket", NewSocketHandler())
 	}
 
-	log.Fatalln(http.ListenAndServe(*f_server, nil))
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = *f_server
+	} else {
+		port = ":" + port
+	}
+
+	log.Fatalln(http.ListenAndServe(port, nil))
 }

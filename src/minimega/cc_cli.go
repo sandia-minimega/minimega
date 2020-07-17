@@ -5,7 +5,6 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -108,7 +107,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 
 			"cc <responses,> <id or prefix or all> [raw,]",
 
-			"cc <tunnel,> <uuid> <src port> <host> <dst port>",
+			"cc <tunnel,> <vm name or uuid> <src port> <host> <dst port>",
 			"cc <rtunnel,> <src port> <host> <dst port>",
 
 			"cc <delete,> <command,> <id or prefix or all>",
@@ -209,11 +208,20 @@ func cliCCTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	}
 
 	host := c.StringArgs["host"]
-	uuid := c.StringArgs["uuid"]
 
 	if c.BoolArgs["rtunnel"] {
 		return ns.ccServer.Reverse(ns.ccFilter, src, host, dst)
 	}
+
+	v := c.StringArgs["vm"]
+
+	// get the vm uuid
+	vm := ns.FindVM(v)
+	if vm == nil {
+		return vmNotFound(v)
+	}
+	log.Debug("got vm: %v %v", vm.GetID(), vm.GetName())
+	uuid := vm.GetUUID()
 
 	return ns.ccServer.Forward(uuid, src, host, dst)
 }
@@ -239,7 +247,6 @@ func cliCCResponses(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 
 	// must be searching for a prefix
 	var match bool
-	var buf bytes.Buffer
 
 	for _, c := range ns.ccServer.GetCommands() {
 		if c.Prefix == s {
@@ -248,7 +255,7 @@ func cliCCResponses(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 				return err
 			}
 
-			buf.WriteString(s)
+			resp.Response += s + "\n"
 
 			match = true
 		}
@@ -362,7 +369,7 @@ func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 
 	}
 
-	ns.NewCommand(cmd)
+	resp.Data = ns.NewCommand(cmd)
 	return nil
 }
 
@@ -372,12 +379,10 @@ func cliCCFileRecv(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 
 	// Add new files to receive
 	for _, file := range c.ListArgs["file"] {
-		cmd.FilesRecv = append(cmd.FilesRecv, &ron.File{
-			Name: file,
-		})
+		cmd.FilesRecv = append(cmd.FilesRecv, file)
 	}
 
-	ns.NewCommand(cmd)
+	resp.Data = ns.NewCommand(cmd)
 	return nil
 }
 
@@ -393,7 +398,7 @@ func cliCCBackground(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 		Stderr:     stderr,
 	}
 
-	ns.NewCommand(cmd)
+	resp.Data = ns.NewCommand(cmd)
 	return nil
 }
 
@@ -401,7 +406,7 @@ func cliCCProcessKill(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 	// kill all processes
 	if c.StringArgs["pid"] == Wildcard {
 		cmd := &ron.Command{PID: -1}
-		ns.NewCommand(cmd)
+		resp.Data = ns.NewCommand(cmd)
 
 		return nil
 	}
@@ -413,7 +418,7 @@ func cliCCProcessKill(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 	}
 
 	cmd := &ron.Command{PID: pid}
-	ns.NewCommand(cmd)
+	resp.Data = ns.NewCommand(cmd)
 
 	return nil
 }
@@ -423,7 +428,7 @@ func cliCCProcessKillAll(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 		KillAll: c.StringArgs["name"],
 	}
 
-	ns.NewCommand(cmd)
+	resp.Data = ns.NewCommand(cmd)
 	return nil
 }
 
@@ -438,7 +443,7 @@ func cliCCExec(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		Stderr:  stderr,
 	}
 
-	ns.NewCommand(cmd)
+	resp.Data = ns.NewCommand(cmd)
 	return nil
 }
 
@@ -537,7 +542,7 @@ func cliCCLog(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 		Level: &level,
 	}
 
-	ns.NewCommand(cmd)
+	resp.Data = ns.NewCommand(cmd)
 	return nil
 }
 

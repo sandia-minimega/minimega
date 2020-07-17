@@ -18,28 +18,28 @@ minimega//p1 minimega//p3
 minimega//p1 minimega//p4
 minimega//p2 minimega//p5
 minimega//p2 minimega//p6
-## pipe
-name         | mode | readers | writers | count | via | previous
-minimega//p0 | all  | 2       | 0       | 0     |     | 
-minimega//p1 | all  | 2       | 1       | 0     |     | 
-minimega//p2 | all  | 2       | 1       | 0     |     | 
-minimega//p3 | all  | 0       | 1       | 0     |     | 
-minimega//p4 | all  | 0       | 1       | 0     |     | 
-minimega//p5 | all  | 0       | 1       | 0     |     | 
-minimega//p6 | all  | 0       | 1       | 0     |     |
+## .columns name,mode,readers,writers,count pipe
+name         | mode | readers | writers | count
+minimega//p0 | all  | 2       | 0       | 0
+minimega//p1 | all  | 2       | 1       | 0
+minimega//p2 | all  | 2       | 1       | 0
+minimega//p3 | all  | 0       | 1       | 0
+minimega//p4 | all  | 0       | 1       | 0
+minimega//p5 | all  | 0       | 1       | 0
+minimega//p6 | all  | 0       | 1       | 0
 
 ## pipe p0 "Hello to you."
 ## shell sleep 2s
 
-## pipe
-name         | mode | readers | writers | count | via | previous
-minimega//p0 | all  | 2       | 0       | 1     |     | Hello to you.
-minimega//p1 | all  | 2       | 1       | 1     |     | Hello to you.
-minimega//p2 | all  | 2       | 1       | 1     |     | Hello to you.
-minimega//p3 | all  | 0       | 1       | 1     |     | Hello to you.
-minimega//p4 | all  | 0       | 1       | 1     |     | Hello to you.
-minimega//p5 | all  | 0       | 1       | 1     |     | Hello to you.
-minimega//p6 | all  | 0       | 1       | 1     |     | Hello to you.
+## .columns name,mode,readers,writers,count pipe
+name         | mode | readers | writers | count
+minimega//p0 | all  | 2       | 0       | 1
+minimega//p1 | all  | 2       | 1       | 1
+minimega//p2 | all  | 2       | 1       | 1
+minimega//p3 | all  | 0       | 1       | 1
+minimega//p4 | all  | 0       | 1       | 1
+minimega//p5 | all  | 0       | 1       | 1
+minimega//p6 | all  | 0       | 1       | 1
 
 ## # Round-robin mode testing: set all parents to RR and verify message count distributions
 ## pipe p0 mode round-robin
@@ -51,12 +51,12 @@ minimega//p6 | all  | 0       | 1       | 1     |     | Hello to you.
 ## pipe p0 "This is round 3."
 ## pipe p0 "This is round 4."
 
-## pipe
-name         | mode        | readers | writers | count | via | previous
-minimega//p0 | round-robin | 2       | 0       | 5     |     | This is round 4.
-minimega//p1 | round-robin | 2       | 1       | 3     |     | This is round 4.
-minimega//p2 | round-robin | 2       | 1       | 3     |     | This is round 3.
-minimega//p3 | all         | 0       | 1       | 2     |     | This is round 2.
-minimega//p4 | all         | 0       | 1       | 2     |     | This is round 4.
-minimega//p5 | all         | 0       | 1       | 2     |     | This is round 3.
-minimega//p6 | all         | 0       | 1       | 2     |     | This is round robin.
+## .columns name,mode,readers,writers,count pipe
+name         | mode        | readers | writers | count
+minimega//p0 | round-robin | 2       | 0       | 5
+minimega//p1 | round-robin | 2       | 1       | 3
+minimega//p2 | round-robin | 2       | 1       | 3
+minimega//p3 | all         | 0       | 1       | 2
+minimega//p4 | all         | 0       | 1       | 2
+minimega//p5 | all         | 0       | 1       | 2
+minimega//p6 | all         | 0       | 1       | 2

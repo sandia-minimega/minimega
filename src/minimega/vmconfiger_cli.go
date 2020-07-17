@@ -705,8 +705,8 @@ Default: 2048
 		HelpShort: "configures snapshot",
 		HelpLong: `Enable or disable snapshot mode for disk images and container
 filesystems. When enabled, disks/filesystems will have temporary snapshots created
-when run and changes will not be saved. This allows a single disk/filesystem to be
-used for many VMs.
+when run and changes will not be saved. This allows a single
+disk/filesystem to be used for many VMs.
 
 Default: true
 `,

@@ -75,6 +75,11 @@ func main() {
 
 	igor.Config = readConfig(*configpath)
 
+	// Quit immediately if igor is paused
+	if igor.Pause != "" {
+		log.Fatal(igor.Pause)
+	}
+
 	// Add another logger for the logfile, if set
 	if igor.LogFile != "" {
 		logfile, err := os.OpenFile(igor.LogFile, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0660)

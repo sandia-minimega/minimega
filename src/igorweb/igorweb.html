@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+  <meta content="width=device-width, initial-scale=1" name="viewport">
+  <meta charset="UTF-8">
+
+  <title>igorweb</title>
+
+  <link href="static/style/bootstrap.min.css" rel="stylesheet">
+  <link
+    href="static/style/open-iconic/font/css/open-iconic-bootstrap.min.css"
+    rel="stylesheet"
+  >
+  <link href="static/style/igorweb.css" rel="stylesheet">
+</head>
+<body style="background-color: whitesmoke; padding-top: 80px;">
+  <div id="app" v-on:click="clearSelection()">
+    <!-- Navigation bar -->
+    <nav class="navbar fixed-top navbar-dark">
+      <span
+        class="navbar-brand"
+        style="margin-left: 10%; color: white; font-size: 2.25em; font-family: Logo, sans-serif;"
+      >
+        <b>Igor</b>
+        <i>Web</i>
+      </span>
+
+      {{if eq .Error ""}} <!-- Go Template -->
+      <div
+        class="clickable"
+        id="newbutton"
+        title="Make a new reservation"
+        v-on:click="showNewResForm()"
+      >
+        <svg
+          viewBox="0 0 75.000008 75.000008"
+          height="75.000008"
+          width="75.000008"
+        >
+          <g>
+            <circle
+              id="newcircle"
+              r="37.5"
+              cy="37.5"
+              cx="37.500004"
+            />
+            <path
+              d="m 39.83399,26.757814 0,8.398438 8.398438,0 0,4.648437 -8.398438,0 0,8.4375 -4.628906,0 0,-8.4375 -8.4375,0 0,-4.648437 8.4375,0 0,-8.398438 4.628906,0 z"
+              style="fill:#ffffff;fill-opacity:1;"
+            />
+          </g>
+        </svg>
+      </div>
+      {{end}} <!-- Go Template -->
+    </nav>
+
+    <alert :message="alertMessage"></alert>
+
+    {{if eq .Error ""}} <!-- Go Template -->
+    <reservation-info v-on:res-action="handleReservationAction"></reservation-info>
+
+    <new-reservation-modal ref="newResModal"></new-reservation-modal>
+    <edit-reservation-modal ref="editResModal"></edit-reservation-modal>
+    <delete-reservation-modal ref="deleteModal"></delete-reservation-modal>
+    <power-modal ref="powerModal"></power-modal>
+    <extend-reservation-modal ref="extendModal"></extend-reservation-modal>
+    {{else}} <!-- Go Template -->
+    <div class="modal-backdrop fade show"></div>
+    <div id="error" class="modal fade show" style="display: block;">
+      <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+          <div class="modal-header m-3">
+            <h5 class="modal-title text-center col-12">
+              <b>Error loading igor</b>
+            </h5>
+          </div>
+          <div class="modal-body m-3">
+            <p class="text-centered">{{.Error}}</p> <!-- Go Template -->
+          </div>
+        </div>
+      </div>
+    </div>
+    {{end}} <!-- Go Template -->
+  </div>
+
+  <!-- Scripts -->
+  <script>
+  <!-- Use Go Template to set some initial application state -->
+  const STARTNODE = {{ .RangeStart }};
+  const ENDNODE = {{ .RangeEnd }};
+  const RACKWIDTH = {{ .RackWidth }};
+  const CLUSTER = {{ .Prefix }};
+  const INITIALRESERVATIONS = {{ .ResTable }};
+  const IMAGES = [{{- range $name, $pair := .Listimages }}{name:{{ $name -}} },{{ end -}} {"name":"image"}];
+  IMAGES.pop();
+  const IMAGEPATH = {{ .Path }};
+  </script>
+
+  <script src="static/libs/jquery-3.3.1.min.js" type="text/javascript"></script>
+  <script src="static/libs/bootstrap.min.js" type="text/javascript"></script>
+  <script src="static/libs/vue.min.js" type="text/javascript"></script>
+  <script src="static/libs/vuex.min.js" type="text/javascript"></script>
+  <script src="static/scripts/Alert.js" type="text/javascript"></script>
+  <script src="static/scripts/KeyCard.js" type="text/javascript"></script>
+  <script src="static/scripts/LoadingModal.js" type="text/javascript"></script>
+  <script src="static/scripts/SpeculateTable.js" type="text/javascript"></script>
+  <script src="static/scripts/NewReservationModal.js" type="text/javascript"></script>
+  <script src="static/scripts/EditReservationModal.js" type="text/javascript"></script>
+  <script src="static/scripts/DeleteReservationModal.js" type="text/javascript"></script>
+  <script src="static/scripts/ExtendReservationModal.js" type="text/javascript"></script>
+  <script src="static/scripts/PowerModal.js" type="text/javascript"></script>
+  <script src="static/scripts/ReservationTableRow.js" type="text/javascript"></script>
+  <script src="static/scripts/ReservationTable.js" type="text/javascript"></script>
+  <script src="static/scripts/Node.js" type="text/javascript"></script>
+  <script src="static/scripts/NodeGrid.js" type="text/javascript"></script>
+  <script src="static/scripts/ReservationInfo.js" type="text/javascript"></script>
+  <script src="static/scripts/store.js" type="text/javascript"></script>
+  <script src="static/scripts/main.js" type="text/javascript"></script>
+</body>
+</html>

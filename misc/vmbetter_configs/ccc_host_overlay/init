@@ -22,6 +22,9 @@ mount -t cgroup cgroup -o freezer /sys/fs/cgroup/freezer
 mount -t cgroup cgroup -o devices /sys/fs/cgroup/devices
 mount -t cgroup cgroup -o cpu,cpuacct /sys/fs/cgroup/cpu,cpuacct
 
+ln -s /proc/self/mounts /etc/mtab
+ln -s /proc/self/fd/ /dev/fd
+
 # / needs permissions!?
 chmod a+rx /
 

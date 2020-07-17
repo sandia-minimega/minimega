@@ -123,7 +123,7 @@ func main() {
 
 				// if we got here, the VM is not busy, so start playing the recording!
 				recordingpath := filepath.Join(*f_recordings, filename)
-				log.Debug("Playing", recordingpath, "on", host, id)
+				log.Debug("Playing %v on %v %v", recordingpath, host, id)
 				cmd := fmt.Sprintf("vnc playback %s %s %s", host, id, recordingpath)
 				c.RunAndPrint(cmd, false)
 				break outside

@@ -168,46 +168,15 @@ func SplitList(in string) ([]string, error) {
 	return res, nil
 }
 
+// UnsplitList takes a list of strings like ["foo1.bar", "foo2.bar"] and
+// condenses them to "foo[1-2].bar".
 func UnsplitList(vals []string) string {
-	var res []string
-
-	// Add all the vals to a trie
 	trie := newTrie()
 	for _, v := range vals {
 		trie.Add(v)
 	}
-	prefixes := trie.AlphaPrefixes()
 
-	// Find the longest prefix match for each host
-	groups := map[string][]string{}
-	for _, h := range vals {
-		longest := ""
-		for _, p := range prefixes {
-			if strings.HasPrefix(h, p) && len(p) > len(longest) {
-				longest = p
-			}
-		}
-
-		groups[longest] = append(groups[longest], h)
-	}
-
-	// Compress each group of vals that share the same prefix
-	for p, group := range groups {
-		r, _ := NewRange(p, 0, int(math.MaxInt32))
-
-		s, err := r.UnsplitRange(group)
-		if err != nil {
-			// Fallback, append all the vals
-			res = append(res, group...)
-			continue
-		}
-
-		res = append(res, s)
-	}
-
-	sort.Strings(res)
-
-	return strings.Join(res, ",")
+	return strings.Join(trie.Flatten(), ",")
 }
 
 // Turn an array of node names into a single string like kn[1-5,20]
@@ -231,11 +200,24 @@ func (r *Range) UnsplitRange(names []string) (string, error) {
 		return "", errors.New("nothing to parse")
 	}
 
+	return r.Prefix + unsplitInts(nums), nil
+}
+
+// unsplitInts takes ints as a slice (e.g. [1,2,3,5]) and turns them into a
+// string (e.g. [1-3,5]).
+func unsplitInts(nums []int) string {
+	if len(nums) == 0 {
+		return ""
+	}
+	if len(nums) == 1 {
+		return strconv.Itoa(nums[0])
+	}
+
 	// Sort the numbers
 	sort.Ints(nums)
 
 	// "count along" to find stretches like 1-5
-	result := r.Prefix + "[" + strconv.Itoa(nums[0])
+	result := "[" + strconv.Itoa(nums[0])
 	start := nums[0]
 	prev := nums[0]
 	for i := 1; i < len(nums); i++ {
@@ -257,7 +239,7 @@ func (r *Range) UnsplitRange(names []string) (string, error) {
 	}
 	result = result + "]"
 
-	return result, nil
+	return result
 }
 
 func subrange(s string) ([]string, error) {
@@ -293,4 +275,30 @@ func subrange(s string) ([]string, error) {
 	}
 
 	return nodes, nil
+}
+
+func (r *Range) RangeToInts(names []string) []int {
+	var nums []int
+
+	// Remove the prefix from every name and put into an array of ints
+	for _, s := range names {
+		if !strings.HasPrefix(s, r.Prefix) {
+			return []int{}
+		}
+
+		if i, err := strconv.Atoi(strings.TrimPrefix(s, r.Prefix)); err == nil {
+			nums = append(nums, i)
+		} else {
+			return []int{}
+		}
+	}
+
+	if len(nums) == 0 {
+		return []int{}
+	}
+
+	// Sort the numbers
+	sort.Ints(nums)
+
+	return nums
 }

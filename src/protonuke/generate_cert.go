@@ -87,7 +87,7 @@ func generateCerts() (string, string) {
 
 	keyOut, err := ioutil.TempFile("", "protonuke_key_")
 	if err != nil {
-		log.Fatal("failed to open key.pem for writing:", err)
+		log.Fatal("failed to open key.pem for writing: %v", err)
 	}
 	pem.Encode(keyOut, &pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(priv)})
 	keyOut.Close()

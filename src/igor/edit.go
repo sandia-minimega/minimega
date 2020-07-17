@@ -18,8 +18,8 @@ The -r flag specifies the name of the reservation to edit.
 
 OPTIONAL FLAGS:
 
-See "igor sub" for the meanings of the -k, -i, -profile, and -c flags. As with
-"igor sub", the -profile flag takes precedence over the other flags.
+See "igor sub" for the meanings of the -k, -i, -profile, -vlan, and -c flags.
+As with "igor sub", the -profile flag takes precedence over the other flags.
 
 The -owner flag can be used to modify the reservation owner (admin only). If
 -owner is specified, all other edits are ignored.
@@ -39,6 +39,7 @@ func init() {
 	cmdEdit.Flag.StringVar(&subI, "i", "", "")
 	cmdEdit.Flag.StringVar(&subC, "c", "", "")
 	cmdEdit.Flag.StringVar(&subProfile, "profile", "", "")
+	cmdEdit.Flag.StringVar(&subVlan, "vlan", "", "")
 	cmdEdit.Flag.StringVar(&subOwner, "owner", "", "")
 	cmdEdit.Flag.StringVar(&subG, "g", "", "")
 }
@@ -149,6 +150,14 @@ func runEdit(cmd *Command, args []string) {
 		if r.KernelArgs != subC {
 			r2.KernelArgs = subC
 		}
+	}
+
+	if subVlan != "" {
+		vlanID, err := parseVLAN(subVlan)
+		if err != nil {
+			log.Fatalln(err)
+		}
+		r2.Vlan = vlanID
 	}
 
 	// replace reservation with modified version

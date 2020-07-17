@@ -244,7 +244,7 @@ func ftpServer() {
 	go func() {
 		err := goftpServer.ListenAndServe()
 		if err != nil {
-			log.Error("Error starting server: ", err)
+			log.Error("Error starting server: %v", err)
 		}
 	}()
 }

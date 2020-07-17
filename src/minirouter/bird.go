@@ -37,7 +37,7 @@ var (
 
 type OSPF struct {
 	Area           string
-	Interfaces     map[string]bool // bool placeholder for later options
+	Interfaces     map[string]map[string]string
 	Prefixes       map[string]bool
 	Filternetworks map[string]bool
 }
@@ -61,6 +61,7 @@ func init() {
 			"bird <routerid,> <id>",
 			"bird <static,> <network> <nh> <name>",
 			"bird <ospf,> <area> <network or lo>",
+			"bird <ospf,> <area> <network or lo> <option> <value>",
 			"bird <ospf,> <area> <filter,> <filtername or IPv4/MASK>",
 			"bird <bgp,> <processname> <local,neighbor> <IPv4> <asnumber>",
 			"bird <bgp,> <processname> <rrclient,>",
@@ -152,7 +153,14 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 			}
 
 			o := OSPFFindOrCreate(area)
-			o.Interfaces[iface] = true
+			if _, ok := o.Interfaces[iface]; !ok {
+				o.Interfaces[iface] = make(map[string]string)
+			}
+
+			// set options, if any
+			if opt := c.StringArgs["option"]; opt != "" {
+				o.Interfaces[iface][opt] = c.StringArgs["value"]
+			}
 		}
 	} else if c.BoolArgs["bgp"] {
 		var ip string
@@ -277,7 +285,7 @@ func OSPFFindOrCreate(area string) *OSPF {
 	}
 	o := &OSPF{
 		Area:           area,
-		Interfaces:     make(map[string]bool),
+		Interfaces:     make(map[string]map[string]string),
 		Prefixes:       make(map[string]bool),
 		Filternetworks: make(map[string]bool),
 	}
@@ -382,25 +390,29 @@ protocol ospf {
 	{{ if .ExportOSPF}}
 	export filter {
 		{{ range $v := .OSPF }}
-		{{ range $f , $options := $v.Filternetworks }} 
-		if proto = "static_{{ $f }}" then 
+		{{ range $f , $options := $v.Filternetworks }}
+		if proto = "static_{{ $f }}" then
 			accept;
 		{{ end }}
 		{{ end }}
 	};
 	{{ end }}
-{{ range $v := .OSPF }} 
+{{ range $v := .OSPF }}
 	area {{ $v.Area }} {
 		{{ $DONETWORK := len $v.Prefixes }}
 		{{ if ne $DONETWORK 0 }}
 		networks {
-			{{ range $p, $options := $v.Prefixes }} 
+			{{ range $p, $options := $v.Prefixes }}
 			{{ $p }};
 			{{ end }}
 		};
 		{{ end }}
 		{{ range $int, $options := $v.Interfaces }}
-		interface "{{ $int }}";
+		interface "{{ $int }}" {
+			{{ range $k, $v := $options }}
+			{{ $k }} {{ $v }};
+			{{ end }}
+		};
 		{{ end }}
 	};
 {{ end }}
@@ -412,7 +424,7 @@ protocol ospf {
 
 {{ range $v := .BGP }}
 protocol bgp {{ $v.ProcessName }} {
-	import all;       
+	import all;
 	local {{ $v.LocalIP }} as {{ $v.LocalAS }};
 	neighbor {{ $v.NeighborIP }} as {{ $v.NeighborAS }};
 	{{ if $v.RouteReflector }}

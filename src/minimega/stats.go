@@ -211,7 +211,7 @@ func hostStatsMemory() (int, int, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Error("reading meminfo:", err)
+		log.Error("reading meminfo: %v", err)
 	}
 
 	outputMemUsed := (memTotal - (memFree + memBuffers + memCached)) / 1024
