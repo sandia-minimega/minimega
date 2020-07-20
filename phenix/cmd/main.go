@@ -95,7 +95,7 @@ func main() {
 							configs, err := config.List(ctx.Args().First())
 
 							if err != nil {
-								err := util.HumanizeError(err, "Unable to list known configs")
+								err := util.HumanizeError(err, "Unable to list known configurations")
 								return cli.Exit(err.Humanize(), 1)
 							}
 
@@ -131,7 +131,7 @@ func main() {
 						Action: func(ctx *cli.Context) error {
 							c, err := config.Get(ctx.Args().First())
 							if err != nil {
-								err := util.HumanizeError(err, "Unable to get given config")
+								err := util.HumanizeError(err, "Unable to get the " + c.Kind + "/" + c.Metadata.Name + " configuration") // do we want to give the name used instead of given
 								return cli.Exit(err.Humanize(), 1)
 							}
 
@@ -139,7 +139,7 @@ func main() {
 							case "yaml":
 								m, err := yaml.Marshal(c)
 								if err != nil {
-									err := util.HumanizeError(err, "Unable to convert config to YAML")
+									err := util.HumanizeError(err, "Unable to convert configuration to YAML")
 									return cli.Exit(err.Humanize(), 1)
 								}
 
@@ -157,13 +157,13 @@ func main() {
 								}
 
 								if err != nil {
-									err := util.HumanizeError(err, "Unable to convert config to JSON")
+									err := util.HumanizeError(err, "Unable to convert configuration to JSON")
 									return cli.Exit(err.Humanize(), 1)
 								}
 
 								fmt.Println(string(m))
 							default:
-								err := util.HumanizeError(fmt.Errorf("unrecognized output format %s", ctx.String("output")), "")
+								err := util.HumanizeError(fmt.Errorf("unrecognized output format %s", ctx.String("output")), "") // need to revert?
 								return cli.Exit(err.Humanize(), 1)
 							}
 
@@ -181,17 +181,17 @@ func main() {
 						},
 						Action: func(ctx *cli.Context) error {
 							if ctx.Args().Len() == 0 {
-								return cli.Exit("No config file(s) provided", 1)
+								return cli.Exit("No configuration file(s) provided", 1)
 							}
 
 							for _, f := range ctx.Args().Slice() {
 								c, err := config.Create(f, !ctx.Bool("skip-validation"))
 								if err != nil {
-									err := util.HumanizeError(err, "Unable to create config "+f)
+									err := util.HumanizeError(err, "Unable to create configuration "+f)
 									return cli.Exit(err.Humanize(), 1)
 								}
 
-								fmt.Printf("%s/%s config created\n", c.Kind, c.Metadata.Name)
+								fmt.Printf("%s/%s configuration created\n", c.Kind, c.Metadata.Name)
 							}
 
 							return nil
@@ -221,16 +221,16 @@ func main() {
 						Usage: "delete phenix config(s)",
 						Action: func(ctx *cli.Context) error {
 							if ctx.Args().Len() == 0 {
-								return cli.Exit("No config(s) provided", 1)
+								return cli.Exit("No configurations provided", 1)
 							}
 
 							for _, c := range ctx.Args().Slice() {
 								if err := config.Delete(c); err != nil {
-									err := util.HumanizeError(err, "Unable to delete config "+c)
+									err := util.HumanizeError(err, "Unable to delete configuration "+c)
 									return cli.Exit(err.Humanize(), 1)
 								}
 
-								fmt.Printf("%s deleted\n", c)
+								fmt.Printf("%s configuration deleted\n", c)
 							}
 
 							return nil
@@ -341,7 +341,8 @@ func main() {
 
 							exp, err := experiment.Get(ctx.Args().First())
 							if err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to get experiment " + name)
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							if exp.Status.Running() {
@@ -349,7 +350,8 @@ func main() {
 							}
 
 							if err := config.Delete("experiment/" + name); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to delete experiment " + name)
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							fmt.Printf("experiment %s deleted\n", name)
@@ -372,7 +374,8 @@ func main() {
 							)
 
 							if err := experiment.Schedule(exp, algo); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to schedule experiment " + exp)
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							return nil
@@ -395,7 +398,8 @@ func main() {
 							)
 
 							if err := experiment.Start(exp, dryrun); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to start experiment " + exp)
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							return nil
@@ -418,7 +422,8 @@ func main() {
 							)
 
 							if err := experiment.Stop(exp, dryrun); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to stop experiment " + exp)
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							return nil
@@ -441,11 +446,13 @@ func main() {
 							)
 
 							if err := experiment.Stop(exp, dryrun); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to stop the experiment " + exp)
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							if err := experiment.Start(exp, dryrun); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to start the experiment " + exp)
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							return nil
@@ -468,14 +475,16 @@ func main() {
 							case 1:
 								vms, err := vm.List(parts[0])
 								if err != nil {
-									return cli.Exit(err, 1)
+									err := util.HumanizeError(err, "Unable to get list of VMs")
+									return cli.Exit(err.Humanize(), 1)
 								}
 
 								util.PrintTableOfVMs(os.Stdout, vms...)
 							case 2:
 								vm, err := vm.Get(parts[0], parts[1])
 								if err != nil {
-									return cli.Exit(err, 1)
+									err := util.HumanizeError(err, "Unable to get information for the " + parts[1] + " VM")
+									return cli.Exit(err.Humanize(), 1)
 								}
 
 								util.PrintTableOfVMs(os.Stdout, *vm)
@@ -500,7 +509,8 @@ func main() {
 							)
 
 							if err := vm.Pause(expName, vmName); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to pause the " + vmName + " VM")
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							return nil
@@ -520,7 +530,8 @@ func main() {
 							)
 
 							if err := vm.Resume(expName, vmName); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to resume the " + vmName + " VM")
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							return nil
@@ -589,7 +600,8 @@ func main() {
 							}
 
 							if err := vm.Redeploy(expName, vmName, opts...); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to redeploy the " + vmName + " VM")
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							return nil
@@ -610,7 +622,8 @@ func main() {
 							)
 
 							if err := vm.Kill(expName, vmName); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to kill the " + vmName + " VM")
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							return nil
@@ -648,7 +661,8 @@ func main() {
 									}
 
 									if err := vm.Connect(expName, vmName, iface, vlan); err != nil {
-										return cli.Exit(err, 1)
+										err := util.HumanizeError(err, "Unable to modify the connectivity for the " + vmName + " VM")
+										return cli.Exit(err.Humanize(), 1)
 									}
 
 									return nil
@@ -674,7 +688,8 @@ func main() {
 									}
 
 									if err := vm.Disonnect(expName, vmName, iface); err != nil {
-										return cli.Exit(err, 1)
+										err := util.HumanizeError(err, "Unable to disconnect the interface on the " + vmName + " VM")
+										return cli.Exit(err.Humanize(), 1)
 									}
 
 									return nil
@@ -707,7 +722,8 @@ func main() {
 									}
 
 									if err := vm.StartCapture(expName, vmName, iface, out); err != nil {
-										return cli.Exit(err, 1)
+										err := util.HumanizeError(err, "Unable to start a capture on the interface on the " + vmName + " VM")
+										return cli.Exit(err.Humanize(), 1)
 									}
 
 									return nil
@@ -728,7 +744,8 @@ func main() {
 									)
 
 									if err := vm.StopCaptures(expName, vmName); err != nil {
-										return cli.Exit(err, 1)
+										err := util.HumanizeError(err, "Unable to stop the packet captures on the " + vmName + " VM")
+										return cli.Exit(err.Humanize(), 1)
 									}
 
 									return nil
@@ -828,7 +845,8 @@ func main() {
 							}
 
 							if err := image.Create(name, &img); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to create the " + name + " image" )
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							return nil
@@ -873,7 +891,8 @@ func main() {
 							)
 
 							if err := image.CreateFromConfig(name, saveas, overlays, packages, scripts); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to create the configuration file " + saveas)
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							return nil
@@ -907,7 +926,8 @@ func main() {
 							)
 
 							if err := image.Build(name, verbosity, cache); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to build the " + name + " image")
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							return nil
@@ -920,7 +940,8 @@ func main() {
 						Action: func(ctx *cli.Context) error {
 							imgs, err := image.List()
 							if err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to print a list of configurations")
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							util.PrintTableOfImageConfigs(os.Stdout, imgs...)
@@ -940,10 +961,11 @@ func main() {
 							}
 
 							if err := config.Delete("image/" + name); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to delete the " + name + " image")
+								return cli.Exit(err.Humanize(), 1)
 							}
 
-							fmt.Printf("image config %s deleted\n", name)
+							fmt.Printf("%s image configuration deleted\n", name)
 
 							return nil
 						},
@@ -982,7 +1004,8 @@ func main() {
 							)
 
 							if err := image.Append(name, overlays, packages, scripts); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to append to the " + name + " image")
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							return nil
@@ -1022,7 +1045,8 @@ func main() {
 							)
 
 							if err := image.Remove(name, overlays, packages, scripts); err != nil {
-								return cli.Exit(err, 1)
+								err := util.HumanizeError(err, "Unable to remove from the " + name + " image")
+								return cli.Exit(err.Humanize(), 1)
 							}
 
 							return nil
@@ -1050,14 +1074,16 @@ func main() {
 							case 0:
 								info, err := vlan.Aliases()
 								if err != nil {
-									return cli.Exit(err, 1)
+									err := util.HumanizeError(err, "Unable to display all aliases") // not sure this is accurate
+									return cli.Exit(err.Humanize(), 1)
 								}
 
 								util.PrintTableOfVLANAliases(os.Stdout, info)
 							case 1:
 								info, err := vlan.Aliases(vlan.Experiment(ctx.Args().First()))
 								if err != nil {
-									return cli.Exit(err, 1)
+									err := util.HumanizeError(err, "Unable to display aliases for the experiment") // not sure this is accurate; if it is, should represent exp name
+									return cli.Exit(err.Humanize(), 1)
 								}
 
 								util.PrintTableOfVLANAliases(os.Stdout, info)
@@ -1075,7 +1101,8 @@ func main() {
 								}
 
 								if err := vlan.SetAlias(vlan.Experiment(exp), vlan.Alias(alias), vlan.ID(vid), vlan.Force(force)); err != nil {
-									return cli.Exit(err, 1)
+									err := util.HumanizeError(err, "Unable to set the alias for the " + exp + " experiment")
+									return cli.Exit(err.Humanize(), 1)
 								}
 							default:
 								return cli.Exit("unexpected number of arguments provided", 1)
@@ -1100,14 +1127,16 @@ func main() {
 							case 0:
 								info, err := vlan.Ranges()
 								if err != nil {
-									return cli.Exit(err, 1)
+									err := util.HumanizeError(err, "Unable to display VLAN range(s)") // not sure this is accurate
+									return cli.Exit(err.Humanize(), 1)
 								}
 
 								util.PrintTableOfVLANRanges(os.Stdout, info)
 							case 1:
 								info, err := vlan.Ranges(vlan.Experiment(ctx.Args().First()))
 								if err != nil {
-									return cli.Exit(err, 1)
+									err := util.HumanizeError(err, "Unable to display VLAN range(s) for the experiment") // not sure this is accurate; if it is, should represent exp name
+									return cli.Exit(err.Humanize(), 1)
 								}
 
 								util.PrintTableOfVLANRanges(os.Stdout, info)
@@ -1130,7 +1159,8 @@ func main() {
 								}
 
 								if err := vlan.SetRange(vlan.Experiment(exp), vlan.Min(vmin), vlan.Max(vmax), vlan.Force(force)); err != nil {
-									return cli.Exit(err, 1)
+									err := util.HumanizeError(err, "Unable to set the VLAN range for the " + exp + " experiment")
+									return cli.Exit(err.Humanize(), 1)
 								}
 							default:
 								return cli.Exit("unexpected number of arguments provided", 1)
@@ -1165,7 +1195,7 @@ func main() {
 
 							exp, err := experiment.Get(name)
 							if err != nil {
-								err := util.HumanizeError(err, "Unable to get provided experiment " + name)
+								err := util.HumanizeError(err, "Unable to get the " + name + " experiment")
 								return cli.Exit(err.Humanize(), 1)
 							}
 
