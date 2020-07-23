@@ -2,6 +2,7 @@ package experiment
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"phenix/app"
@@ -278,7 +279,7 @@ func Start(name string, dryrun bool) error {
 		return fmt.Errorf("decoding experiment status: %w", err)
 	}
 
-	if status.StartTime != "" {
+	if status.StartTime != "" && !strings.HasSuffix(status.StartTime, "-DRYRUN") {
 		return fmt.Errorf("experiment already running (started at: %s)", status.StartTime)
 	}
 
@@ -327,7 +328,11 @@ func Start(name string, dryrun bool) error {
 		status.VLANs = vlans
 	}
 
-	status.StartTime = time.Now().Format(time.RFC3339)
+	if dryrun {
+		status.StartTime = time.Now().Format(time.RFC3339) + "-DRYRUN"
+	} else {
+		status.StartTime = time.Now().Format(time.RFC3339)
+	}
 
 	if err := app.ApplyApps(app.ACTIONPOSTSTART, &exp); err != nil {
 		return fmt.Errorf("applying apps to experiment: %w", err)
@@ -345,7 +350,7 @@ func Start(name string, dryrun bool) error {
 
 // Stop stops the experiment with the given name. It returns any errors
 // encountered while stopping the experiment.
-func Stop(name string, dryrun bool) error {
+func Stop(name string) error {
 	c, _ := types.NewConfig("experiment/" + name)
 
 	if err := store.Get(c); err != nil {
@@ -361,6 +366,8 @@ func Stop(name string, dryrun bool) error {
 	if status.StartTime == "" {
 		return fmt.Errorf("experiment isn't running")
 	}
+
+	dryrun := strings.HasSuffix(status.StartTime, "-DRYRUN")
 
 	var spec v1.ExperimentSpec
 

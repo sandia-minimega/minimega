@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -21,8 +22,9 @@ import (
 )
 
 const (
-	SCRIPT_START_COMMENT = "## %s START ##"
-	SCRIPT_END_COMMENT   = "## %s END ##"
+	V_VERBOSE   int = 1
+	V_VVERBOSE  int = 2
+	V_VVVERBOSE int = 4
 )
 
 // SetDefaults will set default settings to image values if none are set by the
@@ -106,32 +108,27 @@ func SetDefaults(img *v1.Image) error {
 		return fmt.Errorf("variant %s is not implemented", img.Variant)
 	}
 
-	for _, l := range strings.Split(POSTBUILD_APT_CLEANUP, "\n") {
-		img.Scripts = append(img.Scripts, l)
-	}
+	img.Scripts = make(map[string]string)
+
+	addScriptToImage(img, "POSTBUILD_APT_CLEANUP", POSTBUILD_APT_CLEANUP)
 
 	switch img.Variant {
 	case "brash":
-		for _, l := range strings.Split(POSTBUILD_BRASH, "\n") {
-			img.Scripts = append(img.Scripts, l)
-		}
+		addScriptToImage(img, "POSTBUILD_BRASH", POSTBUILD_BRASH)
 
 		fallthrough
 	case "minbase", "mingui":
-		for _, l := range strings.Split(POSTBUILD_NO_ROOT_PASSWD, "\n") {
-			img.Scripts = append(img.Scripts, l)
-		}
-
-		for _, l := range strings.Split(POSTBUILD_PHENIX_HOSTNAME, "\n") {
-			img.Scripts = append(img.Scripts, l)
-		}
+		addScriptToImage(img, "POSTBUILD_NO_ROOT_PASSWD", POSTBUILD_NO_ROOT_PASSWD)
+		addScriptToImage(img, "POSTBUILD_PHENIX_HOSTNAME", POSTBUILD_PHENIX_HOSTNAME)
 	default:
 		return fmt.Errorf("variant %s is not implemented", img.Variant)
 	}
 
 	if len(img.ScriptPaths) > 0 {
-		if err := addScriptsToImage(img, img.ScriptPaths); err != nil {
-			return fmt.Errorf("adding scripts to image config: %w", err)
+		for _, p := range img.ScriptPaths {
+			if err := addScriptToImage(img, p, ""); err != nil {
+				return fmt.Errorf("adding script %s to image config: %w", p, err)
+			}
 		}
 	}
 
@@ -187,6 +184,10 @@ func CreateFromConfig(name, saveas string, overlays, packages, scripts []string)
 		return fmt.Errorf("decoding image spec: %w", err)
 	}
 
+	if err := SetDefaults(&img); err != nil {
+		return fmt.Errorf("setting image defaults: %w", err)
+	}
+
 	c.Metadata.Name = saveas
 
 	if len(overlays) > 0 {
@@ -198,8 +199,10 @@ func CreateFromConfig(name, saveas string, overlays, packages, scripts []string)
 	}
 
 	if len(scripts) > 0 {
-		if err := addScriptsToImage(&img, scripts); err != nil {
-			return fmt.Errorf("adding scripts to image config: %w", err)
+		for _, s := range scripts {
+			if err := addScriptToImage(&img, s, ""); err != nil {
+				return fmt.Errorf("adding script %s to image config: %w", s, err)
+			}
 		}
 	}
 
@@ -219,8 +222,8 @@ func CreateFromConfig(name, saveas string, overlays, packages, scripts []string)
 // and then pass it to the shelled out `vmdb` command. This expects the `vmdb`
 // application is in the `$PATH`. Any errors encountered will be returned during
 // the process of getting an existing image configuration, decoding it,
-// generating the `vmdb` configuration file, or executing the `vmdb` command.
-func Build(name, verbosity string, cache bool) error {
+// generating the `vmdb` verbosconfiguration file, or executing the `vmdb` command.
+func Build(name string, verbosity int, cache bool, dryrun bool, output string) error {
 	c, _ := types.NewConfig("image/" + name)
 
 	if err := store.Get(c); err != nil {
@@ -233,8 +236,8 @@ func Build(name, verbosity string, cache bool) error {
 		return fmt.Errorf("decoding image spec: %w", err)
 	}
 
-	if verbosity != "" {
-		img.Verbosity = verbosity
+	if verbosity >= V_VVVERBOSE {
+		img.VerboseLogs = true
 	}
 
 	img.Cache = cache
@@ -244,57 +247,59 @@ func Build(name, verbosity string, cache bool) error {
 		img.Release = "kali-rolling"
 	}
 
-	dir := "/phenix/images"
-	filename := dir + "/" + name + ".vmdb"
+	filename := output + "/" + name + ".vmdb"
 
 	if err := tmpl.CreateFileFromTemplate("vmdb.tmpl", img, filename); err != nil {
 		return fmt.Errorf("generate vmdb config from template: %w", err)
 	}
 
-	if !shell.CommandExists("vmdb2") {
+	if !dryrun && !shell.CommandExists("vmdb2") {
 		return fmt.Errorf("vmdb2 app does not exist in your path")
 	}
 
 	args := []string{
 		filename,
-		"--output", dir + "/" + name,
-		"--rootfs-tarball", dir + "/" + name + ".tar",
+		"--output", output + "/" + name,
+		"--rootfs-tarball", output + "/" + name + ".tar",
 	}
 
-	switch verbosity {
-	case "v":
+	if verbosity >= V_VERBOSE {
 		args = append(args, "-v")
-	case "vv":
-		fallthrough
-	case "vvv":
-		args = append(args, "-v", "--log", "stderr")
 	}
 
-	cmd := exec.Command("vmdb2", args...)
-
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("starting vmdb2 command: %w", err)
+	if verbosity >= V_VVERBOSE {
+		args = append(args, "--log", "stderr")
 	}
 
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			fmt.Println(scanner.Text())
-		}
-	}()
+	if dryrun {
+		fmt.Printf("DRY RUN: vmdb2 %s\n", strings.Join(args, " "))
+	} else {
+		cmd := exec.Command("vmdb2", args...)
 
-	go func() {
-		scanner := bufio.NewScanner(stderr)
-		for scanner.Scan() {
-			fmt.Println(scanner.Text())
-		}
-	}()
+		stdout, _ := cmd.StdoutPipe()
+		stderr, _ := cmd.StderrPipe()
 
-	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("building image with vmdb2: %w", err)
+		if err := cmd.Start(); err != nil {
+			return fmt.Errorf("starting vmdb2 command: %w", err)
+		}
+
+		go func() {
+			scanner := bufio.NewScanner(stdout)
+			for scanner.Scan() {
+				fmt.Println(scanner.Text())
+			}
+		}()
+
+		go func() {
+			scanner := bufio.NewScanner(stderr)
+			for scanner.Scan() {
+				fmt.Println(scanner.Text())
+			}
+		}()
+
+		if err := cmd.Wait(); err != nil {
+			return fmt.Errorf("building image with vmdb2: %w", err)
+		}
 	}
 
 	return nil
@@ -355,8 +360,10 @@ func Append(name string, overlays, packages, scripts []string) error {
 	}
 
 	if len(scripts) > 0 {
-		if err := addScriptsToImage(&img, scripts); err != nil {
-			return fmt.Errorf("adding scripts to image config: %w", err)
+		for _, s := range scripts {
+			if err := addScriptToImage(&img, s, ""); err != nil {
+				return fmt.Errorf("adding script %s to image config: %w", s, err)
+			}
 		}
 	}
 
@@ -432,8 +439,8 @@ func Remove(name string, overlays, packages, scripts []string) error {
 	}
 
 	if len(scripts) > 0 {
-		if err := removeScriptsFromImage(&img, scripts); err != nil {
-			return fmt.Errorf("removing scripts from image config: %w", err)
+		for _, s := range scripts {
+			delete(img.Scripts, s)
 		}
 	}
 
@@ -446,11 +453,9 @@ func Remove(name string, overlays, packages, scripts []string) error {
 	return nil
 }
 
-func addScriptsToImage(img *v1.Image, scriptPaths []string) error {
-	var scripts []string
-
-	for _, p := range scriptPaths {
-		u, err := url.Parse(p)
+func addScriptToImage(img *v1.Image, name, script string) error {
+	if script == "" {
+		u, err := url.Parse(name)
 		if err != nil {
 			return fmt.Errorf("parsing script path: %w", err)
 		}
@@ -460,18 +465,21 @@ func addScriptsToImage(img *v1.Image, scriptPaths []string) error {
 			u.Scheme = "file"
 		}
 
-		var body io.ReadCloser
+		var (
+			loc  = u.Host + u.Path
+			body io.ReadCloser
+		)
 
 		switch u.Scheme {
 		case "http", "https":
-			resp, err := http.Get(p)
+			resp, err := http.Get(name)
 			if err != nil {
 				return fmt.Errorf("getting script via HTTP(s): %w", err)
 			}
 
 			body = resp.Body
 		case "file":
-			body, err = os.Open(u.Host + u.Path)
+			body, err = os.Open(loc)
 			if err != nil {
 				return fmt.Errorf("opening script file: %w", err)
 			}
@@ -481,51 +489,16 @@ func addScriptsToImage(img *v1.Image, scriptPaths []string) error {
 
 		defer body.Close()
 
-		scripts = append(scripts, fmt.Sprintf(SCRIPT_START_COMMENT, p))
-
-		scanner := bufio.NewScanner(body)
-		scanner.Split(bufio.ScanLines)
-
-		for scanner.Scan() {
-			scripts = append(scripts, scanner.Text())
+		contents, err := ioutil.ReadAll(body)
+		if err != nil {
+			return fmt.Errorf("processing script %s: %w", name, err)
 		}
 
-		if err := scanner.Err(); err != nil {
-			return fmt.Errorf("processing script %s: %w", p, err)
-		}
-
-		scripts = append(scripts, fmt.Sprintf(SCRIPT_END_COMMENT, p))
+		script = string(contents)
 	}
 
-	img.Scripts = append(img.Scripts, scripts...)
-
-	return nil
-}
-
-func removeScriptsFromImage(img *v1.Image, scriptPaths []string) error {
-	for _, p := range scriptPaths {
-		var (
-			matcher = fmt.Sprintf(SCRIPT_START_COMMENT, p)
-			start   = -1
-			end     = -1
-		)
-
-		for i, l := range img.Scripts {
-			if l == matcher {
-				if start < 0 {
-					start = i
-					matcher = fmt.Sprintf(SCRIPT_END_COMMENT, p)
-				} else {
-					end = i
-					break
-				}
-			}
-		}
-
-		if start >= 0 && end > 0 {
-			img.Scripts = append(img.Scripts[:start], img.Scripts[end+1:]...)
-		}
-	}
+	img.Scripts[name] = script
+	img.ScriptOrder = append(img.ScriptOrder, name)
 
 	return nil
 }

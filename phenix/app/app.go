@@ -6,6 +6,8 @@ import (
 
 	"phenix/types"
 	"phenix/util/shell"
+
+	"github.com/fatih/color"
 )
 
 func init() {
@@ -127,22 +129,26 @@ func ApplyApps(action Action, exp *types.Experiment) error {
 	for _, a := range DefaultApps() {
 		switch action {
 		case ACTIONCONFIG:
-			fmt.Printf("configuring experiment with default '%s' app\n", a.Name())
-
 			err = a.Configure(exp)
 		case ACTIONPRESTART:
-			fmt.Printf("pre-starting experiment with default '%s' app\n", a.Name())
-
 			err = a.PreStart(exp)
 		case ACTIONPOSTSTART:
-			fmt.Printf("post-starting experiment with default '%s' app\n", a.Name())
-
 			err = a.PostStart(exp)
 		case ACTIONCLEANUP:
-			fmt.Printf("cleaning up experiment with default '%s' app\n", a.Name())
-
 			err = a.Cleanup(exp)
 		}
+
+		var (
+			status  = "✓"
+			printer = color.New(color.FgGreen)
+		)
+
+		if err != nil {
+			status = "✗"
+			printer = color.New(color.FgRed)
+		}
+
+		printer.Printf("[%s] '%s' default app (%s)\n", status, a.Name(), action)
 
 		if err != nil {
 			return fmt.Errorf("applying default app %s for action %s: %w", a.Name(), action, err)
@@ -155,26 +161,34 @@ func ApplyApps(action Action, exp *types.Experiment) error {
 
 			switch action {
 			case ACTIONCONFIG:
-				fmt.Printf("configuring experiment with '%s' user app\n", a.Name())
-
 				err = a.Configure(exp)
 			case ACTIONPRESTART:
-				fmt.Printf("pre-starting experiment with '%s' user app\n", a.Name())
-
 				err = a.PreStart(exp)
 			case ACTIONPOSTSTART:
-				fmt.Printf("post-starting experiment with '%s' user app\n", a.Name())
-
 				err = a.PostStart(exp)
 			case ACTIONCLEANUP:
-				fmt.Printf("cleaning up experiment with '%s' user app\n", a.Name())
-
 				err = a.Cleanup(exp)
 			}
 
+			var (
+				status  = "✓"
+				printer = color.New(color.FgGreen)
+			)
+
 			if err != nil {
 				if errors.Is(err, ErrUserAppNotFound) {
-					fmt.Printf("experiment app %s not found\n", a.Name())
+					status = "?"
+					printer = color.New(color.FgYellow)
+				} else {
+					status = "✗"
+					printer = color.New(color.FgRed)
+				}
+			}
+
+			printer.Printf("[%s] '%s' experiment app (%s)\n", status, a.Name(), action)
+
+			if err != nil {
+				if errors.Is(err, ErrUserAppNotFound) {
 					continue
 				}
 
@@ -187,26 +201,34 @@ func ApplyApps(action Action, exp *types.Experiment) error {
 
 			switch action {
 			case ACTIONCONFIG:
-				fmt.Printf("configuring experiment with '%s' user app\n", a.Name())
-
 				err = a.Configure(exp)
 			case ACTIONPRESTART:
-				fmt.Printf("pre-starting experiment with '%s' user app\n", a.Name())
-
 				err = a.PreStart(exp)
 			case ACTIONPOSTSTART:
-				fmt.Printf("post-starting experiment with '%s' user app\n", a.Name())
-
 				err = a.PreStart(exp)
 			case ACTIONCLEANUP:
-				fmt.Printf("cleaning up experiment with '%s' user app\n", a.Name())
-
 				err = a.Cleanup(exp)
 			}
 
+			var (
+				status  = "✓"
+				printer = color.New(color.FgGreen)
+			)
+
 			if err != nil {
 				if errors.Is(err, ErrUserAppNotFound) {
-					fmt.Printf("host app %s not found\n", a.Name())
+					status = "?"
+					printer = color.New(color.FgYellow)
+				} else {
+					status = "✗"
+					printer = color.New(color.FgRed)
+				}
+			}
+
+			printer.Printf("[%s] '%s' host app (%s)\n", status, a.Name(), action)
+
+			if err != nil {
+				if errors.Is(err, ErrUserAppNotFound) {
 					continue
 				}
 

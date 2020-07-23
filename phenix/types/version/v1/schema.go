@@ -8,6 +8,15 @@ info:
 paths: {}
 components:
   schemas:
+    Image:
+      type: object
+      title: SCEPTRE Image
+      required:
+      - release
+      properties:
+        release:
+          type: string
+          minLength: 1
     Topology:
       type: object
       title: SCEPTRE Topology

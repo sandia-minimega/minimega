@@ -5,6 +5,7 @@ go 1.14
 require (
 	github.com/activeshadow/libminimega v0.0.0-20190412123224-5384445d4b63
 	github.com/activeshadow/structs v1.2.0
+	github.com/fatih/color v1.9.0
 	github.com/getkin/kin-openapi v0.3.1
 	github.com/go-bindata/go-bindata/v3 v3.1.3
 	github.com/gofrs/uuid v3.3.0+incompatible
