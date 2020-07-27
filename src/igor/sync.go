@@ -67,12 +67,79 @@ func runSync(cmd *Command, args []string) {
 }
 
 func syncArista() {
-	// first get ground truth
+	// collect report and print at the end
+	report := make(map[string]map[string]map[string]string)
+
+	// first get Arista vlan data
 	fmt.Println("Retrieving Arista data, this may take a few moments...")
 	gt, err := networkVlan()
 	if err != nil {
 		log.Fatal("Error gathering VLAN data from Arista")
 	}
+
+	// we need to know which nodes are up or down
+	names := igor.validHosts()
+	// Maps a node's index to a boolean value (up = true, down = false)
+	powered := map[int]bool{}
+	nodes, err := scanNodes(names)
+	if err != nil {
+		log.Fatal("unable to scan: %v", err)
+	}
+	powered = nodes
+
+	// TODO: probably shouldn't iterate over .M directly
+	for _, r := range igor.Reservations.M {
+		if !r.IsActive(igor.Now) {
+			continue
+		}
+		// each reservation can have multiple hosts, but only 1 vlan
+		resnodes := make(map[string]map[string]string)
+		mismatch := false
+		for _, host := range r.Hosts {
+			vlan := strconv.Itoa(r.Vlan)
+			gtvlan := gt[host]
+			aristavlan := gtvlan
+			status := ""
+			// if reservation does not match arista, color the value red to print
+			if gtvlan != vlan {
+				vlan = FgRed + vlan + Reset
+				mismatch = true
+			}
+			// if arista had no vlan assigned, make explicit for readability
+			if gtvlan == "" {
+				aristavlan = "(none)"
+			}
+			// separate host number from prefix to compare against powered map
+			hostnum, err := strconv.Atoi(host[len(igor.Prefix):])
+			if err != nil {
+				//that's weird
+				continue
+			}
+			// if node is powered off, add to node status
+			if !powered[hostnum] {
+				status = status + " - powered off"
+			}
+
+			resnodes[host] = map[string]string{"igor": vlan, "arista": aristavlan, "status": status}
+
+		}
+		// if force flag given and a discrepancy is detected between reservation and
+		// arista, then set node in arista with vlan value from the reservation
+		if force && mismatch {
+			if err := networkSet(r.Hosts, r.Vlan); err != nil {
+				log.Fatal("unable to set up network isolation")
+				for _, host := range r.Hosts {
+					resnodes[host]["status"] = resnodes[host]["status"] + " - Arista set command failed!"
+				}
+			} else {
+				for _, host := range r.Hosts {
+					resnodes[host]["status"] = resnodes[host]["status"] + " - Arista set command executed"
+				}
+			}
+		}
+		report[r.Name] = resnodes
+	}
+
 	// create writer
 	w := new(tabwriter.Writer)
 	w.Init(os.Stdout, 0, 0, 1, ' ', 0)
@@ -82,43 +149,28 @@ func syncArista() {
 	n := "NODE"
 	i := "IGOR"
 	a := "ARISTA"
-	fmt.Println("")
-	fmt.Fprintln(w, n, "\t", i, "  ", a)
-
-	// TODO: probably shouldn't iterate over .M directly
-	for _, r := range igor.Reservations.M {
-		if !r.IsActive(igor.Now) {
-			continue
+	// print report
+	for resname, res := range report {
+		header := false
+		if !quiet {
+			fmt.Fprintln(w, "\nReservation: ", resname)
+			fmt.Fprintln(w, n, "\t", i, "  ", a)
 		}
-		// each reservation can have multiple hosts, but only 1 vlan
-		mismatch := false
-		for _, host := range r.Hosts {
-			vlan := strconv.Itoa(r.Vlan)
-			gtvlan := gt[host]
-			// if reservation does not match arista, color the value red to print
-			if gtvlan != vlan {
-				vlan = FgRed + vlan + Reset
-				mismatch = true
-			}
-			// if arista had no vlan assigned, make explicit for readability
-			if gtvlan == "" {
-				gtvlan = "(none)"
-			}
+		for nodename, node := range res {
 			if !quiet {
-				fmt.Fprintln(w, host, "\t", vlan, "  ", gtvlan)
+				fmt.Fprintln(w, nodename, "\t", node["igor"], "  ", node["arista"]+node["status"])
 			} else {
-				if mismatch {
-					fmt.Fprintln(w, host, "\t", vlan, "  ", gtvlan)
+				if node["igor"] != node["arista"] {
+					if !header {
+						fmt.Fprintln(w, "\nReservation: ", resname)
+						fmt.Fprintln(w, n, "\t", i, "  ", a)
+						header = true
+					}
+					fmt.Fprintln(w, nodename, "\t", node["igor"], "  ", node["arista"]+node["status"])
 				}
 			}
 		}
-		// if force flag given and a discrepancy is detected between reservation and
-		// arista, then set node in arista with vlan value from the reservation
-		if force && mismatch {
-			if err := networkSet(r.Hosts, r.Vlan); err != nil {
-				log.Fatal("unable to set up network isolation")
-			}
-		}
+
 	}
 	w.Flush()
 }
