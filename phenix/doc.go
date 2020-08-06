@@ -100,4 +100,4 @@ You can also edit configs in place via something like:
 
   $> bin/phenix edit experiment/foobar
 */
-package phenix
+package main

@@ -331,6 +331,51 @@ func List() ([]types.Image, error) {
 	return images, nil
 }
 
+// Update retrieves the named image configuration file from the store and will
+// update scripts. First, it will verify the script is present on disk. If so,
+// it will remove the existing script from the configuration file and update the
+// file with updated. It will return any errors encountered during the process
+// of creating a new image configuration, decoding it, or updating it in the
+// store.
+func Update(name string) error {
+	c, err := types.NewConfig("image/" + name)
+	if err != nil {
+		return fmt.Errorf("creating new image config for %s: %w", name, err)
+	}
+
+	if err := store.Get(c); err != nil {
+		return fmt.Errorf("getting config from store: %w", err)
+	}
+
+	var img v1.Image
+
+	if err := mapstructure.Decode(c.Spec, &img); err != nil {
+		return fmt.Errorf("decoding image spec: %w", err)
+	}
+
+	scripts := img.Scripts
+
+	if len(scripts) > 0 {
+		for k := range scripts {
+			if _, err := os.Stat(k); err == nil {
+				delete(img.Scripts, k)
+
+				if err := addScriptToImage(&img, k, ""); err != nil {
+					return fmt.Errorf("adding script %s to image config: %w", k, err)
+				}
+			}
+		}
+	}
+
+	c.Spec = structs.MapDefaultCase(img, structs.CASESNAKE)
+
+	if err := store.Update(c); err != nil {
+		return fmt.Errorf("updating image config in store: %w", err)
+	}
+
+	return nil
+}
+
 // Append retrieves the named image configuration file from the store and will
 // update it with overlays, packages, and scripts as passed by the user. It will
 // return any errors encountered during the process of creating a new image

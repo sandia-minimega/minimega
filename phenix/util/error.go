@@ -96,6 +96,10 @@ func (this HumanizedError) Humanize() string {
 	return fmt.Sprintf("%s (search error logs for %s)", this.humanized, this.uuid)
 }
 
+func (this HumanizedError) Humanized() error {
+	return fmt.Errorf(this.Humanize())
+}
+
 func (this HumanizedError) UUID() string {
 	return this.uuid
 }

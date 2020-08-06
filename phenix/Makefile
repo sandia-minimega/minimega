@@ -64,4 +64,4 @@ util/shell/mock.go: util/shell/shell.go bin/mockgen
 
 bin/phenix: $(GOSOURCES) tmpl/bindata.go
 	mkdir -p bin
-	CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-X 'phenix/version.Version=$(VERSION)' -s -w" -trimpath -o bin/phenix cmd/main.go
+	CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-X 'phenix/version.Version=$(VERSION)' -s -w" -trimpath -o bin/phenix main.go
