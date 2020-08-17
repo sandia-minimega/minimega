@@ -8,6 +8,31 @@ type Experiments struct {
 	Experiments []Experiment `json:"experiments"`
 }
 
+type CreateExperiment struct {
+	Name     string `json:"name"`
+	Topology string `json:"topology"`
+	Scenario string `json:"scenario"`
+	VLANMin  int    `json:"vlan_min"`
+	VLANMax  int    `json:"vlan_max"`
+}
+
+type CaptureSnapshot struct {
+	Filename string `json:"filename"`
+}
+
+type BackingImage struct {
+	Filename string `json:"filename"`
+}
+
+type StartCapture struct {
+	Interface string `json:"interface"`
+	Filename  string `json:"filename"`
+}
+
+type UpdateSchedule struct {
+	Algorithm string `json:"algorithm"`
+}
+
 type Experiment struct {
 	ID        int      `json:"id"`
 	Name      string   `json:"name"`
