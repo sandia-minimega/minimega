@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"gophenix/cache"
-	"gophenix/types"
+	"phenix/web/cache"
+	"phenix/web/types"
 )
 
 func isExperimentLocked(name string) types.Status {

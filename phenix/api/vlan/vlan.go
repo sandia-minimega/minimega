@@ -76,7 +76,7 @@ func SetAlias(opts ...Option) error {
 
 	exp.Spec.VLANs.Aliases[o.alias] = o.id
 
-	if err := experiment.Save(experiment.Name(o.exp), experiment.Spec(exp.Spec)); err != nil {
+	if err := experiment.Save(experiment.SaveWithName(o.exp), experiment.SaveWithSpec(exp.Spec)); err != nil {
 		return fmt.Errorf("saving updated spec for experiment %s: %w", o.exp, err)
 	}
 
@@ -162,7 +162,7 @@ func SetRange(opts ...Option) error {
 	exp.Spec.VLANs.Min = o.min
 	exp.Spec.VLANs.Max = o.max
 
-	if err := experiment.Save(experiment.Name(o.exp), experiment.Spec(exp.Spec)); err != nil {
+	if err := experiment.Save(experiment.SaveWithName(o.exp), experiment.SaveWithSpec(exp.Spec)); err != nil {
 		return fmt.Errorf("saving updated spec for experiment %s: %w", o.exp, err)
 	}
 

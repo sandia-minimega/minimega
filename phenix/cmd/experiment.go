@@ -114,20 +114,19 @@ func newExperimentCreateCmd() *cobra.Command {
 				return fmt.Errorf("Must provide an experiment name") // this does not work because of topology requirement
 			}
 
-			name := args[0]
+			opts := []experiment.CreateOption{
+				experiment.CreateWithName(args[0]),
+				experiment.CreateWithTopology(MustGetString(cmd.Flags(), "topology")),
+				experiment.CreateWithScenario(MustGetString(cmd.Flags(), "scenario")),
+				experiment.CreateWithBaseDirectory(MustGetString(cmd.Flags(), "base-dir")),
+			}
 
-			var (
-				topology = MustGetString(cmd.Flags(), "topology")
-				scenario = MustGetString(cmd.Flags(), "scenario")
-				baseDir  = MustGetString(cmd.Flags(), "base-dir")
-			)
-
-			if err := experiment.Create(name, topology, scenario, baseDir); err != nil {
-				err := util.HumanizeError(err, "Unable to create the "+name+" experiment")
+			if err := experiment.Create(opts...); err != nil {
+				err := util.HumanizeError(err, "Unable to create the "+args[0]+" experiment")
 				return err.Humanized()
 			}
 
-			fmt.Printf("The %s experiment was created\n", name)
+			fmt.Printf("The %s experiment was created\n", args[0])
 
 			return nil
 		},
@@ -190,17 +189,17 @@ func newExperimentScheduleCmd() *cobra.Command {
 		Long:  desc,
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var (
-				exp  = args[0]
-				algo = args[1]
-			)
+			opts := []experiment.ScheduleOption{
+				experiment.ScheduleWithName(args[0]),
+				experiment.ScheduleWithAlgorithm(args[1]),
+			}
 
-			if err := experiment.Schedule(exp, algo); err != nil {
-				err := util.HumanizeError(err, "Unable to schedule the "+exp+" experiment with the "+algo+" algorithm")
+			if err := experiment.Schedule(opts...); err != nil {
+				err := util.HumanizeError(err, "Unable to schedule the "+args[0]+" experiment with the "+args[1]+" algorithm")
 				return err.Humanized()
 			}
 
-			fmt.Printf("The %s experiment was scheduled with %s\n", exp, algo)
+			fmt.Printf("The %s experiment was scheduled with %s\n", args[0], args[1])
 
 			return nil
 		},

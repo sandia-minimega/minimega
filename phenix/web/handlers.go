@@ -16,10 +16,10 @@ import (
 
 	"phenix/api/experiment"
 	"phenix/api/vm"
-	"phenix/types"
 	"phenix/web/broker"
 	"phenix/web/database"
 	"phenix/web/rbac"
+	"phenix/web/types"
 	"phenix/web/util"
 
 	log "github.com/activeshadow/libminimega/minilog"
@@ -79,7 +79,7 @@ func GetExperiments(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 
-				screenshot, err := vm.Screenshot(exp.Spec.ExperimentName, v.Name, size)
+				screenshot, err := util.GetScreenshot(exp.Spec.ExperimentName, v.Name, size)
 				if err != nil {
 					log.Error("getting screenshot - %v", err)
 					continue
@@ -126,27 +126,39 @@ func CreateExperiment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var data map[string]interface{}
-	if err := json.Unmarshal(body, &data); err != nil {
+	var req types.CreateExperiment
+	if err := json.Unmarshal(body, &req); err != nil {
 		log.Error("unmashaling request body - %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	experiment := new(types.Experiment)
-	experiment.FromUI(data)
-
-	if err := lockExperimentForCreation(experiment.Spec.ExperimentName); err != nil {
+	if err := lockExperimentForCreation(req.Name); err != nil {
 		log.Warn(err.Error())
 		http.Error(w, err.Error(), http.StatusConflict)
 		return
 	}
 
-	defer unlockExperiment(experiment.Spec.ExperimentName)
+	defer unlockExperiment(req.Name)
 
-	if err := api.CreateExperiment(&experiment); err != nil {
-		log.Error("creating experiment %s - %v", experiment.Name, err)
+	opts := []experiment.CreateOption{
+		experiment.CreateWithName(req.Name),
+		experiment.CreateWithTopology(req.Topology),
+		experiment.CreateWithScenario(req.Scenario),
+		experiment.CreateWithVLANMin(req.VLANMin),
+		experiment.CreateWithVLANMax(req.VLANMax),
+	}
+
+	if err := experiment.Create(opts...); err != nil {
+		log.Error("creating experiment %s - %v", req.Name, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	exp, err := experiment.Get(req.Name)
+	if err != nil {
+		log.Error("getting experiment %s - %v", req.Name, err)
+		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
 
@@ -187,7 +199,7 @@ func GetExperiment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	experiment, err := api.GetExperiment(name)
+	exp, err := experiment.Get(name)
 	if err != nil {
 		log.Error("getting experiment %s - %v", name, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -205,7 +217,7 @@ func GetExperiment(w http.ResponseWriter, r *http.Request) {
 	for _, vm := range experiment.VMs {
 		if role.Allowed("vms", "list", fmt.Sprintf("%s_%s", name, vm.Name)) {
 			if vm.Running && size != "" {
-				screenshot, err := api.GetScreenshot(name, vm.Name, size)
+				screenshot, err := util.GetScreenshot(name, vm.Name, size)
 				if err != nil {
 					log.Error("getting screenshot: %v", err)
 				} else {
@@ -265,7 +277,7 @@ func DeleteExperiment(w http.ResponseWriter, r *http.Request) {
 
 	defer unlockExperiment(name)
 
-	if err := api.DeleteExperiment(name); err != nil {
+	if err := experiment.Delete(name); err != nil {
 		log.Error("deleting experiment %s - %v", name, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -521,7 +533,7 @@ func ScheduleExperiment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req map[string]interface{}
+	var req types.UpdateSchedule
 	err = json.Unmarshal(body, &req)
 	if err != nil {
 		log.Error("unmarshaling request body - %v", err)
@@ -529,16 +541,9 @@ func ScheduleExperiment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	algorithm, ok := req["algorithm"].(string)
-	if !ok {
-		log.Error("missing algorithm for schedule")
-		http.Error(w, "missing 'algorithm' key", http.StatusBadRequest)
-		return
-	}
-
-	schedule, err := api.ScheduleExperiment(name, algorithm)
+	schedule, err := api.ScheduleExperiment(name, req.Algorithm)
 	if err != nil {
-		log.Error("scheduling experiment %s using %s - %v", name, algorithm, err)
+		log.Error("scheduling experiment %s using %s - %v", name, req.Algorithm, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -693,7 +698,7 @@ func GetVMs(w http.ResponseWriter, r *http.Request) {
 	for _, vm := range vms {
 		if role.Allowed("vms", "list", fmt.Sprintf("%s_%s", exp, vm.Name)) {
 			if vm.Running && size != "" {
-				screenshot, err := api.GetScreenshot(exp, vm.Name, size)
+				screenshot, err := util.GetScreenshot(exp, vm.Name, size)
 				if err != nil {
 					log.Error("getting screenshot: %v", err)
 				} else {
@@ -751,7 +756,7 @@ func GetVM(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if vm.Running && size != "" {
-		screenshot, err := api.GetScreenshot(exp, name, size)
+		screenshot, err := util.GetScreenshot(exp, name, size)
 		if err != nil {
 			log.Error("getting screenshot: %v", err)
 		} else {
@@ -805,7 +810,7 @@ func UpdateVM(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if vm.Running {
-		screenshot, err := api.GetScreenshot(exp, name, "215")
+		screenshot, err := util.GetScreenshot(exp, name, "215")
 		if err != nil {
 			log.Error("getting screenshot: %v", err)
 		} else {
@@ -925,7 +930,7 @@ func StartVM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	screenshot, err := api.GetScreenshot(exp, name, "215")
+	screenshot, err := util.GetScreenshot(exp, name, "215")
 	if err != nil {
 		log.Error("getting screenshot - %v", err)
 	} else {
@@ -1111,7 +1116,7 @@ func RedeployVM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	screenshot, err := api.GetScreenshot(exp, name, "215")
+	screenshot, err := util.GetScreenshot(exp, name, "215")
 	if err != nil {
 		log.Error("getting screenshot - %v", err)
 	} else {
@@ -1153,7 +1158,7 @@ func GetScreenshot(w http.ResponseWriter, r *http.Request) {
 		size = "215"
 	}
 
-	screenshot, err := api.GetScreenshot(exp, name, size)
+	screenshot, err := util.GetScreenshot(exp, name, size)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1275,7 +1280,7 @@ func StartVMCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req map[string]interface{}
+	var req types.StartCapture
 	err = json.Unmarshal(body, &req)
 	if err != nil {
 		log.Error("unmarshaling request body - %v", err)
@@ -1283,21 +1288,7 @@ func StartVMCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	iface, ok := req["interface"].(float64)
-	if !ok {
-		log.Error("missing interface for start capture")
-		http.Error(w, "missing 'interface' key", http.StatusBadRequest)
-		return
-	}
-
-	out, ok := req["filename"].(string)
-	if !ok {
-		log.Error("missing filename for start capture")
-		http.Error(w, "missing 'filename' key", http.StatusBadRequest)
-		return
-	}
-
-	if err := api.StartVMCapture(exp, name, int(iface), out); err != nil {
+	if err := api.StartVMCapture(exp, name, req.Interface, req.Filename); err != nil {
 		log.Error("starting VM capture for VM %s in experiment %s - %v", name, exp, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1406,18 +1397,11 @@ func SnapshotVM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req map[string]interface{}
+	var req types.CaptureSnapshot
 	err = json.Unmarshal(body, &req)
 	if err != nil {
 		log.Error("unmarshaling request body - %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	out, ok := req["filename"].(string)
-	if !ok {
-		log.Error("missing filename for snapshot")
-		http.Error(w, "missing 'filename' key", http.StatusBadRequest)
 		return
 	}
 
@@ -1466,7 +1450,7 @@ func SnapshotVM(w http.ResponseWriter, r *http.Request) {
 
 	cb := func(s string) { status <- s }
 
-	if err := api.SnapshotVM(exp, name, out, cb); err != nil {
+	if err := api.SnapshotVM(exp, name, req.Filename, cb); err != nil {
 		broker.Broadcast(
 			broker.NewRequestPolicy("vms/snapshots", "create", fullName),
 			broker.NewResource("experiment/vm/snapshot", exp+"/"+name, "errorCreating"),
@@ -1575,7 +1559,7 @@ func CommitVM(w http.ResponseWriter, r *http.Request) {
 	// empty string to `api.CommitToDisk` to let it create a copy based on
 	// the existing file name for the base image.
 	if len(body) != 0 {
-		var req map[string]interface{}
+		var req types.BackingImage
 		err = json.Unmarshal(body, &req)
 		if err != nil {
 			log.Error("unmarshaling request body - %v", err)
@@ -1583,11 +1567,13 @@ func CommitVM(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if filename, _ = req["filename"].(string); filename == "" {
+		if req.Filename == "" {
 			log.Error("missing filename for commit")
 			http.Error(w, "missing 'filename' key", http.StatusBadRequest)
 			return
 		}
+
+		filename = req.Filename
 	}
 
 	if err := lockVMForCommitting(exp, name); err != nil {
@@ -1705,7 +1691,7 @@ func GetAllVMs(w http.ResponseWriter, r *http.Request) {
 		for _, vm := range exp.VMs {
 			if role.Allowed("vms", "list", fmt.Sprintf("%s_%s", exp.Name, vm.Name)) {
 				if vm.Running && size != "" {
-					screenshot, err := api.GetScreenshot(exp.Name, vm.Name, size)
+					screenshot, err := util.GetScreenshot(exp.Name, vm.Name, size)
 					if err != nil {
 						log.Error("getting screenshot: %v", err)
 					} else {
