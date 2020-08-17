@@ -18,6 +18,10 @@ func GetVMInfo(opts ...Option) types.VMs {
 	return DefaultMM.GetVMInfo(opts...)
 }
 
+func GetVMScreenshot(opts ...Option) ([]byte, error) {
+	return DefaultMM.GetVMScreenshot(opts...)
+}
+
 func StartVM(opts ...Option) error {
 	return DefaultMM.StartVM(opts...)
 }

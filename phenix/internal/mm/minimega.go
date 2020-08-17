@@ -1,6 +1,7 @@
 package mm
 
 import (
+	"encoding/base64"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -101,6 +102,51 @@ func (this Minimega) GetVMInfo(opts ...Option) types.VMs {
 	}
 
 	return vms
+}
+
+func (Minimega) GetVMScreenshot(opts ...Option) ([]byte, error) {
+	o := NewOptions(opts...)
+
+	cmd := mmcli.NewNamespacedCommand(o.ns)
+	cmd.Command = fmt.Sprintf("vm screenshot %s file /dev/null %s", o.vm, o.screenshotSize)
+
+	var screenshot []byte
+
+	for resps := range mmcli.Run(cmd) {
+		for _, resp := range resps.Resp {
+			if resp.Error != "" {
+				if strings.HasPrefix(resp.Error, "vm not running:") {
+					continue
+				} else if resp.Error == "cannot take screenshot of container" {
+					continue
+				}
+
+				// Unknown error
+				return nil, fmt.Errorf("unknown error getting VM screenshot: %s", resp.Error)
+			}
+
+			if resp.Data == nil {
+				return nil, fmt.Errorf("not found")
+			}
+
+			if screenshot == nil {
+				var err error
+
+				screenshot, err = base64.StdEncoding.DecodeString(resp.Data.(string))
+				if err != nil {
+					return nil, fmt.Errorf("decoding screenshot: %s", err)
+				}
+			} else {
+				return nil, fmt.Errorf("received more than one screenshot")
+			}
+		}
+	}
+
+	if screenshot == nil {
+		return nil, fmt.Errorf("not found")
+	}
+
+	return screenshot, nil
 }
 
 func (Minimega) StartVM(opts ...Option) error {

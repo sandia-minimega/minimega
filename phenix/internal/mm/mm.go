@@ -11,6 +11,7 @@ type MM interface {
 	LaunchVMs(string) error
 
 	GetVMInfo(...Option) types.VMs
+	GetVMScreenshot(...Option) ([]byte, error)
 	StartVM(...Option) error
 	StopVM(...Option) error
 	RedeployVM(...Option) error

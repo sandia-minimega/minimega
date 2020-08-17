@@ -1,0 +1,1267 @@
+openapi: 3.0.0
+info:
+  description: gophenix API
+  version: 1.0.0
+  title: gophenix
+  termsOfService: http://swagger.io/terms/
+  contact:
+    email: emulytics@sandia.gov
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+tags:
+  - name: Experiments
+    description: Experiments details and controls
+  - name: Virtual Machines
+    description: Experiment VM details and controls
+  - name: Hosts
+    description: Cluster host details
+  - name: Applications
+    description: Available phenix user applications
+  - name: Topologies
+    description: Available phenix topologies
+  - name: Disks
+    description: Available phenix disk images
+  - name: Users
+    description: User details and controls
+paths:
+  "/experiments":
+    get:
+      tags:
+        - Experiments
+      summary: Get all phenix experiments
+      description: ""
+      operationId: getExperiments
+      parameters:
+        - name: screenshot
+          in: query
+          description: whether or not to include VM screenshots (value is size to grab)
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Experiments"
+    post:
+      tags:
+        - Experiments
+      summary: Create new phenix experiment
+      description: ""
+      operationId: postExperiments
+      requestBody:
+        description: phenix experiment creation parameters
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                topology:
+                  type: string
+                apps:
+                  type: array
+                  items:
+                    type: string
+                vlan_min:
+                  type: integer
+                vlan_max:
+                  type: integer
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Experiment"
+  "/experiments/{name}":
+    get:
+      tags:
+        - Experiments
+      summary: Get existing phenix experiment
+      description: ""
+      operationId: getExperimentsName
+      parameters:
+        - name: name
+          in: path
+          description: name of phenix experiment to get
+          required: true
+          schema:
+            type: string
+        - name: screenshot
+          in: query
+          description: whether or not to include VM screenshots (value is size to grab)
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Experiment"
+    delete:
+      tags:
+        - Experiments
+      summary: Delete existing phenix experiment
+      description: ""
+      operationId: deleteExperimentsName
+      parameters:
+        - name: name
+          in: path
+          description: name of phenix experiment to delete
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: successful operation
+  "/experiments/{name}/start":
+    post:
+      tags:
+        - Experiments
+      summary: Start existing phenix experiment
+      description: ""
+      operationId: postExperimentsNameStart
+      parameters:
+        - name: name
+          in: path
+          description: name of phenix experiment to start
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Experiment"
+  "/experiments/{name}/stop":
+    post:
+      tags:
+        - Experiments
+      summary: Stop existing phenix experiment
+      description: ""
+      operationId: postExperimentsNameStop
+      parameters:
+        - name: name
+          in: path
+          description: name of phenix experiment to stop
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Experiment"
+  "/experiments/{name}/schedule":
+    get:
+      tags:
+        - Experiments
+      summary: Get current schedule for existing experiment
+      description: ""
+      operationId: getExperimentsNameSchedule
+      parameters:
+        - name: name
+          in: path
+          description: name of phenix experiment to get schedule for
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+    post:
+      tags:
+        - Experiments
+      summary: Update current schedule for existing experiment
+      description: ""
+      operationId: postExperimentsNameSchedule
+      parameters:
+        - name: name
+          in: path
+          description: name of phenix experiment to update schedule for
+          required: true
+          schema:
+            type: name
+      requestBody:
+        description: scheduling algorithm to use
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                algorithm:
+                  type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Schedule"
+  "/experiments/{name}/captures":
+    get:
+      tags:
+        - Experiments
+      summary: Get captures for existing experiment
+      description: ""
+      operationId: getExperimentsNameCaptures
+      parameters:
+        - name: name
+          in: path
+          description: name of phenix experiment to get captures for
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Captures"
+  "/experiments/{name}/files":
+    get:
+      tags:
+        - Experiments
+      summary: Get list of files for experiment
+      description: ""
+      operationId: getExperimentsNameFiles
+      parameters:
+        - name: name
+          in: path
+          description: name of phenix experiment to get files for
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Files"
+  "/experiments/{name}/files/{filename}":
+    get:
+      tags:
+        - Experiments
+      summary: Download experiment file
+      description: ""
+      operationId: getExperimentsNameFilesFilename
+      parameters:
+        - name: name
+          in: path
+          description: name of phenix experiment to get file from
+          required: true
+          schema:
+            type: string
+        - name: filename
+          in: path
+          description: name of file download
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+  "/experiments/{exp_name}/vms":
+    get:
+      tags:
+        - Virtual Machines
+      summary: get all VMs in existing experiment
+      description: ""
+      operationId: getExperimentsNameVms
+      parameters:
+        - name: exp_name
+          in: path
+          description: name of phenix experiment to get VMs for
+          required: true
+          schema:
+            type: string
+        - name: screenshot
+          in: query
+          description: whether or not to include VM screenshots (value is size to grab)
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VMs"
+  "/experiments/{exp_name}/vms/{vm_name}":
+    get:
+      tags:
+        - Virtual Machines
+      summary: get given VM in existing experiment
+      description: ""
+      operationId: getExperimentsNameVmName
+      parameters:
+        - name: exp_name
+          in: path
+          description: name of phenix experiment to get VM from
+          required: true
+          schema:
+            type: string
+        - name: vm_name
+          in: path
+          description: name of phenix experiment VM to get
+          required: true
+          schema:
+            type: string
+        - name: screenshot
+          in: query
+          description: whether or not to include VM screenshots (value is size to grab)
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VM"
+    patch:
+      tags:
+        - Virtual Machines
+      summary: Update existing VM settings in existing experiment
+      description: ""
+      operationId: patchExperimentsNameVmsName
+      parameters:
+        - name: exp_name
+          in: path
+          description: name of phenix experiment to modify
+          required: true
+          schema:
+            type: string
+        - name: vm_name
+          in: path
+          description: name of phenix virtual machine to modify
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: phenix virtual machine patch parameters
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                host:
+                  type: string
+                cpus:
+                  type: integer
+                ram:
+                  type: integer
+                disk:
+                  type: string
+                dnb:
+                  type: boolean
+                interface:
+                  type: object
+                  properties:
+                    index:
+                      type: integer
+                    vlan:
+                      type: integer
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VM"
+    delete:
+      tags:
+        - Virtual Machines
+      summary: Delete phenix experiment VM
+      description: ""
+      operationId: deleteExperimentsNameVmsName
+      parameters:
+        - name: name
+          in: path
+          description: name of phenix experiment
+          required: true
+          schema:
+            type: string
+        - name: vm_name
+          in: path
+          description: name of phenix virtual machine to delete
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: successful operation
+  "/experiments/{exp_name}/vms/{vm_name}/start":
+    post:
+      tags:
+        - Virtual Machines
+      summary: start VM in experiment
+      description: ""
+      operationId: postExperimentsNameVMsNameStart
+      parameters:
+        - name: exp_name
+          in: path
+          description: name of phenix experiment
+          required: true
+          schema:
+            type: string
+        - name: vm_name
+          in: path
+          description: name of phenix VM to start
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VM"
+  "/experiments/{exp_name}/vms/{vm_name}/stop":
+    post:
+      tags:
+        - Virtual Machines
+      summary: stop VM in experiment
+      description: ""
+      operationId: postExperimentsNameVMsNameStop
+      parameters:
+        - name: exp_name
+          in: path
+          description: name of phenix experiment
+          required: true
+          schema:
+            type: string
+        - name: vm_name
+          in: path
+          description: name of phenix VM to stop
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VM"
+  "/experiments/{exp_name}/vms/{vm_name}/redeploy":
+    post:
+      tags:
+        - Virtual Machines
+      summary: redeploy VM in experiment
+      description: ""
+      operationId: postExperimentsNameVMsNameRedeploy
+      parameters:
+        - name: exp_name
+          in: path
+          description: name of phenix experiment
+          required: true
+          schema:
+            type: string
+        - name: vm_name
+          in: path
+          description: name of phenix VM to redeploy
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VM"
+  "/experiments/{exp_name}/vms/{vm_name}/screenshot.png":
+    get:
+      tags:
+        - Virtual Machines
+      summary: Get screenshot of running VM in experiment
+      description: ""
+      operationId: getExperimentsNameVmsNameScreenshot
+      parameters:
+        - name: exp_name
+          in: path
+          description: name of phenix experiment
+          required: true
+          schema:
+            type: string
+        - name: vm_name
+          in: path
+          description: name of phenix virtual machine to get screenshot from
+          required: true
+          schema:
+            type: string
+        - name: size
+          in: query
+          description: size of screenshot to grab
+          required: false
+          schema:
+            type: string
+        - name: base64
+          in: query
+          description: whether or not to base64 encode the screenshot image
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: successful operation
+          content:
+            image/png:
+              schema:
+                type: string
+                format: base64
+  "/experiments/{exp_name}/vms/{vm_name}/vnc/ws":
+    get:
+      tags:
+        - Virtual Machines
+      summary: Tunnel to VNC of running VM using a WebSocket
+      description: ""
+      operationId: getExperimentsNameVmsNameVncWs
+      parameters:
+        - name: exp_name
+          in: path
+          description: name of phenix experiment
+          required: true
+          schema:
+            type: string
+        - name: vm_name
+          in: path
+          description: name of phenix virtual machine to connect to
+          required: true
+          schema:
+            type: string
+      responses:
+        "101":
+          description: switching protocols
+  "/experiments/{exp_name}/vms/{vm_name}/captures":
+    get:
+      tags:
+        - Virtual Machines
+      summary: get phenix experiment VM packet captures
+      description: ""
+      operationId: getExperimentsNameVmsNameCaptures
+      parameters:
+        - name: exp_name
+          in: path
+          description: name of phenix experiment
+          required: true
+          schema:
+            type: string
+        - name: vm_name
+          in: path
+          description: name of phenix VM to get captures for
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Captures"
+    post:
+      tags:
+        - Virtual Machines
+      summary: start phenix experiment VM packet capture
+      description: ""
+      operationId: postExperimentsNameVmsNameCapture
+      parameters:
+        - name: exp_name
+          in: path
+          description: name of phenix experiment
+          required: true
+          schema:
+            type: string
+        - name: vm_name
+          in: path
+          description: name of phenix VM to start capture on
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: phenix VM packet capture parameters
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                interface:
+                  type: integer
+                filename:
+                  type: string
+      responses:
+        "204":
+          description: successful operation
+    delete:
+      tags:
+        - Virtual Machines
+      summary: stop phenix experiment VM packet captures
+      description: ""
+      operationId: deleteExperimentsNameVmsNameCaptures
+      parameters:
+        - name: exp_name
+          in: path
+          description: name of phenix experiment
+          required: true
+          schema:
+            type: string
+        - name: vm_name
+          in: path
+          description: name of phenix VM to stop captures on
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: successful operation
+  "/experiments/{exp_name}/vms/{vm_name}/snapshots":
+    get:
+      tags:
+        - Virtual Machines
+      summary: get phenix experiment VM snapshots
+      description: ""
+      operationId: getExperimentsNameVmsNameSnapshots
+      parameters:
+        - name: exp_name
+          in: path
+          description: name of phenix experiment
+          required: true
+          schema:
+            type: string
+        - name: vm_name
+          in: path
+          description: name of phenix VM to get snapshots for
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Snapshots"
+    post:
+      tags:
+        - Virtual Machines
+      summary: create phenix experiment VM snapshot
+      description: ""
+      operationId: postExperimentsNameVmsNameSnapshots
+      parameters:
+        - name: exp_name
+          in: path
+          description: name of phenix experiment
+          required: true
+          schema:
+            type: string
+        - name: vm_name
+          in: path
+          description: name of phenix VM to snapshot
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: phenix VM snapshot parameters
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  type: string
+      responses:
+        "204":
+          description: successful operation
+  "/experiments/{exp_name}/vms/{vm_name}/snapshots/{snapshot}":
+    post:
+      tags:
+        - Virtual Machines
+      summary: restore phenix experiment VM to snapshot
+      description: ""
+      operationId: postExperimentsNameVmsNameSnapshotsSnapshot
+      parameters:
+        - name: exp_name
+          in: path
+          description: name of phenix experiment
+          required: true
+          schema:
+            type: string
+        - name: vm_name
+          in: path
+          description: name of phenix VM to restore
+          required: true
+          schema:
+            type: string
+        - name: snapshot
+          in: path
+          description: name of snapshot to restore VM to
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: successful operation
+  "/vms":
+    get:
+      tags:
+        - Virtual Machines
+      summary: Get all running VMs
+      description: ""
+      operationId: getVMs
+      parameters:
+        - name: screenshot
+          in: query
+          description: whether or not to include VM screenshots (value is size to grab)
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VMs"
+  "/applications":
+    get:
+      tags:
+        - Applications
+      summary: Get all available user applications
+      description: ""
+      operationId: getApplications
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Applications"
+  "/topologies":
+    get:
+      tags:
+        - Topologies
+      summary: Get all available topologies
+      description: ""
+      operationId: getTopologies
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Topologies"
+  "/disks":
+    get:
+      tags:
+        - Disks
+      summary: Get all available disk images
+      description: ""
+      operationId: getDisks
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Disks"
+  "/hosts":
+    get:
+      tags:
+        - Hosts
+      summary: Get all cluster hosts
+      description: ""
+      operationId: getHosts
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Hosts"
+  "/users":
+    get:
+      tags:
+        - Users
+      summary: Get all users
+      description: ""
+      operationId: getUsers
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Users"
+    post:
+      tags:
+        - Users
+      summary: Create a new user
+      description: ""
+      operationId: postUsers
+      requestBody:
+        description: user details
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                first_name:
+                  type: string
+                last_name:
+                  type: string
+                role_name:
+                  type: string
+                resource_names:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+  "/users/{username}":
+    get:
+      tags:
+        - Users
+      summary: Get a specific user
+      description: ""
+      operationId: getUserUsername
+      parameters:
+        - name: username
+          in: path
+          description: username of user to get
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    patch:
+      tags:
+        - Users
+      summary: Update existing user
+      description: ""
+      operationId: patchUsersUsername
+      parameters:
+        - name: username
+          in: path
+          description: username of user to modify
+          required: true
+          schema:
+            type: string
+      requestBody:
+        description: user paramaters
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                first_name:
+                  type: string
+                last_name:
+                  type: string
+                role_name:
+                  type: string
+                resource_names:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      tags:
+        - Users
+      summary: Delete existing user
+      description: ""
+      operationId: deleteUsersUsername
+      parameters:
+        - name: username
+          in: path
+          description: username of user to delete
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: successful operation
+  "/signup":
+    post:
+      tags:
+        - Users
+      summary: Signup as a new user
+      description: ""
+      operationId: postSignup
+      requestBody:
+        description: user details
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                first_name:
+                  type: string
+                last_name:
+                  type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credentials"
+  "/login":
+    get:
+      tags:
+        - Users
+      summary: Login a user
+      description: ""
+      operationId: getLogin
+      parameters:
+        - in: query
+          name: user
+          schema:
+            type: string
+          description: login username
+        - in: query
+          name: pass
+          schema:
+            type: string
+          description: login password
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credentials"
+    post:
+      tags:
+        - Users
+      summary: Login a user
+      description: ""
+      operationId: postLogin
+      requestBody:
+        description: login credentials
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user:
+                  type: string
+                pass:
+                  type: string
+      responses:
+        "200":
+          description: successful operation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Credentials"
+  "/logout":
+    get:
+      tags:
+        - Users
+      summary: Logout a user
+      description: ""
+      operationId: getLogout
+      responses:
+        "204":
+          description: successful operation
+externalDocs:
+  description: Find out more about Swagger
+  url: http://swagger.io
+servers:
+  - url: http://phenix.web/api/v1
+components:
+  schemas:
+    Experiments:
+      type: object
+      properties:
+        experiments:
+          type: array
+          items:
+            $ref: "#/components/schemas/Experiment"
+    Experiment:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        topology:
+          type: string
+        apps:
+          type: array
+          items:
+            type: string
+        start_time:
+          type: string
+          format: date-time
+        running:
+          type: boolean
+        vm_count:
+          type: integer
+        vlan_min:
+          type: integer
+        vlan_max:
+          type: integer
+        vlan_count:
+          type: integer
+        vlans:
+          type: array
+          items:
+            type: object
+            properties:
+              vlan:
+                type: integer
+              alias:
+                type: string
+        vms:
+          $ref: "#/components/schemas/VMs"
+    VMs:
+      type: object
+      properties:
+        vms:
+          type: array
+          items:
+            $ref: "#/components/schemas/VM"
+    VM:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        experiment:
+          type: string
+        host:
+          type: string
+        ipv4:
+          type: array
+          items:
+            type: string
+        cpus:
+          type: integer
+        ram:
+          type: integer
+        disk:
+          type: string
+        dnb:
+          type: boolean
+        networks:
+          type: array
+          items:
+            type: string
+        taps:
+          type: array
+          items:
+            type: string
+        captures:
+          type: array
+          items:
+            $ref: "#/components/schemas/Capture"
+        running:
+          type: bool
+        uptime:
+          type: number
+          format: float
+        screenshot:
+          type: string
+          format: base64
+    Schedule:
+      type: object
+      properties:
+        schedule:
+          type: array
+          items:
+            type: object
+            properties:
+              vm:
+                type: string
+              host:
+                type: string
+              auto_assigned:
+                type: boolean
+    Captures:
+      type: object
+      properties:
+        captures:
+          type: array
+          items:
+            $ref: "#/components/schemas/Capture"
+    Capture:
+      type: object
+      properties:
+        vm:
+          type: string
+        interface:
+          type: integer
+        filepath:
+          type: string
+    Snapshots:
+      type: object
+      properties:
+        snapshots:
+          type: array
+          items:
+            type: string
+    Files:
+      type: object
+      properties:
+        files:
+          type: array
+          items:
+            type: string
+    Hosts:
+      type: object
+      properties:
+        hosts:
+          type: array
+          items:
+            $ref: "#/components/schemas/Host"
+    Host:
+      type: object
+      properties:
+        name:
+          type: string
+        cpus:
+          type: integer
+        load:
+          type: string
+        memused:
+          type: integer
+        memtotal:
+          type: integer
+        bandwidth:
+          type: string
+        vms:
+          type: integer
+        uptime:
+          type: number
+          format: float
+        schedulable:
+          type: boolean
+    Applications:
+      type: object
+      properties:
+        applications:
+          type: array
+          items:
+            type: string
+    Topologies:
+      type: object
+      properties:
+        topologies:
+          type: array
+          items:
+            type: string
+    Disks:
+      type: object
+      properties:
+        disks:
+          type: array
+          items:
+            type: string
+    Users:
+      type: object
+      properties:
+        users:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+    User:
+      type: object
+      properties:
+        username:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        role:
+          type: object
+          properties:
+            name:
+              type: string
+            resources:
+              type: array
+              items:
+                type: string
+            resource_names:
+              type: array
+              items:
+                type: string
+            verbs:
+              type: array
+              items:
+                type: string
+    Credentials:
+      type: object
+      properties:
+        username:
+          type: string
+        first_name:
+          type: string
+        last_name:
+          type: string
+        role:
+          type: string
+        token:
+          type: string

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"time"
 
 	"phenix/api/experiment"
 	"phenix/internal/mm"
@@ -169,6 +170,21 @@ func Get(expName, vmName string) (*types.VM, error) {
 	}
 
 	return vm, nil
+}
+
+func Screenshot(expName, vmName, size string) ([]byte, error) {
+	if screenshot, ok := cache.DefaultCache.Get(name); ok {
+		return screenshot, nil
+	}
+
+	screenshot, err := mm.GetVMScreenshot(mm.NS(expName), mm.VM(vmName), mm.ScreenshotSize(size))
+	if err != nil {
+		return nil, fmt.Errorf("getting VM screenshot: %w", err)
+	}
+
+	cache.DefaultCache.SetWithExpire(vmName, screenshot, 10*time.Second)
+
+	return screenshot, nil
 }
 
 // Pause stops a running VM with the given name in the experiment with the given
