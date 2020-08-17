@@ -56,3 +56,11 @@ func (this Experiment) Validate() error {
 
 	return nil
 }
+
+func (this CreateExperiment) Validate() error {
+	if this.VLANMin > this.VLANMax {
+		return fmt.Errorf("vlan_min must be <= vlan_max")
+	}
+
+	return nil
+}
