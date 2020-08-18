@@ -1,0 +1,9 @@
+message HostsRequest {
+	required string name = 1;
+	required string cpus = 2;
+	repeated uint32 load = 3;
+	required uint32 mem_used = 4;
+	required uint32 bandwidth = 5;
+	required uint32 no_vms = 6;
+	required string uptime = 7;
+}
