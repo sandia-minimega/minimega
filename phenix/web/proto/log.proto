@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+option go_package = "proto";
+
+message LogsRequest {
+  string timestamp = 1;
+  string source = 2;
+  string level = 3;
+  string log = 4;
+}

@@ -1,10 +1,14 @@
+syntax = "proto3";
+
+option go_package = "proto";
+
 message VM {
-  required string name = 1;
-  required string host = 2;
+  string name = 1;
+  string host = 2;
   string ipv4 = 3;
-  required uint32 cpus = 4;
-  required uint32 ram = 5;
-  required string disk = 6;
+  uint32 cpus = 4;
+  uint32 ram = 5;
+  string disk = 6;
   string uptime = 7;
   repeated string networks = 8;
   repeated string taps = 9;

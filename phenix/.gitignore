@@ -1,6 +1,8 @@
 .devcontainer
 .vscode
 
+*.pb.go
+
 phenix.bdb
 phenix.err
 

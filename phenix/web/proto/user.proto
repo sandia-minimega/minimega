@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+option go_package = "proto";
+
+message SignupUserRequest {
+  string username = 1;
+  string password = 2;
+  string first_name = 3;
+  string last_name = 4;
+}
+
+message User {
+  string username = 1;
+  string password = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string role_name = 5;
+  string resource_names = 6;
+}
+
+message CreateUserRequest { string user = 1; }
+
+message UpdateUserRequest { string user = 1; }

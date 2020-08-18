@@ -1,6 +1,0 @@
-message LogsRequest {
-  required string timestamp = 1;
-  required string source = 2;
-  required string level = 3;
-  required string log = 4;
-}
