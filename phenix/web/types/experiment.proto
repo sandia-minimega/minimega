@@ -45,7 +45,7 @@ message UpdateFilesRequest {
 	repeated string files = 1;
 }
 
-message CreateExperimentReturn {
+message CreateExperimentResponse {
 	required string name = 1;
 	required string topology = 2;
 	optional string scenario = 3;
