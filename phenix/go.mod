@@ -14,7 +14,7 @@ require (
 	github.com/go-bindata/go-bindata/v3 v3.1.3
 	github.com/gofrs/uuid v3.3.0+incompatible
 	github.com/golang/mock v1.4.3
-	github.com/golang/protobuf v1.3.2
+	github.com/golang/protobuf v1.4.1
 	github.com/gorilla/mux v1.7.4
 	github.com/gorilla/websocket v1.4.2
 	github.com/hpcloud/tail v1.0.0
@@ -33,6 +33,7 @@ require (
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20200323222414-85ca7c5b95cd // indirect
 	golang.org/x/tools v0.0.0-20200513201620-d5fe73897c97 // indirect
+	google.golang.org/protobuf v1.25.0
 	gopkg.in/fsnotify.v1 v1.4.7 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c

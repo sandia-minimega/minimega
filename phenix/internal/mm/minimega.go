@@ -4,12 +4,18 @@ import (
 	"encoding/base64"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"phenix/internal/mm/mmcli"
 	"phenix/types"
+)
+
+var (
+	ErrCaptureExists = fmt.Errorf("capture already exists")
+	ErrNoCaptures    = fmt.Errorf("no captures exist")
 )
 
 type Minimega struct{}
@@ -37,7 +43,7 @@ func (Minimega) ClearNamespace(ns string) error {
 }
 
 func (Minimega) LaunchVMs(ns string) error {
-	cmd := mmcli.NewCommand()
+	cmd := mmcli.NewNamespacedCommand(ns)
 	cmd.Command = "vm launch"
 
 	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
@@ -51,6 +57,49 @@ func (Minimega) LaunchVMs(ns string) error {
 	}
 
 	return nil
+}
+
+func (Minimega) GetLaunchProgress(ns string, expected int) (float64, error) {
+	var queued int
+
+	cmd := mmcli.NewNamespacedCommand(ns)
+	cmd.Command = "ns queue"
+
+	re := regexp.MustCompile(`Names: (.*)`)
+
+	for resps := range mmcli.Run(cmd) {
+		for _, resp := range resps.Resp {
+			if resp.Error != "" {
+				continue
+			}
+
+			for _, m := range re.FindAllStringSubmatch(resp.Response, -1) {
+				queued += len(strings.Split(m[1], ","))
+			}
+		}
+	}
+
+	// `ns queue` will be empty once queued VMs have been launched.
+
+	if queued == 0 {
+		cmd.Command = "vm info"
+		cmd.Columns = []string{"state"}
+
+		status := mmcli.RunTabular(cmd)
+
+		if len(status) == 0 {
+			return 0.0, nil
+		}
+
+		for _, s := range status {
+			if s["state"] == "BUILDING" {
+				queued++
+			}
+		}
+	}
+
+	return float64(queued) / float64(expected), nil
+
 }
 
 func (this Minimega) GetVMInfo(opts ...Option) types.VMs {
@@ -147,6 +196,27 @@ func (Minimega) GetVMScreenshot(opts ...Option) ([]byte, error) {
 	}
 
 	return screenshot, nil
+}
+
+func (Minimega) GetVNCEndpoint(opts ...Option) (string, error) {
+	o := NewOptions(opts...)
+
+	cmd := mmcli.NewNamespacedCommand(o.ns)
+	cmd.Command = "vm info"
+	cmd.Columns = []string{"host", "vnc_port"}
+	cmd.Filters = []string{"type=kvm", fmt.Sprintf("name=%s_%s", o.ns, o.vm)}
+
+	var endpoint string
+
+	for _, vm := range mmcli.RunTabular(cmd) {
+		endpoint = fmt.Sprintf("%s:%s", vm["host"], vm["vnc_port"])
+	}
+
+	if endpoint == "" {
+		return "", fmt.Errorf("not found")
+	}
+
+	return endpoint, nil
 }
 
 func (Minimega) StartVM(opts ...Option) error {
@@ -322,6 +392,14 @@ func (Minimega) DisconnectVMInterface(opts ...Option) error {
 func (Minimega) StartVMCapture(opts ...Option) error {
 	o := NewOptions(opts...)
 
+	captures := GetVMCaptures(opts...)
+
+	for _, capture := range captures {
+		if capture.Interface == o.captureIface {
+			return ErrCaptureExists
+		}
+	}
+
 	cmd := mmcli.NewNamespacedCommand(o.ns)
 	cmd.Command = fmt.Sprintf("capture pcap vm %s %d %s", o.vm, o.captureIface, o.captureFile)
 
@@ -333,6 +411,12 @@ func (Minimega) StartVMCapture(opts ...Option) error {
 }
 
 func (Minimega) StopVMCapture(opts ...Option) error {
+	captures := GetVMCaptures(opts...)
+
+	if len(captures) == 0 {
+		return ErrNoCaptures
+	}
+
 	o := NewOptions(opts...)
 
 	cmd := mmcli.NewNamespacedCommand(o.ns)

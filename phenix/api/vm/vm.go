@@ -12,6 +12,19 @@ import (
 
 var vlanAliasRegex = regexp.MustCompile(`(.*) \(\d*\)`)
 
+func Count(expName string) (int, error) {
+	if expName == "" {
+		return 0, fmt.Errorf("no experiment name provided")
+	}
+
+	exp, err := experiment.Get(expName)
+	if err != nil {
+		return 0, fmt.Errorf("getting experiment %s: %w", expName, err)
+	}
+
+	return len(exp.Spec.Topology.Nodes), nil
+}
+
 // List collects VMs, combining topology settings with running VM details if the
 // experiment is running. It returns a slice of VM structs and any errors
 // encountered while gathering them.
@@ -295,4 +308,28 @@ func Kill(expName, vmName string) error {
 	}
 
 	return nil
+}
+
+func Snapshots(expName, vmName string) ([]string, error) {
+	// TODO
+
+	return nil, nil
+}
+
+func Snapshot(expName, vmName, out string, cb func(string)) error {
+	// TODO
+
+	return nil
+}
+
+func Restore(expName, vmName, snap string) error {
+	// TODO
+
+	return nil
+}
+
+func Commit(expName, vmName, out string, cb func(float64)) (string, error) {
+	// TODO
+
+	return "", nil
 }

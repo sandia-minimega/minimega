@@ -8,6 +8,7 @@ DATE    := $(shell date -u)
 VERSION := $(VER) (commit $(COMMIT)) $(DATE)
 
 GOSOURCES := $(shell find . \( -name '*.go' \))
+UISOURCES := $(shell find ./web/ui/src \( -name '*.js' -o -name '*.vue' \))
 TEMPLATES := $(shell find tmpl/templates \( -name '*' \))
 
 THISFILE := $(lastword $(MAKEFILE_LIST))
@@ -26,7 +27,14 @@ all:
 clean:
 	$(RM) bin/phenix
 	$(RM) tmpl/bindata.go
+	$(RM) web/bindata.go
 	$(RM) web/proto/*.pb.go
+	$(RM) web/public/index.html
+	$(RM) web/public/docs/index.html
+	$(RM) web/public/favicon.ico
+	$(RM) -r web/public/assets
+	$(RM) -r web/ui/dist
+	$(RM) -r web/ui/node_modules
 
 .PHONY: install-build-deps
 install-build-deps: bin/go-bindata bin/mockgen bin/protoc-gen-go
@@ -44,13 +52,23 @@ bin/mockgen:
 	go install github.com/golang/mock/mockgen
 
 bin/protoc-gen-go:
-	go install github.com/golang/protobuf/protoc-gen-go
+	go install google.golang.org/protobuf/cmd/protoc-gen-go
 
 .PHONY: generate-bindata
-generate-bindata: tmpl/bindata.go
+generate-bindata: tmpl/bindata.go web/bindata.go
 
 tmpl/bindata.go: $(TEMPLATES) bin/go-bindata
 	$(GOBIN)/go-bindata -pkg tmpl -prefix tmpl/templates -o tmpl/bindata.go tmpl/templates/...
+
+web/public/index.html: $(UISOURCES)
+	(cd web/ui ; yarn install ; yarn build)
+	cp -a web/ui/dist/* web/public
+
+web/public/docs/index.html: web/public/docs/openapi.yml
+	npx redoc-cli bundle web/public/docs/openapi.yml -o web/public/docs/index.html --title 'phenix API'
+
+web/bindata.go: web/public/index.html web/public/vnc.html web/public/docs/index.html bin/go-bindata
+	$(GOBIN)/go-bindata -pkg web -prefix web/public -o web/bindata.go web/public/...
 
 .PHONY: generate-mocks
 generate-mocks: app/mock.go internal/mm/mock.go store/mock.go util/shell/mock.go
@@ -71,20 +89,20 @@ util/shell/mock.go: util/shell/shell.go bin/mockgen
 generate-protobuf: web/proto/experiment.pb.go web/proto/host.pb.go web/proto/log.pb.go web/proto/user.pb.go web/proto/vm.pb.go
 
 web/proto/experiment.pb.go: web/proto/*.proto bin/protoc-gen-go
-	protoc -I . -I web/proto --go_out=plugins=grpc,paths=source_relative:. ./web/proto/experiment.proto
+	protoc -I . -I web/proto --go_out=paths=source_relative:. ./web/proto/experiment.proto
 
 web/proto/host.pb.go: web/proto/*.proto bin/protoc-gen-go
-	protoc -I . -I web/proto --go_out=plugins=grpc,paths=source_relative:. ./web/proto/host.proto
+	protoc -I . -I web/proto --go_out=paths=source_relative:. ./web/proto/host.proto
 
 web/proto/log.pb.go: web/proto/*.proto bin/protoc-gen-go
-	protoc -I . -I web/proto --go_out=plugins=grpc,paths=source_relative:. ./web/proto/log.proto
+	protoc -I . -I web/proto --go_out=paths=source_relative:. ./web/proto/log.proto
 
 web/proto/user.pb.go: web/proto/*.proto bin/protoc-gen-go
-	protoc -I . -I web/proto --go_out=plugins=grpc,paths=source_relative:. ./web/proto/user.proto
+	protoc -I . -I web/proto --go_out=paths=source_relative:. ./web/proto/user.proto
 
 web/proto/vm.pb.go: web/proto/*.proto bin/protoc-gen-go
-	protoc -I . -I web/proto --go_out=plugins=grpc,paths=source_relative:. ./web/proto/vm.proto
+	protoc -I . -I web/proto --go_out=paths=source_relative:. ./web/proto/vm.proto
 
-bin/phenix: $(GOSOURCES) tmpl/bindata.go
+bin/phenix: $(GOSOURCES) generate-bindata generate-protobuf
 	mkdir -p bin
 	CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-X 'phenix/version.Version=$(VERSION)' -s -w" -trimpath -o bin/phenix main.go

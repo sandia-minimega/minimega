@@ -1,17 +1,46 @@
 syntax = "proto3";
 
-option go_package = "proto";
+option go_package = "web/proto";
 
 message VM {
   string name = 1;
   string host = 2;
-  string ipv4 = 3;
+  repeated string ipv4 = 3;
   uint32 cpus = 4;
   uint32 ram = 5;
   string disk = 6;
-  string uptime = 7;
+  double uptime = 7;
   repeated string networks = 8;
   repeated string taps = 9;
-  repeated string snapshots = 10;
-  bool dnb = 11;
+  repeated Capture captures = 10;
+  bool do_not_boot = 11 [json_name="dnb"];
+  string screenshot = 12;
+  bool running = 13;
+  bool redeploying = 14;
+}
+
+message VMList {
+  repeated VM vms = 1;
+}
+
+message Capture {
+  string vm = 1;
+  uint32 interface = 2;
+  string filepath = 3;
+}
+
+message CaptureList {
+  repeated Capture captures = 1;
+}
+
+message SnapshotList {
+  repeated string snapshots = 1;
+}
+
+message VMRedeployRequest {
+  string name = 1;
+  uint32 cpus = 2;
+  uint32 ram = 3;
+  string disk = 4;
+  bool injects = 5;
 }

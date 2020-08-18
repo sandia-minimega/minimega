@@ -8,4 +8,10 @@ phenix.err
 
 mock.go
 
-tmpl/bindata.go
+bindata.go
+bindata.go
+
+web/public/assets
+web/public/favicon.ico
+web/public/index.html
+web/public/docs/index.html

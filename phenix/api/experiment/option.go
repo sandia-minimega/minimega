@@ -132,7 +132,7 @@ func newScheduleOptions(opts ...ScheduleOption) scheduleOptions {
 	return o
 }
 
-func ScheduleWithName(n string) ScheduleOption {
+func ScheduleForName(n string) ScheduleOption {
 	return func(o *scheduleOptions) {
 		o.name = n
 	}

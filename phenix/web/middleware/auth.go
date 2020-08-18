@@ -5,8 +5,6 @@ import (
 	"net/http"
 	"strings"
 
-	"phenix/web/database"
-
 	log "github.com/activeshadow/libminimega/minilog"
 	jwtmiddleware "github.com/cescoferraro/go-jwt-middleware"
 	"github.com/dgrijalva/jwt-go"
@@ -33,9 +31,11 @@ func AuthMiddleware(enabled bool, jwtKey string) mux.MiddlewareFunc {
 			ErrorHandler: func(w http.ResponseWriter, r *http.Request, e string) {
 				log.Error("Error validating auth token: %s", e)
 
-				if token, err := jwtmiddleware.FromAuthHeader(r); err == nil {
-					database.DeleteUserToken(token)
-				}
+				/*
+					if token, err := jwtmiddleware.FromAuthHeader(r); err == nil {
+						database.DeleteUserToken(token)
+					}
+				*/
 
 				http.Error(w, e, http.StatusUnauthorized)
 			},
@@ -69,37 +69,40 @@ func AuthMiddleware(enabled bool, jwtKey string) mux.MiddlewareFunc {
 			}
 
 			token := userToken.(*jwt.Token)
-			claim := token.Claims.(jwt.MapClaims)
+			// claim := token.Claims.(jwt.MapClaims)
 
-			user, err := database.GetUser(claim["sub"].(string))
-			if err != nil {
-				http.Error(w, "user error", http.StatusUnauthorized)
-				return
-			}
+			/*
+				user, err := database.GetUser(claim["sub"].(string))
+				if err != nil {
+					http.Error(w, "user error", http.StatusUnauthorized)
+					return
+				}
 
-			exists, err := database.UserTokenExists(user.Username, token.Raw)
-			if err != nil {
-				http.Error(w, "user token error", http.StatusUnauthorized)
-				return
-			}
+				exists, err := database.UserTokenExists(user.Username, token.Raw)
+				if err != nil {
+					http.Error(w, "user token error", http.StatusUnauthorized)
+					return
+				}
 
-			if !exists {
-				http.Error(w, "user token expired", http.StatusUnauthorized)
-				return
-			}
+				if !exists {
+					http.Error(w, "user token expired", http.StatusUnauthorized)
+					return
+				}
 
-			role, err := database.GetUserRole(user.Username)
-			if err != nil {
-				// TODO: we will get an error here if the user doesn't yet have a role
-				// assigned. Need to figure out how we could redirect the client to a
-				// page that talks about needing to wait for an admin to assign a role.
-				http.Error(w, "user role error", http.StatusUnauthorized)
-				return
-			}
+				role, err := database.GetUserRole(user.Username)
+				if err != nil {
+					// TODO: we will get an error here if the user doesn't yet have a role
+					// assigned. Need to figure out how we could redirect the client to a
+					// page that talks about needing to wait for an admin to assign a role.
+					http.Error(w, "user role error", http.StatusUnauthorized)
+					return
+				}
 
-			ctx = context.WithValue(ctx, "uid", user.ID)
-			ctx = context.WithValue(ctx, "user", user.Username)
-			ctx = context.WithValue(ctx, "role", role)
+				ctx = context.WithValue(ctx, "uid", user.ID)
+				ctx = context.WithValue(ctx, "user", user.Username)
+				ctx = context.WithValue(ctx, "role", role)
+			*/
+
 			ctx = context.WithValue(ctx, "jwt", token.Raw)
 
 			h.ServeHTTP(w, r.WithContext(ctx))

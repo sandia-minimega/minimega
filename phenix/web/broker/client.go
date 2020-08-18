@@ -9,7 +9,8 @@ import (
 	"sync"
 	"time"
 
-	"phenix/api"
+	"phenix/api/experiment"
+	"phenix/api/vm"
 	"phenix/types"
 	"phenix/web/rbac"
 	"phenix/web/util"
@@ -18,7 +19,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-type vm struct {
+type vmScope struct {
 	exp  string
 	name string
 }
@@ -51,7 +52,7 @@ type Client struct {
 	// Track the VMs this client currently has in view, if any, so we know
 	// what screenshots need to periodically be pushed to the client over
 	// the WebSocket connection.
-	vms []vm
+	vms []vmScope
 }
 
 func NewClient(role rbac.Role, conn *websocket.Conn) *Client {
@@ -121,8 +122,6 @@ func (this *Client) read() {
 			continue
 		}
 
-		exp := req.Resource.Name
-
 		switch req.Resource.Action {
 		case "list":
 		default:
@@ -141,10 +140,17 @@ func (this *Client) read() {
 			continue
 		}
 
-		experiment, err := api.GetExperiment(exp)
+		expName := req.Resource.Name
+
+		exp, err := experiment.Get(expName)
 		if err != nil {
-			log.Error("getting experiment %s for WebSocket client: %v", exp, err)
+			log.Error("getting experiment %s for WebSocket client: %v", expName, err)
 			continue
+		}
+
+		vms, err := vm.List(expName)
+		if err != nil {
+			// TODO
 		}
 
 		// If `filter` was not provided client-side, `regex` will be an
@@ -154,15 +160,15 @@ func (this *Client) read() {
 
 		allowed := types.VMs{}
 
-		for _, vm := range experiment.VMs {
+		for _, vm := range vms {
 			// If there's an error, `matched` will be false.
 			if matched, _ := regexp.MatchString(regex, vm.Name); !matched {
 				continue
 			}
 
-			if this.role.Allowed("vms", "list", fmt.Sprintf("%s_%s", exp, vm.Name)) {
+			if this.role.Allowed("vms", "list", fmt.Sprintf("%s_%s", expName, vm.Name)) {
 				if vm.Running {
-					screenshot, err := api.GetScreenshot(exp, vm.Name, "200")
+					screenshot, err := util.GetScreenshot(expName, vm.Name, "200")
 					if err != nil {
 						log.Error("getting screenshot for WebSocket client: %v", err)
 					} else {
@@ -197,7 +203,7 @@ func (this *Client) read() {
 		this.vms = nil
 
 		for _, v := range allowed {
-			this.vms = append(this.vms, vm{exp: exp, name: v.Name})
+			this.vms = append(this.vms, vmScope{exp: expName, name: v.Name})
 		}
 
 		this.Unlock()
@@ -211,7 +217,7 @@ func (this *Client) read() {
 		}
 
 		this.publish <- Publish{
-			Resource: NewResource("experiment/vms", exp, "list"),
+			Resource: NewResource("experiment/vms", expName, "list"),
 			Result:   marshalled,
 		}
 	}
@@ -287,7 +293,7 @@ func (this *Client) screenshots() {
 			this.RLock()
 
 			for _, v := range this.vms {
-				screenshot, err := api.GetScreenshot(v.exp, v.name, "200")
+				screenshot, err := util.GetScreenshot(v.exp, v.name, "200")
 				if err != nil {
 					log.Error("getting screenshot for WebSocket client: %v", err)
 				} else {

@@ -2,12 +2,10 @@ package web
 
 import (
 	"context"
-	"flag"
 	"net/http"
 	"strings"
 
 	"phenix/web/broker"
-	"phenix/web/database"
 	"phenix/web/middleware"
 	"phenix/web/rbac"
 	"phenix/web/util"
@@ -15,61 +13,97 @@ import (
 	log "github.com/activeshadow/libminimega/minilog"
 	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/mux"
-	"github.com/pkg/errors"
 )
 
-var (
-	f_endpoint  string
-	f_jwtKey    string
-	f_users     string
-	f_log       string
-	f_allowCORS bool
-)
+type ServerOption func(*serverOptions)
 
-func init() {
-	flag.StringVar(&f_endpoint, "web.endpoint", ":3000", "HTTP endpoint to listen on")
-	flag.StringVar(&f_jwtKey, "web.auth.jwt-signing-key", "", "key to sign/verify JWTs (not providing a key disables auth)")
-	flag.StringVar(&f_users, "web.users", "admin@foo.com:foobar:Global Admin", "list of default users (separated by pipes)")
-	flag.StringVar(&f_log, "web.log", "", "HTTP logs (options are 'full' and 'requests')")
-	flag.BoolVar(&f_allowCORS, "web.allow-cors", false, "Allow HTTP CORS")
+type serverOptions struct {
+	endpoint  string
+	jwtKey    string
+	users     []string
+	logs      string
+	allowCORS bool
 }
 
-func Start() error {
-	if len(f_users) != 0 {
-		users := strings.Split(f_users, "|")
+func newServerOptions(opts ...ServerOption) serverOptions {
+	o := serverOptions{
+		endpoint: ":3000",
+		users:    []string{"admin@foo.com:foobar:Global Admin"},
+	}
 
-		for _, u := range users {
-			creds := strings.Split(u, ":")
-			uname := creds[0]
-			pword := creds[1]
-			rname := creds[2]
+	for _, opt := range opts {
+		opt(&o)
+	}
 
-			user := rbac.User{
-				Username: uname,
-				Password: pword,
-			}
+	return o
+}
 
-			policies := rbac.CreateBasePoliciesForRole(rname)
+func ServeOnEndpoint(e string) ServerOption {
+	return func(o *serverOptions) {
+		o.endpoint = e
+	}
+}
 
-			for _, policy := range policies {
-				policy.SetResourceNames(creds[3:]...)
-			}
+func ServeWithJWTKey(k string) ServerOption {
+	return func(o *serverOptions) {
+		o.jwtKey = k
+	}
+}
 
-			user.Role = rbac.NewRole(rname, policies...)
+func ServeWithUsers(u string) ServerOption {
+	return func(o *serverOptions) {
+		o.users = strings.Split(u, "|")
+	}
+}
 
-			// allow user to get their own user details
-			user.Role.AddPolicies(&rbac.Policy{
-				Resources:     []string{"users"},
-				ResourceNames: []string{uname},
-				Verbs:         []string{"get"},
-			})
+func ServeWithLogs(l string) ServerOption {
+	return func(o *serverOptions) {
+		o.logs = l
+	}
+}
 
-			log.Debug("creating default user - %+v", user)
+func ServeWithCORS(c bool) ServerOption {
+	return func(o *serverOptions) {
+		o.allowCORS = c
+	}
+}
 
+func Start(opts ...ServerOption) error {
+	o := newServerOptions(opts...)
+
+	for _, u := range o.users {
+		creds := strings.Split(u, ":")
+		uname := creds[0]
+		pword := creds[1]
+		rname := creds[2]
+
+		user := rbac.User{
+			Username: uname,
+			Password: pword,
+		}
+
+		policies := rbac.CreateBasePoliciesForRole(rname)
+
+		for _, policy := range policies {
+			policy.SetResourceNames(creds[3:]...)
+		}
+
+		user.Role = rbac.NewRole(rname, policies...)
+
+		// allow user to get their own user details
+		user.Role.AddPolicies(&rbac.Policy{
+			Resources:     []string{"users"},
+			ResourceNames: []string{uname},
+			Verbs:         []string{"get"},
+		})
+
+		log.Debug("creating default user - %+v", user)
+
+		/*
 			if err := database.UpsertUser(&user); err != nil {
 				return errors.Wrap(err, "adding user to database")
 			}
-		}
+		*/
 	}
 
 	router := mux.NewRouter().StrictSlash(true)
@@ -134,22 +168,24 @@ func Start() error {
 	api.HandleFunc("/disks", GetDisks).Methods("GET", "OPTIONS")
 	api.HandleFunc("/hosts", GetClusterHosts).Methods("GET", "OPTIONS")
 	api.HandleFunc("/logs", GetLogs).Methods("GET", "OPTIONS")
-	api.HandleFunc("/users", GetUsers).Methods("GET", "OPTIONS")
-	api.HandleFunc("/users", CreateUser).Methods("POST", "OPTIONS")
-	api.HandleFunc("/users/{username}", GetUser).Methods("GET", "OPTIONS")
-	api.HandleFunc("/users/{username}", UpdateUser).Methods("PATCH", "OPTIONS")
-	api.HandleFunc("/users/{username}", DeleteUser).Methods("DELETE", "OPTIONS")
-	api.HandleFunc("/signup", Signup).Methods("POST", "OPTIONS")
-	api.HandleFunc("/login", Login).Methods("GET", "POST", "OPTIONS")
-	api.HandleFunc("/logout", Logout).Methods("GET", "OPTIONS")
+	/*
+		api.HandleFunc("/users", GetUsers).Methods("GET", "OPTIONS")
+		api.HandleFunc("/users", CreateUser).Methods("POST", "OPTIONS")
+		api.HandleFunc("/users/{username}", GetUser).Methods("GET", "OPTIONS")
+		api.HandleFunc("/users/{username}", UpdateUser).Methods("PATCH", "OPTIONS")
+		api.HandleFunc("/users/{username}", DeleteUser).Methods("DELETE", "OPTIONS")
+		api.HandleFunc("/signup", Signup).Methods("POST", "OPTIONS")
+		api.HandleFunc("/login", Login).Methods("GET", "POST", "OPTIONS")
+		api.HandleFunc("/logout", Logout).Methods("GET", "OPTIONS")
+	*/
 	api.HandleFunc("/ws", broker.ServeWS).Methods("GET")
 
-	if f_allowCORS {
+	if o.allowCORS {
 		log.Info("CORS is enabled on HTTP API endpoints")
 		api.Use(middleware.AllowCORS)
 	}
 
-	switch f_log {
+	switch o.logs {
 	case "full":
 		log.Info("full HTTP logging is enabled")
 		api.Use(middleware.LogFull)
@@ -158,7 +194,7 @@ func Start() error {
 		api.Use(middleware.LogRequests)
 	}
 
-	api.Use(middleware.AuthMiddleware(true, f_jwtKey))
+	api.Use(middleware.AuthMiddleware(true, o.jwtKey))
 
 	log.Info("Starting websockets broker")
 
@@ -168,7 +204,7 @@ func Start() error {
 
 	go PublishLogs(context.Background())
 
-	log.Info("Starting HTTP server on %s", f_endpoint)
+	log.Info("Starting HTTP server on %s", o.endpoint)
 
-	return http.ListenAndServe(f_endpoint, router)
+	return http.ListenAndServe(o.endpoint, router)
 }

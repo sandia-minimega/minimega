@@ -1,11 +1,11 @@
 syntax = "proto3";
 
-option go_package = "proto";
+option go_package = "web/proto";
 
 import "web/proto/vm.proto";
 
 message VLAN {
-	uint32 id = 1;
+	uint32 vlan = 1;
 	string alias = 2;
 }
 
@@ -17,27 +17,25 @@ message Experiment {
 	string start_time = 5;
 	bool running = 6;
 	string status = 7;
-	uint32 vm_count = 8;
-	uint32 vlan_min = 9;
-	uint32 vlan_max = 10;
-	repeated VLAN vlans = 11;
+	uint32 vlan_min = 8;
+	uint32 vlan_max = 9;
+	repeated VLAN vlans = 10;
 	repeated VM vms = 12;
+	repeated string apps = 13;
 }
 
 message ExperimentList {
 	repeated Experiment experiments = 1;
 }
 
-message UpdateExperimentRequest {
-	string name = 1;
-	string status = 2;
-	string topology = 3;
-	string scenario = 4;
-	string start_time = 5;
-	uint32 vm_count = 6;
-	uint32 vlan_min = 9;
-	uint32 vlan_max = 10;
-	uint32 vlan_count = 11;
+message Schedule {
+	string vm = 1;
+	string host = 2;
+	bool auto_assigned = 3;
+}
+
+message ExperimentSchedule {
+	repeated Schedule schedule = 1;
 }
 
 message TopologyList {
@@ -64,7 +62,7 @@ message CreateExperimentRequest {
 	uint32 vlan_max = 5;
 }
 
-message CaptureSnapshotRequest {
+message SnapshotRequest {
 	string filename = 1;
 }
 
@@ -72,11 +70,20 @@ message BackingImageRequest {
 	string filename = 1;
 }
 
+message BackingImageResponse {
+	string disk = 1;
+	VM vm = 2;
+}
+
 message StartCaptureRequest {
-  string interface = 1;
+  uint32 interface = 1;
   string filename = 2;
 }
 
 message UpdateScheduleRequest {
 	string algorithm = 1;
+}
+
+message AppList {
+	repeated string applications = 1;
 }

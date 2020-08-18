@@ -438,3 +438,21 @@ func Save(opts ...SaveOption) error {
 
 	return nil
 }
+
+func Delete(name string) error {
+	// TODO
+
+	return nil
+}
+
+func Files(name string) ([]string, error) {
+	// TODO
+
+	return nil, nil
+}
+
+func File(name, file string) ([]byte, error) {
+	// TODO
+
+	return nil, nil
+}

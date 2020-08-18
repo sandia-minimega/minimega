@@ -6,7 +6,7 @@ import (
 	"flag"
 	"regexp"
 
-	"gophenix/web/broker"
+	"phenix/web/broker"
 
 	"github.com/hpcloud/tail"
 )

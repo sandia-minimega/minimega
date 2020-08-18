@@ -14,12 +14,20 @@ func LaunchVMs(ns string) error {
 	return DefaultMM.LaunchVMs(ns)
 }
 
+func GetLaunchProgress(ns string, expected int) (float64, error) {
+	return DefaultMM.GetLaunchProgress(ns, expected)
+}
+
 func GetVMInfo(opts ...Option) types.VMs {
 	return DefaultMM.GetVMInfo(opts...)
 }
 
 func GetVMScreenshot(opts ...Option) ([]byte, error) {
 	return DefaultMM.GetVMScreenshot(opts...)
+}
+
+func GetVNCEndpoint(opts ...Option) (string, error) {
+	return DefaultMM.GetVNCEndpoint(opts...)
 }
 
 func StartVM(opts ...Option) error {

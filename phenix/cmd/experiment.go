@@ -190,7 +190,7 @@ func newExperimentScheduleCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts := []experiment.ScheduleOption{
-				experiment.ScheduleWithName(args[0]),
+				experiment.ScheduleForName(args[0]),
 				experiment.ScheduleWithAlgorithm(args[1]),
 			}
 

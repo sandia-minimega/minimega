@@ -9,9 +9,11 @@ type MM interface {
 	ClearNamespace(string) error
 
 	LaunchVMs(string) error
+	GetLaunchProgress(string, int) (float64, error)
 
 	GetVMInfo(...Option) types.VMs
 	GetVMScreenshot(...Option) ([]byte, error)
+	GetVNCEndpoint(...Option) (string, error)
 	StartVM(...Option) error
 	StopVM(...Option) error
 	RedeployVM(...Option) error
