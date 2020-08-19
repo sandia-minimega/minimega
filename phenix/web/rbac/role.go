@@ -1,56 +1,57 @@
 package rbac
 
 import (
-	"database/sql/driver"
-	"encoding/json"
 	"errors"
 	"path/filepath"
 	"strings"
 )
 
 type Role struct {
-	Name           string              `json:"name"`
-	Policies       Policies            `json:"policies"`
-	MappedPolicies map[string]Policies `json:"mapped_policies,omitempty"`
-	ResourceNames  []string            `json:"resource_names,omitempty"`
-}
-
-func (this Role) Value() (driver.Value, error) {
-	return json.Marshal(this)
-}
-
-func (this *Role) Scan(value interface{}) error {
-	bytes, ok := value.([]byte)
-	if !ok {
-		return errors.New("type assertion to []byte failed for rbac.Role")
-	}
-
-	return json.Unmarshal(bytes, &this)
+	Name           string               `yaml:"roleNname" json:"role_name" structs:"roleName" mapstructure:"roleName"`
+	Policies       []*Policy            `yaml:"policies" json:"policies"`
+	MappedPolicies map[string][]*Policy `yaml:"-" json:"-" structs:"-" mapstructure:"-"`
 }
 
 func NewRole(name string, policies ...*Policy) *Role {
 	role := &Role{
 		Name:           name,
-		MappedPolicies: make(map[string]Policies),
+		MappedPolicies: make(map[string][]*Policy),
 	}
 
 	role.AddPolicies(policies...)
 
-	// HACK: get ready for some hackery!
+	return role
+}
 
-	names := make(map[string]struct{})
+func (this *Role) MapPolicies() error {
+	if this.MappedPolicies != nil {
+		return nil
+	}
 
-	for _, p := range role.Policies {
-		for _, n := range p.ResourceNames {
-			names[n] = struct{}{}
+	this.MappedPolicies = make(map[string][]*Policy)
+
+	var invalid []string
+
+	for _, policy := range this.Policies {
+		for _, resource := range policy.Resources {
+			// Checking to make sure pattern given in 'resource' is valid. Thus, the
+			// string provided to match it against is useless.
+			if _, err := filepath.Match(resource, "useless"); err != nil {
+				invalid = append(invalid, resource)
+				continue
+			}
+
+			mapped := this.MappedPolicies[resource]
+			mapped = append(mapped, policy)
+			this.MappedPolicies[resource] = mapped
 		}
 	}
 
-	for n := range names {
-		role.ResourceNames = append(role.ResourceNames, n)
+	if len(invalid) != 0 {
+		return errors.New("invalid resource(s): " + strings.Join(invalid, ", "))
 	}
 
-	return role
+	return nil
 }
 
 func (this *Role) AddPolicies(policies ...*Policy) error {

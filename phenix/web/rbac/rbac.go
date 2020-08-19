@@ -181,7 +181,7 @@ func CreateBasePoliciesForRole(role string) Policies {
 	switch roleType {
 	case GLOBAL_ADMIN:
 		return Policies([]*Policy{
-			&Policy{
+			{
 				Resources:     []string{"*", "*/*"},
 				ResourceNames: []string{"*"},
 				Verbs:         []string{"*"},
@@ -189,7 +189,7 @@ func CreateBasePoliciesForRole(role string) Policies {
 		})
 	case GLOBAL_VIEWER:
 		return Policies([]*Policy{
-			&Policy{
+			{
 				Resources:     []string{"*", "*/*"},
 				ResourceNames: []string{"*"},
 				Verbs:         []string{"list", "get"},
@@ -198,20 +198,20 @@ func CreateBasePoliciesForRole(role string) Policies {
 	case EXP_ADMIN:
 		// must supply experiment names as resource names or nothing will be allowed
 		return Policies([]*Policy{
-			&Policy{
+			{
 				Resources: []string{"experiments", "experiments/*"},
 				Verbs:     []string{"list", "get", "update"},
 			},
-			&Policy{
+			{
 				Resources: []string{"vms", "vms/*"},
 				Verbs:     []string{"list", "get", "create", "update", "patch", "delete"},
 			},
-			&Policy{
+			{
 				Resources:     []string{"disks"},
 				ResourceNames: []string{"*"},
 				Verbs:         []string{"list"},
 			},
-			&Policy{
+			{
 				Resources:     []string{"hosts"},
 				ResourceNames: []string{"*"},
 				Verbs:         []string{"list"},
@@ -220,27 +220,27 @@ func CreateBasePoliciesForRole(role string) Policies {
 	case EXP_USER: // EXP_VIEWER + VM restart + VM update + VM capture
 		// must supply experiment names as resource names or nothing will be allowed
 		return Policies([]*Policy{
-			&Policy{
+			{
 				Resources: []string{"experiments", "experiments/*"},
 				Verbs:     []string{"list", "get"},
 			},
-			&Policy{
+			{
 				Resources: []string{"vms", "vms/*"},
 				Verbs:     []string{"list", "get", "patch"},
 			},
-			&Policy{
+			{
 				Resources: []string{"vms/redeploy"},
 				Verbs:     []string{"update"},
 			},
-			&Policy{
+			{
 				Resources: []string{"vms/captures"},
 				Verbs:     []string{"create", "delete"},
 			},
-			&Policy{
+			{
 				Resources: []string{"vms/snapshots"},
 				Verbs:     []string{"list", "create", "update"},
 			},
-			&Policy{
+			{
 				Resources:     []string{"hosts"},
 				ResourceNames: []string{"*"},
 				Verbs:         []string{"list"},
@@ -249,11 +249,11 @@ func CreateBasePoliciesForRole(role string) Policies {
 	case EXP_VIEWER:
 		// must supply experiment names as resource names or nothing will be allowed
 		return Policies([]*Policy{
-			&Policy{
+			{
 				Resources: []string{"experiments", "experiments/*", "vms", "vms/*"},
 				Verbs:     []string{"list", "get"},
 			},
-			&Policy{
+			{
 				Resources:     []string{"hosts"},
 				ResourceNames: []string{"*"},
 				Verbs:         []string{"list"},
@@ -262,11 +262,11 @@ func CreateBasePoliciesForRole(role string) Policies {
 	case VM_VIEWER:
 		// must supply vm names as resource names or nothing will be allowed
 		return Policies([]*Policy{
-			&Policy{
+			{
 				Resources: []string{"vms"},
 				Verbs:     []string{"list"},
 			},
-			&Policy{
+			{
 				Resources: []string{"vms/screenshot", "vms/vnc"},
 				Verbs:     []string{"get"},
 			},

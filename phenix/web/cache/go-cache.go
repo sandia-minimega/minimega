@@ -3,8 +3,6 @@ package cache
 import (
 	"time"
 
-	"phenix/web/types"
-
 	gocache "github.com/patrickmn/go-cache"
 )
 
@@ -35,7 +33,7 @@ func (this *GoCache) SetWithExpire(key string, val []byte, exp time.Duration) er
 	return nil
 }
 
-func (this *GoCache) Lock(key string, status types.Status, exp time.Duration) types.Status {
+func (this *GoCache) Lock(key string, status Status, exp time.Duration) Status {
 	key = "LOCK|" + key
 
 	if err := this.c.Add(key, status, exp); err != nil {
@@ -47,13 +45,13 @@ func (this *GoCache) Lock(key string, status types.Status, exp time.Duration) ty
 			return ""
 		}
 
-		return v.(types.Status)
+		return v.(Status)
 	}
 
 	return ""
 }
 
-func (this *GoCache) Locked(key string) types.Status {
+func (this *GoCache) Locked(key string) Status {
 	key = "LOCK|" + key
 
 	v, ok := this.c.Get(key)
@@ -61,7 +59,7 @@ func (this *GoCache) Locked(key string) types.Status {
 		return ""
 	}
 
-	return v.(types.Status)
+	return v.(Status)
 }
 
 func (this *GoCache) Unlock(key string) {

@@ -27,6 +27,7 @@ import (
 	"phenix/web/util"
 
 	log "github.com/activeshadow/libminimega/minilog"
+	"github.com/dgrijalva/jwt-go"
 	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
@@ -59,8 +60,7 @@ func GetExperiments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: allocate empty slice instead of nil slice
-	var allowed []*proto.Experiment
+	allowed := []*proto.Experiment{}
 
 	for _, exp := range experiments {
 		if !role.Allowed("experiments", "list", exp.Metadata.Name) {
@@ -99,7 +99,7 @@ func GetExperiments(w http.ResponseWriter, r *http.Request) {
 		allowed = append(allowed, util.ExperimentToProtobuf(exp, status, vms))
 	}
 
-	body, err := protojson.Marshal(&proto.ExperimentList{Experiments: allowed})
+	body, err := protojson.MarshalOptions{EmitUnpopulated: true}.Marshal(&proto.ExperimentList{Experiments: allowed})
 	if err != nil {
 		log.Error("marshaling experiments - %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -2431,6 +2431,7 @@ func Signup(w http.ResponseWriter, r *http.Request) {
 
 	w.Write(marshalled)
 }
+*/
 
 func Login(w http.ResponseWriter, r *http.Request) {
 	log.Debug("Login HTTP handler called")
@@ -2460,20 +2461,18 @@ func Login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		var data map[string]interface{}
-		if err := json.Unmarshal(body, &data); err != nil {
+		var req proto.LoginRequest
+		if err := protojson.Unmarshal(body, &req); err != nil {
 			http.Error(w, "invalid data provided in POST", http.StatusBadRequest)
 			return
 		}
 
-		var ok bool
-
-		if user, ok = data["user"].(string); !ok {
+		if user = req.User; user == "" {
 			http.Error(w, "invalid username provided in POST", http.StatusBadRequest)
 			return
 		}
 
-		if pass, ok = data["pass"].(string); !ok {
+		if pass = req.Pass; pass == "" {
 			http.Error(w, "invalid password provided in POST", http.StatusBadRequest)
 			return
 		}
@@ -2482,62 +2481,77 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := database.ValidateUserPassword(user, pass); err != nil {
-		http.Error(w, "invalid creds", http.StatusUnauthorized)
-		return
-	}
-
-	u, err := database.GetUser(user)
+	u, err := rbac.GetUser(user)
 	if err != nil {
 		http.Error(w, "cannot find user", http.StatusBadRequest)
 		return
 	}
 
+	// TODO: validate password from UserSpec
+
+	/*
+		if err := database.ValidateUserPassword(user, pass); err != nil {
+			http.Error(w, "invalid creds", http.StatusUnauthorized)
+			return
+		}
+	*/
+
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": user,
-		"uid": u.ID,
 		"exp": time.Now().Add(24 * time.Hour).Unix(),
 	})
 
 	// Sign and get the complete encoded token as a string using the secret
-	signed, err := token.SignedString([]byte(f_jwtKey))
+	signed, err := token.SignedString([]byte(o.jwtKey))
 	if err != nil {
 		http.Error(w, "failed to sign JWT", http.StatusInternalServerError)
 		return
 	}
 
-	database.AddUserToken(user, signed)
-
-	data := map[string]interface{}{
-		"username":   u.Username,
-		"first_name": u.FirstName,
-		"last_name":  u.LastName,
-		"token":      signed,
+	if err := u.AddToken(signed, time.Now().Format(time.RFC3339)); err != nil {
+		http.Error(w, "", http.StatusInternalServerError)
+		return
 	}
 
-	if u.Role != nil {
-		data["role"] = u.Role.Name
+	resp := &proto.LoginResponse{
+		Username:  u.Username(),
+		FirstName: u.FirstName(),
+		LastName:  u.LastName(),
+		Role:      u.RoleName(),
+		Token:     signed,
 	}
 
-	marshalled, err := json.Marshal(data)
+	body, err := protojson.Marshal(resp)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.Write(marshalled)
+	w.Write(body)
 }
 
 func Logout(w http.ResponseWriter, r *http.Request) {
 	log.Debug("Logout HTTP handler called")
 
-	token := r.Context().Value("jwt").(string)
-	database.DeleteUserToken(token)
+	var (
+		ctx   = r.Context()
+		user  = ctx.Value("user").(string)
+		token = ctx.Value("jwt").(string)
+	)
+
+	u, err := rbac.GetUser(user)
+	if err != nil {
+		http.Error(w, "cannot find user", http.StatusBadRequest)
+		return
+	}
+
+	if err := u.DeleteToken(token); err != nil {
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusNoContent)
 }
-
-*/
 
 func parseDuration(v string, d *time.Duration) error {
 	var err error

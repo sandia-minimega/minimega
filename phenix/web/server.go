@@ -2,15 +2,20 @@ package web
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
+	"phenix/api/config"
+	"phenix/store"
+	"phenix/types"
 	"phenix/web/broker"
 	"phenix/web/middleware"
 	"phenix/web/rbac"
 	"phenix/web/util"
 
 	log "github.com/activeshadow/libminimega/minilog"
+	"github.com/activeshadow/structs"
 	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/mux"
 )
@@ -27,8 +32,9 @@ type serverOptions struct {
 
 func newServerOptions(opts ...ServerOption) serverOptions {
 	o := serverOptions{
-		endpoint: ":3000",
-		users:    []string{"admin@foo.com:foobar:Global Admin"},
+		endpoint:  ":3000",
+		users:     []string{"admin@foo.com:foobar:Global Admin"},
+		allowCORS: true, // TODO: default to false
 	}
 
 	for _, opt := range opts {
@@ -68,8 +74,10 @@ func ServeWithCORS(c bool) ServerOption {
 	}
 }
 
+var o serverOptions
+
 func Start(opts ...ServerOption) error {
-	o := newServerOptions(opts...)
+	o = newServerOptions(opts...)
 
 	for _, u := range o.users {
 		creds := strings.Split(u, ":")
@@ -77,7 +85,11 @@ func Start(opts ...ServerOption) error {
 		pword := creds[1]
 		rname := creds[2]
 
-		user := rbac.User{
+		if _, err := config.Get("user/" + uname); err == nil {
+			continue
+		}
+
+		user := rbac.UserSpec{
 			Username: uname,
 			Password: pword,
 		}
@@ -99,11 +111,16 @@ func Start(opts ...ServerOption) error {
 
 		log.Debug("creating default user - %+v", user)
 
-		/*
-			if err := database.UpsertUser(&user); err != nil {
-				return errors.Wrap(err, "adding user to database")
-			}
-		*/
+		c := &types.Config{
+			Version:  "phenix.sandia.gov/v1",
+			Kind:     "User",
+			Metadata: types.ConfigMetadata{Name: uname},
+			Spec:     structs.MapDefaultCase(user, structs.CASESNAKE),
+		}
+
+		if err := store.Create(c); err != nil {
+			return fmt.Errorf("adding new user: %w", err)
+		}
 	}
 
 	router := mux.NewRouter().StrictSlash(true)
@@ -175,9 +192,9 @@ func Start(opts ...ServerOption) error {
 		api.HandleFunc("/users/{username}", UpdateUser).Methods("PATCH", "OPTIONS")
 		api.HandleFunc("/users/{username}", DeleteUser).Methods("DELETE", "OPTIONS")
 		api.HandleFunc("/signup", Signup).Methods("POST", "OPTIONS")
-		api.HandleFunc("/login", Login).Methods("GET", "POST", "OPTIONS")
-		api.HandleFunc("/logout", Logout).Methods("GET", "OPTIONS")
 	*/
+	api.HandleFunc("/login", Login).Methods("GET", "POST", "OPTIONS")
+	api.HandleFunc("/logout", Logout).Methods("GET", "OPTIONS")
 	api.HandleFunc("/ws", broker.ServeWS).Methods("GET")
 
 	if o.allowCORS {

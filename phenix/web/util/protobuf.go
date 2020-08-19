@@ -2,11 +2,11 @@ package util
 
 import (
 	"phenix/types"
+	"phenix/web/cache"
 	"phenix/web/proto"
-	wtypes "phenix/web/types"
 )
 
-func ExperimentToProtobuf(exp types.Experiment, status wtypes.Status, vms []types.VM) *proto.Experiment {
+func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []types.VM) *proto.Experiment {
 	pb := &proto.Experiment{
 		Name:      exp.Spec.ExperimentName,
 		Topology:  exp.Metadata.Annotations["topology"],

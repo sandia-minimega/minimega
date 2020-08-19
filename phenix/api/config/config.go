@@ -27,7 +27,7 @@ func List(which string) (types.Configs, error) {
 
 	switch which {
 	case "", "all":
-		configs, err = store.List("Topology", "Scenario", "Experiment", "Image")
+		configs, err = store.List("Topology", "Scenario", "Experiment", "Image", "User")
 	case "topology":
 		configs, err = store.List("Topology")
 	case "scenario":
@@ -36,6 +36,8 @@ func List(which string) (types.Configs, error) {
 		configs, err = store.List("Experiment")
 	case "image":
 		configs, err = store.List("Image")
+	case "user":
+		configs, err = store.List("User")
 	default:
 		return nil, util.HumanizeError(fmt.Errorf("unknown config kind provided: %s", which), "")
 	}

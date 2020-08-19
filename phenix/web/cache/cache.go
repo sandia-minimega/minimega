@@ -2,8 +2,21 @@ package cache
 
 import (
 	"time"
+)
 
-	"phenix/web/types"
+type Status string
+
+const (
+	StatusStopping     Status = "stopping"
+	StatusStopped      Status = "stopped"
+	StatusStarting     Status = "starting"
+	StatusStarted      Status = "started"
+	StatusCreating     Status = "creating"
+	StatusDeleting     Status = "deleting"
+	StatusRedeploying  Status = "redeploying"
+	StatusSnapshotting Status = "snapshotting"
+	StatusRestoring    Status = "restoring"
+	StatusCommitting   Status = "committing"
 )
 
 var DefaultCache Cache = NewGoCache()
@@ -14,8 +27,8 @@ type Cache interface {
 
 	SetWithExpire(string, []byte, time.Duration) error
 
-	Lock(string, types.Status, time.Duration) types.Status
-	Locked(string) types.Status
+	Lock(string, Status, time.Duration) Status
+	Locked(string) Status
 	Unlock(string)
 }
 
@@ -31,11 +44,11 @@ func SetWithExpire(key string, val []byte, exp time.Duration) error {
 	return DefaultCache.SetWithExpire(key, val, exp)
 }
 
-func Lock(key string, status types.Status, exp time.Duration) types.Status {
+func Lock(key string, status Status, exp time.Duration) Status {
 	return DefaultCache.Lock(key, status, exp)
 }
 
-func Locked(key string) types.Status {
+func Locked(key string) Status {
 	return DefaultCache.Locked(key)
 }
 

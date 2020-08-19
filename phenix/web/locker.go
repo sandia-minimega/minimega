@@ -5,10 +5,9 @@ import (
 	"time"
 
 	"phenix/web/cache"
-	"phenix/web/types"
 )
 
-func isExperimentLocked(name string) types.Status {
+func isExperimentLocked(name string) cache.Status {
 	key := "experiment|" + name
 
 	return cache.Locked(key)
@@ -20,7 +19,7 @@ func unlockExperiment(name string) {
 	cache.Unlock(key)
 }
 
-func isVMLocked(exp, name string) types.Status {
+func isVMLocked(exp, name string) cache.Status {
 	key := fmt.Sprintf("vm|%s/%s", exp, name)
 
 	return cache.Locked(key)
@@ -35,7 +34,7 @@ func unlockVM(exp, name string) {
 func lockExperimentForCreation(name string) error {
 	key := "experiment|" + name
 
-	if status := cache.Lock(key, types.StatusCreating, 5*time.Minute); status != "" {
+	if status := cache.Lock(key, cache.StatusCreating, 5*time.Minute); status != "" {
 		return fmt.Errorf("experiment %s is locked with status %s", name, status)
 	}
 
@@ -45,7 +44,7 @@ func lockExperimentForCreation(name string) error {
 func lockExperimentForDeletion(name string) error {
 	key := "experiment|" + name
 
-	if status := cache.Lock(key, types.StatusDeleting, 1*time.Minute); status != "" {
+	if status := cache.Lock(key, cache.StatusDeleting, 1*time.Minute); status != "" {
 		return fmt.Errorf("experiment %s is locked with status %s", name, status)
 	}
 
@@ -55,7 +54,7 @@ func lockExperimentForDeletion(name string) error {
 func lockExperimentForStarting(name string) error {
 	key := "experiment|" + name
 
-	if status := cache.Lock(key, types.StatusStarting, 5*time.Minute); status != "" {
+	if status := cache.Lock(key, cache.StatusStarting, 5*time.Minute); status != "" {
 		return fmt.Errorf("experiment %s is locked with status %s", name, status)
 	}
 
@@ -65,7 +64,7 @@ func lockExperimentForStarting(name string) error {
 func lockExperimentForStopping(name string) error {
 	key := "experiment|" + name
 
-	if status := cache.Lock(key, types.StatusStopping, 1*time.Minute); status != "" {
+	if status := cache.Lock(key, cache.StatusStopping, 1*time.Minute); status != "" {
 		return fmt.Errorf("experiment %s is locked with status %s", name, status)
 	}
 
@@ -75,7 +74,7 @@ func lockExperimentForStopping(name string) error {
 func lockVMForStarting(exp, name string) error {
 	key := fmt.Sprintf("vm|%s/%s", exp, name)
 
-	if status := cache.Lock(key, types.StatusStarting, 1*time.Minute); status != "" {
+	if status := cache.Lock(key, cache.StatusStarting, 1*time.Minute); status != "" {
 		return fmt.Errorf("VM %s is locked with status %s", name, status)
 	}
 
@@ -85,7 +84,7 @@ func lockVMForStarting(exp, name string) error {
 func lockVMForStopping(exp, name string) error {
 	key := fmt.Sprintf("vm|%s/%s", exp, name)
 
-	if status := cache.Lock(key, types.StatusStopping, 1*time.Minute); status != "" {
+	if status := cache.Lock(key, cache.StatusStopping, 1*time.Minute); status != "" {
 		return fmt.Errorf("VM %s is locked with status %s", name, status)
 	}
 
@@ -95,7 +94,7 @@ func lockVMForStopping(exp, name string) error {
 func lockVMForRedeploying(exp, name string) error {
 	key := fmt.Sprintf("vm|%s/%s", exp, name)
 
-	if status := cache.Lock(key, types.StatusRedeploying, 5*time.Minute); status != "" {
+	if status := cache.Lock(key, cache.StatusRedeploying, 5*time.Minute); status != "" {
 		return fmt.Errorf("VM %s is locked with status %s", name, status)
 	}
 
@@ -105,7 +104,7 @@ func lockVMForRedeploying(exp, name string) error {
 func lockVMForSnapshotting(exp, name string) error {
 	key := fmt.Sprintf("vm|%s/%s", exp, name)
 
-	if status := cache.Lock(key, types.StatusSnapshotting, 5*time.Minute); status != "" {
+	if status := cache.Lock(key, cache.StatusSnapshotting, 5*time.Minute); status != "" {
 		return fmt.Errorf("VM %s is locked with status %s", name, status)
 	}
 
@@ -115,7 +114,7 @@ func lockVMForSnapshotting(exp, name string) error {
 func lockVMForRestoring(exp, name string) error {
 	key := fmt.Sprintf("vm|%s/%s", exp, name)
 
-	if status := cache.Lock(key, types.StatusRestoring, 5*time.Minute); status != "" {
+	if status := cache.Lock(key, cache.StatusRestoring, 5*time.Minute); status != "" {
 		return fmt.Errorf("VM %s is locked with status %s", name, status)
 	}
 
@@ -125,7 +124,7 @@ func lockVMForRestoring(exp, name string) error {
 func lockVMForCommitting(exp, name string) error {
 	key := fmt.Sprintf("vm|%s/%s", exp, name)
 
-	if status := cache.Lock(key, types.StatusCommitting, 5*time.Minute); status != "" {
+	if status := cache.Lock(key, cache.StatusCommitting, 5*time.Minute); status != "" {
 		return fmt.Errorf("VM %s is locked with status %s", name, status)
 	}
 

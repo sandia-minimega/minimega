@@ -10,19 +10,19 @@ import (
 var errResourceNamesExist = errors.New("resource names already exist for policy")
 
 var knownVerbs = map[string]struct{}{
-	"list":   struct{}{},
-	"get":    struct{}{},
-	"create": struct{}{},
-	"update": struct{}{},
-	"patch":  struct{}{},
+	"list":   {},
+	"get":    {},
+	"create": {},
+	"update": {},
+	"patch":  {},
 }
 
 type Policies []*Policy
 
 type Policy struct {
-	Resources     []string `json:"resources"`
-	ResourceNames []string `json:"resource_names"`
-	Verbs         []string `json:"verbs"`
+	Resources     []string `yaml:"resources" json:"resources"`
+	ResourceNames []string `yaml:"resourceNames" json:"resource_names"`
+	Verbs         []string `yaml:"verbs" json:"verbs"`
 }
 
 func (this *Policy) SetResourceNames(names ...string) error {

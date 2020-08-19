@@ -17,19 +17,24 @@ func newUiCmd() *cobra.Command {
 		Short: "Run the phenix UI",
 		Long:  desc,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			endpoint := ":3000"
+			var (
+				endpoint = ":3000"
+				jwtKey   = MustGetString(cmd.Flags(), "jwt-signing-key")
+			)
 
 			if len(args) > 0 {
 				endpoint = args[0]
 			}
 
-			if err := web.Start(web.ServeOnEndpoint(endpoint)); err != nil {
+			if err := web.Start(web.ServeOnEndpoint(endpoint), web.ServeWithJWTKey(jwtKey)); err != nil {
 				return util.HumanizeError(err, "Unable to serve UI").Humanized()
 			}
 
 			return nil
 		},
 	}
+
+	cmd.Flags().String("jwt-signing-key", "", "Secret key used to sign JWT for authentication")
 
 	return cmd
 }

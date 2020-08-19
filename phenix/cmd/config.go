@@ -32,7 +32,7 @@ func configKindArgsValidator(multi, allowAll bool) cobra.PositionalArgs {
 				return fmt.Errorf("expects 1 arg(s) in the form of <config kind>/<config name>")
 			}
 
-			kinds := []string{"topology", "scenario", "experiment", "image"}
+			kinds := []string{"topology", "scenario", "experiment", "image", "user"}
 
 			if allowAll {
 				kinds = append(kinds, "all")
@@ -72,13 +72,14 @@ func newConfigListCmd() *cobra.Command {
   phenix config list topology
   phenix config list scenario
   phenix config list experiment
-  phenix config list image`
+  phenix config list image
+  phenix config list user`
 
 	cmd := &cobra.Command{
 		Use:       "list <kind>",
 		Short:     "Show table of stored configuration files",
 		Example:   example,
-		ValidArgs: []string{"all", "topology", "scenario", "experiment", "image"},
+		ValidArgs: []string{"all", "topology", "scenario", "experiment", "image", "user"},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var kinds string
 

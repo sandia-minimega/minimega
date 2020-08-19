@@ -21,3 +21,16 @@ message User {
 message CreateUserRequest { string user = 1; }
 
 message UpdateUserRequest { string user = 1; }
+
+message LoginRequest {
+  string user = 1;
+  string pass = 2;
+}
+
+message LoginResponse {
+  string username = 1;
+  string first_name = 2;
+  string last_name = 3;
+  string token = 4;
+  string role = 5;
+}
