@@ -36,6 +36,11 @@ import (
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
+var (
+	marshaler   = protojson.MarshalOptions{EmitUnpopulated: true}
+	unmarshaler = protojson.UnmarshalOptions{AllowPartial: true, DiscardUnknown: true}
+)
+
 // GET /experiments
 func GetExperiments(w http.ResponseWriter, r *http.Request) {
 	log.Debug("GetExperiments HTTP handler called")
@@ -99,7 +104,7 @@ func GetExperiments(w http.ResponseWriter, r *http.Request) {
 		allowed = append(allowed, util.ExperimentToProtobuf(exp, status, vms))
 	}
 
-	body, err := protojson.MarshalOptions{EmitUnpopulated: true}.Marshal(&proto.ExperimentList{Experiments: allowed})
+	body, err := marshaler.Marshal(&proto.ExperimentList{Experiments: allowed})
 	if err != nil {
 		log.Error("marshaling experiments - %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -132,7 +137,7 @@ func CreateExperiment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req proto.CreateExperimentRequest
-	if err := protojson.Unmarshal(body, &req); err != nil {
+	if err := unmarshaler.Unmarshal(body, &req); err != nil {
 		log.Error("unmashaling request body - %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -172,7 +177,7 @@ func CreateExperiment(w http.ResponseWriter, r *http.Request) {
 		// TODO
 	}
 
-	body, err = protojson.Marshal(util.ExperimentToProtobuf(*exp, "", vms))
+	body, err = marshaler.Marshal(util.ExperimentToProtobuf(*exp, "", vms))
 	if err != nil {
 		log.Error("marshaling experiment %s - %v", req.Name, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -252,7 +257,7 @@ func GetExperiment(w http.ResponseWriter, r *http.Request) {
 		allowed = allowed.Paginate(n, s)
 	}
 
-	body, err := protojson.Marshal(util.ExperimentToProtobuf(*exp, status, allowed))
+	body, err := marshaler.Marshal(util.ExperimentToProtobuf(*exp, status, allowed))
 	if err != nil {
 		log.Error("marshaling experiment %s - %v", name, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -372,7 +377,7 @@ func StartExperiment(w http.ResponseWriter, r *http.Request) {
 				// TODO
 			}
 
-			body, err := protojson.Marshal(util.ExperimentToProtobuf(*s.exp, "", vms))
+			body, err := marshaler.Marshal(util.ExperimentToProtobuf(*s.exp, "", vms))
 			if err != nil {
 				log.Error("marshaling experiment %s - %v", name, err)
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -470,7 +475,7 @@ func StopExperiment(w http.ResponseWriter, r *http.Request) {
 		// TODO
 	}
 
-	body, err := protojson.Marshal(util.ExperimentToProtobuf(*exp, "", vms))
+	body, err := marshaler.Marshal(util.ExperimentToProtobuf(*exp, "", vms))
 	if err != nil {
 		log.Error("marshaling experiment %s - %v", name, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -519,7 +524,7 @@ func GetExperimentSchedule(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := protojson.Marshal(util.ExperimentScheduleToProtobuf(*exp))
+	body, err := marshaler.Marshal(util.ExperimentScheduleToProtobuf(*exp))
 	if err != nil {
 		log.Error("marshaling schedule for experiment %s - %v", name, err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -563,7 +568,7 @@ func ScheduleExperiment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req proto.UpdateScheduleRequest
-	err = protojson.Unmarshal(body, &req)
+	err = unmarshaler.Unmarshal(body, &req)
 	if err != nil {
 		log.Error("unmarshaling request body - %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -584,7 +589,7 @@ func ScheduleExperiment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err = protojson.Marshal(util.ExperimentScheduleToProtobuf(*exp))
+	body, err = marshaler.Marshal(util.ExperimentScheduleToProtobuf(*exp))
 	if err != nil {
 		log.Error("marshaling schedule for experiment %s - %v", name, err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -628,7 +633,7 @@ func GetExperimentCaptures(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body, err := protojson.Marshal(&proto.CaptureList{Captures: util.CapturesToProtobuf(allowed)})
+	body, err := marshaler.Marshal(&proto.CaptureList{Captures: util.CapturesToProtobuf(allowed)})
 	if err != nil {
 		log.Error("marshaling captures for experiment %s - %v", name, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -662,7 +667,7 @@ func GetExperimentFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := protojson.Marshal(&proto.FileList{Files: files})
+	body, err := marshaler.Marshal(&proto.FileList{Files: files})
 	if err != nil {
 		log.Error("marshaling file list for experiment %s - %v", name, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -757,7 +762,7 @@ func GetVMs(w http.ResponseWriter, r *http.Request) {
 		allowed = allowed.Paginate(n, s)
 	}
 
-	body, err := protojson.Marshal(&proto.VMList{Vms: util.VMsToProtobuf(allowed)})
+	body, err := marshaler.Marshal(&proto.VMList{Vms: util.VMsToProtobuf(allowed)})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -800,7 +805,7 @@ func GetVM(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body, err := protojson.Marshal(util.VMToProtobuf(*vm))
+	body, err := marshaler.Marshal(util.VMToProtobuf(*vm))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -977,7 +982,7 @@ func StartVM(w http.ResponseWriter, r *http.Request) {
 		v.Screenshot = "data:image/png;base64," + base64.StdEncoding.EncodeToString(screenshot)
 	}
 
-	body, err := protojson.Marshal(util.VMToProtobuf(*v))
+	body, err := marshaler.Marshal(util.VMToProtobuf(*v))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1047,7 +1052,7 @@ func StopVM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := protojson.Marshal(util.VMToProtobuf(*v))
+	body, err := marshaler.Marshal(util.VMToProtobuf(*v))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1098,7 +1103,7 @@ func RedeployVM(w http.ResponseWriter, r *http.Request) {
 
 	v.Redeploying = true
 
-	body, _ := protojson.Marshal(util.VMToProtobuf(*v))
+	body, _ := marshaler.Marshal(util.VMToProtobuf(*v))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1133,7 +1138,7 @@ func RedeployVM(w http.ResponseWriter, r *http.Request) {
 			var req proto.VMRedeployRequest
 
 			// Update VM struct with values from POST request body.
-			if err := protojson.Unmarshal(body, &req); err != nil {
+			if err := unmarshaler.Unmarshal(body, &req); err != nil {
 				redeployed <- err
 				return
 			}
@@ -1179,7 +1184,7 @@ func RedeployVM(w http.ResponseWriter, r *http.Request) {
 		v.Screenshot = "data:image/png;base64," + base64.StdEncoding.EncodeToString(screenshot)
 	}
 
-	body, _ = protojson.Marshal(util.VMToProtobuf(*v))
+	body, _ = marshaler.Marshal(util.VMToProtobuf(*v))
 
 	broker.Broadcast(
 		broker.NewRequestPolicy("vms/redeploy", "update", fullName),
@@ -1302,7 +1307,7 @@ func GetVMCaptures(w http.ResponseWriter, r *http.Request) {
 
 	captures := mm.GetVMCaptures(mm.NS(exp), mm.VM(name))
 
-	body, err := protojson.Marshal(&proto.CaptureList{Captures: util.CapturesToProtobuf(captures)})
+	body, err := marshaler.Marshal(&proto.CaptureList{Captures: util.CapturesToProtobuf(captures)})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1337,7 +1342,7 @@ func StartVMCapture(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req proto.StartCaptureRequest
-	err = protojson.Unmarshal(body, &req)
+	err = unmarshaler.Unmarshal(body, &req)
 	if err != nil {
 		log.Error("unmarshaling request body - %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1418,7 +1423,7 @@ func GetVMSnapshots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := protojson.Marshal(&proto.SnapshotList{Snapshots: snapshots})
+	body, err := marshaler.Marshal(&proto.SnapshotList{Snapshots: snapshots})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1454,7 +1459,7 @@ func SnapshotVM(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req proto.SnapshotRequest
-	err = protojson.Unmarshal(body, &req)
+	err = unmarshaler.Unmarshal(body, &req)
 	if err != nil {
 		log.Error("unmarshaling request body - %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1616,7 +1621,7 @@ func CommitVM(w http.ResponseWriter, r *http.Request) {
 	// the existing file name for the base image.
 	if len(body) != 0 {
 		var req proto.BackingImageRequest
-		err = protojson.Unmarshal(body, &req)
+		err = unmarshaler.Unmarshal(body, &req)
 		if err != nil {
 			log.Error("unmarshaling request body - %v", err)
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -1656,7 +1661,7 @@ func CommitVM(w http.ResponseWriter, r *http.Request) {
 	}
 
 	payload := &proto.BackingImageResponse{Disk: filename}
-	body, _ = protojson.Marshal(payload)
+	body, _ = marshaler.Marshal(payload)
 
 	broker.Broadcast(
 		broker.NewRequestPolicy("vms/commit", "create", fullName),
@@ -1711,7 +1716,7 @@ func CommitVM(w http.ResponseWriter, r *http.Request) {
 	}
 
 	payload.Vm = util.VMToProtobuf(*v)
-	body, _ = protojson.Marshal(payload)
+	body, _ = marshaler.Marshal(payload)
 
 	broker.Broadcast(
 		broker.NewRequestPolicy("vms/commit", "create", fmt.Sprintf("%s_%s", exp, name)),
@@ -1771,7 +1776,7 @@ func GetAllVMs(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body, err := protojson.Marshal(&proto.VMList{Vms: util.VMsToProtobuf(allowed)})
+	body, err := marshaler.Marshal(&proto.VMList{Vms: util.VMsToProtobuf(allowed)})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1801,7 +1806,7 @@ func GetApplications(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body, err := protojson.Marshal(&proto.AppList{Applications: allowed})
+	body, err := marshaler.Marshal(&proto.AppList{Applications: allowed})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1837,7 +1842,7 @@ func GetTopologies(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body, err := protojson.Marshal(&proto.TopologyList{Topologies: allowed})
+	body, err := marshaler.Marshal(&proto.TopologyList{Topologies: allowed})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1873,7 +1878,7 @@ func GetDisks(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body, err := protojson.Marshal(&proto.DiskList{Disks: allowed})
+	body, err := marshaler.Marshal(&proto.DiskList{Disks: allowed})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -2462,7 +2467,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		}
 
 		var req proto.LoginRequest
-		if err := protojson.Unmarshal(body, &req); err != nil {
+		if err := unmarshaler.Unmarshal(body, &req); err != nil {
 			http.Error(w, "invalid data provided in POST", http.StatusBadRequest)
 			return
 		}
@@ -2521,7 +2526,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		Token:     signed,
 	}
 
-	body, err := protojson.Marshal(resp)
+	body, err := marshaler.Marshal(resp)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
