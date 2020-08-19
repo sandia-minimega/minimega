@@ -1,12 +1,14 @@
 package cmd
 
 import (
+	goflag "flag"
 	"fmt"
 	"os"
 	"phenix/store"
 	"phenix/util"
 	"phenix/version"
 
+	log "github.com/activeshadow/libminimega/minilog"
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -63,9 +65,21 @@ func init() {
 	// rootCmd.PersistentFlags().IntP("log.verbosity", "V", 0, "log verbosity (0 - 10)")
 	rootCmd.PersistentFlags().StringVarP(&errFile, "log.error-file", "E", "", "log fatal errors to file (default: $HOME/.phenix.err)")
 	rootCmd.PersistentFlags().BoolP("log.error-stderr", "V", false, "log fatal errors to STDERR")
+	// rootCmd.PersistentFlags().AddGoFlagSet(goflag.CommandLine)
 }
 
 func initConfig() {
+	goflag.VisitAll(func(f *goflag.Flag) {
+		switch f.Name {
+		case "level":
+			f.Value.Set("debug")
+		case "verbose":
+			f.Value.Set("true")
+		}
+	})
+
+	log.Init()
+
 	var home string
 
 	if cfgFile == "" || storeEndpoint == "" || errFile == "" {
