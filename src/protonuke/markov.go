@@ -30,7 +30,7 @@ func (p Prefix) Shift(word string) {
 // A prefix is a string of prefixLen words joined with spaces.
 // A suffix is a single word. A prefix can have multiple suffixes.
 type Chain struct {
-	chain map[string][]string
+	chain     map[string][]string
 	prefixLen int
 }
 

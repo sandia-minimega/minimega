@@ -24,11 +24,11 @@ var (
 	f_https         = flag.Bool("https", false, "enable https (TLS) service")
 	f_httproot      = flag.String("httproot", "", "serve directory with http(s) instead of the builtin page generator")
 	f_httpGzip      = flag.Bool("httpgzip", false, "gzip image served in http/https pages")
-  f_irc         = flag.Bool("irc", false, "enable irc service")
-	f_ircport     = flag.String("ircport", "6667", "port to use for IRC client or server")
-	f_channels    = flag.String("channels", "#general,#random", "overwrite default IRC channels to join, seperated by commas")
-	f_messages    = flag.String("messages", "", "path to file containing IRC client messages to use")
-	f_markov      = flag.Bool("markov", true, "disable using markov chains")
+	f_irc           = flag.Bool("irc", false, "enable irc service")
+	f_ircport       = flag.String("ircport", "6667", "port to use for IRC client or server")
+	f_channels      = flag.String("channels", "#general,#random", "overwrite default IRC channels to join, seperated by commas")
+	f_messages      = flag.String("messages", "", "path to file containing IRC client messages to use")
+	f_markov        = flag.Bool("markov", true, "disable using markov chains")
 	f_httpCookies   = flag.Bool("httpcookies", false, "enable cookie jar in http/https clients")
 	f_httpUserAgent = flag.String("http-user-agent", "", "set a custom user-agent string")
 	f_ftp           = flag.Bool("ftp", false, "enable ftp service")
@@ -48,7 +48,6 @@ var (
 	f_httpTLSCert   = flag.String("httptlscert", "", "file containing public certificate for TLS")
 	f_httpTLSKey    = flag.String("httptlskey", "", "file containing private key for TLS")
 	f_tlsVersion    = flag.String("tlsversion", "", "Select a TLS version for the client: tls1.0, tls1.1, tls1.2")
-
 
 	// See main for registering with flag
 	f_httpImageSize = DefaultFileSize
@@ -163,8 +162,8 @@ func main() {
 			go ircServer()
 		} else {
 			go ircClient()
-    }
-  }
+		}
+	}
 	if *f_ftp {
 		if *f_serve {
 			go ftpServer()

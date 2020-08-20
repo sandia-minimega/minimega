@@ -14,8 +14,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/thoj/go-ircevent"
 	"github.com/stargrave/goircd"
+	"github.com/thoj/go-ircevent"
 )
 
 const (
@@ -26,21 +26,21 @@ const (
 )
 
 var (
-	channels    []string
+	channels []string
 
-	messages    = defaultMessages
-	nicks       = defaultNicks
+	messages = defaultMessages
+	nicks    = defaultNicks
 
 	usersLock   sync.Mutex
 	channelLock sync.Mutex
 )
 
 type Conversation struct {
-	nick       string
-	channel    string
-	isPaired   bool
-	isWaiting  bool
-	counter    int
+	nick      string
+	channel   string
+	isPaired  bool
+	isWaiting bool
+	counter   int
 }
 
 func ircClient() {
@@ -126,7 +126,7 @@ func ircClient() {
 						}
 					} else if !pair.isPaired {
 						// idle for a bit before starting a new conversation
-						wait := rand.Intn(convoWaitTimeMax - convoWaitTimeMin) + convoWaitTimeMin
+						wait := rand.Intn(convoWaitTimeMax-convoWaitTimeMin) + convoWaitTimeMin
 						for i := 0; i < wait; i++ {
 							t.Tick()
 						}
@@ -137,7 +137,7 @@ func ircClient() {
 						// check if channel is empty
 						if len(channelUsers[channel]) > 0 {
 							nick := randomFromSlice(strings.Split(channelUsers[channel], " "))
-							
+
 							// set conversation flags
 							pair.isWaiting = true
 							pair.nick = nick
@@ -179,7 +179,7 @@ func ircClient() {
 			channel := event.Arguments[2]
 
 			nick = client.GetNick()
-			for i,n := range nicks {
+			for i, n := range nicks {
 				if n == nick {
 					nicks = append(nicks[:i], nicks[i+1:]...)
 					break
@@ -187,7 +187,7 @@ func ircClient() {
 			}
 			channelUsers[channel] = strings.Join(nicks, " ")
 		}(event)
-	});
+	})
 
 	// 433: ERR_NICKNAMEINUSE "<nick> :Nickname is already in use"
 	client.AddCallback("433", func(event *irc.Event) {
@@ -225,7 +225,7 @@ func ircClient() {
 			nicks = append(nicks, nick)
 			channelUsers[channel] = strings.Join(nicks, " ")
 		}
-	});
+	})
 
 	// PRIVMSG handles both private and channel messages
 	client.AddCallback("PRIVMSG", func(event *irc.Event) {
@@ -303,7 +303,7 @@ func ircClient() {
 				}
 			}
 		}
-	});
+	})
 
 	// PART occurs when someone leaves the channel
 	client.AddCallback("PART", func(event *irc.Event) {
@@ -323,7 +323,7 @@ func ircClient() {
 				}
 			}
 		}(event)
-	});
+	})
 
 	// QUIT occurs when someone leaves the server
 	client.AddCallback("QUIT", func(event *irc.Event) {
@@ -344,7 +344,7 @@ func ircClient() {
 				}
 			}
 		}(event)
-	});
+	})
 
 	// connect
 	log.Debug("[nick %v] connecting to irc host %v from %v", client.GetNick(), host, original)
@@ -357,7 +357,7 @@ func ircClient() {
 
 func ircServer() {
 	port := *f_ircport
-	settings := goircd.Settings{"localhost", ":" + port, "", "", "", "", "", "", false}
+	settings := goircd.Settings{Hostname: "localhost", Bind: ":" + port, Motd: "", Logdir: "", Statedir: "", Passwords: "", TlsBind: "", TlsPEM: "", Verbose: false}
 	goircd.SetSettings(settings)
 
 	events := make(chan goircd.ClientEvent)
