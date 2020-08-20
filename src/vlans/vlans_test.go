@@ -11,7 +11,7 @@ import (
 )
 
 func TestAllocate(t *testing.T) {
-	v := NewAllocatedVLANs()
+	v := NewVLANs()
 
 	for i := 0; i < 10; i++ {
 		want, created, _ := v.Allocate("", strconv.Itoa(i))
@@ -31,7 +31,7 @@ func TestAllocate(t *testing.T) {
 }
 
 func TestAllocateNamespace(t *testing.T) {
-	v := NewAllocatedVLANs()
+	v := NewVLANs()
 
 	for i := 0; i < 10; i++ {
 		got1, created, _ := v.Allocate("foo", strconv.Itoa(i))
@@ -51,7 +51,7 @@ func TestAllocateNamespace(t *testing.T) {
 }
 
 func TestAllocateOutOfVLANs(t *testing.T) {
-	v := NewAllocatedVLANs()
+	v := NewVLANs()
 
 	var err error
 	for i := 0; i < 4096; i++ {
@@ -67,7 +67,7 @@ func TestAllocateOutOfVLANs(t *testing.T) {
 }
 
 func TestAllocateDeleteAllocate(t *testing.T) {
-	v := NewAllocatedVLANs()
+	v := NewVLANs()
 
 	for i := 0; i < 10; i++ {
 		alias := strconv.Itoa(i)
@@ -76,7 +76,7 @@ func TestAllocateDeleteAllocate(t *testing.T) {
 			t.Errorf("VLAN already existed: %v", i)
 		}
 
-		v.Delete("", alias)
+		v.Delete("", "")
 
 		if _, created, _ := v.Allocate("", alias); !created {
 			t.Errorf("VLAN already existed: %v", i)
@@ -85,7 +85,7 @@ func TestAllocateDeleteAllocate(t *testing.T) {
 }
 
 func TestAllocateDeleteAllocateNamespace(t *testing.T) {
-	v := NewAllocatedVLANs()
+	v := NewVLANs()
 
 	for i := 0; i < 10; i++ {
 		alias := strconv.Itoa(i)
@@ -116,7 +116,7 @@ func TestAllocateDeleteAllocateNamespace(t *testing.T) {
 }
 
 func TestAllocateRange(t *testing.T) {
-	v := NewAllocatedVLANs()
+	v := NewVLANs()
 
 	v.SetRange("", 0, 100)
 
@@ -132,7 +132,7 @@ func TestAllocateRange(t *testing.T) {
 }
 
 func TestAllocateRangeNamespace(t *testing.T) {
-	v := NewAllocatedVLANs()
+	v := NewVLANs()
 
 	v.SetRange("foo", 0, 100)
 	v.SetRange("bar", 100, 200)
@@ -155,7 +155,7 @@ func TestAllocateRangeNamespace(t *testing.T) {
 }
 
 func TestParallel(t *testing.T) {
-	v := NewAllocatedVLANs()
+	v := NewVLANs()
 
 	var wg sync.WaitGroup
 
@@ -179,11 +179,11 @@ func TestParallel(t *testing.T) {
 			}
 
 			// make sure the mapping was set
-			if got, _ := v.GetAlias(vlan); got != AliasSep+alias {
+			if got, _ := v.GetAlias(vlan); got.Value != alias {
 				t.Errorf("got wrong alias for vlan: %v != %v", got, alias)
 				return
 			}
-			if got, _ := v.GetVLAN(alias); got == vlan {
+			if got, _ := v.GetVLAN("", alias); got != vlan {
 				t.Errorf("got wrong vlan for alias: %v != %v", got, vlan)
 				return
 			}
@@ -192,11 +192,11 @@ func TestParallel(t *testing.T) {
 			v.Delete("", alias)
 
 			// make sure the mapping is not set
-			if got, _ := v.GetAlias(vlan); got == alias {
+			if got, _ := v.GetAlias(vlan); got.Value == alias {
 				t.Errorf("found deleted alias %v by vlan", alias)
 				return
 			}
-			if got, _ := v.GetVLAN(alias); got == vlan {
+			if got, _ := v.GetVLAN("", alias); got == vlan {
 				t.Errorf("found deleted alias %v by alias", alias)
 				return
 			}

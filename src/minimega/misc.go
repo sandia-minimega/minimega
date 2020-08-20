@@ -6,29 +6,29 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"image"
 	"image/png"
 	"io"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"minicli"
 	log "minilog"
-	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"text/tabwriter"
 	"time"
 	"unicode"
 	"vlans"
 
-	"github.com/google/gopacket/macs"
 	_ "github.com/jbuchbinder/gopnm"
 	"github.com/nfnt/resize"
 )
@@ -39,14 +39,6 @@ type errSlice []error
 // number of the caller. Can be swapped for sync.Mutex to track down deadlocks.
 type loggingMutex struct {
 	sync.Mutex // embed
-}
-
-var validMACPrefix [][3]byte
-
-func init() {
-	for k, _ := range macs.ValidMACPrefixMap {
-		validMACPrefix = append(validMACPrefix, k)
-	}
 }
 
 // makeErrSlice turns a slice of errors into an errSlice which implements the
@@ -99,6 +91,15 @@ func (m *loggingMutex) Unlock() {
 	log.Info("unlocked: %v:%v", file, line)
 }
 
+// unreachable returns an error when we reach a condition that should be
+// unreachable and tags the file/line number. This usually means our CLI
+// handling is wrong (i.e. we missed a case).
+func unreachable() error {
+	_, file, line, _ := runtime.Caller(1)
+
+	return fmt.Errorf("unreachable %v:%v, please report.", file, line)
+}
+
 func generateUUID() string {
 	log.Debugln("generateUUID")
 	uuid, err := ioutil.ReadFile("/proc/sys/kernel/random/uuid")
@@ -111,29 +112,6 @@ func generateUUID() string {
 	return string(uuid)
 }
 
-func isUUID(s string) bool {
-	if len(s) != 36 {
-		return false
-	}
-
-	parts := strings.Split(s, "-")
-	if len(parts) != 5 {
-		return false
-	}
-
-	for i, v := range []int{8, 4, 4, 4, 12} {
-		if len(parts[i]) != v {
-			return false
-		}
-
-		if _, err := strconv.ParseInt(parts[i], 16, 64); err != nil {
-			return false
-		}
-	}
-
-	return true
-}
-
 // generate a random mac address and return as a string
 func randomMac() string {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -144,35 +122,6 @@ func randomMac() string {
 	mac := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", prefix[0], prefix[1], prefix[2], r.Intn(256), r.Intn(256), r.Intn(256))
 	log.Info("generated mac: %v", mac)
 	return mac
-}
-
-func isMac(mac string) bool {
-	_, err := net.ParseMAC(mac)
-	return err == nil
-}
-
-func allocatedMac(mac string) bool {
-	hw, err := net.ParseMAC(mac)
-	if err != nil {
-		return false
-	}
-
-	_, allocated := macs.ValidMACPrefixMap[[3]byte{hw[0], hw[1], hw[2]}]
-	return allocated
-}
-
-func hostid(s string) (string, int) {
-	k := strings.Split(s, ":")
-	if len(k) != 2 {
-		log.Error("hostid cannot split host vmid pair: %v", k)
-		return "", -1
-	}
-	val, err := strconv.Atoi(k[1])
-	if err != nil {
-		log.Error("parse hostid: %v", err)
-		return "", -1
-	}
-	return k[0], val
 }
 
 // Return a slice of strings, split on whitespace, not unlike strings.Fields(),
@@ -245,44 +194,20 @@ func unescapeString(input []string) string {
 	return strings.TrimSpace(ret)
 }
 
-// cmdTimeout runs the command c and returns a timeout if it doesn't complete
-// after time t. If a timeout occurs, cmdTimeout will kill the process.
-func cmdTimeout(c *exec.Cmd, t time.Duration) error {
-	log.Debug("cmdTimeout: %v", c)
+// quoteJoin joins elements from s with sep, quoting any element containing a
+// space.
+func quoteJoin(s []string, sep string) string {
+	s2 := make([]string, len(s))
 
-	start := time.Now()
-	err := c.Start()
-	if err != nil {
-		return fmt.Errorf("cmd start: %v", err)
-	}
-
-	done := make(chan error)
-	go func() {
-		done <- c.Wait()
-	}()
-
-	select {
-	case <-time.After(t):
-		err = c.Process.Kill()
-		if err != nil {
-			return err
-		}
-		return <-done
-	case err = <-done:
-		log.Debug("cmd %v completed in %v", c, time.Now().Sub(start))
-		return err
-	}
-}
-
-// registerHandlers registers all the provided handlers with minicli, panicking
-// if any of the handlers fail to register.
-func registerHandlers(name string, handlers []minicli.Handler) {
-	for i := range handlers {
-		err := minicli.Register(&handlers[i])
-		if err != nil {
-			log.Fatal("invalid handler, %s:%d -- %v", name, i, err)
+	for i := range s {
+		if strings.IndexFunc(s[i], unicode.IsSpace) > -1 {
+			s2[i] = strconv.Quote(s[i])
+		} else {
+			s2[i] = s[i]
 		}
 	}
+
+	return strings.Join(s2, sep)
 }
 
 // convert a src ppm image to a dst png image, resizing to a largest dimension
@@ -339,175 +264,117 @@ func hasWildcard(v map[string]bool) bool {
 	return v[Wildcard]
 }
 
-// writeOrDie writes data to the provided file. If there is an error, calls
-// teardown to kill minimega.
-func writeOrDie(fpath, data string) {
+// mustWrite writes data to the provided file. If there is an error, calls
+// log.Fatal to kill minimega.
+func mustWrite(fpath, data string) {
+	log.Debug("writing to %v", fpath)
+
 	if err := ioutil.WriteFile(fpath, []byte(data), 0664); err != nil {
-		log.Errorln(err)
-		teardown()
+		log.Fatal("write %v failed: %v", fpath, err)
 	}
 }
 
-// PermStrings creates a random permutation of the source slice using the
-// "inside-out" version of the Fisher-Yates algorithm.
-func PermStrings(source []string) []string {
-	res := make([]string, len(source))
-
-	for i := range source {
-		j := rand.Intn(i + 1)
-		if j != i {
-			res[i] = res[j]
-		}
-		res[j] = source[i]
+// marshal returns the JSON-marshaled version of `v`. If we are unable to
+// marshal it for whatever reason, we log an error and return an empty string.
+func marshal(v interface{}) string {
+	if v == nil {
+		return ""
 	}
 
-	return res
-}
-
-// processVMNet processes the input specifying the bridge, vlan, and mac for
-// one interface to a VM and updates the vm config accordingly. This takes a
-// bit of parsing, because the entry can be in a few forms:
-// 	vlan
-//
-//	vlan,mac
-//	bridge,vlan
-//	vlan,driver
-//
-//	bridge,vlan,mac
-//	vlan,mac,driver
-//	bridge,vlan,driver
-//
-//	bridge,vlan,mac,driver
-// If there are 2 or 3 fields, just the last field for the presence of a mac
-func processVMNet(spec string) (res NetConfig, err error) {
-	// example: my_bridge,100,00:00:00:00:00:00
-	f := strings.Split(spec, ",")
-
-	var b, v, m, d string
-	switch len(f) {
-	case 1:
-		v = f[0]
-	case 2:
-		if isMac(f[1]) {
-			// vlan, mac
-			v, m = f[0], f[1]
-		} else if isNetworkDriver(f[1]) {
-			// vlan, driver
-			v, d = f[0], f[1]
-		} else {
-			// bridge, vlan
-			b, v = f[0], f[1]
-		}
-	case 3:
-		if isMac(f[2]) {
-			// bridge, vlan, mac
-			b, v, m = f[0], f[1], f[2]
-		} else if isMac(f[1]) {
-			// vlan, mac, driver
-			v, m, d = f[0], f[1], f[2]
-		} else {
-			// bridge, vlan, driver
-			b, v, d = f[0], f[1], f[2]
-		}
-	case 4:
-		b, v, m, d = f[0], f[1], f[2], f[3]
-	default:
-		return NetConfig{}, errors.New("malformed netspec")
-	}
-
-	if d != "" && !isNetworkDriver(d) {
-		return NetConfig{}, errors.New("malformed netspec, invalid driver: " + d)
-	}
-
-	log.Debug("got bridge=%v, vlan=%v, mac=%v, driver=%v", b, v, m, d)
-
-	vlan, err := lookupVLAN(v)
+	b, err := json.Marshal(v)
 	if err != nil {
-		return NetConfig{}, err
+		log.Error("unable to marshal %v: %v", v, err)
+		return ""
 	}
 
-	if m != "" && !isMac(m) {
-		return NetConfig{}, errors.New("malformed netspec, invalid mac address: " + m)
-	}
-
-	// warn on valid but not allocated macs
-	if m != "" && !allocatedMac(m) {
-		log.Warn("unallocated mac address: %v", m)
-	}
-
-	if b == "" {
-		b = DefaultBridge
-	}
-	if d == "" {
-		d = VM_NET_DRIVER_DEFAULT
-	}
-
-	return NetConfig{
-		VLAN:   vlan,
-		Bridge: b,
-		MAC:    strings.ToLower(m),
-		Driver: d,
-	}, nil
+	return string(b)
 }
 
-// lookupVLAN uses the allocatedVLANs and active namespace to turn a string
-// into a VLAN. If the VLAN didn't already exist, broadcasts the update to the
-// cluster.
-func lookupVLAN(alias string) (int, error) {
-	namespace := GetNamespaceName()
+func checkPath(v string) string {
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(v) {
+		v = filepath.Join(*f_iomBase, v)
+	}
 
-	vlan, err := allocatedVLANs.ParseVLAN(namespace, alias)
+	if _, err := os.Stat(v); os.IsNotExist(err) {
+		log.Warn("file does not exist: %v", v)
+	}
+
+	return v
+}
+
+// lookupVLAN uses the vlans and active namespace to turn a string into a VLAN.
+// If the VLAN didn't already exist, broadcasts the update to the cluster.
+func lookupVLAN(namespace, alias string) (int, error) {
+	if alias == "" {
+		return 0, errors.New("VLAN must be non-empty string")
+	}
+
+	vlan, err := vlans.ParseVLAN(namespace, alias)
 	if err != vlans.ErrUnallocated {
 		// nil or other error
 		return vlan, err
 	}
 
-	vlan, created, err := allocatedVLANs.Allocate(namespace, alias)
+	vlan, created, err := vlans.Allocate(namespace, alias)
 	if err != nil {
 		return 0, err
 	}
 
-	if !created {
-		return vlan, nil
-	}
+	if created {
+		// update file so that we have a copy of the vlans if minimega crashes
+		mustWrite(filepath.Join(*f_base, "vlans"), vlanInfo())
 
-	// Broadcast out vlan alias to everyone so that we have a record of the
-	// aliases, should this node crash.
-	s := fmt.Sprintf("vlans add %q %v", alias, vlan)
-	if namespace != "" && !strings.Contains(alias, vlans.AliasSep) {
-		s = fmt.Sprintf("namespace %q %v", namespace, s)
-	}
-	cmd := minicli.MustCompile(s)
-	cmd.SetRecord(false)
-	cmd.SetSource(namespace)
+		// broadcast out the alias to the cluster so that the other nodes can
+		// print the alias correctly
+		cmd := minicli.MustCompilef("namespace %v vlans add %q %v", namespace, alias, vlan)
+		cmd.SetRecord(false)
+		cmd.SetSource(namespace)
 
-	respChan, err := meshageSend(cmd, Wildcard)
-	if err != nil {
-		// don't propagate the error since this is supposed to be best-effort.
-		log.Error("unable to broadcast alias update: %v", err)
-		return vlan, nil
-	}
-
-	// read all the responses, looking for errors
-	go func() {
-		for resps := range respChan {
-			for _, resp := range resps {
-				if resp.Error != "" {
-					log.Info("unable to send alias %v -> %v to %v: %v", alias, vlan, resp.Host, resp.Error)
-				}
-			}
+		respChan, err := meshageSend(cmd, Wildcard)
+		if err != nil {
+			// don't propagate the error since this is supposed to be best-effort.
+			log.Error("unable to broadcast alias update: %v", err)
+			return vlan, nil
 		}
 
-	}()
+		// read all the responses, looking for errors
+		go func() {
+			for resps := range respChan {
+				for _, resp := range resps {
+					if resp.Error != "" {
+						log.Error("unable to send alias %v -> %v to %v: %v", alias, vlan, resp.Host, resp.Error)
+					}
+				}
+			}
+		}()
+	}
 
 	return vlan, nil
 }
 
-// printVLAN uses the allocatedVLANs and active namespace to print a vlan.
-func printVLAN(vlan int) string {
-	namespace := GetNamespaceName()
+// printVLAN uses the vlans and active namespace to print a vlan.
+func printVLAN(namespace string, vlan int) string {
+	return vlans.PrintVLAN(namespace, vlan)
+}
 
-	return allocatedVLANs.PrintVLAN(namespace, vlan)
+// vlanInfo returns formatted information about all the vlans.
+func vlanInfo() string {
+	info := vlans.Tabular("")
+	if len(info) == 0 {
+		return ""
+	}
+
+	var o bytes.Buffer
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+	fmt.Fprintf(w, "Alias\tVLAN\n")
+	for _, i := range info {
+		fmt.Fprintf(w, "%v\t%v\n", i[0], i[1])
+	}
+
+	w.Flush()
+	return o.String()
 }
 
 // wget downloads a URL and writes it to disk, creates parent directories if
@@ -531,4 +398,64 @@ func wget(u, dst string) error {
 
 	_, err = io.Copy(out, resp.Body)
 	return err
+}
+
+func writeInt(filename string, value int) error {
+	log.Debug("writing %v to %v", value, filename)
+
+	b := []byte(strconv.Itoa(value))
+	return ioutil.WriteFile(filename, b, 0644)
+}
+
+func readInt(filename string) (int, error) {
+	b, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return 0, fmt.Errorf("unable to read %v: %v", filename, err)
+	}
+
+	s := strings.TrimSpace(string(b))
+
+	run, err := strconv.Atoi(s)
+	if err != nil {
+		return 0, fmt.Errorf("expected int from %v, not `%v`", filename, s)
+	}
+
+	log.Debug("got %v from %v", int(run), filename)
+
+	return int(run), nil
+}
+
+func mesh(vals []string, pairwise bool) map[string][]string {
+	res := make(map[string][]string)
+
+	if pairwise {
+		for _, v := range vals {
+			for _, v2 := range vals {
+				if v == v2 {
+					continue
+				}
+
+				res[v] = append(res[v], v2)
+			}
+		}
+
+		return res
+	}
+
+	n := uint(math.Ceil(math.Log2(float64(len(vals)))))
+	log.Info("generating mesh with %v links per endpoint", n)
+
+	for i, v := range vals {
+		for j := uint(0); j < n; j++ {
+			i2 := (i + 1<<j) % len(vals)
+			// make sure we don't connect to self
+			if i == i2 {
+				i2 = (i2 + 1) % len(vals)
+			}
+
+			res[v] = append(res[v], vals[i2])
+		}
+	}
+
+	return res
 }

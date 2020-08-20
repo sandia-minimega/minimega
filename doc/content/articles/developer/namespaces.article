@@ -1,0 +1,63 @@
+Namespaces
+
+The minimega authors
+07 Sep 2017
+
+* Introduction
+
+namespaces allows users to say they want VMs of a certain configurations and
+minimega will do the heavy lifting underneath to schedule those VMs across a
+cluster of nodes. This article describes some of that heavy lifting. It assumes
+that you have already read the article describing namespaces for users.
+
+* Overview
+
+One of the major design goals of namespaces was to make as few changes to the
+existing API as possible. Ideally, scripts that ran in minimega 2.2, the last
+release before namespaces, should run on the latest release. So far, we have
+achieved this goal.
+
+** Storing the namespace
+
+The active namespace is stored in the `namespace` global string. This should
+not be used directly -- all the CLI handlers are passed the active namespace
+when invoked and should not need to touch any of the namespace globals. In a a
+few places, goroutines may need to access a particular namespace -- this should
+be done with the "APIs" such as `GetNamespace()` and not by touching the
+globals directly.
+
+** namespace resources
+
+Each namespace stores all the state associated with it such as the VMs, tap
+names, captures, and VNC recordings. These resources are automatically cleaned
+up when the namespace is destroyed. Commands that list resources (e.g.
+`vm`info`, `vlans`, and `taps`) only operate on the data stored in the active
+namespace which simplifies their code (in 2.3, each resource had to be
+namespace-aware and filter appropriately). As a result, there is no way to list
+resources across namespaces.
+
+Nodes may belong to one or more namespaces and are listed as part of the
+`ns`hosts` command. For brevity, we will refer to the nodes that belong to the
+active namespace as active nodes.
+
+** API handler duality
+
+Most API handlers have two functions -- they 1) fan out commands to nodes in
+the active namespace and 2) perform whatever local behavior the command
+dictates. The fan out behavior is handled automatically by `wrapBroadcastCLI`
+and `wrapVMTargetCLI`. `wrapVMTargetCLI` behaves the same as `wrapBroadcastCLI`
+but includes an additional step to filter `vm not found` errors from the nodes
+that aren't running the target VM.
+
+The fan out behavior simply calls `mesh`send` with the original command
+embedded in a `namespace`<namespace>`(command)` command and the hosts in the
+current namespace as the target. It then collects and displays the responses.
+
+One complication with the above approach is that how does the remote node know
+that it should perform the local behavior rather than trying to fan out again?
+Without some mechanism to resolve this, we would fan out again and cause a
+deadlock. To prevent this, we tag the outgoing `minicli.Command` using the
+`Source` field. Specifically, we set the `Source` field to the active
+namespace. The `wrapBroadcastCLI` and `wrapVMTargetCLI` handlers check the
+`Source` field and, if it is non-zero, perform the local behavior. Otherwise,
+they will fan out.

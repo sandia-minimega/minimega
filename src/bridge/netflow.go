@@ -5,10 +5,13 @@
 package bridge
 
 import (
+	"errors"
 	"fmt"
 	"gonetflow"
 	log "minilog"
 )
+
+var ErrNoNetflow = errors.New("bridge has no netflow object")
 
 // NewNetflow creates a new netflow for the bridge.
 func (b *Bridge) NewNetflow(timeout int) (*gonetflow.Netflow, error) {
@@ -56,7 +59,7 @@ func (b *Bridge) GetNetflow() (*gonetflow.Netflow, error) {
 	defer bridgeLock.Unlock()
 
 	if b.nf == nil {
-		return nil, fmt.Errorf("bridge has no netflow object")
+		return nil, ErrNoNetflow
 	}
 
 	return b.nf, nil
@@ -74,7 +77,7 @@ func (b *Bridge) destroyNetflow() error {
 	log.Info("destroying netflow on %v", b.Name)
 
 	if b.nf == nil {
-		return fmt.Errorf("bridge has no netflow object")
+		return ErrNoNetflow
 	}
 
 	b.nf.Stop()
@@ -102,7 +105,7 @@ func (b *Bridge) SetNetflowTimeout(timeout int) error {
 	defer bridgeLock.Unlock()
 
 	if b.nf == nil {
-		return fmt.Errorf("bridge has no netflow object")
+		return ErrNoNetflow
 	}
 
 	args := []string{

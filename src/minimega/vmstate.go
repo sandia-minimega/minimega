@@ -6,7 +6,6 @@ package main
 
 import (
 	"fmt"
-	"strings"
 )
 
 type VMState int
@@ -39,21 +38,4 @@ func (s VMState) String() string {
 		return "ERROR"
 	}
 	return fmt.Sprintf("VmState(%d)", s)
-}
-
-func ParseVmState(s string) (VMState, error) {
-	switch strings.ToLower(s) {
-	case "building":
-		return VM_BUILDING, nil
-	case "running":
-		return VM_RUNNING, nil
-	case "paused":
-		return VM_PAUSED, nil
-	case "quit":
-		return VM_QUIT, nil
-	case "error":
-		return VM_ERROR, nil
-	}
-
-	return VM_ERROR, fmt.Errorf("invalid state: %v", s)
 }

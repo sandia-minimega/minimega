@@ -6,6 +6,8 @@ package main
 
 import (
 	"flag"
+	"fmt"
+	"minicli"
 	log "minilog"
 	"os"
 	"os/signal"
@@ -14,20 +16,32 @@ import (
 )
 
 var (
-	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log      = flag.Bool("v", true, "log on stderr")
-	f_logfile  = flag.String("logfile", "", "also log to file")
-	f_miniccc  = flag.String("miniccc", "/miniccc", "path to miniccc for sending logging and stats to minimega")
-	f_path     = flag.String("path", "/tmp/minirouter", "base directory for minirouter")
-	f_force    = flag.Bool("force", false, "force minirouter to run even if another appears to be running already")
-	f_u        = flag.String("u", "", "update minirouter with a given file")
+	f_miniccc = flag.String("miniccc", "/miniccc", "path to miniccc for sending logging and stats to minimega")
+	f_path    = flag.String("path", "/tmp/minirouter", "base directory for minirouter")
+	f_force   = flag.Bool("force", false, "force minirouter to run even if another appears to be running already")
+	f_u       = flag.String("u", "", "update minirouter with a given file")
+	f_cli     = flag.Bool("cli", false, "validate and print the minirouter cli, in JSON, to stdout and exit")
 )
 
 func main() {
 	// flags
 	flag.Parse()
 
-	logSetup()
+	log.Init()
+	logSetupPushUp()
+
+	if *f_cli {
+		if err := minicli.Validate(); err != nil {
+			log.Fatalln(err)
+		}
+
+		doc, err := minicli.Doc()
+		if err != nil {
+			log.Fatal("failed to generate docs: %v", err)
+		}
+		fmt.Println(doc)
+		os.Exit(0)
+	}
 
 	if *f_u != "" {
 		log.Debug("updating with file: %v", *f_u)

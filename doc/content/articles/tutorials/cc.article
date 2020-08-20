@@ -8,27 +8,27 @@ The minimega authors
 This tutorial illustrates the use of each feature present in the command and
 control (cc) API, including executing commands, file i/o, and TCP tunnels. This
 is an interactive tutorial, and can be run against a running minimega instance
-when minidoc is run with `-exec`true`. 
+when minidoc is run with `-exec`true`.
 
 ** Setup
 
 In order to run the content in this tutorial you will need a running minimega
 instance and at least one virtual machine. We use a standard debian linux VM in
 the examples given here. To use the virtio service described below, your VM and
-host both need to have virtio support available. 
+host both need to have virtio support available.
 
 * About cc
 
 The Command and Control (cc) API in minimega provides a mechanism to
 programmatically execute programs and send and receive files to VMs launched by
 minimega. In addition, the cc API allows creating TCP tunnels (as well as
-reverse tunnels) from the host machine to/from any VM. 
+reverse tunnels) from the host machine to/from any VM.
 
 The cc API supports two modes of communication with VMs. The first is a simple
 TCP connection from the VM to the host via some routable network. In this mode
 the VMs must be able to communicate directly with the host they are launched
 on. This can be accomplished with the `tap` API, or through several other
-means. 
+means.
 
 The second connection mode is over either virtio-serial (for kvm-based VMs), or
 over a UNIX domain socket (for container-based VMs), which provides a simple
@@ -36,16 +36,16 @@ i/o layer, similar to a UNIX pipe between the host and VM. In order to use the
 virtio-serial mode, both host and VM must have virtio-serial support. Most
 modern linux distributions have this enabled by default. Windows VMs must
 install virtio-serial drivers, available from
-[[http://www.linux-kvm.org/page/WindowsGuestDrivers/Download_Drivers][here]]. 
+[[http://www.linux-kvm.org/page/WindowsGuestDrivers/Download_Drivers][here]].
 Domain sockets for container-based VMs are created by default when launching
 containers.
 
 Both connection modes provide the same features, although the TCP mode can be
-significantly faster, depending on the underlying network. 
+significantly faster, depending on the underlying network.
 
 Commands issued with the cc API (including file I/O) are always executed
 _in_order_ on the client. This means you can chain commands, such as "send a
-file, execute that file, then receive the output from that file". 
+file, execute that file, then receive the output from that file".
 
 Commands can also contain filters, which allow you to select which VMs execute
 that command. Filters are stacked, meaning you can apply filters such as
@@ -56,27 +56,27 @@ that command. Filters are stacked, meaning you can apply filters such as
 The miniccc client uses several command line switches to control how to connect
 to minimega, as well as where to store files received for the client. To
 connect over TCP, provide the `-parent` flag with the host/ip of host running
-minimega. 
+minimega.
 
 	miniccc -parent 10.0.0.1
 
 To use virtio-serial, instead use the `-serial` flag, with the path to the
-virtio-serial file. 
+virtio-serial file.
 
 	miniccc -serial /dev/virtio-ports/cc
 
 *NOTE:* In linux, the default virtio-serial cc port is `/dev/virtio-ports/cc`.
-In Windows, the path is `\\.\Global\cc`. 
+In Windows, the path is `\\.\Global\cc`.
 
 By default, miniccc will create the directory `/tmp/miniccc` to store state and
 files in. Files sent to the client will be stored in `/tmp/miniccc/files`. You
-can change this directory with the `-base` flag. 
+can change this directory with the `-base` flag.
 
 * Client Information
 
 Clients report their UUID, hostname, OS, architecture, IP and MAC addresses to
 minimega. This information is updated periodically, so if an IP changes,
-minimega will see the change. 
+minimega will see the change.
 
 To list clients, use the `cc clients` API.
 
@@ -92,7 +92,7 @@ Executing commands is simple - just issue `cc`exec` with the command you want
 to execute. You may need to wrap your command in quotes or escape special
 characters. You can inspect current in-flight commands with `cc`commands`,
 which shows the contents of the command, any applied filters (more on that
-later), and how many clients have responded. 
+later), and how many clients have responded.
 
 .mega cc/exec.mm
 
@@ -102,7 +102,7 @@ a VM or start new VMs, they would all see and execute this command. Second, the
 response from the client isn't printed to screen. Instead, responses are logged
 in a special directory structure in minimega's base path. You can browse to the
 responses yourself, or use the `cc`responses` command to view responses from
-clients (more on that later). 
+clients (more on that later).
 
 For now, we'll simply wait for the client to respond by checking `cc`commands`,
 and then ask minimega to print the response.
@@ -110,7 +110,7 @@ and then ask minimega to print the response.
 .mega cc/exec2.mm
 
 When the client responds to a `cc`exec` command, standard out and error are
-stored in the files `stdout` and `stderr` respectively. 
+stored in the files `stdout` and `stderr` respectively.
 
 ** Background commands
 
@@ -118,7 +118,7 @@ Sometimes you want to execute a command on the client that doesn't return, such
 as a daemon or other agent. To tell cc not to wait on a response for a given
 command, use `cc`background` instead of `cc`exec`. When using background mode,
 miniccc will execute the command and immediately move on to the next command
-queued to run. 
+queued to run.
 
 ** Process control
 
@@ -131,7 +131,7 @@ Processes started in the background can later be listed and killed using the
 
 The cc API supports sending and receiving files to and from the client. Files
 can be specified by name or glob (wildcard). When sending files, they must be
-rooted in a specific directory provided by minimega. 
+rooted in a specific directory provided by minimega.
 
 ** Sending Files
 
@@ -150,14 +150,14 @@ Now we'll send it to the client by using the `cc`send` command.
 
 Clients will fetch the files from minimega before moving on to any other
 commands. You can inspect file send commands with `cc`commands`, just like we
-did with `cc`exec` before. 
+did with `cc`exec` before.
 
 We can also send globs (wildcard) of files, using the * operator. For example:
 
 	minimega$ cc send somedirectory/*
 
 Files will appear in the `files` subdirectory in the client's base directory.
-By default, this is `/tmp/miniccc/files`. 
+By default, this is `/tmp/miniccc/files`.
 
 At this point we can both send and execute a file on the client. Let's execute
 the script we sent a moment ago:
@@ -172,7 +172,7 @@ After the client responds to the `cc`exec` command, we can check the output.
 
 Receiving files is just like sending files, except that you can specify any
 path on the client to receive files from. Globs (wildcards) work with receiving
-files too, so you can receive entire directories of files. 
+files too, so you can receive entire directories of files.
 
 Let's modify our example above and send a bash script that creates a file,
 execute it, and then get that file back. We'll have our bash script create the
@@ -187,9 +187,32 @@ file `/foo/bar.out`, and name is `bar.bash`:
 Use `cc`responses` to check the file received after it completes. You'll notice
 in the output that the file `bar.out` was received and stored in the response
 subdirectory `/foo`. This is because the `/foo` subdirectory was specified with
-the receive command. 
+the receive command.
 
 .mega cc/recv2.mm
+
+** Full filesystem access
+
+The `cc`mount` can be used to mount the guest filesystem on the host. This is
+accomplished by a 9p server integrated into miniccc that serves the guest's
+filesystem over the existing connection to the command and control server.
+`cc`mount` is fully integrated with namespaces -- you may mount a VM's
+filesystem to the head node, regardless of which host is actually running the
+VM. In order to mount the filesystem, you'll need to use either the name or
+UUID of the VM:
+
+    cc mount vm-0 /mnt
+
+To list existing mounts, run it with no arguments:
+
+    cc mount
+
+You can unmount a specific VM or mount by path using:
+
+    clear cc mount [uuid or name or path].
+
+Without an argument, `clear`cc`mount` clears all mounts. This also occurs when
+you call `clear`cc`.
 
 * Examining Responses
 
@@ -210,7 +233,7 @@ command id:
 It's useful to group similar commands into named groups. The `cc`prefix`
 command allows creating groups of commands by associating all issued commands
 after a `cc`prefix` command with that prefix. You can then use the prefix name
-instead of a command id when using `cc`responses`, or when deleting commands. 
+instead of a command id when using `cc`responses`, or when deleting commands.
 
 .mega cc/prefix.mm
 
@@ -231,7 +254,7 @@ example to send a command only to clients that have an IP in the network
 
 Any commands issued from now on will be executed only by clients that meet all
 filter fields. You can set multiple filter arguments, such as restricting
-commands to only windows machines in a specific IP range. 
+commands to only windows machines in a specific IP range.
 
 You can filter on any of UUID, hostname, architecture, OS, IP (including CIDR
 notation), and MAC address.
@@ -247,14 +270,14 @@ that is, a listening port on the minimega host that is tunneled to a
 destination host and port from the perspective of the client, use `cc`tunnel`.
 When creating a forward tunnel the UUID of the client *must* be specified. The
 destination host can be `localhost` or any other host reachable from the
-client. 
+client.
 
 Similarly, a reverse tunnel, a listening port on the client tunneled to a host
 and port reachable from the minimega host, can be created by using
 `cc`rtunnel`. Reverse tunnels do not require a UUID to be specified, and
 instead use the current client filter to restrict which clients create the
 tunnel. That means you can tunnel a port for every client to a resource outside
-of the experiment. 
+of the experiment.
 
 For example, to tunnel local port 4444 on each client to a web server reachable
 from the minimega host:
@@ -266,7 +289,14 @@ from the minimega host:
 The `miniccc` client can add tags to the info for the VM the client is running
 on. This enables third party tools to upstream information about a VM to
 minimega via miniccc. Tags are key/value pairs, and are added simply by using
-the `-tag` switch on a running `miniccc` instance. 
+the `-tag` switch on a running `miniccc` instance.
 
     ./miniccc -tag foo bar
 
+* Logging
+
+You may adjust the log level of clients at runtime from minimega:
+
+	minimega$ cc log level debug
+
+This will apply to clients matching the current filter.

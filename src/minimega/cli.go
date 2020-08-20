@@ -4,53 +4,33 @@
 //
 // David Fritz <djfritz@sandia.gov>
 
-// command line interface for minimega
-//
-// The command line interface wraps a number of commands listed in the
-// cliCommands map. Each entry to the map defines a function that is called
-// when the command is invoked on the command line, as well as short and long
-// form help. The record parameter instructs the cli to put the command in the
-// command history.
-//
-// The cli uses the readline library for command history and tab completion.
-// A separate command history is kept and used for writing the buffer out to
-// disk.
-
 package main
 
 import (
+	"errors"
 	"fmt"
-	"goreadline"
+	"io"
+	"io/ioutil"
 	"minicli"
 	log "minilog"
 	"minipager"
 	"net/url"
 	"os"
-	"os/signal"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"unicode"
+
+	"github.com/peterh/liner"
 )
 
-const (
-	COMMAND_TIMEOUT = 10
-)
+// Prevents multiple commands from running at the same time
+var cmdLock sync.Mutex
 
-var (
-	// Prevents multiple commands from running at the same time
-	cmdLock sync.Mutex
-)
-
-type CLIFunc func(*minicli.Command) *minicli.Response
-
-// Sources of minicli.Commands. If minicli.Command.Source is not set, then we
-// generated the Command programmatically.
-var (
-	SourceMeshage   = "meshage"
-	SourceLocalCLI  = "local"
-	SourceAttachCLI = "attach"
-	SourceRead      = "read"
-)
+type wrappedCLIFunc func(*Namespace, *minicli.Command, *minicli.Response) error
+type wrappedSuggestFunc func(*Namespace, string, string) []string
 
 // cliSetup registers all the minimega handlers
 func cliSetup() {
@@ -70,6 +50,7 @@ func cliSetup() {
 	registerHandlers("log", logCLIHandlers)
 	registerHandlers("meshage", meshageCLIHandlers)
 	registerHandlers("misc", miscCLIHandlers)
+	registerHandlers("namespace", namespaceCLIHandlers)
 	registerHandlers("nuke", nukeCLIHandlers)
 	registerHandlers("optimize", optimizeCLIHandlers)
 	registerHandlers("qos", qosCLIHandlers)
@@ -78,19 +59,32 @@ func cliSetup() {
 	registerHandlers("vlans", vlansCLIHandlers)
 	registerHandlers("vm", vmCLIHandlers)
 	registerHandlers("vmconfig", vmconfigCLIHandlers)
+	registerHandlers("vmconfiger", vmconfigerCLIHandlers)
 	registerHandlers("vnc", vncCLIHandlers)
-	registerHandlers("vyatta", vyattaCLIHandlers)
-	registerHandlers("web", webCLIHandlers)
+	registerHandlers("plumb", plumbCLIHandlers)
+}
+
+// registerHandlers registers all the provided handlers with minicli, panicking
+// if any of the handlers fail to register.
+func registerHandlers(name string, handlers []minicli.Handler) {
+	for i := range handlers {
+		if err := minicli.Register(&handlers[i]); err != nil {
+			log.Fatal("invalid handler, %s:%d -- %v", name, i, err)
+		}
+	}
 }
 
 // wrapSimpleCLI wraps handlers that return a single response. This greatly
 // reduces boilerplate code with minicli handlers.
-func wrapSimpleCLI(fn func(*minicli.Command, *minicli.Response) error) minicli.CLIFunc {
+func wrapSimpleCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
+		ns := GetNamespace()
+
 		resp := &minicli.Response{Host: hostname}
-		if err := fn(c, resp); err != nil {
+		if err := fn(ns, c, resp); err != nil {
 			resp.Error = err.Error()
 		}
+
 		respChan <- minicli.Responses{resp}
 	}
 }
@@ -98,8 +92,11 @@ func wrapSimpleCLI(fn func(*minicli.Command, *minicli.Response) error) minicli.C
 // errResp creates a minicli.Responses from a single error.
 func errResp(err error) minicli.Responses {
 	resp := &minicli.Response{
-		Host:  hostname,
-		Error: err.Error(),
+		Host: hostname,
+	}
+
+	if err != nil {
+		resp.Error = err.Error()
 	}
 
 	return minicli.Responses{resp}
@@ -108,47 +105,31 @@ func errResp(err error) minicli.Responses {
 // wrapBroadcastCLI is a namespace-aware wrapper for VM commands that
 // broadcasts the command to all hosts in the namespace and collects all the
 // responses together.
-func wrapBroadcastCLI(fn func(*minicli.Command, *minicli.Response) error) minicli.CLIFunc {
+func wrapBroadcastCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 	// for the `local` behavior
 	localFunc := wrapSimpleCLI(fn)
 
 	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
 		ns := GetNamespace()
 
-		log.Debug("namespace: %v, command: %#v", ns, c)
-
 		// Wrapped commands have two behaviors:
 		//   `fan out` -- send the command to all hosts in the active namespace
 		//   `local`   -- invoke the underlying handler
 		// We use the source field to track whether we have already performed
 		// the `fan out` phase for this command. By default, the source is the
-		// empty string, so when a namespace is not active, we will always have
-		// the `local` behavior. When a namespace is active, the source will
-		// not match the active namespace so we will perform the `fan out`
-		// phase. We immediately set the source to the active namespace so that
-		// when we send the command via mesh, the source will be propagated and
-		// the remote nodes will execute the `local` behavior rather than
-		// trying to `fan out`.
-		if ns == nil || c.Source == ns.Name {
+		// empty string so the source will not match the active namespace and
+		// we will perform the `fan out` phase. We set the source to the active
+		// namespace so that when we send the command via mesh, the source will
+		// be propagated and they will execute the `local` behavior.
+		if c.Source != "" {
 			localFunc(c, respChan)
 			return
-		}
-		c.SetSource(ns.Name)
-
-		hosts := ns.hostSlice()
-
-		cmds := makeCommandHosts(hosts, c)
-		for _, cmd := range cmds {
-			cmd.SetRecord(false)
 		}
 
 		res := minicli.Responses{}
 
-		// Broadcast to all machines, collecting errors and forwarding
-		// successful commands.
-		//
 		// LOCK: this is a CLI handler so we already hold the cmdLock.
-		for resps := range runCommands(cmds...) {
+		for resps := range runCommands(namespaceCommands(ns, c)...) {
 			// TODO: we are flattening commands that return multiple responses
 			// by doing this... should we implement proper buffering? Only a
 			// problem if commands that return multiple responses are wrapped
@@ -164,27 +145,17 @@ func wrapBroadcastCLI(fn func(*minicli.Command, *minicli.Response) error) minicl
 
 // wrapVMTargetCLI is a namespace-aware wrapper for VM commands that target one
 // or more VMs. This is used by commands like `vm start` and `vm kill`.
-func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli.CLIFunc {
+func wrapVMTargetCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 	// for the `local` behavior
 	localFunc := wrapSimpleCLI(fn)
 
 	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
 		ns := GetNamespace()
 
-		log.Debug("namespace: %v, source: %v", ns, c.Source)
-
 		// See note in wrapBroadcastCLI.
-		if ns == nil || c.Source == ns.Name {
+		if c.Source != "" {
 			localFunc(c, respChan)
 			return
-		}
-		c.SetSource(ns.Name)
-
-		hosts := ns.hostSlice()
-
-		cmds := makeCommandHosts(hosts, c)
-		for _, cmd := range cmds {
-			cmd.SetRecord(false)
 		}
 
 		res := minicli.Responses{}
@@ -192,11 +163,8 @@ func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli
 
 		var notFound string
 
-		// Broadcast to all machines, collecting errors and forwarding
-		// successful commands.
-		//
 		// LOCK: this is a CLI handler so we already hold the cmdLock.
-		for resps := range runCommands(cmds...) {
+		for resps := range runCommands(namespaceCommands(ns, c)...) {
 			for _, resp := range resps {
 				ok = ok || (resp.Error == "")
 
@@ -211,14 +179,155 @@ func wrapVMTargetCLI(fn func(*minicli.Command, *minicli.Response) error) minicli
 
 		if !ok && len(res) == 0 {
 			// Presumably, we weren't able to find the VM
-			res = append(res, &minicli.Response{
-				Host:  hostname,
-				Error: notFound,
-			})
+			respChan <- errResp(errors.New(notFound))
+			return
 		}
 
 		respChan <- res
 	}
+}
+
+func wrapSuggest(fn wrappedSuggestFunc) minicli.SuggestFunc {
+	return func(raw, val, prefix string) []string {
+		if attached != nil {
+			return attached.Suggest(raw)
+		}
+
+		ns := GetNamespace()
+
+		return fn(ns, val, prefix)
+	}
+}
+
+func wrapVMSuggest(mask VMState, wild bool) minicli.SuggestFunc {
+	return wrapSuggest(func(ns *Namespace, val, prefix string) []string {
+		// only make suggestions for VM field
+		if val != "vm" {
+			return nil
+		}
+
+		return cliVMSuggest(ns, prefix, mask, wild)
+	})
+}
+
+// wrapHostnameSuggest creates a completion function, wrapping
+// cliHostnameSuggest.
+func wrapHostnameSuggest(local, direct, wild bool) minicli.SuggestFunc {
+	return wrapSuggest(func(ns *Namespace, val, prefix string) []string {
+		// somewhat hacky... currently only two names for placeholders and
+		// unlikely to be too many more.
+		if val != "hostname" && val != "value" {
+			return nil
+		}
+
+		return cliHostnameSuggest(prefix, local, direct, wild)
+	})
+}
+
+// envCompleter completes environment variables
+func envCompleter(s string) []string {
+	// handle that begin with a '$' and complete based on the
+	// available env variables
+	if !strings.HasPrefix(s, "$") {
+		return nil
+	}
+
+	prefix := strings.TrimPrefix(s, "$")
+
+	var res []string
+
+	for _, env := range os.Environ() {
+		k := strings.SplitN(env, "=", 2)[0]
+		if strings.HasPrefix(k, prefix) {
+			res = append(res, "$"+k)
+		}
+	}
+
+	return res
+}
+
+// fileCompleter
+func fileCompleter(path string) []string {
+	var res []string
+
+	var dir, prefix string
+
+	if strings.HasSuffix(path, string(os.PathSeparator)) {
+		dir = path
+		prefix = ""
+	} else {
+		dir = filepath.Dir(path)
+		prefix = filepath.Base(path)
+	}
+
+	files, _ := ioutil.ReadDir(dir)
+	for _, f := range files {
+		if strings.HasPrefix(f.Name(), prefix) {
+			name := filepath.Join(dir, f.Name())
+
+			if f.IsDir() {
+				name += string(os.PathSeparator)
+			}
+
+			res = append(res, name)
+		}
+	}
+
+	return res
+}
+
+func cliCompleter(line string) []string {
+	prep := func(s []string) []string {
+		if len(s) == 0 {
+			return s
+		}
+
+		sort.Strings(s)
+
+		// remove the last term from the line
+		line := strings.TrimRightFunc(line, func(r rune) bool {
+			return !unicode.IsSpace(r)
+		})
+
+		// create new result that is line + suggestion + whitespace
+		r := make([]string, len(s))
+		for i := range s {
+			r[i] = line + s[i]
+			if !strings.HasSuffix(s[i], string(os.PathSeparator)) {
+				r[i] += " "
+			}
+		}
+
+		return r
+	}
+
+	// completing commands has the highest priority
+	suggest := minicli.Suggest(line)
+	if len(suggest) > 0 {
+		return prep(suggest)
+	}
+
+	// completing partial word
+	if !strings.HasSuffix(line, " ") {
+		f := strings.Fields(line)
+
+		if len(f) > 0 {
+			last := f[len(f)-1]
+
+			suggest = append(suggest, envCompleter(last)...)
+			suggest = append(suggest, iomCompleter(last)...)
+			suggest = append(suggest, fileCompleter(last)...)
+		}
+
+		return prep(suggest)
+	}
+
+	// last resort, complete files from current directory
+	if len(suggest) == 0 {
+		suggest = append(suggest, fileCompleter(*f_iomBase)...)
+	}
+
+	return prep(suggest)
 }
 
 // forward receives minicli.Responses from in and forwards them to out.
@@ -226,6 +335,22 @@ func forward(in <-chan minicli.Responses, out chan<- minicli.Responses) {
 	for v := range in {
 		out <- v
 	}
+}
+
+// consume reads all responses, returning the first error it encounters. Will
+// always drain the channel before returning.
+func consume(in <-chan minicli.Responses) error {
+	var err error
+
+	for resps := range in {
+		for _, resp := range resps {
+			if resp.Error != "" && err == nil {
+				err = errors.New(resp.Error)
+			}
+		}
+	}
+
+	return err
 }
 
 // runCommands is RunCommands without locking cmdLock.
@@ -261,103 +386,77 @@ func RunCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
 	return out
 }
 
-// runCommandGlobally runs the given command across all nodes on meshage,
-// including the local node and combines the results into a single channel.
-func runCommandGlobally(cmd *minicli.Command) <-chan minicli.Responses {
-	// Keep the original CLI input
-	original := cmd.Original
-	record := cmd.Record
-
-	cmd, err := minicli.Compilef("mesh send %s %s", Wildcard, original)
-	if err != nil {
-		log.Fatal("cannot run `%v` globally -- %v", original, err)
-	}
-	cmd.SetRecord(record)
-
-	return runCommands(cmd, cmd.Subcommand)
-}
-
-// makeCommandHosts creates commands to run the given command on a set of hosts
-// handling the special case where the local node is included in the list.
-// makeCommandHosts is namespace-aware -- it generates commands based on the
-// currently active namespace.
-func makeCommandHosts(hosts []string, cmd *minicli.Command) []*minicli.Command {
-	// filter out the local host, if included
-	var includeLocal bool
-	var hosts2 []string
-
-	for _, host := range hosts {
-		if host == hostname {
-			includeLocal = true
-		} else {
-			// Quote the hostname in case there are spaces
-			hosts2 = append(hosts2, fmt.Sprintf("%q", host))
-		}
-	}
-
+// namespaceCommands creates commands to run the given command on all hosts in
+// the namespace including the special case where localhost is included in the
+// list. All commands will be prefixed with "namespace <name>", have their
+// source set to the namespace name, and be record false.
+func namespaceCommands(ns *Namespace, cmd *minicli.Command) []*minicli.Command {
 	var cmds = []*minicli.Command{}
 
-	if includeLocal {
-		// Create a deep copy of the command by recompiling it
-		cmd2 := minicli.MustCompile(cmd.Original)
-		cmd2.SetRecord(cmd.Record)
-		cmd2.SetSource(cmd.Source)
+	var peers []string
 
+	for host := range ns.Hosts {
+		if host == hostname {
+			// Create a deep copy of the command by recompiling it
+			cmd2 := minicli.MustCompile(cmd.Original)
+			cmds = append(cmds, cmd2)
+		} else {
+			// Quote the hostname in case there are spaces
+			peers = append(peers, strconv.Quote(host))
+		}
+	}
+
+	if len(peers) > 0 {
+		targets := strings.Join(peers, ",")
+
+		// use `%q` to quote the namespace name in case there are spaces,
+		// targets and original command should be fine as-is
+		cmd2 := minicli.MustCompilef("mesh send %v namespace %q %v", targets, ns.Name, cmd.Original)
 		cmds = append(cmds, cmd2)
 	}
 
-	if len(hosts2) > 0 {
-		ns := GetNamespace()
-
-		targets := strings.Join(hosts2, ",")
-
-		// Keep the original CLI input
-		original := cmd.Original
-
-		// Prefix with namespace, if one is set
-		if ns != nil {
-			original = fmt.Sprintf("namespace %q %v", ns.Name, original)
-		}
-
-		cmd2 := minicli.MustCompilef("mesh send %s %s", targets, original)
-		cmd2.SetRecord(cmd.Record)
-		cmd2.SetSource(cmd.Source)
-
-		cmds = append(cmds, cmd2)
+	for _, cmd2 := range cmds {
+		cmd2.SetSource(ns.Name)
+		cmd2.SetRecord(false)
+		cmd2.SetPreprocess(cmd.Preprocess)
 	}
 
 	return cmds
 }
 
 // local command line interface, wrapping readline
-func cliLocal() {
-	goreadline.FilenameCompleter = iomCompleter
-
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt)
-	go func() {
-		for range sig {
-			goreadline.Signal()
-		}
-	}()
-	defer signal.Stop(sig)
+func cliLocal(input *liner.State) {
+	input.SetCtrlCAborts(true)
+	input.SetTabCompletionStyle(liner.TabPrints)
+	input.SetCompleter(cliCompleter)
 
 	for {
-		namespace := GetNamespaceName()
+		ns := GetNamespace()
 
-		prompt := "minimega$ "
-		if namespace != "" {
-			prompt = fmt.Sprintf("minimega[%v]$ ", namespace)
+		prompt := fmt.Sprintf("minimega[%v]$ ", ns.Name)
+
+		line, err := input.Prompt(prompt)
+		if err == liner.ErrPromptAborted {
+			continue
+		} else if err == io.EOF {
+			break
 		}
 
-		line, err := goreadline.Readline(prompt, true)
-		if err != nil {
-			return
-		}
-		command := string(line)
-		log.Debug("got from stdin: `%v`", command)
+		line = strings.TrimSpace(line)
 
-		cmd, err := minicli.Compile(command)
+		log.Debug("got line from stdin: `%v`", line)
+
+		// skip blank lines
+		if line == "" {
+			continue
+		}
+
+		input.AppendHistory(line)
+
+		// expand aliases
+		line = minicli.ExpandAliases(line)
+
+		cmd, err := minicli.Compile(line)
 		if err != nil {
 			log.Error("%v", err)
 			//fmt.Printf("closest match: TODO\n")
@@ -377,7 +476,7 @@ func cliLocal() {
 
 		// The namespace changed between when we prompted the user (and could
 		// still change before we actually run the command).
-		if namespace != GetNamespaceName() {
+		if ns != GetNamespace() {
 			// TODO: should we abort the command?
 			log.Warn("namespace changed between prompt and execution")
 		}
@@ -397,17 +496,8 @@ func cliLocal() {
 // cliPreprocess performs expansion on a single string and returns the update
 // string or an error.
 func cliPreprocess(v string) (string, error) {
-	if strings.HasPrefix(v, "$") {
-		end := strings.IndexAny(v, "/ ")
-		if end == -1 {
-			end = len(v)
-		}
-		if v2 := os.Getenv(v[1:end]); v2 != "" {
-			return v2 + v[end:], nil
-		}
-
-		return "", fmt.Errorf("undefined: %v", v)
-	}
+	// expand any ${var} or $var env variables
+	v = os.ExpandEnv(v)
 
 	if u, err := url.Parse(v); err == nil {
 		switch u.Scheme {
@@ -436,6 +526,48 @@ func cliPreprocess(v string) (string, error) {
 			}
 
 			return "", err
+		case "tar":
+			log.Debug("tar preprocessor")
+
+			path := u.Opaque
+
+			if !filepath.IsAbs(u.Path) {
+				// not absolute -- try to fetch via meshage
+				v2, err := iomHelper(u.Opaque)
+				if err != nil {
+					return v, err
+				}
+				path = v2
+			}
+
+			// check to see how many things are in the top-level directory
+			out, err := processWrapper("tar", "--exclude=*/*", "-tf", path)
+			if err != nil {
+				return v, err
+			}
+
+			if strings.Count(out, "\n") != 1 {
+				return v, errors.New("unable to handle tar without a single top-level directory")
+			}
+
+			// remove trailing "\n"
+			out = out[:len(out)-1]
+
+			// check to see if we already extracted this tar
+			dst := filepath.Join(filepath.Dir(path), out)
+			if _, err := os.Stat(dst); err == nil {
+				return dst, nil
+			}
+
+			log.Debug("untar to %v", dst)
+
+			// do the extraction
+			_, err = processWrapper("tar", "-C", filepath.Dir(path), "-xf", path)
+			if err != nil {
+				return v, err
+			}
+
+			return dst, nil
 		}
 	}
 

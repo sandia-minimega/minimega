@@ -21,9 +21,9 @@ First, make sure you have a [[http://golang.org][Go compiler]] installed. Then,
 install some libraries needed to build minimega and the associated tools:
 
 	# fetch pre-requisites
-	$ sudo apt-get install libpcap-dev libreadline-dev syslinux 
+	$ sudo apt-get install libpcap-dev syslinux
 	# On ubuntu 16.04lts you need these as well
-	$ sudo apt-get debootstrap genisoimage extlinux
+	$ sudo apt-get install debootstrap genisoimage extlinux
 
 With those installed, you can pull down the minimega repo and build:
 
@@ -47,7 +47,7 @@ root, open a new file called `misc/vmbetter_configs/wireshark.conf`. This
 directory contains several other configurations which could be instructive, but
 for now just paste the following text into the file and save it:
 
-	parents = "default_amd64.conf"
+	parents = "default.conf"
 	packages = "traceroute dnsutils wget tcpdump telnet wireshark xserver-xorg-core xserver-xorg-input-all xserver-xorg-video-fbdev xserver-xorg-video-cirrus xterm xinit blackbox"
 	overlay = "misc/vmbetter_configs/wireshark_overlay"
 	postbuild = `
@@ -117,7 +117,7 @@ Our `.profile` launches X automatically as soon as root logs in, and then
 Now that we've specified *how* to build the image, we can fire up vmbetter and
 actually *build* it. Here's the command I used to build:
 
-	$ sudo ./bin/vmbetter -branch stable -iso -level debug  -mbr /usr/lib/syslinux/mbr/mbr.bin misc/vmbetter_configs/wireshark.conf 
+	$ sudo ./bin/vmbetter -branch stable -iso -level debug  -mbr /usr/lib/syslinux/mbr/mbr.bin misc/vmbetter_configs/wireshark.conf
 
 It's rather complex, so I'll break down each part:
 
@@ -145,9 +145,8 @@ the current directory. We can test it using minimega:
 	minimega$ vm config cdrom wireshark.iso
 	minimega$ vm launch kvm wireshark
 	minimega$ vm start wireshark
-	minimega$ web 9001
 
-Now, if you point your web browser at
+Start [[/articles/miniweb.article][miniweb]] and then point your web browser to
 [[http://localhost:9001/][http://localhost:9001]], you should be able to see
 minimega's web front-end. There should be one VM listed on the main page; click
 the screenshot to open a VNC session to it.

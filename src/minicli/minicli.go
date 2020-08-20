@@ -10,6 +10,7 @@ import (
 	log "minilog"
 	"strings"
 	"sync"
+	"unicode"
 )
 
 // Output modes
@@ -24,12 +25,13 @@ const (
 )
 
 type Flags struct {
-	Annotate bool
-	Compress bool
-	Headers  bool
-	Sort     bool
-	Mode     int
-	Record   bool
+	Annotate   bool
+	Compress   bool
+	Headers    bool
+	Sort       bool
+	Preprocess bool
+	Mode       int
+	Record     bool
 }
 
 var flagsLock sync.Mutex
@@ -41,17 +43,22 @@ var (
 
 var defaultFlags = Flags{
 	// Output flags
-	Annotate: true,
-	Compress: true,
-	Headers:  true,
-	Sort:     true,
-	Mode:     defaultMode,
+	Annotate:   true,
+	Compress:   true,
+	Headers:    true,
+	Sort:       true,
+	Preprocess: true,
+	Mode:       defaultMode,
 
 	// Command flags
 	Record: true,
 }
 
 var handlers []*Handler
+var trie = &patternTrie{
+	Children: make(map[patternTrieKey]*patternTrie),
+}
+
 var history []string // command history for the write command
 
 // HistoryLen is the length of the history of commands that minicli stores.
@@ -72,13 +79,14 @@ type Response struct {
 	Header   []string    // Optional header. If set, will be used for both Response and Tabular data.
 	Tabular  [][]string  // Optional tabular data. If set, Response will be ignored
 	Error    string      // Because you can't gob/json encode an error type
-	Data     interface{} `json:"-"` // Optional user data
+	Data     interface{} //`json:"-"` // Optional user data
 
 	// Embedded output flags, overrides defaults if set for first response
 	*Flags `json:"-"`
 }
 
 type CLIFunc func(*Command, chan<- Responses)
+type SuggestFunc func(string, string, string) []string
 
 // Preprocessor may be set to perform actions immediately before commands run.
 var Preprocessor func(*Command) error
@@ -88,6 +96,10 @@ func Reset() {
 	handlers = nil
 	history = nil
 	firstHistoryTruncate = true
+
+	trie = &patternTrie{
+		Children: make(map[patternTrieKey]*patternTrie),
+	}
 }
 
 // MustRegister calls Register for a handler and panics if the handler has an
@@ -110,8 +122,7 @@ func Register(h *Handler) error {
 	h.SharedPrefix = h.findPrefix()
 
 	handlers = append(handlers, h)
-
-	return nil
+	return trie.Add(h)
 }
 
 // Process raw input text. An error is returned if parsing the input text
@@ -139,7 +150,7 @@ func ProcessString(input string, record bool) (<-chan Responses, error) {
 
 // Process a prepopulated Command
 func ProcessCommand(c *Command) <-chan Responses {
-	if !c.noOp && c.Call == nil {
+	if !c.Nop && c.Call == nil {
 		log.Fatal("command %v has no callback!", c)
 	}
 
@@ -149,7 +160,7 @@ func ProcessCommand(c *Command) <-chan Responses {
 		defer close(respChan)
 
 		// Run the preprocessor first if one is set
-		if Preprocessor != nil {
+		if Preprocessor != nil && c.Preprocess {
 			if err := Preprocessor(c); err != nil {
 				resp := &Response{Error: err.Error()}
 				respChan <- Responses{resp}
@@ -157,7 +168,7 @@ func ProcessCommand(c *Command) <-chan Responses {
 			}
 		}
 
-		if !c.noOp {
+		if !c.Nop {
 			c.Call(c, respChan)
 		}
 
@@ -204,28 +215,25 @@ func Compile(input string) (*Command, error) {
 		return nil, nil
 	}
 
-	input = expandAliases(input)
-
 	in, err := lexInput(input)
 	if err != nil {
 		return nil, err
 	}
 
 	if strings.HasPrefix(input, CommentLeader) {
-		cmd := &Command{Original: input, noOp: true}
+		cmd := &Command{Original: input, Nop: true}
 		return cmd, nil
 	}
 
-	_, cmd := closestMatch(in)
-	if cmd != nil {
-		flagsLock.Lock()
-		defer flagsLock.Unlock()
-
-		cmd.Record = defaultFlags.Record
-		return cmd, nil
+	cmd := trie.compile(in.items)
+	if cmd == nil {
+		return nil, fmt.Errorf("invalid command: `%s`", input)
 	}
 
-	return nil, fmt.Errorf("invalid command: `%s`", input)
+	// patch original input
+	cmd.Original = input
+
+	return cmd, nil
 }
 
 // Compilef wraps fmt.Sprintf and Compile
@@ -233,25 +241,34 @@ func Compilef(format string, args ...interface{}) (*Command, error) {
 	return Compile(fmt.Sprintf(format, args...))
 }
 
-// expandAliases finds the first alias match in input and replaces it with it's expansion.
-func expandAliases(input string) string {
+// ExpandAliases finds the first alias match in input and replaces it with it's
+// expansion.
+func ExpandAliases(input string) string {
 	aliasesLock.Lock()
 	defer aliasesLock.Unlock()
 
+	// find the first word in the input
+	i := strings.IndexFunc(input, unicode.IsSpace)
+	car, cdr := input, ""
+	if i > 0 {
+		car, cdr = input[:i], input[i:]
+	}
+
 	for k, v := range aliases {
-		if strings.HasPrefix(input, k) {
+		if k == car {
 			log.Info("expanding %v -> %v", k, v)
-			return strings.Replace(input, k, v, 1)
+
+			return v + cdr
 		}
 	}
 
 	return input
 }
 
-func suggest(input *Input) []string {
+func suggest(raw string, input *Input) []string {
 	vals := map[string]bool{}
 	for _, h := range handlers {
-		for _, v := range h.suggest(input) {
+		for _, v := range h.suggest(raw, input) {
 			vals[v] = true
 		}
 	}
@@ -271,107 +288,49 @@ func Suggest(input string) []string {
 		return nil
 	}
 
-	return suggest(in)
+	return suggest(input, in)
 }
 
 //
 func Help(input string) string {
-	helpShort := make(map[string]string)
-
-	_, err := lexInput(input)
+	inputItems, err := lexInput(input)
 	if err != nil {
-		return "Error parsing help input: " + err.Error()
+		return fmt.Sprintf("unable to parse `%v`: %v", input, err)
 	}
 
-	// Figure out the literal string prefixes for each handler
-	groups := make(map[string][]*Handler)
-	for _, handler := range handlers {
-		prefix := handler.SharedPrefix
-		if _, ok := groups[prefix]; !ok {
-			groups[prefix] = make([]*Handler, 0)
-		}
-
-		groups[prefix] = append(groups[prefix], handler)
+	if len(inputItems.items) == 0 {
+		return printHelpShort(handlers)
 	}
 
-	// User entered a valid command prefix as the argument to help, display help
-	// for that group of handlers.
-	if group, ok := groups[input]; input != "" && ok {
-		// Only one handler with a given pattern prefix, give the long help message
-		if len(group) == 1 {
-			return group[0].helpLong()
-		}
-
-		count := 0
-		for _, v := range group {
-			if len(v.HelpLong) > 0 {
-				count += 1
-			}
-		}
-		// If only one entry has long help, do magic!
-		if count == 1 {
-			handler := &Handler{}
-			for _, v := range group {
-				handler.Patterns = append(handler.Patterns, v.Patterns...)
-				if len(v.HelpLong) > 0 {
-					handler.HelpLong = v.HelpLong
-				}
-			}
-			handler.parsePatterns()
-			return handler.helpLong()
-		}
-
-		// Weird case, multiple handlers share the same prefix. Print the short
-		// help for each handler for each pattern registered.
-		// TODO: Is there something better we can do?
-		for _, handler := range group {
-			for _, pattern := range handler.Patterns {
-				helpShort[pattern] = handler.helpShort()
-			}
-		}
-
-		return printHelpShort(helpShort)
-	}
-
-	// Look for groups who have input as a prefix of the prefix, print help for
-	// the handlers in those groups. If input is the empty string, we will end
-	// up printing the full help short.
-	matches := []string{}
-	for prefix := range groups {
-		if strings.HasPrefix(prefix, input) {
-			matches = append(matches, prefix)
-		}
-	}
+	matches := trie.help(inputItems.items)
 
 	if len(matches) == 0 {
-		// If there's a closest match, display the long help for it
-		//handler, _ := closestMatch(inputItems)
-		//if handler != nil {
-		//	return handler.helpLong()
-		//}
-
-		// Found an unresolvable command
 		return fmt.Sprintf("no help entry for `%s`", input)
-	} else if len(matches) == 1 && len(groups[matches[0]]) == 1 {
-		// Very special case, one prefix match and only one handler.
-		return groups[matches[0]][0].helpLong()
+	} else if len(matches) == 1 {
+		return matches[0].helpLong()
 	}
 
-	// List help short for all matches
-	for _, prefix := range matches {
-		group := groups[prefix]
-		if len(group) == 1 {
-			helpShort[prefix] = group[0].helpShort()
-		} else {
-			for _, handler := range group {
-				for _, pattern := range handler.Patterns {
-					helpShort[pattern] = handler.helpShort()
-				}
-			}
+	// look for special case -- there are multiple handlers but only one has
+	// long help text.
+	count := 0
+	for _, v := range matches {
+		if len(v.HelpLong) > 0 {
+			count += 1
 		}
 	}
+	if count == 1 {
+		handler := &Handler{}
+		for _, v := range matches {
+			handler.Patterns = append(handler.Patterns, v.Patterns...)
+			if len(v.HelpLong) > 0 {
+				handler.HelpLong = v.HelpLong
+			}
+		}
+		handler.parsePatterns()
+		return handler.helpLong()
+	}
 
-	return printHelpShort(helpShort)
+	return printHelpShort(matches)
 }
 
 func (c Command) String() string {

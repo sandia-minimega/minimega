@@ -4,13 +4,7 @@
 
 package main
 
-import (
-	"encoding/json"
-	"os"
-	"os/user"
-	"path/filepath"
-	"syscall"
-)
+import log "minilog"
 
 var cmdDel = &Command{
 	UsageLine: "del <reservation name>",
@@ -27,58 +21,23 @@ func init() {
 
 // Remove the specified reservation.
 func runDel(cmd *Command, args []string) {
-	deleteReservation(true, args)
-}
-
-func deleteReservation(checkUser bool, args []string) {
+	// reservation name should be the only argument
 	if len(args) != 1 {
-		fatalf("Invalid arguments")
+		log.Fatalln("Invalid arguments")
 	}
 
-	user, err := user.Current()
-	path := filepath.Join(igorConfig.TFTPRoot, "/igor/reservations.json")
-	resdb, err := os.OpenFile(path, os.O_RDWR, 664)
-	if err != nil {
-		fatalf("failed to open reservations file: %v", err)
-	}
-	defer resdb.Close()
-	err = syscall.Flock(int(resdb.Fd()), syscall.LOCK_EX)
-	defer syscall.Flock(int(resdb.Fd()), syscall.LOCK_UN) // this will unlock it later
-	reservations := getReservations(resdb)
+	name := args[0]
 
-	var newres []Reservation
-	var deletedReservation Reservation
-	found := false
-	if checkUser {
-		for _, r := range reservations {
-			if r.ResName == args[0] && r.Owner != user.Username {
-				fatalf("You are not the owner of %v", args[0])
-			}
-		}
-	}
-	for _, r := range reservations {
-		if r.ResName != args[0] {
-			newres = append(newres, r)
-		} else {
-			deletedReservation = r
-			found = true
-		}
+	r := igor.Find(name)
+	if r == nil {
+		log.Fatal("reservation does not exist: %v", name)
 	}
 
-	if !found {
-		fatalf("Couldn't find reservation %v", args[0])
+	if !r.IsWritable(igor.User) {
+		log.Fatal("insufficient privileges to delete reservation: %v", name)
 	}
 
-	// Truncate the existing reservation file
-	resdb.Truncate(0)
-	resdb.Seek(0, 0)
-	// Write out the new reservations
-	enc := json.NewEncoder(resdb)
-	enc.Encode(newres)
-	resdb.Sync()
-
-	// Delete all the PXE files in the reservation
-	for _, pxename := range deletedReservation.PXENames {
-		os.Remove(igorConfig.TFTPRoot + "/pxelinux.cfg/" + pxename)
+	if err := igor.Delete(r.ID); err != nil {
+		log.Fatalln(err)
 	}
 }

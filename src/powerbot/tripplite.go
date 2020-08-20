@@ -6,7 +6,6 @@ package main
 
 import (
 	"fmt"
-
 	"github.com/ziutek/telnet"
 )
 
@@ -156,4 +155,14 @@ func (p TrippLitePDU) Status(ports map[string]string) error {
 		p.logout()
 		return nil
 	*/
+}
+
+func (p TrippLitePDU) Temp() error {
+	//noop
+	return nil
+}
+
+func (p TrippLitePDU) Info() error {
+	//noop
+	return nil
 }

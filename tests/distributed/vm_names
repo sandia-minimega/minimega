@@ -1,0 +1,5 @@
+vm config filesystem /root/uminicccfs
+vm launch container 6
+
+# should all have a unique name
+.column name vm info

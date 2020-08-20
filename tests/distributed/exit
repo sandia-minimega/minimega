@@ -1,0 +1,17 @@
+namespace miniception
+
+# pull logs for minimega
+cc filter minimega=true
+cc recv /minimega.log
+cc recv /minimega.out
+
+shell sleep 30
+
+# kill all miniception VMs
+vm kill all
+
+# wait for them to drop out of the mesh
+shell sleep 60
+
+# clean up state
+clear all

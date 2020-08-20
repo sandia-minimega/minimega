@@ -15,50 +15,23 @@ type Handler struct {
 	HelpLong  string   `json:"help_long"`  // a descriptive help message
 	Patterns  []string `json:"patterns"`   // the pattern that the input should match
 
-	// prefix shared by all patterns, automatically populated when
-	SharedPrefix string `json:"shared_prefix"`
-
-	// call back to invoke when the raw input matches the pattern
+	// Call to invoke when the raw input matches the pattern
 	Call CLIFunc `json:"-"`
 
-	// the processed patterns, will be automatically populated when the command
-	// is registered
+	// SharedPrefix is a prefix shared by all patterns. Populated by minicli
+	// when the Handler is registered.
+	SharedPrefix string `json:"shared_prefix"`
+
+	// PatternItems are the processed patterns. Populated by minicli when the
+	// Handler is registered.
 	PatternItems [][]PatternItem `json:"parsed_patterns"`
 
 	// Suggest provides suggestions for variable completion. For example, the
 	// `vm stop` command might provide a listing of the currently running VM
 	// names if the user tries to tab complete the "target". The function takes
-	// two arguments: the variable name (e.g. "target") and the user's input
-	// for the variable so far.
-	Suggest func(string, string) []string `json:"-"`
-}
-
-// compileCommand tests whether the input matches the Handler's pattern and
-// builds a command based on the input. If there was no match, the returned
-// Command will be nil. The second return value is the number of elements of the
-// Handler's pattern that were matched. This can be used to determine which
-// handler was the closest match. The third return value is true if there
-// pattern is an exact match, not an apropos match.
-func (h *Handler) compile(input *Input) (*Command, int, bool) {
-	var maxMatchLen int
-	var cmd *Command
-	var matchLen int
-	var exact bool
-
-	for i, pattern := range h.PatternItems {
-		cmd, matchLen, exact = newCommand(pattern, input, h.Call)
-		if cmd != nil {
-			// patch up patterns from original pattern strings
-			cmd.Pattern = h.Patterns[i]
-			return cmd, matchLen, exact
-		}
-
-		if matchLen > maxMatchLen {
-			maxMatchLen = matchLen
-		}
-	}
-
-	return nil, maxMatchLen, false
+	// three arguments: the raw input string, the variable name (e.g. "vm"),
+	// and the user's input for the variable so far.
+	Suggest SuggestFunc `json:"-"`
 }
 
 func (h *Handler) parsePatterns() error {
@@ -74,7 +47,7 @@ func (h *Handler) parsePatterns() error {
 	return nil
 }
 
-func (h *Handler) suggest(input *Input) []string {
+func (h *Handler) suggest(raw string, input *Input) []string {
 	suggestions := []string{}
 
 outer:
@@ -110,10 +83,10 @@ outer:
 			case item.Type&listItem != 0:
 				// Nothing to suggest for lists
 				continue outer
-			case item.Type == commandItem:
+			case item.Type&commandItem != 0:
 				// This is fun, need to recurse to complete the subcommand
 				log.Debug("recursing to find suggestions for %q", input.items[i:])
-				suggestions = append(suggestions, suggest(&Input{
+				suggestions = append(suggestions, suggest(raw, &Input{
 					Original: input.Original,
 					items:    input.items[i:],
 				})...)
@@ -151,17 +124,17 @@ outer:
 					suggestions = append(suggestions, choice)
 				}
 			}
-		case stringItem, listItem:
+		case stringItem, listItem, stringItem | optionalItem, listItem | optionalItem:
 			if h.Suggest != nil {
 				var prefix string
 				if i < len(input.items) {
 					prefix = input.items[i].Value
 				}
-				suggestions = append(suggestions, h.Suggest(item.Key, prefix)...)
+				suggestions = append(suggestions, h.Suggest(raw, item.Key, prefix)...)
 			}
-		case commandItem:
+		case commandItem, commandItem | optionalItem:
 			log.Debug("recursing to find suggestions for %q", input.items[i:])
-			suggestions = append(suggestions, suggest(&Input{
+			suggestions = append(suggestions, suggest(raw, &Input{
 				Original: input.Original,
 				items:    input.items[i:],
 			})...)
@@ -216,7 +189,7 @@ func (h *Handler) helpShort() string {
 func (h *Handler) helpLong() string {
 	res := "Usage:\n"
 	for _, pattern := range h.PatternItems {
-		res += fmt.Sprintf("\t%s\n", patternItems(pattern))
+		res += fmt.Sprintf("\t%s\n", PatternItems(pattern))
 	}
 	res += "\n"
 	// Fallback on HelpShort if there's no HelpLong

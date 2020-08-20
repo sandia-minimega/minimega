@@ -1,0 +1,5 @@
+# reset remote nodes
+mesh send all clear all
+
+# can't clear all locally otherwise we'd lose our miniception VMs
+clear namespace distributed

@@ -6,42 +6,18 @@ package iomeshage
 
 import (
 	"fmt"
-	"io"
 	log "minilog"
-	"os"
 	"path/filepath"
-	"strings"
-)
-
-const (
-	TYPE_INFO = iota
-	TYPE_WHOHAS
-	TYPE_XFER
-	TYPE_RESPONSE
 )
 
 const (
 	PART_SIZE = 10485760 // 10MB
 )
 
-// IOMessage is the only structure sent between iomeshage nodes (including
-// ACKS). It is used as the body of a meshage message.
-type IOMMessage struct {
-	From     string
-	Type     int
-	Filename string
-	Perm     os.FileMode
-	Glob     []string
-	Part     int64
-	TID      int64
-	ACK      bool
-	Data     []byte
-}
-
 // Message pump for incoming iomeshage messages.
 func (iom *IOMeshage) handleMessages() {
 	for {
-		message := (<-iom.Messages).Body.(IOMMessage)
+		message := (<-iom.Messages).Body.(Message)
 		m := &message
 		if log.WillLog(log.DEBUG) {
 			log.Debug("got iomessage from %v, type %v", m.From, m.Type)
@@ -56,7 +32,7 @@ func (iom *IOMeshage) handleMessages() {
 		case TYPE_RESPONSE:
 			go iom.handleResponse(m)
 		default:
-			log.Errorln("iomeshage: received invalid message type: ", m.Type)
+			log.Error("iomeshage: received invalid message type: %v", m.Type)
 		}
 	}
 }
@@ -67,7 +43,7 @@ func (iom *IOMeshage) handleMessages() {
 // message. Responses are sent along registered channels, which are closed when
 // the receiver gives up. If we try to send on a closed channel, recover and
 // move on.
-func (iom *IOMeshage) handleResponse(m *IOMMessage) {
+func (iom *IOMeshage) handleResponse(m *Message) {
 	iom.tidLock.Lock()
 	c, ok := iom.TIDs[m.TID]
 	iom.tidLock.Unlock()
@@ -89,35 +65,37 @@ func (iom *IOMeshage) handleResponse(m *IOMMessage) {
 
 // Handle incoming "get file info" messages by looking up if we have the file
 // and responding with the number of parts or a NACK.  Also process directories
-// and globs, populating the Glob field of the IOMMessage if needed.
-func (iom *IOMeshage) handleInfo(m *IOMMessage) {
+// and globs, populating the Glob field of the Message if needed.
+func (iom *IOMeshage) handleInfo(m *Message) {
 	// do we have this file, rooted at iom.base?
-	resp := IOMMessage{
+	resp := Message{
 		From:     iom.node.Name(),
 		Type:     TYPE_RESPONSE,
 		Filename: m.Filename,
 		TID:      m.TID,
 	}
 
-	glob, parts, err := iom.fileInfo(filepath.Join(iom.base, m.Filename))
-	if err != nil || len(glob) == 0 {
+	log.Info("handleInfo: %v", m.Filename)
+
+	files, err := iom.List(m.Filename, true)
+	if err != nil || len(files) == 0 {
 		resp.ACK = false
-	} else if len(glob) == 1 && glob[0] == m.Filename {
-		resp.ACK = true
-		resp.Part = parts
-		fi, err := os.Stat(filepath.Join(iom.base, m.Filename))
-		if err != nil || fi.IsDir() {
-			resp.ACK = false
-		} else {
-			resp.Perm = fi.Mode() & os.ModePerm
-		}
-		if log.WillLog(log.DEBUG) {
-			log.Debugln("handleInfo found file with parts: ", resp.Part)
-		}
+
+		log.Debug("handleInfo: file does not exist: %v", m.Filename)
+	} else if len(files) == 1 && iom.Rel(files[0]) == m.Filename {
+		resp.ACK = !files[0].IsDir()
+		resp.Part = files[0].numParts()
+		resp.Perm = files[0].Perm()
+
+		log.Debug("handleInfo: found %v with %v parts", m.Filename, resp.Part)
 	} else {
 		// populate Glob
 		resp.ACK = true
-		resp.Glob = glob
+		for _, file := range files {
+			resp.Glob = append(resp.Glob, iom.Rel(file))
+		}
+
+		log.Debug("handleInfo: found glob for %v: %v", m.Filename, resp.Glob)
 	}
 
 	_, err = iom.node.Set([]string{m.From}, resp)
@@ -126,86 +104,27 @@ func (iom *IOMeshage) handleInfo(m *IOMMessage) {
 	}
 }
 
-// Get file info and return the number of parts in the file. If the filename is
-// a directory or glob, return the list of files the directory/glob contains.
-func (iom *IOMeshage) fileInfo(filename string) ([]string, int64, error) {
-	glob, err := filepath.Glob(filename)
-	if err != nil {
-		return nil, 0, err
-	}
-	if len(glob) > 1 {
-		// globs are recursive, figure out any directories
-		var globsRet []string
-		for _, v := range glob {
-			rGlob, _, err := iom.fileInfo(v)
-			if err != nil {
-				return nil, 0, err
-			}
-			globsRet = append(globsRet, rGlob...)
-		}
-		return globsRet, 0, nil
-	}
-
-	log.Debug("glob %v", glob)
-	// special case, glob match was a single directory
-	if len(glob) == 1 && strings.Contains(glob[0], filename[:len(filename)-1]) {
-		filename = glob[0]
-	}
-
-	f, err := os.Open(filename)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer f.Close()
-
-	// is this a directory
-	fi, err := f.Stat()
-	if err != nil {
-		if log.WillLog(log.DEBUG) {
-			log.Debugln("fileInfo error stat: ", err)
-		}
-		return nil, 0, err
-	}
-	if fi.IsDir() {
-		// walk the directory and populate glob
-		glob = []string{}
-		err := filepath.Walk(filename, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if info.IsDir() {
-				return nil
-			}
-			rel, err := filepath.Rel(iom.base, path)
-			if err != nil {
-				return err
-			}
-			glob = append(glob, rel)
-			return nil
-		})
-		if err != nil {
-			return nil, 0, err
-		}
-		return glob, 0, nil
-	}
-
-	// we do have the file, calculate the number of parts
-	parts := (fi.Size() + PART_SIZE - 1) / PART_SIZE // integer divide with ceiling instead of floor
-	rel, err := filepath.Rel(iom.base, filename)
-	return []string{rel}, parts, nil
-}
-
 // Transactions need unique TIDs, and a corresponing channel to return
-// responses along. Register a TID and channel for the mux to respond along.
-func (iom *IOMeshage) registerTID(TID int64, c chan *IOMMessage) error {
+// responses along. Returns a new TID and channel for the mux to respond along.
+func (iom *IOMeshage) newTID() (int64, <-chan *Message) {
 	iom.tidLock.Lock()
 	defer iom.tidLock.Unlock()
 
-	if _, ok := iom.TIDs[TID]; ok {
-		return fmt.Errorf("TID already exists, collision?")
+	var tid int64
+	for {
+		// can't run for more than a few iterations... surely
+		tid = iom.rand.Int63()
+
+		if _, ok := iom.TIDs[tid]; !ok {
+			break
+		}
+
+		log.Warn("found duplicated TID, number of TIDs: %v", len(iom.TIDs))
 	}
-	iom.TIDs[TID] = c
-	return nil
+
+	c := make(chan *Message)
+	iom.TIDs[tid] = c
+	return tid, c
 }
 
 // Unregister TIDs from the mux.
@@ -222,15 +141,20 @@ func (iom *IOMeshage) unregisterTID(TID int64) {
 }
 
 // handle "who has this filepart" messages by returning an ACK if we have the file.
-func (iom *IOMeshage) handleWhohas(m *IOMMessage) {
+func (iom *IOMeshage) handleWhohas(m *Message) {
 	iom.handlePart(m, false)
+}
+
+// Transfer a filepart.
+func (iom *IOMeshage) handleXfer(m *Message) {
+	iom.handlePart(m, true)
 }
 
 // Respond to message m with an ACK if a filepart exists, and optionally the
 // contents of that filepart.
-func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
+func (iom *IOMeshage) handlePart(m *Message, xfer bool) {
 	// do we have this file, rooted at iom.base?
-	resp := IOMMessage{
+	resp := Message{
 		From:     iom.node.Name(),
 		Type:     TYPE_RESPONSE,
 		Filename: m.Filename,
@@ -240,18 +164,22 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 	iom.drainLock.RLock()
 	defer iom.drainLock.RUnlock()
 
-	_, _, err := iom.fileInfo(filepath.Join(iom.base, m.Filename))
+	log.Info("handlePart for %v (part %v), xfer = %v", m.Filename, m.Part, xfer)
+
+	files, err := iom.List(m.Filename, false)
 	if err != nil {
 		resp.ACK = false
-	} else {
+		log.Error("invalid file %v: %v", m.Filename, err)
+	} else if len(files) == 1 {
 		resp.ACK = true
 		resp.Part = m.Part
 		if xfer {
-			resp.Data = iom.readPart(m.Filename, m.Part)
+			resp.Data = iom.readPart(files[0].Path, m.Part)
 		}
-		if log.WillLog(log.DEBUG) {
-			log.Debugln("handlePart found file with parts: ", resp.Part)
-		}
+	} else {
+		// found zero or more than one file
+		resp.ACK = false
+		log.Error("invalid file %v, found %v files", m.Filename, len(files))
 	}
 
 	if resp.ACK {
@@ -262,25 +190,25 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 		return
 	}
 
-	// we don't have the file in a complete state at least, do we have that specific part in flight somewhere?
-	// we consider a part to be transferrable IFF it exists on disk and is marked as being fully received.
+	// we don't have the file in a complete state at least, do we have that
+	// specific part in flight somewhere? we consider a part to be
+	// transferrable IFF it exists on disk and is marked as being fully
+	// received.
 	iom.transferLock.RLock()
-	if t, ok := iom.transfers[m.Filename]; ok {
+	if t, ok := iom.transfers[m.Filename]; ok && t.Parts[m.Part] {
 		// we are currently transferring parts of the file
-		if t.Parts[m.Part] {
-			partname := fmt.Sprintf("%v/%v.part_%v", t.Dir, t.Filename, m.Part)
-			_, _, err := iom.fileInfo(partname)
-			if err == nil {
-				// we have it
-				resp.ACK = true
-				resp.Part = m.Part
-				if xfer {
-					resp.Data = iom.readPart(partname, 0)
-					log.Debug("sending partial %v", partname)
-				}
-			} else {
-				resp.ACK = false
+		partname := fmt.Sprintf("%v/%v.part_%v", t.Dir, filepath.Base(t.Filename), m.Part)
+		_, err := iom.List(partname, false)
+		if err == nil {
+			// we have it
+			resp.ACK = true
+			resp.Part = m.Part
+			if xfer {
+				resp.Data = iom.readPart(partname, 0)
+				log.Debug("sending partial %v", partname)
 			}
+		} else {
+			resp.ACK = false
 		}
 	}
 	iom.transferLock.RUnlock()
@@ -289,48 +217,4 @@ func (iom *IOMeshage) handlePart(m *IOMMessage, xfer bool) {
 	if err != nil {
 		log.Errorln("handlePart: sending message: ", err)
 	}
-}
-
-// Transfer a filepart.
-func (iom *IOMeshage) handleXfer(m *IOMMessage) {
-	iom.handlePart(m, true)
-}
-
-// Read a filepart and return a byteslice.
-func (iom *IOMeshage) readPart(filename string, part int64) []byte {
-	if !strings.HasPrefix(filename, iom.base) {
-		filename = filepath.Join(iom.base, filename)
-	}
-	f, err := os.Open(filename)
-	if err != nil {
-		log.Errorln(err)
-		return nil
-	}
-	defer f.Close()
-
-	// we do have the file, calculate the number of parts
-	fi, err := f.Stat()
-	if err != nil {
-		log.Errorln(err)
-		return nil
-	}
-
-	parts := (fi.Size() + PART_SIZE - 1) / PART_SIZE // integer divide with ceiling instead of floor
-	if part > parts {
-		log.Errorln("attempt to read beyond file")
-		return nil
-	}
-
-	// read up to PART_SIZE
-	data := make([]byte, PART_SIZE)
-	n, err := f.ReadAt(data, part*PART_SIZE)
-
-	if err != nil {
-		if err != io.EOF {
-			log.Errorln(err)
-			return nil
-		}
-	}
-
-	return data[:n]
 }

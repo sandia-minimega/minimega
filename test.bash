@@ -5,28 +5,22 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 . $SCRIPT_DIR/env.bash
 
 # set the version from the repo
-VERSION=`git rev-parse HEAD`
+VERSION=`git --git-dir $SCRIPT_DIR/.git rev-parse HEAD`
 DATE=`date --rfc-3339=date`
 echo "package version
 
 var (
 	Revision = \"$VERSION\"
-	Date = \"$DATE\"
-)
-" > $SCRIPT_DIR/src/version/version.go
+	Date     = \"$DATE\"
+)" > $SCRIPT_DIR/src/version/version.go
 
 # testing
-echo TESTING
-for i in `ls $SCRIPT_DIR/src | grep -v vendor`
+echo "TESTING"
+for i in `ls $SCRIPT_DIR/src | grep -v vendor | grep -v plumbing`
 do
 	go test $i
+	if [[ $? != 0 ]]; then
+		exit 1
+	fi
 done
-
-# test python bindings
-$SCRIPT_DIR/misc/python/test_minimega.py &> /dev/null
-if [[ $? != 0 ]]; then
-    echo -e "FAIL\tminimega.py"
-else
-    echo -e "ok\tminimega.py"
-fi
 echo

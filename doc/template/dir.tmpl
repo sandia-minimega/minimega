@@ -1,57 +1,43 @@
-<!DOCTYPE html>
-<html>
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <title>minimega</title>
-  <link type="text/css" rel="stylesheet" href="/static/dir.css">
-  <link rel="icon" href="/static/favicon.png">
-  <script src="/static/dir.js"></script>
-</head>
-<body>
+{/* Template for directory listing. */}
 
-<div id="page">
+{{ define "content" }}
+<h1>Documentation</h1>
 
-  <h1>Documentation</h1>
+{{with .Path}}<h2>{{.}}</h2>{{end}}
 
-  {{with .Path}}<h2>{{.}}</h2>{{end}}
+{{with .Articles}}
+<h4>Articles:</h4>
+<dl>
+{{range .}}
+<dd><a href="/{{.Path}}">{{.Title}}</a></dd>
+{{end}}
+</dl>
+{{end}}
 
-  {{with .Articles}}
-  <h4>Articles:</h4>
-  <dl>
-  {{range .}}
-  <dd><a href="/{{.Path}}">{{.Title}}</a></dd>
-  {{end}}
-  </dl>
-  {{end}}
+{{with .Slides}}
+<h4>Slide decks:</h4>
+<dl>
+{{range .}}
+<dd><a href="/{{.Path}}">{{.Name}}</a>: {{.Title}}</dd>
+{{end}}
+</dl>
+{{end}}
 
-  {{with .Slides}}
-  <h4>Slide decks:</h4>
-  <dl>
-  {{range .}}
-  <dd><a href="/{{.Path}}">{{.Name}}</a>: {{.Title}}</dd>
-  {{end}}
-  </dl>
-  {{end}}
+{{with .Other}}
+<h4>Files:</h4>
+<dl>
+{{range .}}
+<dd><a href="/{{.Path}}">{{.Name}}</a></dd>
+{{end}}
+</dl>
+{{end}}
 
-  {{with .Other}}
-  <h4>Files:</h4>
-  <dl>
-  {{range .}}
-  <dd><a href="/{{.Path}}">{{.Name}}</a></dd>
-  {{end}}
-  </dl>
-  {{end}}
-
-  {{with .Dirs}}
-  <h4>Sub-directories:</h4>
-  <dl>
-  {{range .}}
-  <dd><a href="/{{.Path}}">{{.Name}}</a></dd>
-  {{end}}
-  </dl>
-  {{end}}
-
-</div>
-
-</body>
-</html>
+{{with .Dirs}}
+<h4>Sub-directories:</h4>
+<dl>
+{{range .}}
+<dd><a href="/{{.Path}}">{{.Name}}</a></dd>
+{{end}}
+</dl>
+{{end}}
+{{ end }}

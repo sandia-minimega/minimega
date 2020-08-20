@@ -8,12 +8,15 @@ import (
 	"encoding/gob"
 	"flag"
 	"fmt"
+	"io"
+	"io/ioutil"
 	log "minilog"
 	"net"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"syscall"
 	"time"
 	"version"
@@ -24,16 +27,14 @@ const Retries = 480
 const RetryInterval = 15 * time.Second
 
 var (
-	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log      = flag.Bool("v", true, "log on stderr")
-	f_logfile  = flag.String("logfile", "", "also log to file")
-	f_port     = flag.Int("port", 9002, "port to connect to")
-	f_version  = flag.Bool("version", false, "print the version")
-	f_parent   = flag.String("parent", "", "parent to connect to (if relay or client)")
-	f_path     = flag.String("path", "/tmp/miniccc", "path to store files in")
-	f_serial   = flag.String("serial", "", "use serial device instead of tcp")
-	f_family   = flag.String("family", "tcp", "[tcp,unix] family to dial on")
-	f_tag      = flag.Bool("tag", false, "add a key value tag in minimega for this vm")
+	f_port    = flag.Int("port", 9002, "port to connect to")
+	f_version = flag.Bool("version", false, "print the version")
+	f_parent  = flag.String("parent", "", "parent to connect to (if relay or client)")
+	f_path    = flag.String("path", "/tmp/miniccc", "path to store files in")
+	f_serial  = flag.String("serial", "", "use serial device instead of tcp")
+	f_family  = flag.String("family", "tcp", "[tcp,unix] family to dial on")
+	f_tag     = flag.Bool("tag", false, "add a key value tag in minimega for this vm")
+	f_pipe    = flag.String("pipe", "", "read/write to or from a named pipe")
 )
 
 const banner = `miniccc, Copyright (2014) Sandia Corporation.
@@ -57,7 +58,15 @@ func main() {
 		os.Exit(0)
 	}
 
-	logSetup()
+	log.Init()
+
+	// init client
+	NewClient()
+
+	if *f_pipe != "" {
+		pipeHandler(*f_pipe)
+		return
+	}
 
 	if *f_tag {
 		if runtime.GOOS == "windows" {
@@ -75,7 +84,31 @@ func main() {
 		log.Fatal("mkdir base path: %v", err)
 	}
 
-	log.Debug("starting ron client with UUID: %v", client.UUID)
+	log.Info("starting ron client with UUID: %v", client.UUID)
+
+	if runtime.GOOS != "windows" {
+		pidPath := filepath.Join(*f_path, "miniccc.pid")
+
+		// try to find existing miniccc process
+		data, err := ioutil.ReadFile(pidPath)
+		if err == nil {
+			pid, err := strconv.Atoi(string(data))
+			if err == nil {
+				log.Info("search for miniccc pid: %v", pid)
+				if processExists(pid) {
+					log.Fatal("miniccc already running")
+				}
+				log.Info("process not found")
+			}
+		}
+
+		// write PID file
+		pid := strconv.Itoa(os.Getpid())
+		if err := ioutil.WriteFile(pidPath, []byte(pid), 0664); err != nil {
+			log.Fatal("write pid failed: %v", err)
+		}
+		defer os.Remove(pidPath)
+	}
 
 	if err := dial(); err != nil {
 		log.Fatal("unable to connect: %v", err)
@@ -86,7 +119,13 @@ func main() {
 
 	// create a listening domain socket for tag updates
 	if runtime.GOOS != "windows" {
-		go commandSocketStart()
+		// path for tag update
+		udsPath := filepath.Join(*f_path, "miniccc")
+
+		// clean up defunct state
+		os.Remove(udsPath)
+
+		go commandSocketStart(udsPath)
 	}
 
 	// wait for SIGTERM
@@ -120,6 +159,21 @@ func dial() error {
 			client.conn, err = dialSerial(*f_serial)
 		}
 
+		// write magic bytes
+		if err == nil {
+			_, err = io.WriteString(client.conn, "RON")
+		}
+
+		// read until we see the magic bytes back
+		var buf [3]byte
+		for err == nil && string(buf[:]) != "RON" {
+			// shift the buffer
+			buf[0] = buf[1]
+			buf[1] = buf[2]
+			// read the next byte
+			_, err = client.conn.Read(buf[2:])
+		}
+
 		if err == nil {
 			client.enc = gob.NewEncoder(client.conn)
 			client.dec = gob.NewDecoder(client.conn)
@@ -131,46 +185,6 @@ func dial() error {
 	}
 
 	return err
-}
-
-func commandSocketStart() {
-	l, err := net.Listen("unix", filepath.Join(*f_path, "miniccc"))
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			log.Error("command socket: %v", err)
-		}
-		log.Debugln("client connected")
-		go commandSocketHandle(conn)
-	}
-}
-
-func commandSocketHandle(conn net.Conn) {
-	var err error
-	var k string
-	var v string
-
-	defer conn.Close()
-
-	dec := gob.NewDecoder(conn)
-
-	err = dec.Decode(&k)
-	if err != nil {
-		log.Errorln(err)
-		return
-	}
-	err = dec.Decode(&v)
-	if err != nil {
-		log.Errorln(err)
-		return
-	}
-
-	log.Debug("adding key/value: %v : %v", k, v)
-	addTag(k, v)
 }
 
 func updateTag() error {
@@ -190,6 +204,11 @@ func updateTag() error {
 	}
 
 	enc := gob.NewEncoder(conn)
+
+	err = enc.Encode(MODE_TAG)
+	if err != nil {
+		return err
+	}
 
 	err = enc.Encode(k)
 	if err != nil {

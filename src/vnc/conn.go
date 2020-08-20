@@ -13,11 +13,13 @@ import (
 )
 
 type Conn struct {
-	net.Conn
+	net.Conn // embed
 
+	// s tracks server info
 	s Server
 }
 
+// Dial a VNC server and complete the handshake
 func Dial(host string) (*Conn, error) {
 	c, err := net.Dial("tcp", host)
 	if err != nil {
@@ -77,6 +79,29 @@ func (c *Conn) handshake() error {
 	c.s.Name = make([]uint8, c.s.NameLength)
 	if err = binary.Read(c, binary.BigEndian, &c.s.Name); err != nil {
 		return errors.New("unable to read name")
+	}
+
+	// Set Pixel format and encoding to something that we know how to decode.
+	// We do this for all connections since both the framebuffer recorder and
+	// the screenshot will try to read framebuffer updates.
+	err = (&SetPixelFormat{
+		PixelFormat: PixelFormat{
+			BitsPerPixel: 32, Depth: 24, TrueColorFlag: 1,
+			RedMax: 255, GreenMax: 255, BlueMax: 255,
+			RedShift: 16, GreenShift: 8, BlueShift: 0,
+		},
+	}).Write(c.Conn)
+
+	if err != nil {
+		return fmt.Errorf("unable to set pixel format: %v", err)
+	}
+
+	err = (&SetEncodings{
+		Encodings: []int32{RawEncoding, DesktopSizePseudoEncoding},
+	}).Write(c.Conn)
+
+	if err != nil {
+		return fmt.Errorf("unable to set encodings: %v", err)
 	}
 
 	return nil

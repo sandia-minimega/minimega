@@ -37,11 +37,21 @@ root).
 In order to override the flags passed to remote minimega instances, provide
 flags with 'deploy flags'. For example:
 
-	deploy flags -base=/opt/minimega -level=debug`,
+	deploy flags -base=/opt/minimega -level=debug
+
+To customize stdout and stderr, use 'deploy stdout' and 'deploy stderr':
+
+	deploy stdout /var/log/minimega.out
+	deploy stderr /var/log/minimega.err
+
+By default, stdout and stderr are written to /dev/null.
+	`,
 		Patterns: []string{
 			"deploy <launch,> <hosts>",
 			"deploy <launch,> <hosts> <user> [sudo,]",
 			"deploy <flags,> [minimega flags]...",
+			"deploy <stdout,> [path]",
+			"deploy <stderr,> [path]",
 		},
 		Call: wrapSimpleCLI(cliDeploy),
 	},
@@ -58,8 +68,10 @@ flags used when launching minimega.`,
 }
 
 var deployFlags []string
+var deployStdout string
+var deployStderr string
 
-func cliDeploy(c *minicli.Command, resp *minicli.Response) error {
+func cliDeploy(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	hosts := c.StringArgs["hosts"]
 	user := c.StringArgs["user"]
 	sudo := c.BoolArgs["sudo"]
@@ -72,6 +84,22 @@ func cliDeploy(c *minicli.Command, resp *minicli.Response) error {
 		}
 
 		deployFlags = flagsList
+		return nil
+	} else if c.BoolArgs["stdout"] {
+		if c.StringArgs["path"] == "" {
+			resp.Response = deployStdout
+			return nil
+		}
+
+		deployStdout = c.StringArgs["path"]
+		return nil
+	} else if c.BoolArgs["stderr"] {
+		if c.StringArgs["path"] == "" {
+			resp.Response = deployStderr
+			return nil
+		}
+
+		deployStderr = c.StringArgs["path"]
 		return nil
 	}
 
@@ -132,11 +160,20 @@ func deployRun(hosts []string, user, remotePath string, sudo bool) []error {
 	flags := deployGetFlags()
 	log.Debug("minimega flags: %v", flags)
 
+	stdout := "/dev/null"
+	if deployStdout != "" {
+		stdout = deployStdout
+	}
+	stderr := "/dev/null"
+	if deployStderr != "" {
+		stderr = deployStderr
+	}
+
 	var minimegaCommand string
 	if sudo {
-		minimegaCommand = fmt.Sprintf("sudo -b nohup %v %v > /dev/null 2>&1 &", remotePath, flags)
+		minimegaCommand = fmt.Sprintf("sudo -b nohup %v %v > %v 2> %v &", remotePath, flags, stdout, stderr)
 	} else {
-		minimegaCommand = fmt.Sprintf("nohup %v %v > /dev/null 2>&1 &", remotePath, flags)
+		minimegaCommand = fmt.Sprintf("nohup %v %v > %v 2>%v &", remotePath, flags, stdout, stderr)
 	}
 
 	for _, host := range hosts {
@@ -177,7 +214,7 @@ func deployGetFlags() string {
 	return strings.Join(flags, " ")
 }
 
-func cliDeployClear(c *minicli.Command, resp *minicli.Response) error {
+func cliDeployClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	deployFlags = nil
 	return nil
 }

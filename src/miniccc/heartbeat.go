@@ -45,7 +45,6 @@ func heartbeat() {
 		Hostname:      client.Hostname,
 		IPs:           client.IPs,
 		MACs:          client.MACs,
-		Namespace:     client.Namespace,
 		LastCommandID: client.LastCommandID,
 		Version:       version.Revision,
 		Processes:     make(map[int]*ron.Process),

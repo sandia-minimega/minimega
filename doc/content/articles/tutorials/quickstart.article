@@ -1,7 +1,7 @@
 minimega Quickstart
 
 The minimega authors
-17 Mar 2015
+02 Nov 2018
 
 * Introduction
 
@@ -17,38 +17,23 @@ to be installed.
 
 * Step One: Make a VM image with vmbetter
 
-If you want to skip straight to working with minimega, download
-[[https://storage.googleapis.com/minimega-files/generic_vm.iso][this file]] and
-skip ahead to Step Two.
-
-We're assuming you're starting from a completely blank slate and don't have any
-particular VM you want to run. We'll build a disk image for a basic Linux
+We assume that you're starting from a completely blank slate and don't have any
+particular VM that you want to run. We'll build a disk image for a basic Linux
 system and use that to start with. If you have another hard disk image (QCOW2
 format), you can skip ahead.
 
-If you don't already have Syslinux installed, install it:
-
-    sudo apt-get install syslinux
-
 The tool to build a VM is called "vmbetter". It should already have been
 compiled along with minimega, so all we have to do is point it at one of the
-provided config files and let it know we want a QCOW disk image:
+provided config files:
 
-    sudo ./bin/vmbetter -level debug -qcow ./misc/vmbetter_configs/generic_vm.conf
+    sudo ./bin/vmbetter -level info misc/vmbetter_configs/miniccc.conf
 
 This will grind for a while as it fetches a bunch of Debian packages and
-creates a disk image. We added -level=debug to the flags so we can see more
+creates an image. We added `-level info` to the flags so we can see more
 information as it works.
 
-In some cases, vmbetter may fail because syslinux's mbr.bin file isn't where it
-expects; if this happens, you should locate your mbr.bin file and use the -mbr
-flag to specify its location. For instance, on Debian Unstable you may need to
-run this instead:
-
-    sudo ./bin/vmbetter -mbr /usr/lib/syslinux/mbr/mbr.bin -level debug -qcow ./misc/vmbetter_configs/generic_vm.conf
-
-Eventually, vmbetter should finish and leave you with a disk image called
-generic_vm.qcow2
+Eventually, vmbetter should finish and leave you with a kernel/initrd pair
+called `miniccc.kernel` and `miniccc.initrd`, respectively.
 
 * Step Two: Run minimega and set up the VM
 
@@ -58,60 +43,82 @@ doesn't need any arguments:
     sudo ./bin/minimega
 
 You should get a copyright notice followed by a prompt. If it printed any
-warning messages, you may need to install missing programs.
+warning messages, you may need to install missing programs. This can be
+confirmed by running the command `check`.
 
 ** Configure the VM itself
 
 The very first thing we can do is check the default configuration:
 
 	minimega$ vm config
-	freyr: Current VM configuration:
-	Memory:   2048
-	VCPUS:    1
-	Networks: []
-	
-	Current KVM configuration:
-	Migrate Path:       
-	Disk Paths:         []
-	CDROM Path:         
-	Kernel Path:        
-	Initrd Path:        
-	Kernel Append:      
-	QEMU Path:          /usr/bin/kvm
-	QEMU Append:        []
-	Snapshot:           true
-	UUID:               
-	SerialPorts:        0
-	Virtio-SerialPorts: 0
+    VM configuration:
+    Memory:           2048
+    VCPUs:            1
+    Networks:         []
+    Snapshot:         true
+    UUID:
+    Schedule host:
+    Coschedule limit: -1
+    Backchannel:      true
+    Tags:             {}
+
+    KVM configuration:
+    Migrate Path:
+    Disk Paths:         []
+    CDROM Path:
+    Kernel Path:
+    Initrd Path:
+    Kernel Append:      []
+    QEMU Path:          kvm
+    QEMU Append:        []
+    SerialPorts:        0
+    Virtio-SerialPorts: 0
+    Machine:
+    CPU:                host
+    Cores:              1
+
+    Container configuration:
+    Filesystem Path:
+    Hostname:
+    Init:            [/init]
+    Pre-init:
+    FIFOs:           0
+    Volumes:
 
 By default, very little is configured beyond the memory size and number of
 CPUs. Note the "Snapshot: true" parameter--this indicates that by default,
 changes will not be written to the virtual disk file, meaning you can launch
-multiple copies of the same VM. If you wanted to make permanent changes to the
-disk, you would set "snapshot" to false.
+multiple copies of the same VM using the same disk. If you wanted to make
+permanent changes to the disk, you would set "snapshot" to false. The snapshot
+parameter only applies to disk images, not the initrd used in this example.
 
-For our simple purposes, we just need to tell it to use the disk we just
-created:
+For this tutorial, we just need to tell it to use the kernel/initrd pair that
+we just created:
 
-   minimega$ vm config disk generic_vm.qcow2
+   minimega$ vm config kernel /path/to/miniccc.kernel
+   minimega$ vm config initrd /path/to/miniccc.initrd
+
+Note that, by default, minimega expects files to be relative to the files
+directory (typically /tmp/minimega/files) so you should specify absolute paths
+if you do not copy the files to that directory first.
 
 ** Configure the network
 
 minimega can do a lot of complex things with the network. For this quickstart,
 we'll do the following:
 
-- Put the VM onto virtual network #100
+- Put the VM onto a virtual network called "LAN"
 - Connect the host to that same virtual network
 - Start a DHCP server on the host
 
-First, we'll configure the VM to use virtual network #100:
+First, we'll configure the VM to use virtual network "LAN":
 
-      minimega$ vm config net 100
+      minimega$ vm config net LAN
 
-Then, we'll create a tap interface on the host, also on virtual network #100,
-and specify an IP for the host:
+Then, we'll create a tap interface on the host, also on the "LAN" virtual
+network, and specify an IP for the host:
 
-      minimega$ tap create 100 ip 10.0.0.1/24
+      minimega$ tap create LAN ip 10.0.0.1/24
 
 Now, when the VM is launched, it will be able to communicate with the host via
 the virtual network.
@@ -124,7 +131,7 @@ get an IP:
 If this fails, it's possible that you don't have dnsmasq installed, or that
 dnsmasq is already running. You don't *need* dnsmasq, but without it you'll
 have to access the VM through VNC, since SSH won't work.
-	 
+
 * Step 3: Launch and start the VM
 
 Although we've configured the VM parameters, we have not actually started any
@@ -137,9 +144,9 @@ This creates the VM, but leaves it in an inactive state until we explicitly
 start it. If we run "vm info", we see a single VM named "test" in the
 "BUILDING" state:
 
-     minimega$ vm info
-     host  | id | name | state    | memory | vcpus | disk                 | snapshot |
-     freyr | 0  | test | BUILDING | 2048   | 1     | [ccc_host_ovs.qcow2] | true     |
+     minimega$ .annotate false .columns name,state vm info
+     name | state
+     test | BUILDING
 
 Let's go ahead and let the VM start running:
 
@@ -158,25 +165,14 @@ passwordless login for the root user.
 
 ** Web interface
 
-The web interface is the friendliest way to see VMs. Assuming you ran minimega
-from the root of the minimega repository, you can start the web interface like
-this:
-
-    minimega$ web
-
-Now point your web browser to [[http://localhost:9001]] and scroll down to the
-section "VM Screenshots". You should see something like this:
+The web interface is the friendliest way to see VMs. Start
+[[/articles/miniweb.article][miniweb]] and then point your web browser to
+[[http://localhost:9001]] and scroll down to the section "VM Screenshots". You
+should see something like this:
 
 .image quickstart/mm-web.png
 
 Click on "Connect" to open a VNC session to the VM.
-
-** Direct VNC
-
-If you'd rather connect directly using your preferred VNC client, just run "vm
-info" and look at the "id" field for your desired VM, then add 5900 to that
-number to get your VNC port. In our case, the "test" VM should be ID #0; 5900+0
-= 5900, so we can connect our VNC client to localhost:5900.
 
 ** SSH
 
@@ -194,14 +190,13 @@ should start running:
 
 	minimega$ vm launch kvm 5
 	minimega$ vm start all
-	minimega$ vm info
-	host  | id | name | state   | memory | vcpus | migrate | disk               | snapshot |
-	freyr | 0  | vm-0 | RUNNING | 2048   | 1     |         | [generic_vm.qcow2] | true     |
-	freyr | 1  | vm-1 | RUNNING | 2048   | 1     |         | [generic_vm.qcow2] | true     |
-	freyr | 2  | vm-2 | RUNNING | 2048   | 1     |         | [generic_vm.qcow2] | true     |
-	freyr | 3  | vm-3 | RUNNING | 2048   | 1     |         | [generic_vm.qcow2] | true     |
-	freyr | 4  | vm-4 | RUNNING | 2048   | 1     |         | [generic_vm.qcow2] | true     |
-
+	minimega$ .annotate false .columns name,state vm info
+    name | state
+    vm-0 | BUILDING
+    vm-1 | BUILDING
+    vm-2 | BUILDING
+    vm-3 | BUILDING
+    vm-4 | BUILDING
 
 * Shutting down
 

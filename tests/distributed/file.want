@@ -1,0 +1,75 @@
+## # Shouldn't have any files
+## file list /minitest
+## file get /minitest/zero
+E: get /minitest/zero: file not found
+## file get /minitest/big
+E: get /minitest/big: file not found
+## file get /minitest/dir
+E: get /minitest/dir: file not found
+
+## # Create files in directory
+## shell mkdir /tmp/minimega/files/minitest
+## shell touch /tmp/minimega/files/minitest/zero
+## shell bash -c "dd if=/dev/zero of=/tmp/minimega/files/minitest/big bs=1M count=100 &> /dev/null"
+## shell mkdir /tmp/minimega/files/minitest/dir
+## shell touch /tmp/minimega/files/minitest/dir/a
+## shell touch /tmp/minimega/files/minitest/dir/b
+## shell touch /tmp/minimega/files/minitest/dir/c
+
+## # Files should exist locally but not on any remote
+## file list /minitest
+dir   | name          | size
+      | minitest/big  | 104857600
+      | minitest/zero | 0
+<dir> | minitest/dir  | 100
+## mesh send all file list /minitest
+
+## # Test whether the files transfer properly
+## mesh send all shell md5sum file:minitest/zero
+d41d8cd98f00b204e9800998ecf8427e  /tmp/minimega/files/minitest/zero
+## mesh send all shell md5sum file:minitest/big
+2f282b84e7e608d5852449ed940bfc51  /tmp/minimega/files/minitest/big
+
+## # Files should exist everywhere
+## file list /minitest
+dir   | name          | size
+      | minitest/big  | 104857600
+      | minitest/zero | 0
+<dir> | minitest/dir  | 100
+## mesh send all file list /minitest
+dir  | name          | size
+     | minitest/big  | 104857600
+     | minitest/big  | 104857600
+     | minitest/big  | 104857600
+     | minitest/zero | 0
+     | minitest/zero | 0
+     | minitest/zero | 0
+
+## # Test whether the dir transfers properly
+## mesh send all file get /minitest/dir
+
+## # Dir and contents should exist everywhere
+## file list /minitest/dir
+dir  | name           | size
+     | minitest/dir/a | 0
+     | minitest/dir/b | 0
+     | minitest/dir/c | 0
+## mesh send all file list /minitest/dir
+dir  | name           | size
+     | minitest/dir/a | 0
+     | minitest/dir/a | 0
+     | minitest/dir/a | 0
+     | minitest/dir/b | 0
+     | minitest/dir/b | 0
+     | minitest/dir/b | 0
+     | minitest/dir/c | 0
+     | minitest/dir/c | 0
+     | minitest/dir/c | 0
+
+## # Clean up
+## file delete /minitest
+## mesh send all file delete /minitest
+
+## # Test whether clean up worked
+## file list /minitest
+## mesh send all file list /minitest

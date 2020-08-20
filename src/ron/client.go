@@ -6,8 +6,10 @@ package ron
 
 import (
 	"encoding/gob"
+	"fmt"
 	"io"
 	log "minilog"
+	"miniplumber"
 	"minitunnel"
 	"net"
 	"strings"
@@ -16,14 +18,13 @@ import (
 )
 
 type Client struct {
-	UUID      string
-	Arch      string
-	OS        string
-	Version   string
-	Hostname  string
-	Namespace string
-	IPs       []string
-	MACs      []string
+	UUID     string
+	Arch     string
+	OS       string
+	Version  string
+	Hostname string
+	IPs      []string
+	MACs     []string
 
 	// Processes that are running in the background
 	Processes map[int]*Process
@@ -34,9 +35,6 @@ type Client struct {
 
 	// Responses for commands processed since the last heartbeat
 	Responses []*Response
-
-	// Files requested by the server since the last heartbeat
-	Files []*File
 
 	// LastCommandID is the last command ID that the client processed.
 	LastCommandID int
@@ -60,6 +58,20 @@ type client struct {
 	// maxCommandID is the highest command ID that we have processed for this
 	// client. Should be reset if the command counter is reset.
 	maxCommandID int
+
+	// mangled is true if qemu flipped octets on us
+	mangled bool
+
+	// Namespace for the VM, set during handshake
+	Namespace string
+
+	// pipe readers and writers
+	pipeLock    sync.Mutex
+	pipeReaders map[string]*miniplumber.Reader
+	pipeWriters map[string]chan<- string
+
+	ufsListener net.Listener
+	ufsConn     net.Conn
 }
 
 func (c *client) sendMessage(m *Message) error {
@@ -89,10 +101,6 @@ func (c *Client) Matches(f *Filter) bool {
 	}
 	if f.OS != "" && f.OS != c.OS {
 		log.Debug("failed match on os: %v != %v", f.OS, c.OS)
-		return false
-	}
-	if f.Namespace != "" && f.Namespace != c.Namespace {
-		log.Debug("failed match on namespace: %v != %v", f.Namespace, c.Namespace)
 		return false
 	}
 
@@ -163,4 +171,79 @@ func (c *Client) matchesMAC(f *Filter) bool {
 	}
 
 	return false
+}
+
+func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
+	c.pipeLock.Lock()
+	defer c.pipeLock.Unlock()
+
+	pipe := m.Pipe
+	if c.Namespace != "" {
+		pipe = fmt.Sprintf("%v//%v", c.Namespace, m.Pipe)
+	}
+
+	switch m.PipeMode {
+	case PIPE_NEW_READER:
+		// register a new reader, if the client doesn't already have a
+		// reader on this pipe
+		if _, ok := c.pipeReaders[pipe]; !ok {
+			p := plumber.NewReader(pipe)
+			c.pipeReaders[pipe] = p
+			go func() {
+				defer func() {
+					c.pipeLock.Lock()
+					defer c.pipeLock.Unlock()
+					delete(c.pipeReaders, pipe)
+				}()
+				for {
+					select {
+					case v := <-p.C:
+						c.sendMessage(&Message{
+							Type:     MESSAGE_PIPE,
+							Pipe:     m.Pipe, // use the non-namespace pipe name for downstream
+							PipeMode: PIPE_DATA,
+							PipeData: v,
+						})
+					case <-p.Done:
+						// signal the close downstream
+						c.sendMessage(&Message{
+							Type:     MESSAGE_PIPE,
+							Pipe:     m.Pipe, // use the non-namespace pipe name for downstream
+							PipeMode: PIPE_CLOSE_READER,
+						})
+						return
+					}
+				}
+			}()
+		}
+	case PIPE_NEW_WRITER:
+		if _, ok := c.pipeWriters[pipe]; !ok {
+			p := plumber.NewWriter(pipe)
+			c.pipeWriters[pipe] = p
+		}
+	case PIPE_CLOSE_READER:
+		if p, ok := c.pipeReaders[pipe]; ok {
+			// the reader goroutine will delete the reader from the
+			// map. We do this because miniplumber can close the
+			// reader for us asynchronously, and we want to clean
+			// up accordingly.
+			p.Close()
+		}
+	case PIPE_CLOSE_WRITER:
+		if p, ok := c.pipeWriters[pipe]; ok {
+			close(p)
+			delete(c.pipeWriters, pipe)
+		}
+	case PIPE_DATA:
+		// incoming data to the server is a write. The corresponding
+		// data message in the miniccc client is a read.
+		if p, ok := c.pipeWriters[pipe]; ok {
+			p <- m.PipeData
+		} else {
+			log.Error("no such pipe: %v", pipe)
+		}
+	default:
+		log.Error("unknown message type: %v", m.PipeMode)
+		return
+	}
 }

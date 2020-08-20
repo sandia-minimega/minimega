@@ -1,0 +1,347 @@
+I made the very model, but the model was too general
+Modeling every cyber vegetable, animal, and mineral
+13 Apr 2018
+
+David Fritz, Ph.D.
+Sandia National Laboratories
+SAND2018-3927
+djfritz@sandia.gov
+http://minimega.org/
+
+* Agenda
+
+- Introduction / About Sandia
+- Motivation
+- Overview of Sandia Emulytics
+- Research challenges
+- Shameless recruiting plug
+
+* About Sandia
+
+- Nuclear weapons laboratory, began as the Z division of Los Alamos at the end of the Manhattan Project
+- Ordnance design, testing, and assembly
+- Gained expertise in red-teaming NW systems
+- Carried that expertise into new domains as the lab grew, including cyber
+- Lots of cyber focus areas, including modeling and simulation for critical infrastructure, etc.
+
+.image gt_2018_content/snl_history.jpg _ 900
+
+* 
+
+.image gt_2018_content/snl_logo_first.png _ 500
+
+* The idea
+
+- We're working to boot millions of IT endpoints 
+- And couple that with millions of non-traditional endpoints
+-- Mobile devices
+-- IoT
+-- SCADA/ICS
+- And couple *that* with behavioral models
+-- Sociology, cognitive science, ...
+- Focus on national scale problems
+-- Interdependency studies of electric power, IT, OT, telephony, IoT...
+-- Cyber and cyber-physical domains are all fair game
+
+* Emulytics
+
+- Emulation + Analytics
+- Blend hardware in the loop, simulation, and emulation
+- Also support human in the loop
+
+.image gt_2018_content/lvc.png _ 900
+
+* Why model?
+
+*As*a*National*Laboratory,*we*get*to*study*lots*of*interesting*problems*
+
+- _DevOps_: Can we pre-flight new hardware, software, services, to ensure operation in high consequence environments? Can we conduct predictive analysis to detect malfunctions, misconfigurations, malicious consequences?
+- _Malware_: Can we gain new understanding of malware through pseudo-in situ execution? How will these 1 million samples impact _my_ network specifically? 
+- _ICS/SCADA_: What are the best countermeasures for my IT-connected ICS systems, despite not having certainty about the threat? Can I detect attacks on ICS systems from the IT-connected perspective? Can I prove resiliency solutions for IT-control over entire power grids?
+- _Nuclear_Weapons_: Can we ensure the President will always be able to communicate with a weapon regardless of network state and threat?
+
+* Research and Development in Emulytics
+
+- These are great research questions
+-- And we won't be looking at any of them today
+-- But they do prompt a number of R&D activities in Emulytics itself
+
+* So where do we start
+
+- A few interesting things happened in 2007
+-- Cyberattacks in Estonia 
+-- KVM gets merged into Linux 2.6.20
+-- iPhone is released
+-- Worst European heat wave in a century (probably unrelated)
+- Fast forward to 2008
+-- We boot 4 million KVM VMs on Jaguar at Oak Ridge National Laboratory
+-- Lessons learned: Switch forwarding tables are still very much vulnerable to MAC flooding
+
+* VM-based sandboxes
+
+Can we make use of VM-based sandboxes to model enough of a country to study national-scale attacks?
+
+- Is my house on fire or is Atlanta on fire?
+- How much detail needs to be in the model?
+
+.link http://localhost:9001 miniweb
+
+* A few notes on scale
+
+- One possibility is to use HPC resources
+-- Titan - ~300k core / ~18k node AMD cluster
+-- Sequoia - ~1.5M core / 98k node PPC cluster 
+-- And all those little 10k core systems out there
+- They all run Linux
+- We have access!
+
+.image gt_2018_content/titan.jpg
+
+* 100 nodes
+
+.image gt_2018_content/100.png 500 _
+
+* 10,000 nodes
+
+A typical supercomputer
+
+.image gt_2018_content/10k.png 500 _
+
+* 1M nodes
+
+We've run out of pixels
+
+.image gt_2018_content/1m.png 500 _
+
+* 10M nodes
+
+Diffraction pattern
+
+.image gt_2018_content/10m.png 500 _
+
+* Why don't we use the public internet?
+
+- That's the supercomputer
+- The bad guys do
+- The internet has hundreds (of millions) of nodes
+- As a legal entity, Sandia would have some difficulty pursuing this approach :)
+
+* Enter minimega
+
+- [[http://minimega.org][Open source]], publicly available, active development
+- Launch and manage VM-based experiments
+- Setup complex network topologies
+- Integrate real hardware with virtual experiments
+-- Or simulators
+-- Or humans
+- Fast!
+- Repeatable (for some definition of repeatable)
+- One tool in the toolset; the substrate for a number of programs
+-- One of your grad students is responsible for the another major tool
+
+* R&D in Emulytics
+
+- The research questions from before inform all sorts of R&D in the platform
+- And they're all important!
+-- Scale / density
+-- VM placement / scheduling
+-- Experiment description and discovery
+-- Behavioral/threat modeling
+-- Non-IT comms
+-- Measuring humans-in-the-loop
+-- *Verification*&*Validation*
+-- ...
+- We can walk through a few of these
+
+* Experiment description and discovery
+
+*Can*we*automate*the*description*(and*generation)*of*models*of*large,*real*networks?*
+
+- Map-to-model isn't a new problem
+- But it's novel for getting to a _bootable_ model
+- Operators often don't know what is actually on their network
+- Result is significant hand-tooling, human in the loop
+-- Humans don't scale when building national scale models...
+
+* Map-to-Model
+
+- Ingest router configs, PCAP, active scans, exotic datasets, ...
+- And simply build a graph
+- Allow operator-defined templating of "actions" on nodes in the graph
+- Template system allows for multi-pass model generation
+- Iterative workflow
+- Infinite models from one intermediate representation
+
+	{{ if .Node.D.name }}
+		vm launch container {{ .Node.D.name }}
+	{{ else }}
+		{{ $name := printf "discovery-node-%v" .Node.NID }}
+		vm launch container {{ $name }}
+		{{ setData .Node "name" $name }}
+	{{ end }}
+
+* Example: SCinet
+
+- High capacity network
+-- 9x 100Gbps links
+- Exists for 2 weeks a year
+- Supports the SC conference
+-- 10k+ attendees
+
+.image gt_2018_content/sc.png 300 _
+
+* SC16
+
+.image gt_2018_content/sc16.png 500 _
+
+* SC17
+
+.image gt_2018_content/sc17.png 500 _
+
+.link gt_2018_content/sc17.mp4 Animation!
+
+# for the sake of brevity we're not showing a lot of the capability here...
+
+* Non-IT comms (representing IoT devices)
+
+*How*do*we*plumb*non-network*based*connectivity?*
+
+- Vehicle radars
+- *physics* - sound, heat, light, rabid bunnies
+- cyber-physical interactions of all kinds
+
+.image gt_2018_content/miniplumber.png _ 500
+
+* Plumbing
+
+Enter _miniplumber_
+
+- A networkless, out-of-band, inter-process communication layer
+- Quick specification of communication pathways (pipelines)
+- uni- or multi-cast experiment communication
+- Supports any number of clients (scales along with the rest of minimega)
+- Similar to unix pipelines (though not limited to linear pipelines)
+- Borrows concepts from the plan 9 plumber
+- Newline delimited messages (as opposed to unix byte streams)
+- Works on host, in minimega, and any miniccc client (ARM, x86-64 / *bsd, linux, windows)
+
+* Example: Setting fire to your datacenter
+
+- Temperature sensors in datacenter
+- More sensors outside of the room
+- Thermal alerts at 80F, critical at 100F (shutdown)
+- Room temperature simulated as a simple value injected by the user
+
+.image gt_2018_content/fire.png _ 700
+
+* Plumbing
+
+- In-room sensors see slightly different values (via)
+- Out-of-room sensors see different distribution (truncated function of room temperature)
+- Critical thermal event triggers shutdown of in-room machines
+- in/out-of-room defined simply by pipe source (no need for geographic annotation)
+
+.image gt_2018_content/fire_annotated.png _ 700
+
+* Plumbing
+
+.mega gt_2018_content/fire.mm 500
+
+* Plumbing
+
+.mega gt_2018_content/fire2.mm 
+
+.iframe http://localhost:4451 450 1000
+
+* Example: Digital logic
+
+- Not really a cyber-physical example, but it shows the power of the communication framework
+- Use plumbing as nets in a circuit
+- VMs as discrete logic components (and, or, not, xor provided)
+- 5-bit unsigned array multiplier
+- 145 gates (VMs)
+- 166 nets (pipes)
+
+* Plumbing
+
+.mega gt_2018_content/array.mm 500
+
+* Multiplication
+
+.mega gt_2018_content/array2.mm 500
+
+* Verification and Validation
+
+We don't know how much to trust the results from our emulation-based models
+
+- Virtual machines, virtual networks, emulators, simulators...
+- Real software, real network packets, real behavior
+
+.image gt_2018_content/compare.png _ 700
+
+* V&V 
+
+- Short answer: It depends
+- Case study: DNS amplification attack modeling
+-- We know that disabling logging in DNS servers can exacerbate the effect of the attack
+-- Because DNSd is suddenly more performant 
+- Can we illustrate this in a model?
+
+* DNS bare metal performance
+
+.image gt_2018_content/dns_bare.png 500 _
+
+* DNS emulated performance
+
+.image gt_2018_content/dns_emu.png 500 _
+
+* Virtual artifacts
+
+- We're starting to make a 'cookbook' of virtual artifacts
+- Goal is to provide the experiment designer with measurement boundaries
+
+.image gt_2018_content/e1000.png 500 _
+
+* And why not...
+
+In a talk about modeling everything, why not play out the [[http://localhost:5001/graph][game of life?]]
+
+.image gt_2018_content/gold.png 500 _
+
+* Ongoing research
+
+* Threat modeling
+
+_Cyber_doesn't_exist_in_the_absence_of_an_adversary_
+
+- Or from a modeling perspective...
+- The quality of our cybersecurity modeling is bound to the quality of the represented threat
+- So how do we model threat in a holistic way?  
+
+.image gt_2018_content/threat_prim.png 300 _
+
+* Threat modeling
+
+- Two major pushes
+-- Threat parsing
+-- Threat/actor modeling
+- The latter is a traffic generation problem
+-- Represent all the high-order things an attacker does
+-- Dropped files, timing, laziness...
+- Academic alliance with Purdue, GT, NM Tech
+-- Dr. Manos Antonakakis
+
+* A plug
+
+We need help!
+
+- Academic partnerships
+- Internships
+-- Undergrad through post-doc
+- Full-time R&D staff 
+-- Masters and Ph.D.
+
+.image gt_2018_content/snl.png 40 _
+.image gt_2018_content/nnsa.png 40 _
+.image gt_2018_content/doe.png 40 _
+

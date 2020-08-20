@@ -5,10 +5,11 @@ The minimega authors
 
 * Introduction
 
-One of the early feature requests for minimega was a scheduler that would
-launch VMs across a cluster of machines as easily as VMs are launched
-on a single machine. In minimega 2.3, we introduced the concept of
-`namespaces`, which attempts to provide this functionality.
+One of the early feature requests for minimega was a scheduler that would launch
+VMs across a cluster of machines as easily as VMs are launched on a single
+machine. In minimega 2.3, we introduced the concept of `namespaces`, which
+attempts to provide this functionality. In minimega 2.4, we enabled namespaces
+by default.
 
 * Overview
 
@@ -24,180 +25,310 @@ experiments on a single host and on a cluster of hundreds of hosts. To support
 this, there are minimal changes to the existing APIs (except behind the scenes,
 of course) and a few new namespace-specific APIs.
 
-** `namespace` API
+** Default namespace
+
+By default, minimega starts out in the `minimega` namespace. This namespace is
+special for several reasons:
+
+- If you delete it, it gets recreated automatically.
+- It only contains the local node on creation.
+
+** namespace API
 
 namespaces are managed by the `namespace` API. For example, to create a new
 namespace called `foo` and set it as the active namespace:
 
-    minimega$ namespace foo
-    minimega[foo]$
+	minimega[minimega]$ namespace foo
+	minimega[foo]$
 
-Now that the namespace `foo` is active, commands will apply only to
-resources, such as VMs, that belong to the namespace. By default,
-a newly-created namespace includes all nodes in the mesh *except* the
-local node.
+Now that the namespace `foo` is active, commands will apply only to resources,
+such as VMs, that belong to the namespace. In a clustered environment, a
+newly-created namespace includes all nodes in the mesh *except* the local node,
+which is treated as the head node. When there are not any nodes in the mesh, the
+namespace includes just the local node.
 
-To deactivate a namespace, use:
+To return to the default namespace, use:
 
-    minimega[foo]$ clear namespace
-    minimega$
+	minimega[foo]$ clear namespace
+	minimega[minimega]$
 
-When run without arguments, `namespace` displays the available
-namespaces. If a namespace is active, `namespace` displays information
-about the active namespace instead:
+When run without arguments, `namespace` prints summary info about namespaces:
 
-    minimega$ namespace
-    Namespaces: [foo]
-    minimega$ namespace foo
-    minimega[foo]$ namespace
-    Namespace: "foo"
-    Hosts: map[]
-    Number of queuedVMs: 0
-
-    Schedules:
-    start end  state launched failures total hosts
-
-The displayed information includes the hosts that are part of the namespace, how
-many VM configurations have been queued so far (explained below), and the status
-of any schedules that have been started.
+	minimega[minimega]$ namespace
+	namespace | vms | vlans    | active
+	foo       | 0   |          | false
+	minimega  | 0   | 101-4096 | true
 
 To make it easier to run commands that target a namespace, users may prefix
 commands with the namespace they with to use. For example, to display
 information about VMs running inside the `foo` namespace, any of the following
 work:
 
-    minimega$ namespace foo
-    minimega[foo]$ .columns name,state,namespace vm info
-    name     | state    | namespace
-    vm-foo-0 | BUILDING | foo
+	minimega[minimega]$ namespace foo
+	minimega[foo]$ .columns name,state,namespace vm info
+	name     | state    | namespace
+	vm-foo-0 | BUILDING | foo
 
 
-    minimega$ namespace foo .columns name,state,namespace vm info
-    name     | state    | namespace
-    vm-foo-0 | BUILDING | foo
+	minimega[minimega]$ namespace foo .columns name,state,namespace vm info
+	name     | state    | namespace
+	vm-foo-0 | BUILDING | foo
 
 
-    minimega$ .columns name,state,namespace namespace foo vm info
-    name     | state    | namespace
-    vm-foo-0 | BUILDING | foo
+	minimega[minimega]$ .columns name,state,namespace namespace foo vm info
+	name     | state    | namespace
+	vm-foo-0 | BUILDING | foo
 
 Finally, to delete a namespace, again use the `clear`namespace` API:
 
-    minimega$ clear namespace foo
+	minimega$ clear namespace foo
 
-** `nsmod` API
+Deleting a namespace will clean up all state associated with the namespace
+including: killing VMs, stopping captures, deleting VLAN aliases, removing
+host taps.
 
-The `nsmod` API allows users to configure parameters of the active namespace.
-Currently, this is limited to the hosts that are part of the namespace but in
-the future it will be expanded to include configuration for the scheduler.
+** ns API
 
-By default, a newly-created namespace will contain all the hosts in the
-mesh *except* the current host. The current host can be added to the
-namespace if e.g. there are not other nodes available.
+The `ns` API allows users to view and configure parameters of the active
+namespace such as which hosts belong to the namespace.
 
-To add hosts to the namespace, use `nsmod`add-host`:
+To display the list of hosts, use `ns`hosts`:
 
-    minimega$ nsmod add-host ccc[1-10]
+	minimega[foo]$ ns hosts
+	ccc[1-5]
 
-To remove hosts, use `nsmod`del-host`:
+To add hosts to the namespace, use `ns`add-hosts`:
 
-    minimega$ nsmod del-host ccc[1,3,5,7,9]
+	minimega[foo]$ ns add-hosts ccc[6-10]
 
 minimega only adds hosts that are already part of the mesh.
 
+To remove hosts, use `ns`del-hosts`:
+
+	minimega[foo]$ ns del-hosts ccc[1,3,5,7,9]
+
+An important parameter is whether VMs should be queued or not. This is
+configured by the `ns`queueing` option which defaults to false. See the
+Launching VMs section below for an explanation of queueing.
+
+The `ns` API also allows you to control parameters of the scheduler such as how
+the scheduler determines which host is the least loaded. This is done via the
+`ns`load` API:
+
+	minimega$ ns load cpucommit
+
+See the Scheduler section below for a description of the different ways the
+scheduler can compute load.
+
+`ns` can also be used to display the current VM queue with `ns`queue` and
+information about the schedules it has run so far with `ns`schedule`status`.
+
 ** Launching VMs
 
-Launching VMs in a namespace is similar to launching VMs without namespaces. VMs
-are configured exactly the same as before -- with the `vm`config` APIs. The only
-difference for users is queued launching. Specifically, when the user calls
-`vm`launch` the specified VMs are not created immediately -- they are instead
-added to a queue. This queue allows the scheduler to make smarter decisions
-about where it launches VMs. For example, the scheduler could schedule VMs with
-the same VLANs or disk image on the same host.
+VMs are configured with the `vm`config` APIs. Each namespace has a separate
+`vm`config` to prevent users from clobbering each other's configurations.
+
+When queueing is enabled and when the user calls `vm`launch` the specified VMs
+are not created immediately -- they are instead added to a queue. This queue
+allows the scheduler to make smarter decisions about where it launches VMs. For
+example, the scheduler could schedule VMs with the same VLANs or disk image on
+the same host.
 
 Each call to `vm`launch` queues a new VM:
 
-    minimega$ namespace foo
-    minimega[foo]$ vm launch kvm a
-    minimega[foo]$ vm launch kvm b
-    minimega[foo]$ vm info
-    minimega[foo]$ namespace
-    Namespace: "foo"
-    Hosts: map[]
-    Number of queuedVMs: 2
-
-    Schedules:
-    start end  state launched failures total hosts
+	minimega[minimega]$ namespace foo
+	minimega[foo]$ ns queueing true
+	minimega[foo]$ vm launch kvm a
+	minimega[foo]$ vm launch kvm b
+	minimega[foo]$ vm info
+	minimega[foo]$ ns queue
+	... displays VM configuration for a and b ...
 
 Calling `vm`launch` with no additional arguments flushes the queue and invokes
 the scheduler:
 
-    minimega[foo]$ namespace
-    shepherd: Namespace: "foo"
-    Hosts: map[shepherd:true]
-    Number of queuedVMs: 0
+	minimega[foo]$ vm launch
+	minimega[foo]$ ns schedule status
+	start               | end                 | state     | launched | failures | total | hosts
+	02 Jan 06 15:04 MST | 02 Jan 06 15:04 MST | completed | 1        | 0        | 1     | 1
 
-    Schedules:
-    start                                   end                                     state     launched failures total hosts
-    2016-03-22 18:04:50.217220992 -0700 PDT 2016-03-22 18:04:50.236229396 -0700 PDT completed 2        0        2     1
 
-The scheduler, described below, distributes the queued VMs to nodes in
-the namespace and starts them. Once the queue is flushed, the VMs become
-visible in `vm`info`.
+The scheduler, described below, distributes the queued VMs to nodes in the
+namespace and starts them. Once the queue is flushed, the VMs become visible in
+`vm`info`.
 
 ** Scheduler
 
-The scheduler for namespaces is very naive -- if it has to launch N VMs and
-there are M hosts in the namespace, then each host launches N/M VMs. This
-assumes that all hosts in the cluster are homogeneous. Because of the way the
-scheduler is implemented, VMs with the same configuration tend to be launch on
-the same host(s).
+The scheduler for namespaces is fairly simple -- for each VM, it finds the least
+loaded node and schedules the VM on it. Load is calculated in one of the
+following ways:
 
-In future releases, we will focus on improving the scheduler.
+ * CPU commit      : Sum of the Virtual CPUs across all launched VMs.
+ * Network commit  : Sum of the count of network interfaces across all launched VMs.
+ * Memory load     : Sum of the total memory minus the total memory reserved for all launched VMs.
 
-** `vm` API
+These values are summed across all VMs running on the host, regardless of
+namespace. This means that the scheduler will avoid launching new VMs on already
+busy nodes if there are multiple namespaces are using the same nodes or there
+are VMs running outside of a namespace.
 
-Besides the changes noted above to `vm`launch`, many of the `vm` APIs are now
-namespace-aware. Specifically:
+In order to allow users to statically schedule some portions of their experiment
+(such as when there is hardware or people in the loop), there are three APIs to modify VM placement on a per-VM basis:
 
- * `vm`info`
- * `vm`flush`
+	* vm config schedule   : schedule these VMs on a particular node
+	* vm config coschedule : limit the number of coscheduled VMs
+	* vm config colocate   : schedule VM on the same node as another VM
 
-These commands are broadcast out to all hosts in the namespace and the responses
-are collected on the issuing node. These are roughly equivalent to doing
-`mesh`send`<hosts>`vm`info` where `<hosts>` is the list of nodes in the
+These three APIs can be used together or separately:
+
+	minimega$ vm config schedule ccc50
+	minimega$ vm config coschedule 0
+	minimega$ vm launch kvm solo
+
+Instructs the scheduler to launch a VM called `solo` on ccc50 and not to
+schedule any other VMs on ccc50.
+
+	minimega$ vm config coschedule 0
+	minimega$ vm launch kvm solo
+
+Instructs the scheduler to launch a VM called `solo` on any node and not to
+schedule any other VMs on that node.
+
+	minimega$ vm config coschedule 3
+	minimega$ vm launch kvm quad[0-3]
+
+Instructs the scheduler to launch four VMs called quad[0-3] on any node and not
+to schedule at most four other VMs on those nodes. Note: because of the way the
+least loaded scheduler works, quad[0-3] will most likely not be scheduled on the
+same node.
+
+	minimega$ vm launch kvm a
+	minimega$ vm config colocate a
+	minimega$ vm launch kvm b
+
+Instructs the scheduler to schedule `b` on the same node as `a`.
+
+	minimega$ vm config coschedule 1
+	minimega$ vm launch kvm a
+	minimega$ vm config colocate a
+	minimega$ vm launch kvm b
+
+Instructs the scheduler to schedule `b` on the same node as `a` on the same
+node with no other VMs.
+
+Note that `vm`config`schedule` and `vm`config`colocate` cannot be used for the
+same VM as this could lead to conflicts in VM placement.
+
+*** Dry-run
+
+The `ns` API also allows users to perform dry runs with the scheduler. This
+will determine VM placement but stop before launching any VMs. The VM placement
+is displayed back to the user for editing with the `ns`schedule`mv` API. For
+example, if we launched four VMs with queueing enabled:
+
+	minimega$ ns queueing true
+	minimega$ vm launch kvm vm[0-3]
+	minimega$ ns schedule dry-run
+	vm   | dst
+	vm0  | mm0
+	vm1  | mm1
+	vm2  | mm2
+	vm3  | mm3
+
+We can then move one or more VMs:
+
+	minimega$ ns schedule mv vm0 mm1
+	minimega$ ns schedule mv vm[1-2] mm0
+	minimega$ ns schedule dump
+	vm   | dst
+	vm0  | mm1
+	vm1  | mm0
+	vm2  | mm0
+	vm3  | mm3
+
+To launch the VMs based on the edited VM placement, simply run `ns`schedule`:
+
+	minimega$ ns schedule dump
+
+Note that only named VMs can be manipulated in this manner. If you launch VMs
+with a number (i.e. `vm`launch`kvm`4`), the VMs do not have names until they
+are launched.
+
+** Private bridge
+
+The `ns`bridge` API creates a bridge on all the hosts in the namespace and then
+creates a fully connected mesh of GRE or VXLAN tunnels between them. This
+bridge can then be used when launching VMs:
+
+	minimega$ namespace foo
+	minimega$ ns bridge foo
+	minimega$ vm config net foo,LAN
+	minimega$ vm launch kvm 2
+
+minimega uses tunnel keys on the GRE or VXLAN tunnels so that each namespace
+has an isolated bridge. This allows VLANs to be reused although this is not
+currently supported.
+
+Note that bridge names are not automatically namespaced -- users may wish to
+follow a convention of prefixing the bridge name with the namespace name. This
+may happen automatically in a future release.
+
+The bridge can be manually destroyed using the `ns`del-bridge` API or it will
+be automatically destroyed when the namespace is destroyed.
+
+** Replacing mesh send all
+
+Before namespaces, users would call `mesh`send`all` to run a command across the
+cluster and then run the command locally as well if it applied to the head
+node. To help with running commands across nodes in a namespace which can be a
+segment of the mesh, we created the `ns`run` API. This API runs the subcommand
+on all nodes in the namespace including the head node, if it is part of the
 namespace.
 
-APIs that target one or more VMs now apply to VMs across the namespace on any
-host. This includes:
+** Snapshot
 
- * `vm`start`
- * `vm`pause`
- * `vm`kill`
- * `vm`hotplug`
- * `vm`qmp`
- * `vm`screenshot`
- * `vm`tag`
- * `vm`cdrom`
+Namespaces are working towards a full snapshot of a running experiment. This
+capability is partially implemented in the `ns`snapshot` API. This API records
+a minimega script to relaunch the running VMs and calls `vm`migrate` on each VM
+to capture its memory. The resulting migration files are added to the minimega
+script using the `vm`config`migrate` API. This snapshot capability should work
+for VMs with a kernel/initrd but not for VMs with a disk.
+
+In future releases, we plan to expand upon this capability.
+
+** vm API
+
+Besides the changes noted above to `vm`launch`, all of the `vm` APIs are
+namespace-specific. These commands are broadcast out to all hosts in the
+namespace and the responses are collected on the issuing node. `vm` APIs that
+target one or more VMs now apply to VMs across the namespace on any host.
 
 Note: because of the above changes, minimega now enforces globally unique VM
 names within a namespace. VMs of the same name can exist in different
-namespaces. However, minimega does not reuse VM IDs which means that `vm`kill`0`
-will kill all VMs with ID 0 on hosts in the active namespace regardless of
-whether those VMs belong to the namespace or not.
+namespaces. Users should use VM names rather than IDs to perform actions on VMs
+since multiple hosts can have VMs with the same ID.
 
-** `mesh` API Changes
+** vlans API
 
-The `mesh` API has a minor tweak -- when a namespace is active,
-`mesh`send`all` now resolves `all` to hosts in the namespace rather than
-all hosts in the cluster.
+Setting `vlans`range` in the default namespace applies to all namespaces that
+do not have their own range specified.
 
-** `cc` API Changes
+** cc API
 
-The `cc` API adds an implicit filter for VMs running in the active namespace.
+minimega starts a separate `cc` server for each namespace. Each server creates
+a separate `miniccc_response` directory in the files directory.
 
-** `host` API Changes
+** host API
 
 The `host` API broadcasts the `host` command to all hosts in the namespace and
 collects the responses on the issuing host when a namespace is active.
 Otherwise, it only reports information for the issuing node.
+
+** capture API
+
+The `capture` API is partially namespace-aware. Specifically, the commands to
+capture traffic for a VM work perfect with namespaces -- traffic will be
+captured on the node that runs the VM and can be retrieved with `file`get` when
+the capture completes. Capturing traffic on a bridge (PCAP or netflow) is not
+advised -- it may contain traffic from other experiments. See `help`capture`
+for more details.

@@ -1,0 +1,54 @@
+{/* This is site layout. Other templates fill in the content. */}
+
+{{define "header"}}
+<title>minimega.org</title>
+{{end}}
+
+{{define "root"}}
+<!DOCTYPE html>
+<html lang="en-US">
+	<head>
+		<link type="text/css" rel="stylesheet" href="/static/page.css">
+		<link rel="icon" href="/static/favicon.png">
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+		{{ template "header" . }}
+	</head>
+
+	<body>
+		<div id="title">
+			<h1>minimega</h1>
+			<p>a distributed VM management tool</p>
+		</div>
+
+		<ul class="links">
+			<li><a href="/">Home</a>
+			<li><a href="/screenshots/">Screenshots</a>
+			<li><a href="/training">mini101</a>
+			<li><a href="/articles/tutorials/">Tutorials</a>
+			<li><a href="/articles/api.article">API Documentation</a>
+			<li><a href="/articles/publications.article">Publications</a>
+			<li><a href="/articles/">Documentation</a>
+			<hr />
+			<li><a href="https://github.com/sandia-minimega/minimega">Github repository</a>
+			<li><a href="/articles/contributing.article">Contributing</a>
+			<li><a href="/articles/developer/">Developer Docs</a>
+			<li><a href="/tools.html">More tools</a>
+			<hr />
+			<li><a href="http://tip.minimega.org">Latest docs (unstable)</a>
+		</ul>
+
+		<div id="content" class="content">
+			{{ template "content" . }}
+		</div>
+        
+        <div id="footer">
+        <footer class="content">
+            <div class="col-12">
+                <p id="colophonLegal">Sandia National Laboratories is a multimission laboratory managed and operated by National Technology and Engineering Solutions of Sandia, LLC., a wholly owned subsidiary of Honeywell International, Inc., for the U.S. Department of Energy&#8217;s National Nuclear Security Administration under contract DE-NA-0003525.</p>
+            </div>
+        </footer>
+        </div>
+	
+	</body>
+</html>
+{{end}}

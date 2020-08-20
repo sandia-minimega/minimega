@@ -10,6 +10,7 @@ import (
 	log "minilog"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/gopacket/pcap"
@@ -24,7 +25,13 @@ type Bridge struct {
 	Name     string
 	preExist bool
 
-	mirror  string
+	// mirrors records the mirror tap names used by captures
+	mirrors map[string]bool
+
+	// captures records the "stop" flags that are set to non-zero values when
+	// we want to stop a capture.
+	captures map[int]capture
+
 	trunks  map[string]bool
 	tunnels map[string]bool
 
@@ -37,6 +44,12 @@ type Bridge struct {
 	nameChan chan string
 
 	handle *pcap.Handle
+
+	// config values that have been set on this bridge
+	config map[string]string
+
+	// set to non-zero value by Bridge.destroy
+	isdestroyed uint64
 }
 
 // BridgeInfo is a summary of fields from a Bridge.
@@ -44,9 +57,10 @@ type BridgeInfo struct {
 	Name     string
 	PreExist bool
 	VLANs    []int
-	Mirror   string
 	Trunks   []string
 	Tunnels  []string
+	Mirrors  []string
+	Config   map[string]string
 }
 
 // Tap represents an interface that is attached to an openvswitch bridge.
@@ -61,9 +75,23 @@ type Tap struct {
 
 	IP4 string // Snooped IPv4 address
 	IP6 string // Snooped IPv6 address
-	Qos *qos   // Quality-of-service constraints
+
+	*qos // Quality-of-service constraints
 
 	stats []tapStat
+}
+
+type capture struct {
+	tap string
+
+	// isstopped is set to non-zero when stopped
+	isstopped *uint64
+
+	// ack is closed when the goroutine doing the capture closes
+	ack chan bool
+
+	// pcap handle, needed so that we can close it in stopCapture
+	handle *pcap.Handle
 }
 
 type tapStat struct {
@@ -73,23 +101,18 @@ type tapStat struct {
 	TxBytes int
 }
 
-// Destroy a bridge, removing all of the taps, etc. associated with it
-func (b *Bridge) Destroy() error {
-	bridgeLock.Lock()
-	defer bridgeLock.Unlock()
-
-	return b.destroy()
-}
-
 func (b *Bridge) destroy() error {
 	log.Info("destroying bridge: %v", b.Name)
 
+	if b.destroyed() {
+		// bridge has already been destroyed
+		return nil
+	}
+
+	b.setDestroyed()
+
 	if b.handle != nil {
-		// Don't close the handle otherwise we might cause a deadlock:
-		//   https://github.com/google/gopacket/issues/253
-		// We will leak the handle but bridges are usually only destroyed when
-		// the program is terminating so it won't be leaked for long.
-		// b.handle.Close()
+		b.handle.Close()
 	}
 
 	// first get all of the taps off of this bridge and destroy them
@@ -114,11 +137,8 @@ func (b *Bridge) destroy() error {
 			return err
 		}
 	}
-
-	if b.mirror != "" {
-		if err := b.destroyMirror(); err != nil {
-			return err
-		}
+	for v := range b.captures {
+		b.stopCapture(v)
 	}
 
 	if b.nf != nil {
@@ -192,6 +212,14 @@ func (b *Bridge) reapTaps() error {
 	}
 
 	return nil
+}
+
+func (b *Bridge) setDestroyed() {
+	atomic.StoreUint64(&b.isdestroyed, 1)
+}
+
+func (b *Bridge) destroyed() bool {
+	return atomic.LoadUint64(&b.isdestroyed) > 0
 }
 
 // DestroyBridge deletes an `unmanaged` bridge. This can be used when cleaning

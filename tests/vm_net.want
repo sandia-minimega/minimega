@@ -1,21 +1,229 @@
-## vm config net 0
-## vm launch kvm vm0
+## vm config net LAN
+## vm launch kvm k[0-1]
+## vm config filesystem $images/minicccfs
+## vm launch container c[0-1]
 ## .columns name,vlan,bridge vm info
-name | vlan | bridge
-vm0  | [0]  | [mega_bridge]
-## vm net disconnect vm0 0
-## .columns name,vlan,bridge vm info
-name | vlan           | bridge
-vm0  | [disconnected] | []
-## vm net connect vm0 0 foo 1
-## .columns name,vlan,bridge vm info
-name | vlan | bridge
-vm0  | [1]  | [foo]
-## vm net connect vm0 0 bar 0
-## .columns name,vlan,bridge vm info
-name | vlan | bridge
-vm0  | [0]  | [bar]
-## vm net disconnect vm0 0
+name | vlan        | bridge
+c0   | [LAN (101)] | [mega_bridge]
+c1   | [LAN (101)] | [mega_bridge]
+k0   | [LAN (101)] | [mega_bridge]
+k1   | [LAN (101)] | [mega_bridge]
+
+## # disconnect single and multiple VMs
+## vm net disconnect k0 0
 ## .columns name,vlan,bridge vm info
 name | vlan           | bridge
-vm0  | [disconnected] | []
+c0   | [LAN (101)]    | [mega_bridge]
+c1   | [LAN (101)]    | [mega_bridge]
+k0   | [disconnected] | []
+k1   | [LAN (101)]    | [mega_bridge]
+## vm net disconnect c0 0
+## .columns name,vlan,bridge vm info
+name | vlan           | bridge
+c0   | [disconnected] | []
+c1   | [LAN (101)]    | [mega_bridge]
+k0   | [disconnected] | []
+k1   | [LAN (101)]    | [mega_bridge]
+## vm net disconnect all 0
+## .columns name,vlan,bridge vm info
+name | vlan           | bridge
+c0   | [disconnected] | []
+c1   | [disconnected] | []
+k0   | [disconnected] | []
+k1   | [disconnected] | []
+
+## # connect single and multiple VMs
+## vm net connect k0 0 LAN2
+## .columns name,vlan,bridge vm info
+name | vlan           | bridge
+c0   | [disconnected] | []
+c1   | [disconnected] | []
+k0   | [LAN2 (102)]   | [mega_bridge]
+k1   | [disconnected] | []
+## vm net connect c0 0 LAN2
+## .columns name,vlan,bridge vm info
+name | vlan           | bridge
+c0   | [LAN2 (102)]   | [mega_bridge]
+c1   | [disconnected] | []
+k0   | [LAN2 (102)]   | [mega_bridge]
+k1   | [disconnected] | []
+## vm net connect all 0 LAN2 mega_bridge2
+## .columns name,vlan,bridge vm info
+name | vlan         | bridge
+c0   | [LAN2 (102)] | [mega_bridge2]
+c1   | [LAN2 (102)] | [mega_bridge2]
+k0   | [LAN2 (102)] | [mega_bridge2]
+k1   | [LAN2 (102)] | [mega_bridge2]
+
+## # reconnect single and multiple VMs
+## vm net connect k0 0 LAN3
+## .columns name,vlan,bridge vm info
+name | vlan         | bridge
+c0   | [LAN2 (102)] | [mega_bridge2]
+c1   | [LAN2 (102)] | [mega_bridge2]
+k0   | [LAN3 (103)] | [mega_bridge2]
+k1   | [LAN2 (102)] | [mega_bridge2]
+## vm net connect c0 0 LAN3
+## .columns name,vlan,bridge vm info
+name | vlan         | bridge
+c0   | [LAN3 (103)] | [mega_bridge2]
+c1   | [LAN2 (102)] | [mega_bridge2]
+k0   | [LAN3 (103)] | [mega_bridge2]
+k1   | [LAN2 (102)] | [mega_bridge2]
+## vm net connect all 0 LAN3
+## .columns name,vlan,bridge vm info
+name | vlan         | bridge
+c0   | [LAN3 (103)] | [mega_bridge2]
+c1   | [LAN3 (103)] | [mega_bridge2]
+k0   | [LAN3 (103)] | [mega_bridge2]
+k1   | [LAN3 (103)] | [mega_bridge2]
+
+## # reconnect back to mega_bridge
+## vm net connect all 0 LAN3 mega_bridge
+
+## # start everything and repeat
+## vm start all
+
+## # disconnect single and multiple VMs
+## vm net disconnect k0 0
+## .columns name,vlan,bridge vm info
+name | vlan           | bridge
+c0   | [LAN3 (103)]   | [mega_bridge]
+c1   | [LAN3 (103)]   | [mega_bridge]
+k0   | [disconnected] | []
+k1   | [LAN3 (103)]   | [mega_bridge]
+## vm net disconnect c0 0
+## .columns name,vlan,bridge vm info
+name | vlan           | bridge
+c0   | [disconnected] | []
+c1   | [LAN3 (103)]   | [mega_bridge]
+k0   | [disconnected] | []
+k1   | [LAN3 (103)]   | [mega_bridge]
+## vm net disconnect all 0
+## .columns name,vlan,bridge vm info
+name | vlan           | bridge
+c0   | [disconnected] | []
+c1   | [disconnected] | []
+k0   | [disconnected] | []
+k1   | [disconnected] | []
+
+## # connect single and multiple VMs
+## vm net connect k0 0 LAN2
+## .columns name,vlan,bridge vm info
+name | vlan           | bridge
+c0   | [disconnected] | []
+c1   | [disconnected] | []
+k0   | [LAN2 (102)]   | [mega_bridge]
+k1   | [disconnected] | []
+## vm net connect c0 0 LAN2
+## .columns name,vlan,bridge vm info
+name | vlan           | bridge
+c0   | [LAN2 (102)]   | [mega_bridge]
+c1   | [disconnected] | []
+k0   | [LAN2 (102)]   | [mega_bridge]
+k1   | [disconnected] | []
+## vm net connect all 0 LAN2 mega_bridge2
+## .columns name,vlan,bridge vm info
+name | vlan         | bridge
+c0   | [LAN2 (102)] | [mega_bridge2]
+c1   | [LAN2 (102)] | [mega_bridge2]
+k0   | [LAN2 (102)] | [mega_bridge2]
+k1   | [LAN2 (102)] | [mega_bridge2]
+
+## # reconnect single and multiple VMs
+## vm net connect k0 0 LAN3
+## .columns name,vlan,bridge vm info
+name | vlan         | bridge
+c0   | [LAN2 (102)] | [mega_bridge2]
+c1   | [LAN2 (102)] | [mega_bridge2]
+k0   | [LAN3 (103)] | [mega_bridge2]
+k1   | [LAN2 (102)] | [mega_bridge2]
+## vm net connect c0 0 LAN3
+## .columns name,vlan,bridge vm info
+name | vlan         | bridge
+c0   | [LAN3 (103)] | [mega_bridge2]
+c1   | [LAN2 (102)] | [mega_bridge2]
+k0   | [LAN3 (103)] | [mega_bridge2]
+k1   | [LAN2 (102)] | [mega_bridge2]
+## vm net connect all 0 LAN3
+## .columns name,vlan,bridge vm info
+name | vlan         | bridge
+c0   | [LAN3 (103)] | [mega_bridge2]
+c1   | [LAN3 (103)] | [mega_bridge2]
+k0   | [LAN3 (103)] | [mega_bridge2]
+k1   | [LAN3 (103)] | [mega_bridge2]
+
+## # reconnect back to mega_bridge
+## vm net connect all 0 LAN3 mega_bridge
+
+## # kill all and repeat
+## vm kill all
+
+## # disconnect single and multiple VMs
+## vm net disconnect k0 0
+## .columns name,vlan,bridge vm info
+name | vlan           | bridge
+c0   | [LAN3 (103)]   | [mega_bridge]
+c1   | [LAN3 (103)]   | [mega_bridge]
+k0   | [disconnected] | []
+k1   | [LAN3 (103)]   | [mega_bridge]
+## vm net disconnect c0 0
+## .columns name,vlan,bridge vm info
+name | vlan           | bridge
+c0   | [disconnected] | []
+c1   | [LAN3 (103)]   | [mega_bridge]
+k0   | [disconnected] | []
+k1   | [LAN3 (103)]   | [mega_bridge]
+## vm net disconnect all 0
+## .columns name,vlan,bridge vm info
+name | vlan           | bridge
+c0   | [disconnected] | []
+c1   | [disconnected] | []
+k0   | [disconnected] | []
+k1   | [disconnected] | []
+
+## # connect single and multiple VMs
+## vm net connect k0 0 LAN2
+## .columns name,vlan,bridge vm info
+name | vlan           | bridge
+c0   | [disconnected] | []
+c1   | [disconnected] | []
+k0   | [LAN2 (102)]   | [mega_bridge]
+k1   | [disconnected] | []
+## vm net connect c0 0 LAN2
+## .columns name,vlan,bridge vm info
+name | vlan           | bridge
+c0   | [LAN2 (102)]   | [mega_bridge]
+c1   | [disconnected] | []
+k0   | [LAN2 (102)]   | [mega_bridge]
+k1   | [disconnected] | []
+## vm net connect all 0 LAN2 mega_bridge2
+## .columns name,vlan,bridge vm info
+name | vlan         | bridge
+c0   | [LAN2 (102)] | [mega_bridge2]
+c1   | [LAN2 (102)] | [mega_bridge2]
+k0   | [LAN2 (102)] | [mega_bridge2]
+k1   | [LAN2 (102)] | [mega_bridge2]
+
+## # reconnect single and multiple VMs
+## vm net connect k0 0 LAN3
+## .columns name,vlan,bridge vm info
+name | vlan         | bridge
+c0   | [LAN2 (102)] | [mega_bridge2]
+c1   | [LAN2 (102)] | [mega_bridge2]
+k0   | [LAN3 (103)] | [mega_bridge2]
+k1   | [LAN2 (102)] | [mega_bridge2]
+## vm net connect c0 0 LAN3
+## .columns name,vlan,bridge vm info
+name | vlan         | bridge
+c0   | [LAN3 (103)] | [mega_bridge2]
+c1   | [LAN2 (102)] | [mega_bridge2]
+k0   | [LAN3 (103)] | [mega_bridge2]
+k1   | [LAN2 (102)] | [mega_bridge2]
+## vm net connect all 0 LAN3
+## .columns name,vlan,bridge vm info
+name | vlan         | bridge
+c0   | [LAN3 (103)] | [mega_bridge2]
+c1   | [LAN3 (103)] | [mega_bridge2]
+k0   | [LAN3 (103)] | [mega_bridge2]
+k1   | [LAN3 (103)] | [mega_bridge2]

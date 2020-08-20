@@ -22,7 +22,7 @@ that does not return.`,
 		Patterns: []string{
 			"shell <command>...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 			return cliShell(c, resp, false)
 		}),
 	},
@@ -36,7 +36,7 @@ logged at the "info" level.`,
 		Patterns: []string{
 			"background <command>...",
 		},
-		Call: wrapSimpleCLI(func(c *minicli.Command, resp *minicli.Response) error {
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 			return cliShell(c, resp, true)
 		}),
 	},

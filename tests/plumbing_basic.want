@@ -1,0 +1,62 @@
+## # Basic plumbing tests
+## # Note: These test message delivery modes "all" and "round-robin."
+
+## .annotate false
+
+## # Create basic pipe: test mode all. This is a depth 2 binary tree (to be used for round-robin as well).
+## plumb p0 p1
+## plumb p0 p2
+## plumb p1 p3
+## plumb p1 p4
+## plumb p2 p5
+## plumb p2 p6
+## plumb
+pipeline
+minimega//p0 minimega//p1
+minimega//p0 minimega//p2
+minimega//p1 minimega//p3
+minimega//p1 minimega//p4
+minimega//p2 minimega//p5
+minimega//p2 minimega//p6
+## .columns name,mode,readers,writers,count pipe
+name         | mode | readers | writers | count
+minimega//p0 | all  | 2       | 0       | 0
+minimega//p1 | all  | 2       | 1       | 0
+minimega//p2 | all  | 2       | 1       | 0
+minimega//p3 | all  | 0       | 1       | 0
+minimega//p4 | all  | 0       | 1       | 0
+minimega//p5 | all  | 0       | 1       | 0
+minimega//p6 | all  | 0       | 1       | 0
+
+## pipe p0 "Hello to you."
+## shell sleep 2s
+
+## .columns name,mode,readers,writers,count pipe
+name         | mode | readers | writers | count
+minimega//p0 | all  | 2       | 0       | 1
+minimega//p1 | all  | 2       | 1       | 1
+minimega//p2 | all  | 2       | 1       | 1
+minimega//p3 | all  | 0       | 1       | 1
+minimega//p4 | all  | 0       | 1       | 1
+minimega//p5 | all  | 0       | 1       | 1
+minimega//p6 | all  | 0       | 1       | 1
+
+## # Round-robin mode testing: set all parents to RR and verify message count distributions
+## pipe p0 mode round-robin
+## pipe p1 mode round-robin
+## pipe p2 mode round-robin
+
+## pipe p0 "This is round robin."
+## pipe p0 "This is round 2."
+## pipe p0 "This is round 3."
+## pipe p0 "This is round 4."
+
+## .columns name,mode,readers,writers,count pipe
+name         | mode        | readers | writers | count
+minimega//p0 | round-robin | 2       | 0       | 5
+minimega//p1 | round-robin | 2       | 1       | 3
+minimega//p2 | round-robin | 2       | 1       | 3
+minimega//p3 | all         | 0       | 1       | 2
+minimega//p4 | all         | 0       | 1       | 2
+minimega//p5 | all         | 0       | 1       | 2
+minimega//p6 | all         | 0       | 1       | 2

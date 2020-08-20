@@ -1,5 +1,0 @@
-vm config qemu-override
-vm config virtio-serial 40
-vm config qemu-override
-clear vm config virtio-serial
-vm config qemu-override

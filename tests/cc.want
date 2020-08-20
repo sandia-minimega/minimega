@@ -1,95 +1,52 @@
-## vm config filesystem $containerfs
-
 ## namespace foo
-## nsmod add-host localhost
+## vm config filesystem $images/minicccfs
 ## vm config hostname foo
 ## vm config uuid a5e980ca-3958-48cc-92e9-93d50c0157ad
 ## vm launch container foo
-## vm launch
+## vm start all
 
 ## namespace bar
-## nsmod add-host localhost
+## vm config filesystem $images/minicccfs
 ## vm config hostname bar
 ## vm config uuid d67f9fed-adea-415a-a66b-301d275a2383
 ## vm launch container bar
-## vm launch
+## vm start all
 
 ## clear namespace
-## vm start all
 
 ## # wait for clients to start
 ## shell sleep 10
-## .columns UUID,hostname,namespace cc clients
-UUID                                 | hostname | namespace
-a5e980ca-3958-48cc-92e9-93d50c0157ad | foo      | foo
-d67f9fed-adea-415a-a66b-301d275a2383 | bar      | bar
-## .columns UUID,hostname namespace foo cc clients
-UUID                                 | hostname
+## .columns uuid,hostname namespace foo cc clients
+uuid                                 | hostname
 a5e980ca-3958-48cc-92e9-93d50c0157ad | foo
-## .columns UUID,hostname namespace bar cc clients
-UUID                                 | hostname
+## .columns uuid,hostname namespace bar cc clients
+uuid                                 | hostname
 d67f9fed-adea-415a-a66b-301d275a2383 | bar
-
-## # run command, wait for clients to check in
-## cc exec hostname
-## shell sleep 20
-
-## # get responses and then clear all
-## cc responses all
-1/a5e980ca-3958-48cc-92e9-93d50c0157ad/stdout:
-foo
-
-1/d67f9fed-adea-415a-a66b-301d275a2383/stdout:
-bar
-## clear cc responses
-## cc responses all
-
-## # run command, wait for clients to check in
-## cc exec hostname
-## shell sleep 20
-
-## # get responses just in one namespace and then clear one namespace
-## namespace foo cc responses all
-2/a5e980ca-3958-48cc-92e9-93d50c0157ad/stdout:
-foo
-## namespace foo clear cc responses
-## namespace foo cc responses all
-## cc responses all
-2/d67f9fed-adea-415a-a66b-301d275a2383/stdout:
-bar
-
-## # reset
-## clear cc responses
 
 ## # run command in one namespace
 ## namespace foo cc exec hostname
+## namespace bar cc exec hostname
 ## shell sleep 10
 
-## # check response
-## cc responses all
-3/a5e980ca-3958-48cc-92e9-93d50c0157ad/stdout:
+## # check responses
+## namespace foo cc responses all
+1/a5e980ca-3958-48cc-92e9-93d50c0157ad/stdout:
 foo
+## namespace bar cc responses all
+1/d67f9fed-adea-415a-a66b-301d275a2383/stdout:
+bar
 
 ## # make sure that commands ended up being attributed correctly
-## .columns ID,responses,filter cc commands
-ID   | responses | filter
-1    | 2         | 
-2    | 2         | 
-3    | 1         | namespace=foo
-## .columns ID,responses,filter namespace foo cc commands
-ID   | responses | filter
-3    | 1         | namespace=foo
-## .columns ID,responses,filter namespace bar cc commands
+## .columns id,responses,filter namespace foo cc commands
+id   | responses | filter
+1    | 1         |
+## .columns id,responses,filter namespace bar cc commands
+id   | responses | filter
+1    | 1         |
 
 ## # clear commands in one namespace
 ## namespace foo clear cc commands
-## .columns ID,responses,filter cc commands
-ID   | responses | filter
-1    | 2         | 
-2    | 2         |
-## # should have no affect
-## namespace bar clear cc commands
-## .columns ID,responses,filter cc commands
-ID   | responses | filter
-1    | 2         | 
-2    | 2         |
+## namespace foo .columns id,responses,filter cc commands
+## namespace bar .columns id,responses,filter cc commands
+id   | responses | filter
+1    | 1         |

@@ -6,23 +6,8 @@ package ron
 
 import (
 	log "minilog"
-	"net"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
-	"time"
-)
-
-type Type int
-
-// Ron message types to inform the mux on either end how to route the message
-const (
-	MESSAGE_COMMAND Type = iota
-	MESSAGE_CLIENT
-	MESSAGE_TUNNEL
-	MESSAGE_FILE
 )
 
 const (
@@ -32,27 +17,6 @@ const (
 	RESPONSE_PATH  = "miniccc_responses"
 )
 
-type Server struct {
-	serialConns map[string]net.Conn // map of connected, but not necessarily active serial connections
-	serialLock  sync.Mutex
-
-	udsConns map[string]net.Listener
-	udsLock  sync.Mutex
-
-	commands       map[int]*Command // map of active commands
-	commandCounter int
-	commandLock    sync.Mutex // lock for commands and commandCounter
-
-	clients    map[string]*client // map of active clients, each of which have a running handler
-	vms        map[string]VM      // map of uuid -> VM
-	clientLock sync.Mutex         // lock for clients and vms
-
-	path          string    // path for serving files
-	lastBroadcast time.Time // watchdog time of last command list broadcast
-
-	responses chan *Client // queue of incoming responses, consumed by the response processor
-}
-
 type Process struct {
 	PID     int
 	Command []string
@@ -60,64 +24,11 @@ type Process struct {
 
 type VM interface {
 	GetNamespace() string
-	GetTags() map[string]string
+	GetUUID() string
 	SetCCActive(bool)
+	GetTags() map[string]string
 	SetTag(string, string)
-}
-
-type Message struct {
-	Type     Type
-	UUID     string
-	Commands map[int]*Command
-	Client   *Client
-	File     []byte
-	Filename string
-	Error    string
-	Tunnel   []byte
-}
-
-// NewServer creates a ron server listening on on tcp.
-func NewServer(port int, path string) (*Server, error) {
-	s := &Server{
-		serialConns:   make(map[string]net.Conn),
-		udsConns:      make(map[string]net.Listener),
-		commands:      make(map[int]*Command),
-		clients:       make(map[string]*client),
-		vms:           make(map[string]VM),
-		path:          path,
-		lastBroadcast: time.Now(),
-		responses:     make(chan *Client, 1024),
-	}
-
-	if err := os.MkdirAll(filepath.Join(s.path, RESPONSE_PATH), 0775); err != nil {
-		return nil, err
-	}
-
-	if err := s.Listen(port); err != nil {
-		return nil, err
-	}
-
-	go s.responseHandler()
-	go s.clientReaper()
-
-	log.Debug("registered new ron server: %v", port)
-
-	return s, nil
-}
-
-func (t Type) String() string {
-	switch t {
-	case MESSAGE_COMMAND:
-		return "COMMAND"
-	case MESSAGE_CLIENT:
-		return "CLIENT"
-	case MESSAGE_TUNNEL:
-		return "TUNNEL"
-	case MESSAGE_FILE:
-		return "FILE"
-	}
-
-	return "UNKNOWN"
+	Info(string) (string, error)
 }
 
 func unmangle(uuid string) string {

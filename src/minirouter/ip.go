@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"minicli"
@@ -16,13 +17,13 @@ const (
 )
 
 var (
-	IPs [][]string
+	IPs = make(map[int][]string)
 )
 
 func init() {
 	minicli.Register(&minicli.Handler{
 		Patterns: []string{
-			"ip <add,> <index> <ip>",
+			"ip <add,> <index or lo> <ip>",
 			"ip <flush,>",
 		},
 		Call: handleIP,
@@ -76,28 +77,28 @@ func handleIP(c *minicli.Command, r chan<- minicli.Responses) {
 		r <- nil
 	}()
 	if c.BoolArgs["flush"] {
-		ips := make([][]string, len(IPs))
-		for i, v := range IPs {
-			ips[i] = make([]string, len(v))
-			copy(ips[i], v)
-		}
-		for i, v := range ips {
-			for _, ip := range v {
-				log.Debug("deleting ip: %v", ip)
-				err := ipDel(i, ip)
+		for idx, iplist := range IPs {
+			for i := len(iplist) - 1; i > -1; i-- {
+				log.Debug("deleting ip: %v", iplist[i])
+				err := ipDel(idx, iplist[i])
 				if err != nil {
 					log.Errorln(err)
 				}
 			}
 		}
 	} else if c.BoolArgs["add"] {
-		idx, err := strconv.Atoi(c.StringArgs["index"])
-		if err != nil {
-			log.Errorln(err)
-			return
+		var idx int
+		var err error
+		if c.StringArgs["index"] != "lo" {
+			idx, err = strconv.Atoi(c.StringArgs["index"])
+			if err != nil {
+				log.Errorln(err)
+				return
+			}
+		} else {
+			idx = -1
 		}
 		ip := c.StringArgs["ip"]
-
 		err = ipAdd(idx, ip)
 		if err != nil {
 			log.Errorln(err)
@@ -109,72 +110,64 @@ func handleIP(c *minicli.Command, r chan<- minicli.Responses) {
 }
 
 func ipDel(idx int, ip string) error {
-	if idx >= len(IPs) {
-		return fmt.Errorf("invalid index: %v", idx)
-	}
-
-	var found bool
-	for _, v := range IPs[idx] {
-		if ip == v {
-			found = true
-			break
+	iface := "lo"
+	if idx != -1 {
+		// get an interface from the index
+		var err error
+		iface, err = findEth(idx)
+		if err != nil {
+			return err
 		}
 	}
-	if !found {
-		return fmt.Errorf("no such ip: %v", ip)
-	}
 
-	// get an interface from the index
-	eth, err := findEth(idx)
-	if err != nil {
-		return err
-	}
-
-	// TODO: what's the right way to remove a dhcp interface?
+	// TODO: Need to send release ip reservation to dhcp server
 	if ip == "dhcp" {
+		out, err := exec.Command("dhclient", "-r", iface).CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("%v: %v", err, string(out))
+		}
 		return nil
 	}
-
-	out, err := exec.Command("ip", "addr", "del", ip, "dev", eth).CombinedOutput()
+	out, err := exec.Command("ip", "addr", "del", ip, "dev", iface).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%v: %v", err, string(out))
 	}
 
-	for i, v := range IPs[idx] {
-		if ip == v {
-			IPs[idx] = append(IPs[idx][:i], IPs[idx][i+1:]...)
-			break
-		}
+	IPs[idx] = append(IPs[idx][:len(IPs[idx])-1])
+	if len(IPs[idx]) == 0 {
+		delete(IPs, idx)
 	}
-
 	return nil
 }
 
 func ipAdd(idx int, ip string) error {
-	// get an interface from the index
-	eth, err := findEth(idx)
-	if err != nil {
-		return err
+	iface := "lo"
+	if idx != -1 {
+		// get an interface from the index
+		var err error
+		iface, err = findEth(idx)
+		if err != nil {
+			return err
+		}
 	}
 
-	out, err := exec.Command("ip", "link", "set", eth, "up").CombinedOutput()
+	out, err := exec.Command("ip", "link", "set", iface, "up").CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%v: %v", err, string(out))
 	}
 
 	if ip == "dhcp" {
-		return exec.Command("dhclient", eth).Run()
+		if iface == "lo" {
+			return errors.New("Cannot put dhcp on Loopback interface")
+		}
+		return exec.Command("dhclient", iface).Run()
 	}
 
-	out, err = exec.Command("ip", "addr", "add", ip, "dev", eth).CombinedOutput()
+	out, err = exec.Command("ip", "addr", "add", ip, "dev", iface).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%v: %v", err, string(out))
 	}
 
-	for idx >= len(IPs) {
-		IPs = append(IPs, []string{})
-	}
 	IPs[idx] = append(IPs[idx], ip)
-
 	return nil
 }

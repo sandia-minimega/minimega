@@ -27,10 +27,8 @@ func sendCommand(s string) string {
 	}
 	defer mm.Close()
 
-	cmd := &minicli.Command{Original: s}
-
 	var responses string
-	for resp := range mm.Run(cmd) {
+	for resp := range mm.Run(s) {
 		if r := resp.Rendered; r != "" {
 			responses += r + "\n"
 		}
@@ -41,10 +39,20 @@ func sendCommand(s string) string {
 	return responses
 }
 
+type Request struct {
+	Command   string
+	Suggest   string
+	PlumbPipe string
+}
+
 type Response struct {
+	// Resp, Rendered, More are returned in response to a command
 	Resp     minicli.Responses
 	Rendered string
 	More     bool // whether there are more responses coming
+
+	// Suggest is returned in response to Suggest request
+	Suggest []string `json:"omitempty"`
 }
 
 type Conn struct {
@@ -79,8 +87,8 @@ func (mm *Conn) Close() error {
 }
 
 // Run a command through a JSON pipe, hand back channel for responses.
-func (mm *Conn) Run(cmd *minicli.Command) chan *Response {
-	if cmd == nil {
+func (mm *Conn) Run(cmd string) chan *Response {
+	if cmd == "" {
 		// Language spec: "Receiving from a nil channel blocks forever."
 		// Instead, make and immediately close the channel so that range
 		// doesn't block and receives no values.
@@ -90,7 +98,7 @@ func (mm *Conn) Run(cmd *minicli.Command) chan *Response {
 		return out
 	}
 
-	err := mm.enc.Encode(*cmd)
+	err := mm.enc.Encode(Request{Command: cmd})
 	if err != nil {
 		log.Fatal("local command gob encode: %v", err)
 	}

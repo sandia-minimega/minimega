@@ -61,68 +61,100 @@ the node.
 
 You can also supply globs (wildcards) with the * operator. For example:
 
-	file get *.qcow2`,
+	file get *.qcow2
+	file delete *.qcow2
+
+The stream command allows users to stream files through the Response. Each part
+of the file is returned as a separate response which can then be combined to
+form the original file. This command blocks until the stream is complete.`,
 		Patterns: []string{
 			"file <list,> [path]",
 			"file <get,> <file>",
+			"file <stream,> <file>",
 			"file <delete,> <file>",
 			"file <status,>",
 		},
-		Call: wrapSimpleCLI(cliFile),
+		Call: cliFile,
 	},
 }
 
-func iomeshageInit(node *meshage.Node) {
+func iomeshageStart(node *meshage.Node) error {
 	var err error
 	iom, err = iomeshage.New(*f_iomBase, node)
-	if err != nil {
-		log.Errorln(err)
-		teardown()
-	}
+	return err
 }
 
-func cliFile(c *minicli.Command, resp *minicli.Response) error {
-	if c.BoolArgs["get"] {
-		return iom.Get(c.StringArgs["file"])
-	} else if c.BoolArgs["delete"] {
-		return iom.Delete(c.StringArgs["file"])
-	} else if c.BoolArgs["status"] {
-		transfers := iom.Status()
-		resp.Header = []string{"Filename", "Temporary directory", "Completed parts", "Queued"}
+func cliFile(c *minicli.Command, respChan chan<- minicli.Responses) {
+	fname := c.StringArgs["file"]
+
+	switch {
+	case c.BoolArgs["list"]:
+		path := c.StringArgs["path"]
+		if path == "" {
+			path = "/"
+		}
+
+		resp := &minicli.Response{Host: hostname}
+
+		resp.Header = []string{"dir", "name", "size"}
 		resp.Tabular = [][]string{}
 
-		for _, f := range transfers {
+		files, err := iom.List(path, false)
+		if err != nil {
+			respChan <- errResp(err)
+			return
+		}
+
+		for _, f := range files {
+			var dir string
+			if f.IsDir() {
+				dir = "<dir>"
+			}
+
+			row := []string{dir, iom.Rel(f), strconv.FormatInt(f.Size, 10)}
+			resp.Tabular = append(resp.Tabular, row)
+		}
+
+		respChan <- minicli.Responses{resp}
+		return
+	case c.BoolArgs["get"]:
+		respChan <- errResp(iom.Get(fname))
+		return
+	case c.BoolArgs["stream"]:
+		stream, err := iom.Stream(fname)
+		if err != nil {
+			respChan <- errResp(err)
+			return
+		}
+
+		for v := range stream {
+			resp := &minicli.Response{
+				Host: hostname,
+				Data: v,
+			}
+
+			respChan <- minicli.Responses{resp}
+		}
+
+		return
+	case c.BoolArgs["delete"]:
+		respChan <- errResp(iom.Delete(fname))
+		return
+	case c.BoolArgs["status"]:
+		resp := &minicli.Response{Host: hostname}
+
+		resp.Header = []string{"filename", "tempdir", "completed", "queued"}
+		resp.Tabular = [][]string{}
+
+		for _, f := range iom.Status() {
 			completed := fmt.Sprintf("%v/%v", len(f.Parts), f.NumParts)
 			row := []string{f.Filename, f.Dir, completed, fmt.Sprintf("%v", f.Queued)}
 			resp.Tabular = append(resp.Tabular, row)
 		}
 
-		return nil
+		respChan <- minicli.Responses{resp}
+		return
 	}
-
-	// must be "list"
-	path := c.StringArgs["path"]
-	if path == "" {
-		path = "/"
-	}
-
-	resp.Header = []string{"dir", "name", "size"}
-	resp.Tabular = [][]string{}
-
-	files, err := iom.List(path)
-	if err == nil && files != nil {
-		for _, f := range files {
-			var dir string
-			if f.Dir {
-				dir = "<dir>"
-			}
-
-			row := []string{dir, f.Name, strconv.FormatInt(f.Size, 10)}
-			resp.Tabular = append(resp.Tabular, row)
-		}
-	}
-
-	return nil
 }
 
 // iomHelper supports grabbing files for internal minimega operations. It
@@ -186,7 +218,7 @@ outer:
 	for {
 		for _, f := range iom.Status() {
 			if strings.Contains(f.Filename, file) {
-				log.Debug("iomHelper waiting on %v: %v/%v", f.Filename, len(f.Parts), f.NumParts)
+				log.Info("iomHelper waiting on %v: %v/%v", f.Filename, len(f.Parts), f.NumParts)
 				time.Sleep(IOM_HELPER_WAIT)
 				continue outer
 			}
@@ -198,65 +230,61 @@ outer:
 
 // a filename completer for goreadline that searches for the file: prefix,
 // attempts to find matching files, and returns an array of candidates.
-func iomCompleter(line string) []string {
-	f := strings.Fields(line)
-	if len(f) == 0 {
+func iomCompleter(last string) []string {
+	if !strings.HasPrefix(last, IOM_HELPER_MATCH) {
 		return nil
 	}
-	last := f[len(f)-1]
-	if strings.HasPrefix(last, IOM_HELPER_MATCH) {
-		fileprefix := strings.TrimPrefix(last, IOM_HELPER_MATCH)
-		matches := iom.Info(fileprefix + "*")
-		log.Debug("got raw matches: %v", matches)
 
-		// we need to clean up matches to collapse directories, unless
-		// there is a directory common prefix, in which case we
-		// collapse offset by the number of common directories.
-		dlcp := lcp(matches)
-		didx := strings.LastIndex(dlcp, string(filepath.Separator))
-		drel := ""
-		if didx > 0 {
-			drel = dlcp[:didx]
-		}
-		log.Debug("dlcp: %v, drel: %v", dlcp, drel)
+	fileprefix := strings.TrimPrefix(last, IOM_HELPER_MATCH)
+	matches := iom.Info(fileprefix + "*")
+	log.Debug("got raw matches: %v", matches)
 
-		if len(fileprefix) < len(drel) {
-			r := IOM_HELPER_MATCH + drel + string(filepath.Separator)
-			return []string{r, r + "0"} // hack to prevent readline from fastforwarding beyond the directory name
-		}
-
-		var finalMatches []string
-		for _, v := range matches {
-			if strings.Contains(v, "*") {
-				continue
-			}
-			r, err := filepath.Rel(drel, v)
-			if err != nil {
-				log.Errorln(err)
-				return nil
-			}
-			dir := filepath.Dir(r)
-			if dir == "." {
-				finalMatches = append(finalMatches, IOM_HELPER_MATCH+v)
-				continue
-			}
-
-			paths := strings.Split(dir, string(filepath.Separator))
-			found := false
-			for _, d := range finalMatches {
-				if d == paths[0]+string(filepath.Separator) {
-					found = true
-					break
-				}
-			}
-			if !found {
-				finalMatches = append(finalMatches, IOM_HELPER_MATCH+filepath.Join(drel, paths[0])+string(filepath.Separator))
-			}
-		}
-
-		return finalMatches
+	// we need to clean up matches to collapse directories, unless
+	// there is a directory common prefix, in which case we
+	// collapse offset by the number of common directories.
+	dlcp := lcp(matches)
+	didx := strings.LastIndex(dlcp, string(filepath.Separator))
+	drel := ""
+	if didx > 0 {
+		drel = dlcp[:didx]
 	}
-	return nil
+	log.Debug("dlcp: %v, drel: %v", dlcp, drel)
+
+	if len(fileprefix) < len(drel) {
+		r := IOM_HELPER_MATCH + drel + string(filepath.Separator)
+		return []string{r, r + "0"} // hack to prevent readline from fastforwarding beyond the directory name
+	}
+
+	var finalMatches []string
+	for _, v := range matches {
+		if strings.Contains(v, "*") {
+			continue
+		}
+		r, err := filepath.Rel(drel, v)
+		if err != nil {
+			log.Errorln(err)
+			return nil
+		}
+		dir := filepath.Dir(r)
+		if dir == "." {
+			finalMatches = append(finalMatches, IOM_HELPER_MATCH+v)
+			continue
+		}
+
+		paths := strings.Split(dir, string(filepath.Separator))
+		found := false
+		for _, d := range finalMatches {
+			if d == paths[0]+string(filepath.Separator) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			finalMatches = append(finalMatches, IOM_HELPER_MATCH+filepath.Join(drel, paths[0])+string(filepath.Separator))
+		}
+	}
+
+	return finalMatches
 }
 
 // a simple longest common prefix function

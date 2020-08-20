@@ -11,45 +11,42 @@ that this is needed.
 SETUP
 ----------------
 
-You will need to have syslinux, specifically pxelinux,
-installed. Figure out where your TFTP root will be--whichever
+You need either Cobbler or syslinux, specifically pxelinux,
+installed.
+
+For pxelinux, figure out where your TFTP root will be--whichever
 directory contains pxelinux.cfg, ours is /tftpboot--and set up the
 default PXE configuration in /tftpboot/pxelinux.cfg/default. This
 setup is simple but is outside the scope of this document.
 
-Compile igor; depending on your environment, the process may
-differ. Here's how we do it:
+For Cobbler, make sure you have a usable default profile enabled,
+and make sure user 'igor' is allowed to run the cobbler command.
+You should also select a root directory for igor to use; /tftpboot
+is not a bad choice.
 
-	$ cd ~/mega/
-	$ ./build.bash
+Run "./setup.sh <path to root>", e.g. for pxelinux you'd run
 
-This will place the "igor" binary into bin/. Place it somewhere
-accessible, such as /usr/local/bin.
+	./setup.sh /tftpboot
 
-Run "setup.sh" to make some files and directories needed by igor.
+This will copy necessary files to their destinations.
 
 To configure igor, edit /etc/igor.conf, a JSON config file created by
-setup.sh. Here's what ours looks like:
+setup.sh. The setup.sh script will copy over sampleconfig.json;
+edit the values to match your configuration.
 
-	{
-		"tftproot" : "/tftpboot/",
-		"prefix" : "kn",
-		"start" : 1,
-		"end" : 520,
-		"rackwidth" : 8,
-		"rackheight" : 5
-	}
-
-N.B.: It is extremely important that the last entry ("rackheight" in
-this case) is not followed by a comma; this is a quirk of json.
-
-The "tftproot" setting should be whatever directory contains the
-"pxelinux.cfg" directory. The other options describe your cluster
-naming scheme. Our cluster nodes are named kn1 through kn520, so our
+Our cluster nodes are named kn1 through kn520, so our
 "prefix" is "kn", "start" is 1, and "end" is 520. Note that the
 numbers are *not* in quotes.
 
-"Rackheight" and "rackwidth" define the physical dimensions of your
+Basic config
+------------
+* "tftproot" is the directory which contains pxelinux.cfg, or if
+using Cobbler can be any directory.
+* "prefix" is the prefix for your cluster hostnames on the management network, so nodes of the format "kn1" would have a prefix "kn"
+* "start" is the first node's number
+* "end" is the last node's number
+* "padlen" should be set to the minimum number width for node names; if your nodes are named "kn1", set it to 0, but if nodes are named "kn001" set it to 3.
+* "rackheight" and "rackwidth" define the physical dimensions of your
 cluster hardware, for use with "igor show". Our cluster is composed of
 13 shelves, each containing 5 shelves of 8 PCs each. When "igor show"
 runs, part of the information it gives is a diagram of "racks"; one
@@ -79,6 +76,23 @@ prefer a big grid, you can set rackheight = sqrt(# nodes) and
 rackwidth = sqrt(# nodes). This will just show one big grid of all
 your nodes.
 
+Cobbler
+-------
+* "usecobbler" is a boolean value and should be set to true if you wish to use Cobbler
+* "cobblerdefaultprofile" is the name of the default Cobbler profile; unreserved nodes will be configured to use this.
+
+Power
+-----
+* "poweroncommand" and "poweroffcommand" are commands that can be executed to turn nodes on and off. If "poweroncommand" is set to "powerbot on", for instance, igor will attempt to call "powerbot on kn1" to power on kn1.
+* "autoreboot" determines if igor will attempt to power cycle nodes automatically when a reservation begins or ends.
+
+Network segmentation
+---------------------
+* "network" specifies what kind of networking switch you're using. Currently, only Arista devices are supported; set this to "arista" to use it. If set to "", igor will not do segmentation.
+* "vlan_min" and "vlan_max" specify a range of VLANs to use for automatically segmenting reservation traffic using 802.1ad (QinQ)
+* "networkuser" and "networkpassword" specify login details for the switch
+* "network_url" specifies the host to connect to for switch configuration; for Arista devices, this will take the form of <host>:<port>/command-api
+* "node_map" is a mapping from cluster node names to port names on the core switch.
 
 RUNNING
 -----------------

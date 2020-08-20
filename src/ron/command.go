@@ -6,19 +6,18 @@ package ron
 
 import (
 	"fmt"
-	"os"
+	log "minilog"
 	"strings"
 )
 
 type Filter struct {
-	UUID      string
-	Hostname  string
-	Arch      string
-	OS        string
-	MAC       string
-	IP        string
-	Namespace string
-	Tags      map[string]string
+	UUID     string
+	Hostname string
+	Arch     string
+	OS       string
+	MAC      string
+	IP       string
+	Tags     map[string]string
 }
 
 type Command struct {
@@ -33,16 +32,19 @@ type Command struct {
 
 	// Files to transfer to the client. Any path given in a file specified
 	// here will be rooted at <BASE>/files
-	FilesSend []*File
+	FilesSend []string
 
 	// Files to transfer back to the master
-	FilesRecv []*File
+	FilesRecv []string
 
 	// PID of the process to signal, -1 signals all processes
 	PID int
 
 	// KillAll kills all processes by name
 	KillAll string
+
+	// Level adjusts the minilog level
+	Level *log.Level
 
 	// Filter for clients to process commands. Not all fields in a client
 	// must be set (wildcards), but all set fields must match for a command
@@ -51,24 +53,20 @@ type Command struct {
 
 	// clients that have responded to this command
 	CheckedIn []string
-}
 
-type File struct {
-	Name string
-	Perm os.FileMode
-	Data []byte
-}
+	// Prefix is an optional field that can be used to track commands. It is
+	// not used by the server or client.
+	Prefix string
 
-func (f File) String() string {
-	return f.Name
+	// plumber connections
+	Stdin  string
+	Stdout string
+	Stderr string
 }
 
 type Response struct {
 	// ID counter, must match the corresponding Command
 	ID int
-
-	// Names and data for uploaded files
-	Files []*File
 
 	// Output from responding command, if any
 	Stdout string
@@ -81,9 +79,6 @@ func (f *Filter) String() string {
 	}
 
 	var res []string
-	if f.Namespace != "" {
-		res = append(res, "namespace="+f.Namespace)
-	}
 	if f.UUID != "" {
 		res = append(res, "uuid="+f.UUID)
 	}
@@ -109,17 +104,34 @@ func (f *Filter) String() string {
 	return strings.Join(res, " && ")
 }
 
-// Creates a copy of c
+// Creates a copy of c.
 func (c *Command) Copy() *Command {
-	return &Command{
+	c2 := &Command{
 		ID:         c.ID,
 		Background: c.Background,
-		Command:    c.Command,
-		FilesSend:  c.FilesSend,
-		FilesRecv:  c.FilesRecv,
-		CheckedIn:  c.CheckedIn,
-		Filter:     c.Filter,
 		PID:        c.PID,
 		KillAll:    c.KillAll,
+		Prefix:     c.Prefix,
+		Stdin:      c.Stdin,
+		Stdout:     c.Stdout,
+		Stderr:     c.Stderr,
 	}
+
+	// make deep copies
+	c2.Command = append(c2.Command, c.Command...)
+	c2.CheckedIn = append(c2.CheckedIn, c.CheckedIn...)
+
+	c2.FilesSend = append(c2.FilesSend, c.FilesSend...)
+	c2.FilesRecv = append(c2.FilesRecv, c.FilesRecv...)
+
+	if c.Filter != nil {
+		c2.Filter = new(Filter)
+		*c2.Filter = *c.Filter
+	}
+	if c.Level != nil {
+		c2.Level = new(log.Level)
+		*c2.Level = *c.Level
+	}
+
+	return c2
 }

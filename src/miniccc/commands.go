@@ -5,9 +5,11 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	log "minilog"
 	"os/exec"
+	"path/filepath"
 	"ron"
 	"strings"
 )
@@ -32,40 +34,160 @@ func processCommand(cmd *ron.Command) {
 		killAll(cmd.KillAll)
 	}
 
+	// adjust the log level, if a new level is provided
+	if cmd.Level != nil {
+		log.Info("setting level to: %v", *cmd.Level)
+		log.SetLevelAll(*cmd.Level)
+	}
+
 	if len(cmd.Command) != 0 {
-		resp.Stdout, resp.Stderr = runCommand(cmd.Command, cmd.Background)
+		resp.Stdout, resp.Stderr = runCommand(cmd.Stdin, cmd.Stdout, cmd.Stderr, cmd.Command, cmd.Background)
 	}
 
 	if len(cmd.FilesRecv) != 0 {
-		resp.Files = readFiles(cmd.FilesRecv)
+		sendFiles(cmd.ID, cmd.FilesRecv)
 	}
 
 	appendResponse(resp)
 }
 
-func runCommand(command []string, background bool) (string, string) {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
+// lookPath wraps exec.LookPath to check $PATH and the files path
+func lookPath(file string) (string, error) {
+	path, err := exec.LookPath(file)
+	if err == nil {
+		return path, nil
+	}
 
-	path, err := exec.LookPath(command[0])
+	// file contains a slash, shouldn't search files path
+	if strings.Contains(file, "/") {
+		return "", &exec.Error{Name: file, Err: exec.ErrNotFound}
+	}
+
+	file = filepath.Join(*f_path, "files", file)
+	return exec.LookPath(file)
+}
+
+func runCommand(stdin, stdout, stderr string, command []string, background bool) (string, string) {
+	done := make(chan struct{})
+	var bufout, buferr bytes.Buffer
+
+	path, err := lookPath(command[0])
 	if err != nil {
 		log.Errorln(err)
+		close(done)
 		return "", err.Error()
 	}
 
 	cmd := &exec.Cmd{
-		Path:   path,
-		Args:   command,
-		Stdout: &stdout,
-		Stderr: &stderr,
+		Path: path,
+		Args: command,
 	}
+
+	if stdin != "" {
+		pStdin, err := cmd.StdinPipe()
+		if err != nil {
+			log.Errorln(err)
+			return "", ""
+		}
+
+		cStdin, err := NewPlumberReader(stdin)
+		if err != nil {
+			log.Errorln(err)
+			return "", ""
+		}
+
+		go func() {
+			<-done
+			cStdin.Close()
+		}()
+
+		go func() {
+			for v := range cStdin.C {
+				_, err := pStdin.Write([]byte(v))
+				if err != nil {
+					log.Errorln(err)
+					return
+				}
+			}
+			pStdin.Close()
+		}()
+	}
+
+	if stdout != "" {
+		pStdout, err := cmd.StdoutPipe()
+		if err != nil {
+			log.Errorln(err)
+			close(done)
+			return "", ""
+		}
+
+		cStdout, err := NewPlumberWriter(stdout)
+		if err != nil {
+			log.Errorln(err)
+			close(done)
+			return "", ""
+		}
+
+		go func() {
+			defer close(cStdout)
+			scanner := bufio.NewScanner(pStdout)
+			for scanner.Scan() {
+				select {
+				case cStdout <- scanner.Text() + "\n":
+				case <-done:
+					return
+				}
+			}
+			if err := scanner.Err(); err != nil {
+				log.Errorln(err)
+				return
+			}
+		}()
+	} else {
+		cmd.Stdout = &bufout
+	}
+
+	if stderr != "" {
+		pStderr, err := cmd.StderrPipe()
+		if err != nil {
+			log.Errorln(err)
+			close(done)
+			return "", ""
+		}
+
+		cStderr, err := NewPlumberWriter(stderr)
+		if err != nil {
+			log.Errorln(err)
+			close(done)
+			return "", ""
+		}
+
+		go func() {
+			defer close(cStderr)
+			scanner := bufio.NewScanner(pStderr)
+			for scanner.Scan() {
+				select {
+				case cStderr <- scanner.Text() + "\n":
+				case <-done:
+					return
+				}
+			}
+			if err := scanner.Err(); err != nil {
+				log.Errorln(err)
+				return
+			}
+		}()
+	} else {
+		cmd.Stderr = &buferr
+	}
+
 	log.Info("executing: %v", command)
 
 	if background {
 		log.Debug("starting in background")
 		if err := cmd.Start(); err != nil {
 			log.Errorln(err)
-			return "", stderr.String()
+			return "", buferr.String()
 		}
 
 		pid := cmd.Process.Pid
@@ -81,11 +203,11 @@ func runCommand(command []string, background bool) (string, string) {
 		go func() {
 			cmd.Wait()
 			log.Info("command exited: %v", command)
-			if stdout.Len() > 0 {
-				log.Info(stdout.String())
+			if bufout.Len() > 0 {
+				log.Info(bufout.String())
 			}
-			if stderr.Len() > 0 {
-				log.Info(stderr.String())
+			if buferr.Len() > 0 {
+				log.Info(buferr.String())
 			}
 
 			client.Lock()
@@ -99,7 +221,7 @@ func runCommand(command []string, background bool) (string, string) {
 	if err := cmd.Run(); err != nil {
 		log.Errorln(err)
 	}
-	return stdout.String(), stderr.String()
+	return bufout.String(), buferr.String()
 }
 
 func kill(pid int) {

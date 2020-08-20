@@ -1,0 +1,72 @@
+{{define "layout"}}
+<html>
+    <script type="text/javascript" src="/libs/jquery-3.4.1.min.js"></script>
+    <script>
+    function getURLParameter(name) {
+        var pageURL = window.location.search.substring(1);
+        var vars = pageURL.split('&');
+        for(var i = 0; i < vars.length; i++)
+        {
+            var [k, v] = vars[i].split('=', 2);
+            if(k == name)
+            {
+                return v;
+            }
+        }
+
+        return "";
+    }
+
+    function refreshScreenshots() {
+        $("#main img").each(function() {
+            $(this).attr("src", $(this).attr("data-url") + "&" + new Date().getTime());
+        });
+    }
+
+    var layout = getURLParameter("layout");
+    if (layout == "") {
+        layout = "5x5";
+    }
+    var refresh = getURLParameter("refresh");
+    if (refresh == "") {
+        refresh = "5000";
+    }
+    var size = getURLParameter("size");
+    if (size == "") {
+        size = "800";
+    }
+
+    var [x, y] = layout.split("x", 2);
+    if (!y) {
+        // make y "unlimited"
+        y = 1000;
+    }
+
+    var width = 100/x;
+
+    $(document).ready(function() {
+        $.getJSON("/vms/info.json", function(data) {
+            var div = $("<div class='container'></div");
+            for(var i = 0; i < data.length; i++) {
+                if (i % x == 0 && i != 0) {
+                    div.appendTo("#main");
+                    div = $("<div></div");
+                }
+                if (i == x*y) {
+                    break;
+                }
+                div.append($("<img width=\""+width+"%\" data-url=\"/vm/"+data[i].name+"/screenshot.png?size="+size+"\"></img>"));
+            }
+            div.appendTo("#main");
+
+            refreshScreenshots();
+        });
+
+        setInterval(refreshScreenshots, refresh);
+    });
+    </script>
+
+    <div id="main">
+    </div>
+</html>
+{{end}}

@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"present"
 )
@@ -23,6 +24,15 @@ func init() {
 
 // dirHandler serves a directory listing for the requested path, rooted at basePath.
 func dirHandler(w http.ResponseWriter, r *http.Request) {
+	if strings.HasPrefix(r.URL.Path, "/minimega.git") {
+		// modify host to github, keep rest of the URL intact (including query params)
+		url := r.URL
+		url.Host = "github.com"
+		url.Path = "/sandia-minimega" + url.Path
+		http.Redirect(w, r, url.String(), 301)
+		return
+	}
+
 	if r.URL.Path == "/favicon.ico" {
 		http.Error(w, "not found", 404)
 		return
@@ -45,6 +55,16 @@ func dirHandler(w http.ResponseWriter, r *http.Request) {
 	} else if isDir {
 		return
 	}
+
+	// try to render .html as a template
+	if filepath.Ext(name) == ".html" {
+		if err := renderHTML(w, name); err != nil {
+			log.Errorln(err)
+			http.Error(w, err.Error(), 500)
+		}
+		return
+	}
+
 	http.FileServer(http.Dir(*f_root)).ServeHTTP(w, r)
 }
 
@@ -60,11 +80,16 @@ var (
 	// contentTemplate maps the presentable file extensions to the
 	// template to be executed.
 	contentTemplate map[string]*template.Template
+
+	// layoutTemplate holds the page layout
+	layoutTemplate *template.Template
 )
 
 func initTemplates(base string) error {
 	// Locate the template file.
 	actionTmpl := filepath.Join(base, "action.tmpl")
+	layoutTmpl := filepath.Join(base, "layout.tmpl")
+	dirTmpl := filepath.Join(base, "dir.tmpl")
 
 	contentTemplate = make(map[string]*template.Template)
 
@@ -77,19 +102,15 @@ func initTemplates(base string) error {
 		// Read and parse the input.
 		tmpl := present.Template()
 		tmpl = tmpl.Funcs(template.FuncMap{"playable": executable})
-		if _, err := tmpl.ParseFiles(actionTmpl, contentTmpl); err != nil {
+		if _, err := tmpl.ParseFiles(actionTmpl, layoutTmpl, contentTmpl); err != nil {
 			return err
 		}
 		contentTemplate[ext] = tmpl
 	}
 
 	var err error
-	dirListTemplate, err = template.ParseFiles(filepath.Join(base, "dir.tmpl"))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	dirListTemplate, err = template.ParseFiles(layoutTmpl, dirTmpl)
+	return err
 }
 
 // renderDoc reads the present file, gets its template representation,
@@ -106,6 +127,23 @@ func renderDoc(w io.Writer, docFile string) error {
 
 	// Execute the template.
 	return doc.Render(w, tmpl)
+}
+
+// renderHTML parses the html file as a template and tries to execute it with
+// layoutTemplate. Reparses the html file each time.
+func renderHTML(w io.Writer, name string) error {
+	layoutTmpl := filepath.Join(*f_base, "layout.tmpl")
+
+	log.Info("renderHTML: %v", name)
+
+	f := filepath.Join(*f_root, name)
+
+	tmpl, err := template.ParseFiles(f, layoutTmpl)
+	if err != nil {
+		return err
+	}
+
+	return tmpl.ExecuteTemplate(w, "root", nil)
 }
 
 func parse(name string, mode present.ParseMode) (*present.Doc, error) {
@@ -151,13 +189,8 @@ func dirList(w io.Writer, name string) (isDir bool, err error) {
 		}
 		// If there's an index.html, send that back and bail out
 		if fi.Name() == "index.html" {
-			ih, err := os.Open(filepath.Join(*f_root, e.Path))
-			if err != nil {
-				return false, err
-			}
-			io.Copy(w, ih)
 			// returning true is naughty but whatever
-			return true, nil
+			return true, renderHTML(w, e.Path)
 		}
 
 		if fi.IsDir() && showDir(e) {
@@ -187,7 +220,7 @@ func dirList(w io.Writer, name string) (isDir bool, err error) {
 	sort.Sort(d.Slides)
 	sort.Sort(d.Articles)
 	sort.Sort(d.Other)
-	return true, dirListTemplate.Execute(w, d)
+	return true, dirListTemplate.ExecuteTemplate(w, "root", d)
 }
 
 // showFile reports whether the given file should be displayed in the list.

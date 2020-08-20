@@ -8,7 +8,7 @@ The minimega authors
 This document describes the two virtual machine (VM) types minimega is capable
 of launching - QEMU/KVM virtual machines and containers. minimega uses a common
 API to describe features and supports launching experiments consisting of both
-types of VM. 
+types of VM.
 
 * A quick example
 
@@ -49,7 +49,7 @@ minimega supports booting `kvm` type VMs by using QEMU/KVM. When launching
 `kvm` type VMs, minimega will use the configuration provided in the `vm`config`
 API to generate command line arguments for QEMU. Additional configuration, such
 as creating network taps and assigning them to openvswitch bridges occurs at
-launch time. 
+launch time.
 
 minimega manages running `kvm` type VMs, including providing an interface to
 the VM's QMP socket. When a VM quits or crashes, minimega will reflect this in
@@ -60,7 +60,7 @@ the `state` column of `vm`info`.
 Most `vm`config` parameters are common to all VM types, though some are
 specific to `KVM` and `container` instances. See the
 [[/articles/api.article][minimega API]] for documentation on specific
-configuration parameters. 
+configuration parameters.
 
 Configuration parameters specific to `KVM` instances:
 
@@ -75,7 +75,7 @@ Configuration parameters specific to `KVM` instances:
 - `cpu` - Set the virtual CPU architecture.
 - `kernel` - Attach a kernel image to a VM.
 - `initrd` - Attach an initrd image to a VM.
-- `serial` - Specify serial ports. 
+- `serial` - Specify serial ports.
 - `virtio-serial` - Specify virtio-serial ports.
 
 *** Technical details
@@ -109,17 +109,18 @@ an executable to be run at `init` (PID 1) within the rootfs. The `init` program
 can be a shell script. minimega's container implementation supports full-system
 containers only. This means that every container obtains a PID, network, mount,
 and IPC namespace. The rootfs must have certain directories populated in order
-to function correctly. A prebuilt container filesystem can be obtained
-[[https://storage.googleapis.com/minimega-files/minimega-2.2-containerfs.tar.bz2][here]]
-or by running the `misc/get_containerfs.bash` script in the minimega
-distribution.
+to function correctly. The minimega distribution includes scripts to build
+busybox-based rootfs (see `misc/uminiccc/build.bash` and
+`misc/uminirouter/build.bash`) and vmbetter-based rootfs (see
+`misc/vmbetter_configs/miniccc_container.conf` and
+`misc/vmbetter_configs/minirouter_container.conf`).
 
 *** container-specific configuration parameters
 
 Most `vm`config` parameters are common to all VM types, though some are
 specific to `KVM` and `container` instances. See the
 [[/articles/api.article][minimega API]] for documentation on specific
-configuration parameters. 
+configuration parameters.
 
 Configuration parameters specific to `container` instances:
 
@@ -134,7 +135,7 @@ Configuration parameters specific to `container` instances:
 minimega uses a custom container implementation to boot `container` type VMs.
 minimega requires that cgroups be enabled (see notes below for special
 constraints), and that the linux host support `overlayfs`. `overlayfs` is
-enabled by default in linux 3.18+. 
+enabled by default in linux 3.18+.
 
 When launching `container` type VMs, the following occurs, in order:
 

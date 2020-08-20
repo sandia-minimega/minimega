@@ -19,19 +19,21 @@ import (
 func commandSocketStart() {
 	l, err := net.Listen("unix", filepath.Join(*f_base, "minimega"))
 	if err != nil {
-		log.Error("commandSocketStart: %v", err)
-		teardown()
+		log.Fatal("commandSocketStart: %v", err)
 	}
 
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			log.Error("commandSocketStart: accept: %v", err)
+	go func() {
+		for {
+			conn, err := l.Accept()
+			if err != nil {
+				log.Error("commandSocketStart: accept: %v", err)
+				continue
+			}
+			log.Infoln("client connected")
+
+			go commandSocketHandle(conn)
 		}
-		log.Infoln("client connected")
-
-		go commandSocketHandle(conn)
-	}
+	}()
 }
 
 func commandSocketRemove() {
@@ -51,13 +53,86 @@ func commandSocketHandle(c net.Conn) {
 	var err error
 
 	for err == nil {
+		var r *miniclient.Request
 		var cmd *minicli.Command
 
-		cmd, err = readLocalCommand(dec)
+		r, err = readLocalRequest(dec)
 		if err != nil {
 			break
 		}
 
+		// check the plumbing
+		if r.PlumbPipe != "" {
+			reader := plumber.NewReader(r.PlumbPipe)
+			writer := plumber.NewWriter(r.PlumbPipe)
+
+			go func() {
+				for {
+					select {
+					case <-reader.Done:
+						return
+					case line := <-reader.C:
+						if err := enc.Encode(line); err != nil {
+							if !strings.Contains(err.Error(), "write: broken pipe") {
+								log.Errorln(err)
+							}
+							break
+						}
+					}
+				}
+
+			}()
+
+			for err == nil {
+				var line string
+				err = dec.Decode(&line)
+				if err != nil {
+					break
+				}
+
+				if line != "" {
+					writer <- line
+				}
+			}
+
+			// stop the reader
+			reader.Close()
+			close(writer)
+
+			break
+		}
+
+		// should have a command or suggestion but not both
+		if (r.Command == "") == (r.Suggest == "") {
+			resp := &minicli.Response{
+				Host:  hostname,
+				Error: "must specify either command or suggest",
+			}
+			err = sendLocalResp(enc, minicli.Responses{resp}, false)
+			continue
+		}
+
+		// client wants a suggestion
+		if r.Suggest != "" {
+			err = sendLocalSuggest(enc, cliCompleter(r.Suggest))
+			continue
+		}
+
+		r.Command = minicli.ExpandAliases(r.Command)
+
+		// client specified a command
+		cmd, err = minicli.Compile(r.Command)
+		if err != nil {
+			resp := &minicli.Response{
+				Host:  hostname,
+				Error: err.Error(),
+			}
+			err = sendLocalResp(enc, minicli.Responses{resp}, false)
+			continue
+		}
+
+		// No command was returned, must have been a blank line or a comment
+		// line. Either way, don't try to run a nil command.
 		if cmd == nil {
 			err = sendLocalResp(enc, nil, false)
 			continue
@@ -98,18 +173,16 @@ func commandSocketHandle(c net.Conn) {
 	}
 }
 
-func readLocalCommand(dec *json.Decoder) (*minicli.Command, error) {
-	var cmd minicli.Command
+func readLocalRequest(dec *json.Decoder) (*miniclient.Request, error) {
+	var r miniclient.Request
 
-	if err := dec.Decode(&cmd); err != nil {
+	if err := dec.Decode(&r); err != nil {
 		return nil, err
 	}
 
-	log.Debug("got command over socket: %v", cmd)
+	log.Debug("got request over socket: %v", r)
 
-	// HAX: Reprocess the original command since the Call target cannot be
-	// serialized... is there a cleaner way to do this?
-	return minicli.Compile(cmd.Original)
+	return &r, nil
 }
 
 func sendLocalResp(enc *json.Encoder, resp minicli.Responses, more bool) error {
@@ -119,6 +192,14 @@ func sendLocalResp(enc *json.Encoder, resp minicli.Responses, more bool) error {
 	if resp != nil {
 		r.Resp = resp
 		r.Rendered = resp.String()
+	}
+
+	return enc.Encode(&r)
+}
+
+func sendLocalSuggest(enc *json.Encoder, suggest []string) error {
+	r := miniclient.Response{
+		Suggest: suggest,
 	}
 
 	return enc.Encode(&r)

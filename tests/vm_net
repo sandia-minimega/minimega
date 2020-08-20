@@ -1,11 +1,89 @@
-vm config net 0
-vm launch kvm vm0
+vm config net LAN
+vm launch kvm k[0-1]
+vm config filesystem $images/minicccfs
+vm launch container c[0-1]
 .columns name,vlan,bridge vm info
-vm net disconnect vm0 0
+
+# disconnect single and multiple VMs
+vm net disconnect k0 0
 .columns name,vlan,bridge vm info
-vm net connect vm0 0 foo 1
+vm net disconnect c0 0
 .columns name,vlan,bridge vm info
-vm net connect vm0 0 bar 0
+vm net disconnect all 0
 .columns name,vlan,bridge vm info
-vm net disconnect vm0 0
+
+# connect single and multiple VMs
+vm net connect k0 0 LAN2
+.columns name,vlan,bridge vm info
+vm net connect c0 0 LAN2
+.columns name,vlan,bridge vm info
+vm net connect all 0 LAN2 mega_bridge2
+.columns name,vlan,bridge vm info
+
+# reconnect single and multiple VMs
+vm net connect k0 0 LAN3
+.columns name,vlan,bridge vm info
+vm net connect c0 0 LAN3
+.columns name,vlan,bridge vm info
+vm net connect all 0 LAN3
+.columns name,vlan,bridge vm info
+
+# reconnect back to mega_bridge
+vm net connect all 0 LAN3 mega_bridge
+
+# start everything and repeat
+vm start all
+
+# disconnect single and multiple VMs
+vm net disconnect k0 0
+.columns name,vlan,bridge vm info
+vm net disconnect c0 0
+.columns name,vlan,bridge vm info
+vm net disconnect all 0
+.columns name,vlan,bridge vm info
+
+# connect single and multiple VMs
+vm net connect k0 0 LAN2
+.columns name,vlan,bridge vm info
+vm net connect c0 0 LAN2
+.columns name,vlan,bridge vm info
+vm net connect all 0 LAN2 mega_bridge2
+.columns name,vlan,bridge vm info
+
+# reconnect single and multiple VMs
+vm net connect k0 0 LAN3
+.columns name,vlan,bridge vm info
+vm net connect c0 0 LAN3
+.columns name,vlan,bridge vm info
+vm net connect all 0 LAN3
+.columns name,vlan,bridge vm info
+
+# reconnect back to mega_bridge
+vm net connect all 0 LAN3 mega_bridge
+
+# kill all and repeat
+vm kill all
+
+# disconnect single and multiple VMs
+vm net disconnect k0 0
+.columns name,vlan,bridge vm info
+vm net disconnect c0 0
+.columns name,vlan,bridge vm info
+vm net disconnect all 0
+.columns name,vlan,bridge vm info
+
+# connect single and multiple VMs
+vm net connect k0 0 LAN2
+.columns name,vlan,bridge vm info
+vm net connect c0 0 LAN2
+.columns name,vlan,bridge vm info
+vm net connect all 0 LAN2 mega_bridge2
+.columns name,vlan,bridge vm info
+
+# reconnect single and multiple VMs
+vm net connect k0 0 LAN3
+.columns name,vlan,bridge vm info
+vm net connect c0 0 LAN3
+.columns name,vlan,bridge vm info
+vm net connect all 0 LAN3
 .columns name,vlan,bridge vm info

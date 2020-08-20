@@ -1,0 +1,26 @@
+{{define "content"}}
+<div id="content">
+    <div id="namespaces-table" class="box">
+        <h1 class="box-header">Namespaces</h1>
+        <div class="box-content">
+            <table id="namespaces-dataTable" class="table table-striped table-bordered dataTable no-footer"></table>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript" src="/libs/dataTables/jquery.dataTables.min.js"></script>
+<script type="text/javascript" src="/libs/dataTables/dataTables.bootstrap4.min.js"></script>
+<script type="text/javascript" src="/libs/dataTables/dataTables.buttons.min.js"></script>
+<script type="text/javascript" src="/libs/dataTables/buttons.colVis.min.js"></script>
+<script type="text/javascript" src="/libs/dataTables/buttons.html5.min.js"></script>
+<script type="text/javascript" src="/libs/dataTables/buttons.bootstrap4.min.js"></script>
+
+<script type="text/javascript" src="/js/glue.js"></script>
+<script type="text/javascript">
+    $(document).ready(function() {
+        $('nav a[href$="' + "namespaces" + '"]').addClass("current-view");
+
+        initNamespacesDataTable();
+    });
+</script>
+{{end}}

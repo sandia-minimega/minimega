@@ -13,6 +13,7 @@ import (
 	log "minilog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"text/tabwriter"
 	"time"
 )
@@ -34,15 +35,17 @@ type Tap struct {
 
 var bridges = bridge.NewBridges(DefaultBridge, TapFmt)
 
-// periodicReapTaps should be run as a goroutine to reap defunct taps.
-func periodicReapTaps() {
-	for {
-		time.Sleep(TapReapRate)
-		log.Debugln("periodic reapTaps")
-		if err := bridges.ReapTaps(); err != nil {
-			log.Errorln(err)
+// tapReaperStart periodically calls bridges.ReapTaps
+func tapReaperStart() {
+	go func() {
+		for {
+			time.Sleep(TapReapRate)
+			log.Debugln("periodic reapTaps")
+			if err := bridges.ReapTaps(); err != nil {
+				log.Errorln(err)
+			}
 		}
-	}
+	}()
 }
 
 // destroy all bridges
@@ -68,8 +71,7 @@ func getBridge(b string) (*bridge.Bridge, error) {
 		return nil, err
 	}
 
-	log.Debugln("updating bridge info")
-	writeOrDie(filepath.Join(*f_base, "bridges"), bridgeInfo())
+	mustWrite(filepath.Join(*f_base, "bridges"), bridgeInfo())
 
 	return br, nil
 }
@@ -94,7 +96,7 @@ func bridgeInfo() string {
 }
 
 // hostTapCreate creates a host tap based on the supplied arguments.
-func hostTapCreate(b, tap, v string) (string, error) {
+func hostTapCreate(b, tap string, v int) (string, error) {
 	if b == "" {
 		b = DefaultBridge
 	}
@@ -107,53 +109,27 @@ func hostTapCreate(b, tap, v string) (string, error) {
 		return "", fmt.Errorf("`%s` is a reserved word -- cannot use for tap name", tap)
 	}
 
-	vlan, err := lookupVLAN(v)
-	if err != nil {
-		return "", err
-	}
-
 	br, err := getBridge(b)
 	if err != nil {
 		return "", err
 	}
 
-	return br.CreateHostTap(tap, vlan)
+	return br.CreateHostTap(tap, v)
 }
 
 // hostTapList populates resp with information about all the host taps.
-func hostTapList(resp *minicli.Response) {
+func hostTapList(ns *Namespace, resp *minicli.Response) {
 	resp.Header = []string{"bridge", "tap", "vlan"}
 	resp.Tabular = [][]string{}
 
-	// no namespace active => add an extra column
-	ns := GetNamespace()
-	if ns == nil {
-		resp.Header = append(resp.Header, "namespace")
-	}
-
 	// find all the host taps first
 	for _, tap := range bridges.HostTaps() {
-		// skip taps that don't belong to the active namespace
-		if ns != nil && !ns.HasTap(tap.Name) {
+		if !ns.Taps[tap.Name] {
 			continue
 		}
 
 		row := []string{
-			tap.Bridge, tap.Name, printVLAN(tap.VLAN),
-		}
-
-		// no namespace active => find namespace tap belongs to so that we can
-		// populate that column
-		if ns == nil {
-			v := ""
-			for _, n := range ListNamespaces() {
-				if ns := GetOrCreateNamespace(n); ns.HasTap(tap.Name) {
-					v = ns.Name
-					break
-				}
-			}
-
-			row = append(row, v)
+			tap.Bridge, tap.Name, printVLAN(ns.Name, tap.VLAN),
 		}
 
 		resp.Tabular = append(resp.Tabular, row)
@@ -162,34 +138,34 @@ func hostTapList(resp *minicli.Response) {
 
 // hostTapDelete deletes a host tap by name or all host taps if Wildcard is
 // specified.
-func hostTapDelete(s string) error {
-	ns := GetNamespace()
+func hostTapDelete(ns *Namespace, s string) error {
+	// helper to find and delete a tap t
+	delTap := func(t string) error {
+		tap, err := bridges.FindTap(t)
+		if err != nil {
+			return err
+		} else if !tap.Host {
+			return errors.New("not a host tap")
+		} else if !ns.Taps[tap.Name] {
+			return errors.New("not a host tap in active namespace")
+		}
 
-	delTap := func(t bridge.Tap) error {
-		br, err := getBridge(t.Bridge)
+		br, err := getBridge(tap.Bridge)
 		if err != nil {
 			return err
 		}
 
-		if err := br.DestroyTap(t.Name); err != nil {
+		if err := br.DestroyTap(tap.Name); err != nil {
 			return err
 		}
 
 		// update the host taps for the namespace
-		if ns != nil {
-			ns.RemoveTap(t.Name)
-		}
-
+		delete(ns.Taps, tap.Name)
 		return nil
 	}
 
 	if s == Wildcard {
-		for _, tap := range bridges.HostTaps() {
-			// skip taps that don't belong to the active namespace
-			if ns != nil && !ns.HasTap(tap.Name) {
-				continue
-			}
-
+		for tap := range ns.Taps {
 			if err := delTap(tap); err != nil {
 				return err
 			}
@@ -198,14 +174,81 @@ func hostTapDelete(s string) error {
 		return nil
 	}
 
-	tap, err := bridges.FindTap(s)
-	if err != nil {
-		return err
-	} else if !tap.Host {
-		return errors.New("not a host tap")
-	} else if namespace != "" && !namespaces[namespace].Taps[tap.Name] {
-		return errors.New("not a host tap in active namespace")
+	return delTap(s)
+}
+
+func mirrorDelete(ns *Namespace, name string) error {
+	delMirror := func(m string) error {
+		if !ns.Mirrors[m] {
+			return errors.New("not a valid mirror")
+		}
+
+		tap, err := bridges.FindTap(m)
+		if err != nil {
+			return err
+		}
+
+		br, err := getBridge(tap.Bridge)
+		if err != nil {
+			return err
+		}
+
+		if err := br.DestroyMirror(m); err != nil {
+			return err
+		}
+
+		// update the mirrors for the namespace
+		delete(ns.Mirrors, m)
+		return nil
 	}
 
-	return delTap(tap)
+	if name == Wildcard || name == "" {
+		for mirror := range ns.Mirrors {
+			if err := delMirror(mirror); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	return delMirror(name)
+}
+
+// mirrorDeleteVM looks up the name of the interface(s) for the VM and then
+// calls mirrorDelete on them.
+func mirrorDeleteVM(ns *Namespace, svm, si string) error {
+	vm := ns.FindVM(svm)
+	if vm == nil {
+		return vmNotFound(svm)
+	}
+
+	// delete all mirrors for all interfaces
+	if si == Wildcard {
+		networks := vm.GetNetworks()
+
+		for _, nic := range networks {
+			if !ns.Mirrors[nic.Tap] {
+				continue
+			}
+
+			if err := mirrorDelete(ns, nic.Tap); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	i, err := strconv.Atoi(si)
+	if err != nil {
+		return fmt.Errorf("invalid interface number: `%v`", si)
+	}
+
+	nic, err := vm.GetNetwork(i)
+	if err != nil {
+		return err
+	}
+
+	return mirrorDelete(ns, nic.Tap)
 }

@@ -6,13 +6,17 @@
 	<body>
 		<div id="terminal"></div>
 		<script>
-		var terminalContainer = document.getElementById('#terminal');
+		var terminalContainer = document.getElementById('terminal');
 		var term = new Terminal();
 		term.open(terminalContainer);
 		term.resize(80, 24);
 
-		path = "/tunnel/" + window.location.pathname.substring(window.location.pathname.lastIndexOf("/")+1)
-		socketURL = "ws://"+window.location.hostname+":"+window.location.port+path;
+		path = window.location.pathname + "/ws";
+		protocol = "ws://";
+		if (window.location.protocol == "https:") {
+			protocol = "wss://";
+		}
+		socketURL = protocol+window.location.host+path;
 		socket = new WebSocket(socketURL);
 		socket.onopen = runterminal;
 

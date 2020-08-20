@@ -9,7 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"log"
+	log "minilog"
 	"os"
 	"ranges"
 	"strings"
@@ -17,6 +17,7 @@ import (
 
 var (
 	f_config = flag.String("config", "/etc/powerbot.conf", "path to config file")
+	f_PDU    = flag.Bool("pdu", false, "Force PDU only")
 	config   Config
 )
 
@@ -28,6 +29,8 @@ Usage, <arg> = required, [arg] = optional:
 	powerbot cycle <nodelist>
         powerbot status [nodelist]
         powerbot                    # equivalent to "powerbot status"
+	powerbot temp <nodelist>    # IPMI only - temp sensor info
+	powerbot full <nodelist>   # IPMI only - full sensor info
 
 Node lists are in standard range format, i.e. node[1-5,8-10,15]
 `)
@@ -41,6 +44,8 @@ type PDU interface {
 	Off(map[string]string) error
 	Cycle(map[string]string) error
 	Status(map[string]string) error
+	Temp() error // IPMI only - noop for PDUs
+	Info() error // IPMI only - noop for PDUs
 }
 
 // This maps the Device.pdutype variable to a function
@@ -61,16 +66,29 @@ type Device struct {
 	outlets  map[string]string // map hostname -> outlet name
 }
 
+// IPMI configuration as read from the config file
+type IPMIData struct {
+	ip       string
+	node     string
+	password string
+	username string
+}
+
 // This gets read from the config file
 type Config struct {
-	devices map[string]Device
-	prefix  string // node name prefix, e.g. "ccc" for "ccc[1-100]"
+	nodes    []string
+	devices  map[string]Device
+	ipmiPath string
+	ipmis    map[string]IPMIData // hostname -> IPMIData
+	prefix   string              // node name prefix, e.g. "ccc" for "ccc[1-100]"
 }
 
 // Parse the config file and store it in the global config
 func readConfig(filename string) (Config, error) {
 	var ret Config
 	ret.devices = make(map[string]Device)
+	ret.ipmis = make(map[string]IPMIData)
+	ret.ipmiPath = "ipmitool"
 
 	f, err := os.Open(filename)
 	if err != nil {
@@ -101,21 +119,35 @@ func readConfig(filename string) (Config, error) {
 			d.username = fields[5]
 			d.password = fields[6]
 			d.outlets = make(map[string]string)
-			for _, v := range ret.devices {
-				if v.name == d.name {
-					continue
-				}
-			}
 			ret.devices[d.name] = d
+		case "ipmi":
+			ret.ipmiPath = fields[1]
 		case "node":
-			if len(fields) != 4 {
-				continue
-			}
+			ln := len(fields)
 			nodename := fields[1]
 			dev := fields[2]
 			outlet := fields[3]
 			if _, ok := ret.devices[dev]; ok {
 				ret.devices[dev].outlets[nodename] = outlet
+			}
+			ret.nodes = append(ret.nodes, nodename)
+			// IPMI Data
+			if ln > 4 {
+				var ipmi IPMIData
+				ipmi.ip = fields[4]
+				ipmi.username = fields[5]
+				ipmi.password = fields[6]
+				ipmi.node = nodename
+				ret.ipmis[nodename] = ipmi
+			}
+		case "loglevel":
+			if len(fields) > 1 {
+				ll, err := log.ParseLevel(fields[1])
+				if err != nil {
+					log.Error(err.Error())
+					return ret, nil
+				}
+				log.AddSyslog("local", "", "powerbot", ll)
 			}
 		}
 	}
@@ -130,6 +162,8 @@ func main() {
 	// Get flags and arguments
 	flag.Parse()
 	args := flag.Args()
+	log.Init()
+	log.AddSyslog("local", "", "powerbot", log.INFO)
 
 	if len(args) == 0 {
 		command = "status"
@@ -160,35 +194,73 @@ func main() {
 		command = "status"
 	}
 
-	// Find a list of what devices and ports are affected
-	// by the command
-	devs := make(map[string]Device)
+	// Prepare the list of nodes
+	var nodeList []string
 	if nodes != "" {
-		devs, err = findOutletsAndDevs(nodes)
+		ranger, _ := ranges.NewRange(config.prefix, 0, 1000000)
+		nodeList, err = ranger.SplitRange(nodes)
 		if err != nil {
 			log.Fatal(err.Error())
 		}
 	} else {
-		devs = config.devices
+		nodeList = config.nodes
 	}
+
+	// Try IPMI first, unless we opt out
+	var remainingNodes []string
+	if *f_PDU == false {
+		remainingNodes = useIPMI(nodeList, command)
+	} else {
+		remainingNodes = nodeList
+	}
+
+	// Stop if we are done, otherwise continue with PDUs
+	if len(remainingNodes) == 0 {
+		return
+	}
+	// Find a list of what devices and ports are affected
+	// by the command
+	devs := make(map[string]Device)
+	devs, err = findOutletsAndDevs(remainingNodes)
+	if err != nil {
+		log.Fatal(err.Error())
+	}
+	log.Info("Attempting PDU commands...")
 
 	// For each device affected, perform the command
 	for _, dev := range devs {
+		log.Info("Performing powerbot %v on %v:%v:%v with type %v", command, dev.name, dev.host, dev.port, dev.pdutype)
 		var pdu PDU
+		// First, let's see if IPMI is available
 		pdu, err = PDUtypes[dev.pdutype](dev.host, dev.port, dev.username, dev.password)
 		if err != nil {
-			log.Print(err)
+			log.Error(err.Error())
 			continue
 		}
+
 		switch command {
 		case "on":
-			pdu.On(dev.outlets)
+			err := pdu.On(dev.outlets)
+			if err != nil {
+				log.Error(err.Error())
+			}
 		case "off":
-			pdu.Off(dev.outlets)
+			err := pdu.Off(dev.outlets)
+			if err != nil {
+				log.Error(err.Error())
+			}
 		case "cycle":
-			pdu.Cycle(dev.outlets)
+			err := pdu.Cycle(dev.outlets)
+			if err != nil {
+				log.Error(err.Error())
+			}
 		case "status":
-			pdu.Status(dev.outlets)
+			err := pdu.Status(dev.outlets)
+			if err != nil {
+				log.Error(err.Error())
+			}
+		case "temp", "info":
+			fmt.Println("Invalid PDU command; Remaining nodes skipped.")
 		default:
 			usage()
 		}
@@ -201,16 +273,8 @@ func main() {
 // outlets in their outlet list.
 // This makes it handy because you'll generally be calling On(),
 // Off(), etc. a device at a time.
-func findOutletsAndDevs(s string) (map[string]Device, error) {
+func findOutletsAndDevs(nodes []string) (map[string]Device, error) {
 	ret := make(map[string]Device)
-	var nodes []string
-	var err error
-
-	ranger, _ := ranges.NewRange(config.prefix, 0, 1000000)
-	nodes, err = ranger.SplitRange(s)
-	if err != nil {
-		return ret, err
-	}
 
 	// This is really gross but you won't have a ton of devices anyway
 	// so it should be pretty fast.
@@ -236,4 +300,47 @@ func findOutletsAndDevs(s string) (map[string]Device, error) {
 		}
 	}
 	return ret, nil
+}
+
+// This will create a proper node list and execute
+// IPMI commands on each
+func useIPMI(s []string, c string) []string {
+	ipmis := config.ipmis
+	var ret []string
+	var dummyMap map[string]string //doesn't apply to IPMI
+	log.Info("Attempting IPMI commands...")
+
+	for _, n := range s {
+		var ipmi PDU
+		var err error
+		if ipmiData, ok := ipmis[n]; !ok {
+			ret = append(ret, n)
+			log.Debug("No data for %s, skipping...", n)
+			continue
+		} else {
+			ipmi = NewIPMI(ipmiData.ip, ipmiData.node, ipmiData.password, config.ipmiPath, ipmiData.username)
+		}
+		switch c {
+		case "on":
+			err = ipmi.On(dummyMap)
+		case "off":
+			err = ipmi.Off(dummyMap)
+		case "cycle":
+			err = ipmi.Cycle(dummyMap)
+		case "status":
+			err = ipmi.Status(dummyMap)
+		case "temp":
+			err = ipmi.Temp()
+		case "info":
+			err = ipmi.Info()
+		default:
+			usage()
+		}
+		if err != nil {
+			ret = append(ret, n)
+			log.Info("Failed to use IPMI for %s, adding to PDU list, if available:", n)
+			log.Info(err.Error())
+		}
+	}
+	return ret
 }

@@ -1,0 +1,29 @@
+# launch and start a container and kvm
+vm config filesystem $images/minicccfs
+vm config kernel $images/miniccc.kernel
+vm config initrd $images/miniccc.initrd
+vm launch container container
+vm launch kvm kvm
+vm start all
+
+# wait for cc to connect
+shell sleep 20
+cc
+
+# kill vms and make sure we're back to no clients
+vm kill all
+shell sleep 20
+cc
+
+# restart and see if they come back
+vm start kvm,container
+shell sleep 20
+cc
+
+# do again for good measure
+vm kill all
+shell sleep 20
+cc
+vm start kvm,container
+shell sleep 20
+cc

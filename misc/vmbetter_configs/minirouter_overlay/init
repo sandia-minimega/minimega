@@ -44,7 +44,19 @@ echo 32768 > /proc/sys/net/ipv6/neigh/default/gc_thresh1
 echo 32768 > /proc/sys/net/ipv6/neigh/default/gc_thresh2
 echo 65536 > /proc/sys/net/ipv6/neigh/default/gc_thresh3
 
-/miniccc -v=false -serial /dev/vport1p1 -logfile /miniccc.log &
+# create symlinks for virtio devices
+mkdir /dev/virtio-ports
+
+for d in $(ls /sys/class/virtio-ports); do
+	name=$(cat /sys/class/virtio-ports/$d/name)
+	ln -s -T /dev/$d /dev/virtio-ports/$name
+done
+
+# enable IP forwarding by default
+sysctl -w net.ipv6.conf.all.forwarding=1
+sysctl -w net.ipv4.ip_forward=1
+
+/miniccc -v=false -serial /dev/virtio-ports/cc -logfile /miniccc.log &
 /minirouter -v=false -logfile /minirouter.log &
 
 # attach a real tty to the console

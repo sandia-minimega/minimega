@@ -6,94 +6,131 @@ package main
 
 import (
 	"bufio"
+	"encoding/gob"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"minicli"
 	log "minilog"
 	"os"
-	"runtime"
 	"strconv"
 	"strings"
+	"time"
 )
+
+type HostStats struct {
+	Name          string
+	RxBps         float64
+	TxBps         float64
+	CPUs          int
+	MemTotal      int
+	MemUsed       int
+	VMs           int
+	Limit         int
+	CPUCommit     uint64
+	MemCommit     uint64
+	NetworkCommit int
+	Load          string
+	Uptime        time.Duration
+}
 
 var hostCLIHandlers = []minicli.Handler{
 	{ // host
-		HelpShort: "report information about the host",
+		HelpShort: "report information about hosts",
 		HelpLong: `
-Report information about the host:
+Report information about hosts in the current namespace:
 
-- bandwidth : RX/TX bandwidth stats
-- cpus : number of cpus
-- load : system load average
-- memtotal : total memory, in MB
-- memused : memory used, in MB
-- name : hostname
-- vms : number of VMs (in active namespace)
-- vmsall: number of VMs (regardless of namespace)
-- uptime: uptime
-		`,
+- cpucommit  : total cpu commit
+- cpus       : number of cpus
+- load       : system load average
+- memcommit  : total memory commit in MB
+- memtotal   : total memory in MB
+- memused    : memory used in MB
+- name       : name of the machine
+- netcommit  : total network interface commit
+- rx         : RX bandwidth stats (MB/s)
+- tx         : TX bandwidth stats (MB/s)
+- uptime     : uptime
+- vms        : number of VMs
+- vmlimit    : limit based on coschedule values (-1 is no limit)
+
+All VM-based stats are computed across namespaces.`,
 		Patterns: []string{
 			"host",
-			"host <bandwidth,>",
+			"host <cpucommit,>",
 			"host <cpus,>",
 			"host <load,>",
+			"host <memcommit,>",
 			"host <memtotal,>",
 			"host <memused,>",
 			"host <name,>",
-			"host <vms,>",
-			"host <vmsall,>",
+			"host <netcommit,>",
+			"host <rx,>",
+			"host <tx,>",
 			"host <uptime,>",
+			"host <vms,>",
+			"host <vmlimit,>",
 		},
 		Call: wrapBroadcastCLI(cliHost),
 	},
 }
 
-var hostInfoFns = map[string]func() (string, error){
-	"bandwidth": func() (string, error) {
-		rx, tx := bridges.BandwidthStats()
-
-		return fmt.Sprintf("%.1f/%.1f (rx/tx MB/s)", rx, tx), nil
-	},
-	"cpus": func() (string, error) {
-		return strconv.Itoa(runtime.NumCPU()), nil
-	},
-	"load": hostStatsLoad,
-	"memtotal": func() (string, error) {
-		total, _, err := hostStatsMemory()
-		return fmt.Sprintf("%v MB", total), err
-	},
-	"memused": func() (string, error) {
-		_, used, err := hostStatsMemory()
-		return fmt.Sprintf("%v MB", used), err
-	},
-	"name": func() (string, error) { return hostname, nil },
-	"vms": func() (string, error) {
-		return strconv.Itoa(vms.Count()), nil
-	},
-	"vmsall": func() (string, error) {
-		return strconv.Itoa(vms.CountAll()), nil
-	},
-	"uptime": func() (string, error) {
-		uptime, err := hostStatsUptime()
-		return fmt.Sprintf("%v s", uptime), err
-	},
+func init() {
+	gob.Register(&HostStats{})
 }
 
-// Preferred ordering of host info fields in tabular
+func (s *HostStats) IsFull() bool {
+	return s.Limit != -1 && s.VMs >= s.Limit
+}
+
+func (h *HostStats) Print(v string) string {
+	switch v {
+	case "rx":
+		return fmt.Sprintf("%.1f", h.RxBps)
+	case "tx":
+		return fmt.Sprintf("%.1f", h.TxBps)
+	case "cpus":
+		return strconv.Itoa(h.CPUs)
+	case "cpucommit":
+		return strconv.FormatUint(h.CPUCommit, 10)
+	case "load":
+		return h.Load
+	case "memcommit":
+		return strconv.FormatUint(h.MemCommit, 10)
+	case "memtotal":
+		return strconv.Itoa(h.MemTotal)
+	case "memused":
+		return strconv.Itoa(h.MemUsed)
+	case "name":
+		return h.Name
+	case "netcommit":
+		return strconv.Itoa(h.NetworkCommit)
+	case "vms":
+		return strconv.Itoa(h.VMs)
+	case "vmlimit":
+		return strconv.Itoa(h.Limit)
+	case "uptime":
+		return h.Uptime.String()
+	}
+
+	return "???"
+
+}
+
+// Preferred ordering of host info fields in tabular. Don't include name --
+// it's usually redundant in the tabular data unless .annotate is false.
 var hostInfoKeys = []string{
-	"name", "cpus", "load", "memused", "memtotal", "bandwidth",
-	"vms", "vmsall", "uptime",
+	"cpus", "load", "memused", "memtotal", "rx", "tx", "vms", "vmlimit",
+	"cpucommit", "memcommit", "netcommit", "uptime",
 }
 
-func cliHost(c *minicli.Command, resp *minicli.Response) error {
+func cliHost(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	stats := NewHostStats()
+	resp.Data = stats
+
 	// If they selected one of the fields to display
 	for k := range c.BoolArgs {
-		val, err := hostInfoFns[k]()
-		if err != nil {
-			return err
-		}
-
-		resp.Response = val
+		resp.Response = stats.Print(k)
 		return nil
 	}
 
@@ -102,37 +139,14 @@ func cliHost(c *minicli.Command, resp *minicli.Response) error {
 
 	row := []string{}
 	for _, k := range resp.Header {
-		val, err := hostInfoFns[k]()
-		if err != nil {
-			return err
-		}
-
-		row = append(row, val)
+		row = append(row, stats.Print(k))
 	}
 	resp.Tabular = [][]string{row}
 
 	return nil
 }
 
-func hostStatsUptime() (string, error) {
-	uptime, err := ioutil.ReadFile("/proc/uptime")
-	if err != nil {
-		return "", err
-	}
-
-	// uptime should look something like
-	//  2641.71 9287.55
-	f := strings.Fields(string(uptime))
-	if len(f) != 2 {
-		return "", fmt.Errorf("could not read uptime")
-	}
-	outputUptime := f[0]
-	// TODO convert from seconds to HH:MM:ss?
-
-	return outputUptime, nil
-}
-
-func hostStatsLoad() (string, error) {
+func hostLoad() (string, error) {
 	load, err := ioutil.ReadFile("/proc/loadavg")
 	if err != nil {
 		return "", err
@@ -144,9 +158,8 @@ func hostStatsLoad() (string, error) {
 	if len(f) != 5 {
 		return "", fmt.Errorf("could not read loadavg")
 	}
-	outputLoad := strings.Join(f[0:3], " ")
 
-	return outputLoad, nil
+	return strings.Join(f[0:3], " "), nil
 }
 
 func hostStatsMemory() (int, int, error) {
@@ -198,11 +211,32 @@ func hostStatsMemory() (int, int, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		log.Error("reading meminfo:", err)
+		log.Error("reading meminfo: %v", err)
 	}
 
 	outputMemUsed := (memTotal - (memFree + memBuffers + memCached)) / 1024
 	outputMemTotal := memTotal / 1024
 
 	return outputMemTotal, outputMemUsed, nil
+}
+
+func hostUptime() (time.Duration, error) {
+	data, err := ioutil.ReadFile("/proc/uptime")
+	if err != nil {
+		return 0, err
+	}
+
+	// uptime should look something like
+	//  2641.71 9287.55
+	f := strings.Fields(string(data))
+	if len(f) != 2 {
+		return 0, errors.New("malformed uptime, expected float float")
+	}
+
+	uptime, err := time.ParseDuration(f[0] + "s")
+	if err != nil {
+		return 0, err
+	}
+
+	return uptime, nil
 }

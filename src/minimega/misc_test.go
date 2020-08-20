@@ -5,7 +5,9 @@
 package main
 
 import (
+	"math"
 	"minicli"
+	"strconv"
 	"testing"
 )
 
@@ -39,24 +41,54 @@ func TestHasCommand(t *testing.T) {
 	}
 }
 
-func TestIsUUID(t *testing.T) {
-	var data = []struct {
-		v    string
-		want bool
-	}{
-		{"", false},
-		{"false", false},
-		{"-----", false},
-		{"0-0-0-0-0-0", false},
-		{"xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", false},
-		{"00000x00-0000-0000-0000-0000x0000000", false},
-		{"00000000-0000-0000-0000-000000000000", true},
-		{"deadbeef-cafe-dead-beef-cafeeeeeeeee", true},
+func testMesh(size int, pairwise bool, t *testing.T) {
+	var vals []string
+	for i := 0; i < size; i++ {
+		vals = append(vals, strconv.Itoa(i))
 	}
 
-	for i := range data {
-		if got := isUUID(data[i].v); got != data[i].want {
-			t.Errorf("expected isUUID(%v) = %t", data[i].v, data[i].want)
+	res := mesh(vals, pairwise)
+	if len(res) != len(vals) {
+		t.Errorf("expected slice for each val, got %v", len(res))
+	}
+
+	want := len(vals) - 1
+	if !pairwise {
+		// should be ceil(log2(vals))
+		want = int(math.Ceil(math.Log2(float64(len(vals)))))
+	}
+
+	for k, vals2 := range res {
+		if len(vals2) != want {
+			t.Errorf("expected %v values in slice for %v, got %v", want, k, len(vals2))
+		}
+
+		for _, v := range vals2 {
+			if k == v {
+				t.Errorf("contains self-loop: %v -> %v", k, v)
+			}
 		}
 	}
 }
+
+func TestMesh2(t *testing.T)  { testMesh(2, false, t) }
+func TestMesh3(t *testing.T)  { testMesh(3, false, t) }
+func TestMesh4(t *testing.T)  { testMesh(4, false, t) }
+func TestMesh5(t *testing.T)  { testMesh(5, false, t) }
+func TestMesh6(t *testing.T)  { testMesh(6, false, t) }
+func TestMesh7(t *testing.T)  { testMesh(7, false, t) }
+func TestMesh8(t *testing.T)  { testMesh(8, false, t) }
+func TestMesh9(t *testing.T)  { testMesh(9, false, t) }
+func TestMesh20(t *testing.T) { testMesh(20, false, t) }
+func TestMesh50(t *testing.T) { testMesh(50, false, t) }
+
+func TestMeshPairwise2(t *testing.T)  { testMesh(2, true, t) }
+func TestMeshPairwise3(t *testing.T)  { testMesh(3, true, t) }
+func TestMeshPairwise4(t *testing.T)  { testMesh(4, true, t) }
+func TestMeshPairwise5(t *testing.T)  { testMesh(5, true, t) }
+func TestMeshPairwise6(t *testing.T)  { testMesh(6, true, t) }
+func TestMeshPairwise7(t *testing.T)  { testMesh(7, true, t) }
+func TestMeshPairwise8(t *testing.T)  { testMesh(8, true, t) }
+func TestMeshPairwise9(t *testing.T)  { testMesh(9, true, t) }
+func TestMeshPairwise20(t *testing.T) { testMesh(20, true, t) }
+func TestMeshPairwise50(t *testing.T) { testMesh(50, true, t) }

@@ -1,3 +1,7 @@
+// Copyright (2017) Sandia Corporation.
+// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+// the U.S. Government retains certain rights in this software.
+
 package bridge
 
 import (
@@ -5,20 +9,12 @@ import (
 	"fmt"
 	log "minilog"
 	"strconv"
-	"time"
 )
 
-// Used for queue length in qdisc netem
-// Empirically determined; lower values than minNetemLimit resulted in
-// unnecessary packet drops due to queue overfilling before it could be drained,
-// even without congestion (possibly due to limited tick granularity?)
-// maxNetemLimit is just set at the default Netem limit for now, which worked
-// without issue at line rate (20-40 Gbps) in testing
-const (
-	minNetemLimit     = 10
-	maxNetemLimit     = 1000
-	defaultNetemLimit = 1000
-)
+// #include <unistd.h>
+import "C"
+
+var clkTck = int64(C.sysconf(C._SC_CLK_TCK))
 
 // Qos option types
 type QosType int
@@ -34,75 +30,111 @@ type QosOption struct {
 	Value string
 }
 
-// Netem parameters
+// tc parameters
 type qos struct {
-	loss  string
-	delay string
-	rate  string
-	limit string
+	Loss  string
+	Delay string
+	Rate  string
 }
 
-// Set the initial qdisc namespace
-func (t *Tap) initializeQos() error {
-	t.Qos = &qos{}
-	t.Qos.limit = strconv.FormatUint(defaultNetemLimit, 10)
-	cmd := []string{
-		"tc", "qdisc", "add", "dev", t.Name,
-		"root", "handle", "1:", "netem", "limit", t.Qos.limit,
-	}
-	return t.qosCmd(cmd)
-}
-
-func (t *Tap) destroyQos() error {
-	if t.Qos == nil {
+func (t *Tap) removeQos() error {
+	if t.qos == nil {
 		return nil
 	}
-	t.Qos = nil
+	t.qos = nil
 	cmd := []string{"tc", "qdisc", "del", "dev", t.Name, "root"}
 	return t.qosCmd(cmd)
 }
 
-func (t *Tap) setQos(op QosOption) error {
-	if t.Qos == nil {
-		err := t.initializeQos()
-		if err != nil {
-			return err
+func (t *Tap) addQos(op QosOption) error {
+	if t.qos == nil {
+		t.qos = &qos{}
+	}
+
+	// Rate and Loss/Delay are mutually exclusive... warn if we previously had
+	// a rate qos and are replacing it with loss/delay (or vice versa).
+	switch op.Type {
+	case Loss, Delay:
+		if t.qos.Rate != "" {
+			log.Warn("replacing rate qos with loss/delay on %v", t.Name)
+			t.qos.Rate = ""
+		}
+	case Rate:
+		if t.qos.Loss != "" || t.qos.Delay != "" {
+			log.Warn("replacing loss/delay qos with rate on %v", t.Name)
+			t.qos.Loss = ""
+			t.qos.Delay = ""
 		}
 	}
 
 	switch op.Type {
 	case Loss:
-		t.Qos.loss = op.Value
+		t.qos.Loss = op.Value
+		return t.qosNetem()
 	case Delay:
-		t.Qos.delay = op.Value
+		t.qos.Delay = op.Value
+		return t.qosNetem()
 	case Rate:
-		t.Qos.rate = op.Value
+		t.qos.Rate = op.Value
+		return t.qosTbf()
 	}
 
-	// only modify the limit if rate limiting is in effect
-	if t.Qos.rate != "" {
-		t.Qos.limit = getNetemLimit(t.Qos.rate, t.Qos.delay)
-	} else {
-		t.Qos.limit = strconv.FormatUint(defaultNetemLimit, 10)
+	return errors.New("unreachable")
+}
+
+func (t *Tap) qosTbf() error {
+	var rate int64
+	var unit string
+	for i := range t.qos.Rate {
+		c := t.qos.Rate[i]
+		if c < '0' || c > '9' {
+			unit = t.qos.Rate[i:]
+			break
+		}
+		rate = rate*10 + int64(c) - '0'
+		if rate < 0 {
+			return errors.New("overflow")
+		}
 	}
+
+	log.Debug("parsed rate: %v, unit: %v", rate, unit)
+
+	switch unit {
+	case "gbit":
+		rate *= 1000
+		fallthrough
+	case "mbit":
+		rate *= 1000
+		fallthrough
+	case "kbit":
+		rate *= 1000
+	default:
+		return errors.New("invalid rate unit")
+	}
+
+	// compute minimum burst by dividing rate by HZ, convert to kbit
+	burst := strconv.FormatFloat(float64(rate)/float64(clkTck)/1000.0, 'f', 3, 64) + "kbit"
+
+	log.Debug("computed burst for rate %v (%v): %v", t.qos.Rate, rate, burst)
 
 	cmd := []string{
-		"tc", "qdisc", "change", "dev", t.Name,
-		"root", "handle", "1:", "netem",
+		"tc", "qdisc", "replace", "root", "dev", t.Name, "tbf",
+		"rate", t.qos.Rate, "burst", burst, "latency", "20ms",
 	}
 
-	// stack up parameters
-	if t.Qos.limit != "" {
-		cmd = append(cmd, "limit", t.Qos.limit)
+	return t.qosCmd(cmd)
+}
+
+func (t *Tap) qosNetem() error {
+	cmd := []string{
+		"tc", "qdisc", "replace", "root", "dev", t.Name, "netem",
 	}
-	if t.Qos.rate != "" {
-		cmd = append(cmd, "rate", t.Qos.rate)
+
+	if t.qos.Delay != "" {
+		cmd = append(cmd, "delay", t.qos.Delay)
 	}
-	if t.Qos.loss != "" {
-		cmd = append(cmd, "loss", t.Qos.loss)
-	}
-	if t.Qos.delay != "" {
-		cmd = append(cmd, "delay", t.Qos.delay)
+	if t.qos.Loss != "" {
+		cmd = append(cmd, "loss", t.qos.Loss)
 	}
 
 	return t.qosCmd(cmd)
@@ -110,17 +142,33 @@ func (t *Tap) setQos(op QosOption) error {
 
 // Execute a qos command string
 func (t *Tap) qosCmd(cmd []string) error {
-	log.Debug("received qos command %v", cmd)
+	log.Debug("received qos command for %v: `%v`", t.Name, cmd)
 	out, err := processWrapper(cmd...)
 	if err != nil {
 		// Clean up
 		err = errors.New(out)
-		t.destroyQos()
+		t.removeQos()
 	}
 	return err
 }
 
-func (b *Bridge) ClearQos(tap string) error {
+func (t *Tap) getQos() []QosOption {
+	var ops []QosOption
+
+	if t.qos.Rate != "" {
+		ops = append(ops, QosOption{Rate, t.qos.Rate})
+	}
+	if t.qos.Loss != "" {
+		ops = append(ops, QosOption{Loss, t.qos.Loss})
+	}
+	if t.qos.Delay != "" {
+		ops = append(ops, QosOption{Delay, t.qos.Delay})
+	}
+
+	return ops
+}
+
+func (b *Bridge) RemoveQos(tap string) error {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
@@ -130,7 +178,7 @@ func (b *Bridge) ClearQos(tap string) error {
 	if !ok {
 		return fmt.Errorf("tap %s not found", tap)
 	}
-	return t.destroyQos()
+	return t.removeQos()
 }
 
 func (b *Bridge) UpdateQos(tap string, op QosOption) error {
@@ -144,7 +192,7 @@ func (b *Bridge) UpdateQos(tap string, op QosOption) error {
 		return fmt.Errorf("tap %s not found", tap)
 	}
 
-	return t.setQos(op)
+	return t.addQos(op)
 }
 
 func (b *Bridge) GetQos(tap string) []QosOption {
@@ -155,69 +203,8 @@ func (b *Bridge) GetQos(tap string) []QosOption {
 	if !ok {
 		return nil
 	}
-	if t.Qos == nil {
+	if t.qos == nil {
 		return nil
 	}
-	return b.getQos(t)
-}
-
-func (b *Bridge) getQos(t *Tap) []QosOption {
-	var ops []QosOption
-
-	if t.Qos.rate != "" {
-		ops = append(ops, QosOption{Rate, t.Qos.rate})
-	}
-	if t.Qos.loss != "" {
-		ops = append(ops, QosOption{Loss, t.Qos.loss})
-	}
-	if t.Qos.delay != "" {
-		ops = append(ops, QosOption{Delay, t.Qos.delay})
-	}
-	return ops
-}
-
-// Tune netem's limit (queue length) to minimize latency,
-// avoid unnecessary packet drops, and achieve reasonable TCP throughput
-// We treat netem's limit parameter as a buffer size, even though the
-// netem man page describes it differently (and incorrectly)
-func getNetemLimit(rate string, delay string) string {
-	r := rate[:len(rate)-4]
-	unit := rate[len(rate)-4:]
-	var bps uint64
-
-	switch unit {
-	case "kbit":
-		bps = 1 << 10
-	case "mbit":
-		bps = 1 << 20
-	case "gbit":
-		bps = 1 << 30
-	}
-	rateUint, _ := strconv.ParseUint(r, 10, 64)
-
-	d, _ := time.ParseDuration(delay)
-	delayNsUint := uint64(d.Nanoseconds())
-	// floor to 1 ms for purposes of sizing the limit
-	if delayNsUint < 1e6 {
-		delayNsUint = 1e6
-	}
-
-	// Bandwidth-delay product
-	bdp := rateUint * bps * delayNsUint / 1e9
-
-	// Limit is in packets, so divide BDP (in bits)
-	// by typical packet size, roughly 10,000 bits
-	// Empirically, then multiply by 1000, to avoid some observed premature drops
-	// Buffers really should be tuned according to application, but
-	// we can start off with something roughly reasonable...
-	limit := bdp / 1e3
-	log.Debug("rate %s, delay %s => bandwidth-delay product %d bits => auto-calculated limit %d packets", rate, delay, bdp, limit)
-
-	if limit < minNetemLimit {
-		limit = minNetemLimit
-	}
-	if limit > maxNetemLimit {
-		limit = maxNetemLimit
-	}
-	return strconv.FormatUint(limit, 10)
+	return t.getQos()
 }

@@ -1,0 +1,18 @@
+## ns hosts
+mm[1-3]
+## ns del-hosts all
+## ns hosts
+## ns add-hosts mm[1-2]
+## ns hosts
+mm[1-2]
+## ns add-hosts all
+## ns del-hosts localhost
+## ns hosts
+mm[1-3]
+## ns del-hosts mm2
+## ns hosts
+mm[1,3]
+## ns add-hosts all
+## ns del-hosts localhost
+## ns hosts
+mm[1-3]

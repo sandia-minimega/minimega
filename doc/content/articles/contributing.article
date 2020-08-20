@@ -19,37 +19,37 @@ title.
 * Discuss your design
 
 Begin by joining the
-[[https://groups.google.com/forum/#!forum/minimega-dev][minimega mailing
-list]]. New ideas and better solutions to existing code are always welcome, and
-posting to the mailing list first allows coming to a quorum on your idea before
-you spend time implementing it. 
+[[https://groups.google.com/forum/#!forum/minimega-dev][minimega mailing list]].
+New ideas and better solutions to existing code are always welcome, and posting
+to the mailing list first allows coming to a quorum on your idea before you
+spend time implementing it.
 
 Please post on the mailing list before you submit patches, unless they are
-trivial. 
+trivial.
 
 * Development style
 
 minimega follows the formatting style enforced by the Go language
 specification, and _generally_ follows the programming style used by core Go
 developers (and by luck most Go developers). There are exceptions, particularly
-in the few C files in the codebase. 
+in the few C files in the codebase.
 
-Unless the devlopment in question is aimed at reformatting a piece of the
+Unless the development in question is aimed at reformatting a piece of the
 codebase, you should adhere to the style in that particular section of code.
 minimega is growing rapidly and often times newer code is more well thought out
-(or not) than older code. 
+(or not) than older code.
 
 * Tests
 
 Add unit tests using Go's unit test framework whenever possible. If your code
-is not Go, tests should be considered in some other capacity. 
+is not Go, tests should be considered in some other capacity.
 
 Always make sure that your code revision builds and completes all tests by
 running `all.bash` in the repo. If your code revision applies to windows
 binaries (`protonuke`, `miniccc`, etc.), then make sure your change works on
 Windows as well.
 
-Write runtime tests using [[minitest.article][minitest]]. 
+Write runtime tests using [[minitest.article][minitest]].
 
 * Documentation
 
@@ -58,30 +58,38 @@ Always include updates and additions to the documents, API help, and tutorials
 there is an emphasis on ensuring that revisions and especially new
 functionality is well documented.
 
-* Tracking issues 
+* Tracking issues
 
 If your change is being committed to a branch other than `master`, include
 "updates issue NNN" in the commit log. Never close an issue on a commit in a
-branch other than `master` unless that ticket is specific to that branch. 
+branch other than `master` unless that ticket is specific to that branch.
+
+* Commit messages
+
+Try to adhere to common Git commit message
+[[https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html][format]].
+When working on a one or two tools or packages, we typically prefix the summary
+with the its name (e.g. `minimega: ...`, `minimega,minicli: ...`). For commits
+that span many components, we typically prefix them with `various: ...`.
 
 * Submitting a patch
 
 minimega is hosted on github.com, and we use github's 'pull request'
 functionality for code review and merging patches to the main repository. See
-[[https://help.github.com/articles/using-pull-requests/][github's pull request
-page]] for more information. In short, you will need to fork minimega to your
+[[https://help.github.com/articles/using-pull-requests/][github's pull request page]]
+for more information. In short, you will need to fork minimega to your
 own account, commit to your local tree, and issue a pull request to the main
-repository from your own. 
+repository from your own.
 
 Generate the pull request from master (or the branch you are committing to) for
-all of the commits in your patchset, including updates to documentation. 
+all of the commits in your patchset, including updates to documentation.
 
 If your patchset fixes a listed issue, make sure 'fixes issue #NNN' is in the
-commit log, so the issue is referenced to your work. 
+commit log, so the issue is referenced to your work.
 
 * Code review
 
-When a pull request is made, at least one contributer will review the patchset,
+When a pull request is made, at least one contributor will review the patchset,
 make comments, and either wait for more feedback or authorize the patch with a
 'LGTM' (looks good to me) phrase. After authorization, any committer may merge
 the pull request.
@@ -95,8 +103,7 @@ for more information on effectively contributing to projects the "github" way.
 Of specific use may be
 [[https://help.github.com/articles/syncing-a-fork/][syncing a fork]] with an
 upstream repo, and
-[[https://help.github.com/articles/checking-out-pull-requests-locally/][checking
-out a pull request locally]].
+[[https://help.github.com/articles/checking-out-pull-requests-locally/][checking out a pull request locally]].
 
 * Copyright
 
@@ -106,7 +113,6 @@ the repo. If you are submitting a patch to the existing codebase, the code will
 be licensed under the same license. If you are submitting an entirely new
 package, please license it under any compatible FLOSS license. If you are
 submitting under a license not already included in the distribution, please
-discuss this on the mailing list first. 
+discuss this on the mailing list first.
 
 GPLv3 is preferred.
-

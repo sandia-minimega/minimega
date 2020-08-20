@@ -57,13 +57,22 @@ commands.`,
 		HelpLong: `
 Read a command file and execute it. This has the same behavior as if you typed
 the file in manually. read stops if it reads an invalid command. read does not
-stop if a command returns an error.
+stop if a command returns an error. Nested reads are not permitted.
+
+Because reading and executing long files can take a while, the read command
+releases the command lock that it holds so commands from other clients
+(including miniweb) can be interleaved. To prevent issues with another script
+changing the namespace and commands being run in a different namespace than
+originally intended, read records the active namespace when it starts and
+prepends that namespace to all commands that it reads from the file. If it
+reads a command that would change the active namespace, read updates its state
+so that the new namespace is prepended instead.
 
 If the optional argument check is specified then read doesn't execute any of
 the commands in the file. Instead, it checks that all the commands are
 syntactically valid. This can identify mistyped commands in scripts before you
 read them. It cannot check for semantic errors (e.g. killing a non-existent
-VM). Stops on the first invalid command.`,
+VM). The check stops at the first invalid command.`,
 		Patterns: []string{
 			"read <file> [check,]",
 		},
@@ -71,11 +80,21 @@ VM). Stops on the first invalid command.`,
 	},
 	{ // debug
 		HelpShort: "display internal debug information",
+		HelpLong: `
+debug can help find and resolve issues with minimega. Without arguments, debug
+prints the go version, the number of goroutines, and the number of cgo calls.
+
+With arguments, debug writes files that can be read using "go tool pprof":
+
+- memory: sampling of all heap allocations
+- cpu: starts CPU profiling (must be stopped before read)
+- goroutine: stack traces of all current goroutines`,
 		Patterns: []string{
 			"debug",
 			"debug <memory,> <file>",
 			"debug <cpu,> <start,> <file>",
 			"debug <cpu,> <stop,>",
+			"debug <goroutine,> <file>",
 		},
 		Call: wrapSimpleCLI(cliDebug),
 	},
@@ -93,9 +112,19 @@ VM). Stops on the first invalid command.`,
 		},
 		Call: wrapSimpleCLI(cliEcho),
 	},
+	{ // clear all
+		HelpShort: "reset all resettable ",
+		HelpLong: `
+Runs all the "clear ..." handlers on the local instance -- as close to nuke as
+you can get without restarting minimega. Restarting minimega is preferable.`,
+		Patterns: []string{
+			"clear all",
+		},
+		Call: wrapSimpleCLI(cliClearAll),
+	},
 }
 
-func cliQuit(c *minicli.Command, resp *minicli.Response) error {
+func cliQuit(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if v, ok := c.StringArgs["delay"]; ok {
 		delay, err := strconv.Atoi(v)
 		if err != nil {
@@ -104,18 +133,18 @@ func cliQuit(c *minicli.Command, resp *minicli.Response) error {
 
 		go func() {
 			time.Sleep(time.Duration(delay) * time.Second)
-			teardown()
+			Shutdown("quitting")
 		}()
 
 		resp.Response = fmt.Sprintf("quitting after %v seconds", delay)
 		return nil
 	}
 
-	teardown()
-	return errors.New("unreachable")
+	Shutdown("quitting")
+	return unreachable()
 }
 
-func cliHelp(c *minicli.Command, resp *minicli.Response) error {
+func cliHelp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	input := ""
 	if args, ok := c.ListArgs["command"]; ok {
 		input = strings.Join(args, " ")
@@ -126,11 +155,21 @@ func cliHelp(c *minicli.Command, resp *minicli.Response) error {
 }
 
 func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
+	// HAX: prevent running as a subcommand
+	if c.Source == SourceMeshage {
+		err := fmt.Errorf("cannot run `%s` via meshage", c.Original)
+		respChan <- errResp(err)
+		return
+	}
+
+	ns := GetNamespace()
+
 	resp := &minicli.Response{Host: hostname}
 
+	fname := c.StringArgs["file"]
 	check := c.BoolArgs["check"]
 
-	file, err := os.Open(c.StringArgs["file"])
+	file, err := os.Open(fname)
 	if err != nil {
 		resp.Error = err.Error()
 		respChan <- minicli.Responses{resp}
@@ -147,7 +186,11 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 
 	scanner := bufio.NewScanner(file)
 
+	// line number
+	var line int
+
 	for scanner.Scan() {
+		line += 1
 		var cmd *minicli.Command
 
 		command := scanner.Text()
@@ -158,8 +201,7 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 			break
 		}
 
-		// No command was returned, must have been a blank line or a comment
-		// line. Either way, don't try to run a nil command.
+		// Must have been a blank line. Don't try to run.
 		if cmd == nil {
 			continue
 		}
@@ -175,11 +217,39 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 			continue
 		}
 
+		// HAX: check to see if the command that we're about to run changes the
+		// namespace. If it does, we need to adjust the namespace that we
+		// prepend to all commands.
+		var namespace string
+
+		if !cmd.Nop {
+			for cmd := cmd; cmd != nil; cmd = cmd.Subcommand {
+				// found command to change namespace
+				if strings.HasPrefix(cmd.Original, "namespace") && cmd.Subcommand == nil {
+					namespace = cmd.StringArgs["name"]
+				}
+			}
+
+			if namespace == "" {
+				// no change in namespace so recompile the command to execute in
+				// the original namespace
+				cmd = minicli.MustCompilef("namespace %q %v", ns.Name, command)
+			}
+		}
+
 		forward(RunCommands(cmd), respChan)
+
+		if namespace != "" {
+			log.Info("read switching to namespace `%v`", namespace)
+
+			// update the namespace that we prepend to match the newly
+			// activated namespace
+			ns = GetOrCreateNamespace(namespace)
+		}
 	}
 
 	if err != nil {
-		resp.Error = err.Error()
+		resp.Error = fmt.Sprintf("%v:%v %v", filepath.Base(fname), line, err)
 		respChan <- minicli.Responses{resp}
 	}
 
@@ -189,38 +259,37 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 	}
 }
 
-func cliDebug(c *minicli.Command, resp *minicli.Response) error {
-	if c.BoolArgs["memory"] {
-		dst := c.StringArgs["file"]
+func cliDebug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	dst := c.StringArgs["file"]
+
+	var f *os.File
+	if dst != "" {
+		// make sure path is relative to files if not absolute
 		if !filepath.IsAbs(dst) {
 			dst = path.Join(*f_iomBase, dst)
 		}
 
-		log.Info("writing memory profile to %v", dst)
+		log.Info("writing debug info to %v", dst)
 
-		f, err := os.Create(dst)
-		if err != nil {
+		var err error
+		if f, err = os.Create(dst); err != nil {
 			return err
 		}
+	}
+
+	if c.BoolArgs["memory"] {
 		defer f.Close()
 
-		return pprof.WriteHeapProfile(f)
+		return pprof.Lookup("heap").WriteTo(f, 0)
+	} else if c.BoolArgs["goroutine"] {
+		defer f.Close()
+
+		return pprof.Lookup("goroutine").WriteTo(f, 2)
 	} else if c.BoolArgs["cpu"] && c.BoolArgs["start"] {
 		if cpuProfileOut != nil {
 			return errors.New("CPU profile still running")
 		}
 
-		dst := c.StringArgs["file"]
-		if !filepath.IsAbs(dst) {
-			dst = path.Join(*f_iomBase, dst)
-		}
-
-		log.Info("writing cpu profile to %v", dst)
-
-		f, err := os.Create(dst)
-		if err != nil {
-			return err
-		}
 		cpuProfileOut = f
 
 		return pprof.StartCPUProfile(cpuProfileOut)
@@ -239,7 +308,7 @@ func cliDebug(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	// Otherwise, return information about the runtime environment
-	resp.Header = []string{"Go version", "Goroutines", "CGO calls"}
+	resp.Header = []string{"goversion", "goroutines", "cgocalls"}
 	resp.Tabular = [][]string{
 		[]string{
 			runtime.Version(),
@@ -251,12 +320,41 @@ func cliDebug(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliVersion(c *minicli.Command, resp *minicli.Response) error {
+func cliVersion(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Response = fmt.Sprintf("minimega %v %v", version.Revision, version.Date)
 	return nil
 }
 
-func cliEcho(c *minicli.Command, resp *minicli.Response) error {
+func cliEcho(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Response = strings.Join(c.ListArgs["args"], " ")
 	return nil
+}
+
+func cliClearAll(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	all := []string{
+		// clear non-namespaced things (except history)
+		"clear deploy flags",
+		"dnsmasq kill all",
+		// clear all namespaced things
+		"clear namespace all",
+		// clear vlan blacklist
+		"clear vlans all",
+		// clear plumbing and pipes
+		"clear plumb",
+		"clear pipe",
+		// clear the history last
+		"clear history",
+	}
+
+	var cmds []*minicli.Command
+
+	// LOCK: this is a CLI hander so we already hold the cmdLock.
+	for _, v := range all {
+		cmd := minicli.MustCompile(v)
+		// keep the original source
+		cmd.SetSource(c.Source)
+		cmds = append(cmds, cmd)
+	}
+
+	return consume(runCommands(cmds...))
 }

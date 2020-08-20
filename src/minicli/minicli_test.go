@@ -31,8 +31,6 @@ var validTestPatterns = []struct {
 	{"cd [dir]", []string{"cd", "cd a"}},
 	// Required string
 	{"ping <host>", []string{"ping minimega.org"}},
-	// Required string w/ comment
-	{"ping6 <host hostname>", []string{"ping6 minimega.org"}},
 	// Required multiple choice
 	{"ip <addr,link>", []string{"ip addr", "ip link"}},
 	// Required multiple choice followed by required string
@@ -122,18 +120,16 @@ func TestParse(t *testing.T) {
 		// Ensure that we can register the pattern without error
 		err := Register(&Handler{Patterns: []string{v.pattern}})
 		if err != nil {
-			t.Errorf(err.Error())
+			t.Errorf("unable to register `%v`: %v", v.pattern, err)
 			continue
 		}
 
 		for _, i := range v.inputs {
 			t.Logf("Testing input: `%s`", i)
 
-			cmd, err := Compile(i)
+			_, err := Compile(i)
 			if err != nil {
-				t.Errorf("unable to compile command, %s", err.Error())
-			} else if cmd.Pattern != v.pattern {
-				t.Errorf("unexpected match, `%s` != `%s`", v.pattern, cmd.Pattern)
+				t.Errorf("unable to compile: %v", err)
 			}
 		}
 	}

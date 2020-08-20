@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/gob"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -15,6 +16,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 )
 
 var vmCLIHandlers = []minicli.Handler{
@@ -29,6 +32,7 @@ info include:
 - id*        : the VM ID, as an integer
 - name*      : the VM name, if it exists
 - state*     : one of (building, running, paused, quit, error)
+- uptime     : amount of time since the VM was launched
 - namespace* : namespace the VM belongs to
 - type*      : one of (kvm, container)
 - uuid*      : QEMU system uuid
@@ -53,6 +57,7 @@ Additional fields are available for KVM-based VMs:
 - kernel        : kernel image
 - initrd        : initrd image
 - migrate       : qemu migration image
+- pid           : pid of qemu process
 - serial        : number of serial ports
 - virtio-serial : number of virtio ports
 - vnc_port      : port for VNC shim
@@ -63,6 +68,7 @@ Additional fields are available for container-based VMs:
 - hostname     : hostname of the container
 - init	       : process to invoke as init
 - preinit      : process to invoke at container launch before isolation
+- pid          : pid of container's init process
 - fifo         : number of fifo devices
 - console_port : port for console shim
 
@@ -78,17 +84,17 @@ Display information about all VMs:
 		Patterns: []string{
 			"vm info [summary,]",
 		},
-		Call: wrapBroadcastCLI(cliVmInfo),
+		Call: wrapBroadcastCLI(cliVMInfo),
 	},
 	{ // vm launch
 		HelpShort: "launch virtual machines in a paused state",
-		HelpLong: fmt.Sprintf(`
+		HelpLong: `
 Launch virtual machines in a paused state, using the parameters defined leading
 up to the launch command. Any changes to the VM parameters after launching will
 have no effect on launched VMs.
 
-When you launch a VM, you supply the type of VM in the launch command.
-Currently, the supported VM types are:
+When you launch a VM, you supply the type of VM in the launch command. The
+supported VM types are:
 
 - kvm : QEMU-based vms
 - container: Linux containers
@@ -99,23 +105,24 @@ naming scheme:
 
 	vm launch kvm foo[0-9]
 
-Note: VM names cannot be integers or reserved words (e.g. "%[1]s").
+Note: VM names cannot be integers or reserved words (e.g. "all").
 
-The optional 'noblock' suffix forces minimega to return control of the command
-line immediately instead of waiting on potential errors from launching the
-VM(s). The user must check logs or error states from vm info.
+Users may specify a saved config explicity rather than use the current one, for
+example:
 
-The launch behavior changes when namespace are active. If a namespace is
-active, invocations that include the VM type and the name or number of VMs will
-be queue until a subsequent invocation that does not include any arguments.
-This allows the scheduler to better allocate resources across the cluster. The
-'noblock' suffix is ignored when namespaces are active.`, Wildcard),
+	vm config save endpoint
+	[other commands]
+	vm launch kvm 5 endpoint
+
+If queueing is enabled (see "ns"), VMs will be queued for launching until "vm
+launch" is called with no additional arguments. This allows the scheduler to
+better allocate resources across the cluster.`,
 		Patterns: []string{
 			"vm launch",
-			"vm launch <kvm,> <name or count> [noblock,]",
-			"vm launch <container,> <name or count> [noblock,]",
+			"vm launch <kvm,> <name or count> [config]",
+			"vm launch <container,> <name or count> [config]",
 		},
-		Call: wrapSimpleCLI(cliVmLaunch),
+		Call: wrapSimpleCLI(cliVMLaunch),
 	},
 	{ // vm kill
 		HelpShort: "kill running virtual machines",
@@ -123,16 +130,10 @@ This allows the scheduler to better allocate resources across the cluster. The
 Kill one or more running virtual machines. See "vm start" for a full
 description of allowable targets.`,
 		Patterns: []string{
-			"vm kill <target>",
+			"vm <kill,> <vm target>",
 		},
-		Call: wrapVMTargetCLI(cliVmKill),
-		Suggest: func(val, prefix string) []string {
-			if val == "target" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
-			} else {
-				return nil
-			}
-		},
+		Call:    wrapVMTargetCLI(cliVMApply),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
 	},
 	{ // vm start
 		HelpShort: "start paused virtual machines",
@@ -163,16 +164,10 @@ Calling "vm start" on a specific list of VMs will cause them to be started if
 they are in the building, paused, quit, or error states. When used with the
 wildcard, only vms in the building or paused state will be started.`, Wildcard),
 		Patterns: []string{
-			"vm start <target>",
+			"vm <start,> <vm target>",
 		},
-		Call: wrapVMTargetCLI(cliVmStart),
-		Suggest: func(val, prefix string) []string {
-			if val == "target" {
-				return cliVMSuggest(prefix, ^VM_RUNNING)
-			} else {
-				return nil
-			}
-		},
+		Call:    wrapVMTargetCLI(cliVMApply),
+		Suggest: wrapVMSuggest(^VM_RUNNING, true),
 	},
 	{ // vm stop
 		HelpShort: "stop/pause virtual machines",
@@ -182,27 +177,27 @@ description of allowable targets.
 
 Calling stop will put VMs in a paused state. Use "vm start" to restart them.`,
 		Patterns: []string{
-			"vm stop <target>",
+			"vm <stop,> <vm target>",
 		},
-		Call: wrapVMTargetCLI(cliVmStop),
-		Suggest: func(val, prefix string) []string {
-			if val == "target" {
-				return cliVMSuggest(prefix, VM_RUNNING)
-			} else {
-				return nil
-			}
-		},
+		Call:    wrapVMTargetCLI(cliVMApply),
+		Suggest: wrapVMSuggest(VM_RUNNING, true),
 	},
 	{ // vm flush
 		HelpShort: "discard information about quit or failed VMs",
 		HelpLong: `
-Discard information about VMs that have either quit or encountered an error.
-This will remove any VMs with a state of "quit" or "error" from vm info. Names
-of VMs that have been flushed may be reused.`,
+Flush one or more virtual machines. Discard information about VMs that
+have either quit or encountered an error. This will remove VMs with a state of
+"quit" or "error" from vm info. Names of VMs that have been flushed may be
+reused.
+
+Note running without arguments results in the same behavior as using the "all"
+target. See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
-			"vm flush",
+			"vm <flush,>",
+			"vm <flush,> <vm target>",
 		},
-		Call: wrapBroadcastCLI(cliVmFlush),
+		Call:    wrapBroadcastCLI(cliVMApply),
+		Suggest: wrapVMSuggest((VM_QUIT | VM_ERROR), true),
 	},
 	{ // vm hotplug
 		HelpShort: "add and remove USB drives",
@@ -215,59 +210,72 @@ name, and the name of the file to add. For example, to add foo.img to VM foo:
 
 	vm hotplug add foo foo.img
 
-The add command will assign a disk ID, shown in vm hotplug show. To remove
-media, use the 'remove' argument with the VM name and the disk ID. For example,
-to remove the drive added above, named 0:
+The add command will assign a disk ID, shown in "vm hotplug". The optional
+parameter allows you to specify whether the drive will appear on the 1.1 or 2.0
+USB bus. For USB 1.1:
+
+	vm hotplug add foo foo.img 1.1
+
+For USB 2.0:
+
+	vm hotplug add foo foo.img 2.0
+
+To remove media, use the 'remove' argument with the VM name and the disk ID.
+For example, to remove the drive added above, named 0:
 
 	vm hotplug remove foo 0
 
-To remove all hotplug devices, use ID "all" for the disk ID.`,
+To remove all hotplug devices, use ID "all" for the disk ID.
+
+See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
-			"vm hotplug <show,> <vm name>",
-			"vm hotplug <add,> <vm name> <filename>",
-			"vm hotplug <remove,> <vm name> <disk id or all>",
+			"vm hotplug",
+			"vm hotplug <add,> <vm target> <filename> [version]",
+			"vm hotplug <add,> <vm target> <filename> serial <serial> [version]",
+			"vm hotplug <remove,> <vm target> <disk id or all>",
 		},
-		Call: wrapVMTargetCLI(cliVmHotplug),
-		Suggest: func(val, prefix string) []string {
-			if val == "vm" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
-			} else {
-				return nil
-			}
-		},
+		Call:    wrapVMTargetCLI(cliVMHotplug),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
 	},
 	{ // vm net
 		HelpShort: "disconnect or move network connections",
 		HelpLong: `
-Disconnect or move existing network connections on a running VM.
+Disconnect or move existing network connections for one or more VMs. See "vm
+start" for a full description of allowable targets.
 
 Network connections are indicated by their position in vm net (same order in vm
 info) and are zero indexed. For example, to disconnect the first network
-connection from a VM named vm-0 with 4 network connections:
+connection from a VM named vm-0:
 
 	vm net disconnect vm-0 0
 
-To disconnect the second connection:
+To disconnect the second interface:
 
 	vm net disconnect vm-0 1
 
-To move a connection, specify the new VLAN tag and bridge:
+To move a connection, specify the interface number, the new VLAN tag and
+optional bridge:
 
-	vm net <vm name> 0 bridgeX 100`,
+	vm net vm-0 0 100 mega_bridge
+
+If the bridge name is omitted, the interface will be reconnected to the same
+bridge that it is already on. If the interface is not connected to a bridge, it
+will be connected to the default bridge, "mega_bridge".`,
 		Patterns: []string{
-			"vm net <connect,> <vm name> <tap position> <bridge> <vlan>",
-			"vm net <disconnect,> <vm name> <tap position>",
+			"vm net <connect,> <vm target> <tap position> <vlan> [bridge]",
+			"vm net <disconnect,> <vm target> <tap position>",
 		},
-		Call: wrapSimpleCLI(cliVmNetMod),
-		Suggest: func(val, prefix string) []string {
+		Call: wrapVMTargetCLI(cliVMNetMod),
+		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
 			if val == "vm" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
+				return cliVMSuggest(ns, prefix, VM_ANY_STATE, false)
 			} else if val == "vlan" {
-				return cliVLANSuggest(prefix)
-			} else {
-				return nil
+				return cliVLANSuggest(ns, prefix)
+			} else if val == "bridge" {
+				return cliBridgeSuggest(ns, prefix)
 			}
-		},
+			return nil
+		}),
 	},
 	{ // vm qmp
 		HelpShort: "issue a JSON-encoded QMP command",
@@ -281,14 +289,8 @@ and a JSON string, and returns the JSON encoded response. For example:
 		Patterns: []string{
 			"vm qmp <vm name> <qmp command>",
 		},
-		Call: wrapVMTargetCLI(cliVmQmp),
-		Suggest: func(val, prefix string) []string {
-			if val == "vm" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
-			} else {
-				return nil
-			}
-		},
+		Call:    wrapVMTargetCLI(cliVMQmp),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // vm screenshot
 		HelpShort: "take a screenshot of a running vm",
@@ -314,14 +316,8 @@ You can also specify the maximum dimension:
 			"vm screenshot <vm name> [maximum dimension]",
 			"vm screenshot <vm name> file <filename> [maximum dimension]",
 		},
-		Call: wrapVMTargetCLI(cliVmScreenshot),
-		Suggest: func(val, prefix string) []string {
-			if val == "vm" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
-			} else {
-				return nil
-			}
-		},
+		Call:    wrapVMTargetCLI(cliVMScreenshot),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // vm migrate
 		HelpShort: "write VM state to disk",
@@ -336,14 +332,8 @@ status of in-flight migrations by invoking vm migrate with no arguments.`,
 			"vm migrate",
 			"vm migrate <vm name> <filename>",
 		},
-		Call: wrapVMTargetCLI(cliVmMigrate),
-		Suggest: func(val, prefix string) []string {
-			if val == "vm" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
-			} else {
-				return nil
-			}
-		},
+		Call:    wrapVMTargetCLI(cliVMMigrate),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // vm cdrom
 		HelpShort: "eject or change an active VM's cdrom",
@@ -358,23 +348,24 @@ Eject all VM cdroms:
 
         vm cdrom eject all
 
+If the cdrom is "locked" by the guest, the force option can be used to override
+the lock:
+
+        vm cdrom eject 0 force
+
 Change a VM to use a new ISO:
 
         vm cdrom change 0 /tmp/debian.iso
 
-"vm cdrom change" implies that the current ISO will be ejected.`,
+"vm cdrom change" ejects the current ISO, if there is one.
+
+See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
-			"vm cdrom <eject,> <vm name>",
-			"vm cdrom <change,> <vm name> <path>",
+			"vm cdrom <eject,> <vm target> [force,]",
+			"vm cdrom <change,> <vm target> <path> [force,]",
 		},
-		Call: wrapVMTargetCLI(cliVmCdrom),
-		Suggest: func(val, prefix string) []string {
-			if val == "vm" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
-			} else {
-				return nil
-			}
-		},
+		Call:    wrapVMTargetCLI(cliVMCdrom),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
 	},
 	{ // vm tag
 		HelpShort: "display or set a tag for the specified VM",
@@ -393,19 +384,13 @@ To set a tag "foo" to "bar" for VM 2:
 
 To read a tag:
 
-        vm tag <target> <key or all>`,
+        vm tag <vm target> <key or all>`,
 		Patterns: []string{
-			"vm tag <target> [key or all]",  // get
-			"vm tag <target> <key> <value>", // set
+			"vm tag <vm target> [key or all]",  // get
+			"vm tag <vm target> <key> <value>", // set
 		},
-		Call: wrapVMTargetCLI(cliVmTag),
-		Suggest: func(val, prefix string) []string {
-			if val == "target" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
-			} else {
-				return nil
-			}
-		},
+		Call:    wrapVMTargetCLI(cliVMTag),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
 	},
 	{ // clear vm tag
 		HelpShort: "remove tags from a VM",
@@ -429,16 +414,37 @@ Clear all tags from all VMs:
         clear vm tag all`,
 		Patterns: []string{
 			"clear vm tag",
-			"clear vm tag <target> [tag]",
+			"clear vm tag <vm target> [tag]",
 		},
-		Call: wrapVMTargetCLI(cliClearVmTag),
-		Suggest: func(val, prefix string) []string {
-			if val == "target" {
-				return cliVMSuggest(prefix, VM_ANY_STATE)
-			} else {
-				return nil
-			}
+		Call:    wrapVMTargetCLI(cliClearVMTag),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
+	},
+	{ // vm top
+		HelpShort: "view vm resource utilization",
+		HelpLong: fmt.Sprintf(`
+View system resource utilization per VM. This is measured from the host and may
+differ from what is reported by the guest.
+
+The optional duration specifies the length of the sampling window in seconds.
+The command will block for at least this long while it measures usage. The
+default duration is one second.
+
+Returned columns include:
+- name      : name of the VM
+- namespace : namespace of the VM (when not in a namespace)
+- virt      : virtual memory size (MB)
+- res       : resident memory size (MB)
+- shr       : shared memory size (MB)
+- cpu       : host CPU usage (%%)
+- vcpu      : guest CPU usage (%%) (KVM only)
+- time      : total CPU time
+- procs     : number of processes inspected (limited to %d)
+- rx        : total received data rate (MB/s)
+- tx        : total transmitted data rate (MB/s)`, ProcLimit),
+		Patterns: []string{
+			"vm top [duration]",
 		},
+		Call: wrapBroadcastCLI(cliVMTop),
 	},
 }
 
@@ -449,74 +455,75 @@ func init() {
 	gob.Register(&ContainerVM{})
 }
 
-func cliVmStart(c *minicli.Command, resp *minicli.Response) error {
-	return makeErrSlice(vms.Start(c.StringArgs["target"]))
+func cliVMApply(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	switch {
+	case c.BoolArgs["start"]:
+		return ns.Start(c.StringArgs["vm"])
+	case c.BoolArgs["stop"]:
+		return ns.VMs.Stop(c.StringArgs["vm"])
+	case c.BoolArgs["kill"]:
+		return ns.VMs.Kill(c.StringArgs["vm"])
+	case c.BoolArgs["flush"]:
+		if len(c.StringArgs["vm"]) == 0 {
+			return ns.VMs.FlushAll(ns.ccServer)
+		} else {
+			return ns.VMs.Flush(c.StringArgs["vm"], ns.ccServer)
+		}
+	}
+
+	return unreachable()
 }
 
-func cliVmStop(c *minicli.Command, resp *minicli.Response) error {
-	return makeErrSlice(vms.Stop(c.StringArgs["target"]))
-}
-
-func cliVmKill(c *minicli.Command, resp *minicli.Response) error {
-	return makeErrSlice(vms.Kill(c.StringArgs["target"]))
-}
-
-func cliVmInfo(c *minicli.Command, resp *minicli.Response) error {
+func cliVMInfo(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	fields := vmInfo
 	if c.BoolArgs["summary"] {
 		fields = vmInfoLite
 	}
 
-	vms.Info(fields, resp)
+	ns.VMs.Info(fields, resp)
 	return nil
 }
 
-func cliVmCdrom(c *minicli.Command, resp *minicli.Response) error {
-	arg := c.StringArgs["vm"]
+func cliVMCdrom(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	force := c.BoolArgs["force"]
+	target := c.StringArgs["vm"]
 
-	doVms := make([]*KvmVM, 0)
+	if c.BoolArgs["eject"] {
+		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+			kvm, ok := vm.(*KvmVM)
+			if !ok {
+				return false, nil
+			}
 
-	if arg == Wildcard {
-		doVms = vms.FindKvmVMs()
-	} else {
-		vm, err := vms.FindKvmVM(arg)
-		if err != nil {
+			err := kvm.EjectCD(force)
+			if wild && err != nil && err.Error() == "no cdrom inserted" {
+				// suppress error if more than one target
+				err = nil
+			}
+
+			return true, nil
+		})
+	} else if c.BoolArgs["change"] {
+		f := c.StringArgs["path"]
+		if _, err := os.Stat(f); os.IsNotExist(err) {
 			return err
 		}
 
-		doVms = append(doVms, vm)
+		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+			kvm, ok := vm.(*KvmVM)
+			if !ok {
+				return false, nil
+			}
+
+			return true, kvm.ChangeCD(f, force)
+		})
 	}
 
-	if c.BoolArgs["eject"] {
-		for _, v := range doVms {
-			err := v.q.BlockdevEject("ide0-cd1")
-			v.CdromPath = ""
-			if err != nil {
-				return err
-			}
-		}
-	} else if c.BoolArgs["change"] {
-		for _, v := range doVms {
-			// First eject it, then change it
-			err := v.q.BlockdevEject("ide0-cd1")
-			v.CdromPath = ""
-			if err != nil {
-				return err
-			}
-
-			err = v.q.BlockdevChange("ide0-cd1", c.StringArgs["path"])
-			if err != nil {
-				return err
-			}
-			v.CdromPath = c.StringArgs["path"]
-		}
-	}
-
-	return nil
+	return unreachable()
 }
 
-func cliVmTag(c *minicli.Command, resp *minicli.Response) error {
-	target := c.StringArgs["target"]
+func cliVMTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	target := c.StringArgs["vm"]
 
 	key := c.StringArgs["key"]
 	if key == "" {
@@ -531,32 +538,48 @@ func cliVmTag(c *minicli.Command, resp *minicli.Response) error {
 			return errors.New("cannot assign to wildcard")
 		}
 
-		vms.SetTag(target, key, value)
+		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+			vm.SetTag(key, value)
 
-		return nil
+			return true, nil
+		})
 	}
 
 	if key == Wildcard {
-		resp.Header = []string{"ID", "Tag", "Value"}
+		resp.Header = []string{"name", "tag", "value"}
 	} else {
-		resp.Header = []string{"ID", "Value"}
+		resp.Header = []string{"name", "value"}
 	}
 
-	for _, tag := range vms.GetTags(target, key) {
-		row := []string{strconv.Itoa(tag.ID)}
+	// synchronizes appends to resp.Tabular
+	var mu sync.Mutex
+
+	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		name := vm.GetName()
 
 		if key == Wildcard {
-			row = append(row, tag.Key)
+			for k, v := range vm.GetTags() {
+				resp.Tabular = append(resp.Tabular, []string{
+					name, k, v,
+				})
+			}
+
+			return true, nil
 		}
 
-		row = append(row, tag.Value)
-		resp.Tabular = append(resp.Tabular, row)
-	}
+		// TODO: return false if tag not set?
+		resp.Tabular = append(resp.Tabular, []string{
+			name, vm.Tag(key),
+		})
 
-	return nil
+		return true, nil
+	})
 }
 
-func cliClearVmTag(c *minicli.Command, resp *minicli.Response) error {
+func cliClearVMTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// Get the specified tag name or use Wildcard if not provided
 	key, ok := c.StringArgs["key"]
 	if !ok {
@@ -564,116 +587,65 @@ func cliClearVmTag(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	// Get the specified VM target or use Wildcard if not provided
-	target, ok := c.StringArgs["target"]
+	target, ok := c.StringArgs["vm"]
 	if !ok {
 		target = Wildcard
 	}
 
-	vms.ClearTags(target, key)
+	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+		vm.ClearTag(key)
 
-	return nil
+		return true, nil
+	})
 }
 
-func cliVmLaunch(c *minicli.Command, resp *minicli.Response) error {
-	ns := GetNamespace()
-
-	if ns == nil && len(c.StringArgs) == 0 {
-		return errors.New("invalid command when namespace is not active")
+func cliVMLaunch(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	// HAX: prevent running as a subcommand
+	if c.Source == SourceMeshage {
+		return fmt.Errorf("cannot run `%s` via meshage", c.Original)
 	}
 
-	// nab the current VM config and update with the active namespace
-	vmConfig := vmConfig.Copy()
-	if ns != nil {
-		vmConfig.Namespace = ns.Name
-	}
+	// adding VM to queue
+	if len(c.StringArgs) > 0 {
+		// create a local copy of the current or specified VMConfig
+		var vmConfig VMConfig
 
-	// see note in wrapBroadcastCLI
-	if ns != nil && c.Source != ns.Name {
-		if len(c.StringArgs) > 0 {
-			arg := c.StringArgs["name"]
-
-			vmType, err := findVMType(c.BoolArgs)
-			if err != nil {
-				return err
+		if name := c.StringArgs["config"]; name != "" {
+			if _, ok := ns.savedVMConfig[name]; !ok {
+				return fmt.Errorf("config %v does not exist", name)
 			}
-
-			return ns.Queue(arg, vmType, vmConfig)
+			vmConfig = ns.savedVMConfig[name].Copy()
+		} else {
+			vmConfig = ns.vmConfig.Copy()
 		}
 
-		return ns.Launch()
+		vmType, err := findVMType(c.BoolArgs)
+		if err != nil {
+			return err
+		}
+
+		err = ns.Queue(c.StringArgs["name"], vmType, vmConfig)
+
+		if err == nil && !ns.QueueVMs {
+			// no error queueing and user has disabled queueing -- launch now!
+			return ns.Schedule(false)
+		}
+
+		return err
 	}
 
-	// expand the names to launch, scheduler should have ensured that they were
-	// globally unique.
-	names, err := ExpandLaunchNames(c.StringArgs["name"], vms)
+	return ns.Schedule(false)
+}
+
+func cliVMQmp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
 	if err != nil {
 		return err
 	}
 
-	if len(names) > 1 && vmConfig.UUID != "" {
-		return errors.New("cannot launch multiple VMs with a pre-configured UUID")
-	}
-
-	for i, name := range names {
-		if isReserved(name) {
-			return fmt.Errorf("`%s` is a reserved word -- cannot use for vm name", name)
-		}
-
-		if _, err := strconv.Atoi(name); err == nil {
-			return fmt.Errorf("`%s` is an integer -- cannot use for vm name", name)
-		}
-
-		// Check for conflicts within the provided names. Don't conflict with
-		// ourselves or if the name is unspecified.
-		for j, name2 := range names {
-			if i != j && name == name2 && name != "" {
-				return fmt.Errorf("`%s` is specified twice in VMs to launch", name)
-			}
-		}
-	}
-
-	noblock := c.BoolArgs["noblock"]
-
-	vmType, err := findVMType(c.BoolArgs)
-	if err != nil {
-		return err
-	}
-
-	errChan := vms.Launch(QueuedVMs{names, vmType, vmConfig})
-
-	// Collect all the errors from errChan and turn them into a string
-	collectErrs := func() error {
-		errs := []error{}
-		for err := range errChan {
-			errs = append(errs, err)
-		}
-
-		return makeErrSlice(errs)
-	}
-
-	if noblock {
-		go func() {
-			if err := collectErrs(); err != nil {
-				log.Errorln(err)
-			}
-		}()
-
-		return nil
-	}
-
-	return collectErrs()
-}
-
-func cliVmFlush(c *minicli.Command, resp *minicli.Response) error {
-	vms.Flush()
-
-	return nil
-}
-
-func cliVmQmp(c *minicli.Command, resp *minicli.Response) error {
-	vm, err := vms.FindKvmVM(c.StringArgs["vm"])
-	if err != nil {
-		return err
+	var m map[string]interface{}
+	if err := json.Unmarshal([]byte(c.StringArgs["qmp"]), &m); err != nil {
+		return fmt.Errorf("invalid JSON: %v", err)
 	}
 
 	out, err := vm.QMPRaw(c.StringArgs["qmp"])
@@ -685,7 +657,7 @@ func cliVmQmp(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliVmScreenshot(c *minicli.Command, resp *minicli.Response) error {
+func cliVMScreenshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	file := c.StringArgs["filename"]
 
 	var max int
@@ -698,7 +670,7 @@ func cliVmScreenshot(c *minicli.Command, resp *minicli.Response) error {
 		max = v
 	}
 
-	vm := vms.FindVM(c.StringArgs["vm"])
+	vm := ns.FindVM(c.StringArgs["vm"])
 	if vm == nil {
 		return vmNotFound(c.StringArgs["vm"])
 	}
@@ -724,11 +696,11 @@ func cliVmScreenshot(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliVmMigrate(c *minicli.Command, resp *minicli.Response) error {
+func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if _, ok := c.StringArgs["vm"]; !ok { // report current migrations
-		resp.Header = []string{"id", "name", "status", "%% complete"}
+		resp.Header = []string{"id", "name", "status", "complete (%)"}
 
-		for _, vm := range vms.FindKvmVMs() {
+		for _, vm := range ns.FindKvmVMs() {
 			status, complete, err := vm.QueryMigrate()
 			if err != nil {
 				return err
@@ -747,113 +719,212 @@ func cliVmMigrate(c *minicli.Command, resp *minicli.Response) error {
 		return nil
 	}
 
-	vm, err := vms.FindKvmVM(c.StringArgs["vm"])
+	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
 	if err != nil {
 		return err
 	}
 
-	return vm.Migrate(c.StringArgs["filename"])
+	fname := c.StringArgs["filename"]
+
+	if !filepath.IsAbs(fname) {
+		// TODO: should we write to the VM directory instead?
+		fname = filepath.Join(*f_iomBase, fname)
+	}
+
+	if _, err := os.Stat(filepath.Dir(fname)); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(fname), 0755); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	return vm.Migrate(fname)
 }
 
-func cliVmHotplug(c *minicli.Command, resp *minicli.Response) error {
-	vm, err := vms.FindKvmVM(c.StringArgs["vm"])
-	if err != nil {
-		return err
-	}
+func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	target := c.StringArgs["vm"]
 
 	if c.BoolArgs["add"] {
-		// generate an id by adding 1 to the highest in the list for the
-		// hotplug devices, 0 if it's empty
-		id := 0
-		for k, _ := range vm.hotplug {
-			if k >= id {
-				id = k + 1
+		f := c.StringArgs["filename"]
+		if _, err := os.Stat(f); os.IsNotExist(err) {
+			return err
+		}
+
+		version := c.StringArgs["version"]
+		serial := c.StringArgs["serial"]
+
+		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+			if kvm, ok := vm.(*KvmVM); ok {
+				return true, kvm.Hotplug(f, version, serial)
 			}
-		}
-		hid := fmt.Sprintf("hotplug%v", id)
-		log.Debugln("hotplug generated id:", hid)
 
-		r, err := vm.q.DriveAdd(hid, c.StringArgs["filename"])
-		if err != nil {
-			return err
-		}
-
-		log.Debugln("hotplug drive_add response:", r)
-		r, err = vm.q.USBDeviceAdd(hid)
-		if err != nil {
-			return err
-		}
-
-		log.Debugln("hotplug usb device add response:", r)
-		vm.hotplug[id] = c.StringArgs["filename"]
-
-		return nil
+			return false, nil
+		})
 	} else if c.BoolArgs["remove"] {
-		if c.StringArgs["disk"] == Wildcard {
-			for k := range vm.hotplug {
-				if err := vm.hotplugRemove(k); err != nil {
-					return err
-				}
+		disk := c.StringArgs["disk"]
+
+		id, err := strconv.Atoi(disk)
+		if err != nil && disk != Wildcard {
+			return fmt.Errorf("invalid disk: `%v`", disk)
+		}
+
+		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+			kvm, ok := vm.(*KvmVM)
+			if !ok {
+				return false, nil
 			}
 
-			return nil
-		}
+			if disk == Wildcard {
+				err := kvm.HotplugRemoveAll()
+				if wild && err != nil && err.Error() == "no hotplug devices to remove" {
+					// suppress error if more than one target
+					err = nil
+				}
+				return true, err
+			}
 
-		id, err := strconv.Atoi(c.StringArgs["disk"])
-		if err != nil {
-			return err
-		}
+			err := kvm.HotplugRemove(id)
+			if wild && err != nil && err.Error() == "no such hotplug device" {
+				// suppress error if more than one target
+				err = nil
+			}
 
-		return vm.hotplugRemove(id)
+			return true, err
+		})
 	}
 
-	// must be "show"
-	resp.Header = []string{"hotplug ID", "File"}
-	resp.Tabular = [][]string{}
+	resp.Header = []string{"name", "id", "file", "version"}
 
-	for k, v := range vm.hotplug {
-		resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(k), v})
-	}
+	// synchronizes appends to resp.Tabular
+	var mu sync.Mutex
 
-	return nil
+	return ns.VMs.Apply(Wildcard, func(vm VM, wild bool) (bool, error) {
+		kvm, ok := vm.(*KvmVM)
+		if !ok {
+			return false, nil
+		}
+
+		name := vm.GetName()
+		res := kvm.HotplugInfo()
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		for k, v := range res {
+			resp.Tabular = append(resp.Tabular, []string{
+				name, strconv.Itoa(k), v.Disk, v.Version,
+			})
+		}
+
+		return true, nil
+	})
 }
 
-func cliVmNetMod(c *minicli.Command, resp *minicli.Response) error {
-	vm := vms.FindVM(c.StringArgs["vm"])
-	if vm == nil {
-		return vmNotFound(c.StringArgs["vm"])
-	}
+func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	target := c.StringArgs["vm"]
 
 	pos, err := strconv.Atoi(c.StringArgs["tap"])
 	if err != nil {
 		return err
 	}
 
-	if c.BoolArgs["disconnect"] {
-		return vm.NetworkDisconnect(pos)
+	var vlan int
+	if !c.BoolArgs["disconnect"] {
+		vlan, err = lookupVLAN(ns.Name, c.StringArgs["vlan"])
+		if err != nil {
+			return err
+		}
 	}
 
-	vlan, err := lookupVLAN(c.StringArgs["vlan"])
-	if err != nil {
-		return err
+	bridge := c.StringArgs["bridge"]
+
+	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+		var err error
+
+		log.Info("vm networks: %v", vm.GetNetworks())
+
+		if c.BoolArgs["disconnect"] {
+			err = vm.NetworkDisconnect(pos)
+		} else {
+			err = vm.NetworkConnect(pos, vlan, bridge)
+		}
+
+		if err != nil {
+			return true, err
+		}
+
+		log.Info("vm networks: %v", vm.GetNetworks())
+
+		if err := writeVMConfig(vm); err != nil {
+			// don't propagate this error
+			log.Warn("unable to update vm config for %v: %v", vm.GetID(), err)
+		}
+
+		return true, nil
+	})
+}
+
+func cliVMTop(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	d := time.Second
+	if c.StringArgs["duration"] != "" {
+		v, err := strconv.Atoi(c.StringArgs["duration"])
+		if err != nil {
+			return err
+		}
+
+		d = time.Duration(v) * time.Second
 	}
 
-	return vm.NetworkConnect(pos, c.StringArgs["bridge"], vlan)
+	resp.Header = []string{
+		"name",
+		"virt",
+		"res",
+		"shr",
+		"cpu",
+		"vcpu",
+		"time",
+		"procs",
+		"rx",
+		"tx",
+	}
+
+	fmtMB := func(i uint64) string {
+		return strconv.FormatUint(i/(uint64(1)<<20), 10)
+	}
+
+	for _, s := range ns.ProcStats(d) {
+		row := []string{
+			s.Name,
+			fmtMB(s.Size()),
+			fmtMB(s.Resident()),
+			fmtMB(s.Share()),
+			fmt.Sprintf("%.2f", s.CPU()*100),
+			fmt.Sprintf("%.2f", s.GuestCPU()*100),
+			s.Time().String(),
+			strconv.Itoa(s.Count()),
+			fmt.Sprintf("%.2f", s.RxRate),
+			fmt.Sprintf("%.2f", s.TxRate),
+		}
+
+		resp.Tabular = append(resp.Tabular, row)
+	}
+
+	return nil
 }
 
 // cliVMSuggest takes a prefix that could be the start of a VM name
 // and makes suggestions for VM names that have a common prefix. mask
 // can be used to only complete for VMs that are in a particular state (e.g.
 // running). Returns a list of suggestions.
-func cliVMSuggest(prefix string, mask VMState) []string {
-	if attached {
-		log.Warnln("cannot complete via -attach")
-		return nil
-	}
-
+func cliVMSuggest(ns *Namespace, prefix string, mask VMState, wild bool) []string {
 	res := []string{}
 
-	for _, vm := range GlobalVMs() {
+	if strings.HasPrefix(Wildcard, prefix) && wild {
+		res = append(res, Wildcard)
+	}
+
+	for _, vm := range GlobalVMs(ns) {
 		if vm.GetState()&mask == 0 {
 			continue
 		}

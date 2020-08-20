@@ -71,3 +71,60 @@ foo3,BUILDING
 ## #.column name,state vm info
 ## #.json false
 
+## # Test apropos / prefix matching on filters and columns
+## .columns ip6,ip .columns ip,ip6 vm info
+ip6  | ip
+[]   | []
+[]   | []
+[]   | []
+[]   | []
+## .columns ip6,ip .columns ip6,ip vm info
+ip6  | ip
+[]   | []
+[]   | []
+[]   | []
+[]   | []
+## .columns ip,ip6 .columns ip,ip6 vm info
+ip   | ip6
+[]   | []
+[]   | []
+[]   | []
+[]   | []
+## .columns ip,ip6 .columns ip6,ip vm info
+ip   | ip6
+[]   | []
+[]   | []
+[]   | []
+[]   | []
+## .filter name~foo .col ip6,ip,name vm info
+ip6  | ip | name
+[]   | [] | foo1
+[]   | [] | foo2
+[]   | [] | foo3
+## .filter name~foo .col ip,ip6,name vm info
+ip   | ip6 | name
+[]   | []  | foo1
+[]   | []  | foo2
+[]   | []  | foo3
+
+## # Test apropos / prefix matching that should fail
+## .columns i vm info
+E: ambiguous column `i`
+## .columns i,s vm info
+E: ambiguous column `i`
+## .columns s vm info
+E: ambiguous column `s`
+## .filter name~foo .col state vm info
+E: no such column `name`
+
+## # Test preprocess
+## echo http://localhost/
+E: get /: file not found
+## .preprocess false
+## .preprocess
+false
+## echo http://localhost/
+http://localhost/
+## .preprocess true
+## .preprocess false echo http://localhost/
+http://localhost/

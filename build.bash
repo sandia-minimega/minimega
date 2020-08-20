@@ -5,15 +5,14 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 . $SCRIPT_DIR/env.bash
 
 # set the version from the repo
-VERSION=`git rev-parse HEAD`
+VERSION=`git --git-dir $SCRIPT_DIR/.git rev-parse HEAD`
 DATE=`date --rfc-3339=date`
 echo "package version
 
 var (
 	Revision = \"$VERSION\"
-	Date = \"$DATE\"
-)
-" > $SCRIPT_DIR/src/version/version.go
+	Date     = \"$DATE\"
+)" > $SCRIPT_DIR/src/version/version.go
 
 # build packages with race detection
 #echo "BUILD RACE PACKAGES (linux)"
@@ -33,18 +32,33 @@ var (
 
 # build packages
 echo "BUILD PACKAGES (linux)"
-for i in `ls $SCRIPT_DIR/src | grep -v vendor`
+for i in `ls $SCRIPT_DIR/src | grep -v vendor | grep -v plumbing`
 do
 	echo $i
 	go install $i
+	if [[ $? != 0 ]]; then
+		exit 1
+	fi
+done
+for i in `ls $SCRIPT_DIR/src/plumbing`
+do
+	echo $i
+	go install plumbing/$i
+	if [[ $? != 0 ]]; then
+		exit 1
+	fi
 done
 echo
 
 # build windows packages
 echo "BUILD PACKAGES (windows)"
-echo "protonuke"
-GOOS=windows go install protonuke
-echo "miniccc"
-GOOS=windows go install miniccc
+for i in "protonuke" "miniccc"; do
+    echo $i
+    GOOS=windows go build -o $SCRIPT_DIR/bin/$i.exe $i
+    if [[ $? != 0 ]]; then
+        exit 1
+    fi
+done
 echo
+
 unset GOOS

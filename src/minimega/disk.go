@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 )
 
 // #include "linux/fs.h"
@@ -57,13 +58,18 @@ in the 'files' directory.
 
 To inject files into an image:
 
-	disk inject window7_miniccc.qc2 files "miniccc":"Program Files/miniccc
+	disk inject window7_miniccc.qc2 files "miniccc":"Program Files/miniccc"
 
 Each argument after the image should be a source and destination pair,
 separated by a ':'. If the file paths contain spaces, use double quotes.
 Optionally, you may specify a partition (partition 1 will be used by default):
 
-	disk inject window7_miniccc.qc2:2 files "miniccc":"Program Files/miniccc
+	disk inject window7_miniccc.qc2:2 files "miniccc":"Program Files/miniccc"
+
+You may also specify that there is no partition on the disk, if your filesystem
+was directly written to the disk (this is highly unusual):
+
+	disk inject partitionless_disk.qc2:none files /miniccc:/miniccc
 
 You can optionally specify mount arguments to use with inject. Multiple options
 should be quoted. For example:
@@ -71,7 +77,8 @@ should be quoted. For example:
 	disk inject foo.qcow2 options "-t fat -o offset=100" files foo:bar
 
 Disk image paths are always relative to the 'files' directory. Users may also
-use absolute paths if desired.`,
+use absolute paths if desired. The backing images for snapshots should always
+be in the files directory.`,
 		Patterns: []string{
 			"disk <create,> <qcow2,raw> <image name> <size>",
 			"disk <snapshot,> <image> [dst image]",
@@ -85,6 +92,10 @@ use absolute paths if desired.`,
 
 // diskSnapshot creates a new image, dst, using src as the backing image.
 func diskSnapshot(src, dst string) error {
+	if !strings.HasPrefix(src, *f_iomBase) {
+		log.Warn("minimega expects backing images to be in the files directory")
+	}
+
 	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", src, dst)
 	if err != nil {
 		return fmt.Errorf("%v: %v", out, err)
@@ -148,41 +159,70 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		return err
 	}
 	log.Debug("temporary mount point: %v", mntDir)
+	defer func() {
+		if err := os.Remove(mntDir); err != nil {
+			log.Error("rm mount dir failed: %v", err)
+		}
+	}()
 
 	nbdPath, err := nbd.ConnectImage(dst)
 	if err != nil {
 		return err
 	}
-	defer diskInjectCleanup(mntDir, nbdPath)
+	defer func() {
+		if err := nbd.DisconnectDevice(nbdPath); err != nil {
+			log.Error("nbd disconnect failed: %v", err)
+		}
+	}()
+
+	path := nbdPath
 
 	f, err := os.Open(nbdPath)
 	if err != nil {
 		return err
 	}
+	defer f.Close()
 
-	syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), C.BLKRRPART, 0)
+	// decide whether to mount partition or raw disk
+	if partition != "none" {
+		// keep rereading partitions and waiting for them to show up for a bit
+		timeoutTime := time.Now().Add(5 * time.Second)
+		for i := 1; ; i++ {
+			if time.Now().After(timeoutTime) {
+				return errors.New("no partitions found on image")
+			}
 
-	// decide on a partition
-	if partition == "" {
-		_, err = os.Stat(nbdPath + "p1")
-		if err != nil {
-			return errors.New("no partitions found")
+			// tell kernel to reread partitions
+			syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), C.BLKRRPART, 0)
+
+			_, err = os.Stat(nbdPath + "p1")
+			if err == nil {
+				log.Info("partitions detected after %d attempt(s)", i)
+				break
+			}
+
+			time.Sleep(100 * time.Millisecond)
 		}
 
-		_, err = os.Stat(nbdPath + "p2")
-		if err == nil {
-			return errors.New("please specify a partition; multiple found")
+		// default to first partition if there is only one partition
+		if partition == "" {
+			_, err = os.Stat(nbdPath + "p2")
+			if err == nil {
+				return errors.New("please specify a partition; multiple found")
+			}
+
+			partition = "1"
 		}
 
-		partition = "1"
-	}
-
-	// mount new img
-	var path string
-	if partition == "none" {
-		path = nbdPath
-	} else {
 		path = nbdPath + "p" + partition
+
+		// check desired partition exists
+		_, err = os.Stat(path)
+		if err != nil {
+			return fmt.Errorf("desired partition %s not found", partition)
+		} else {
+			log.Info("desired partition %s found", partition)
+		}
 	}
 
 	// we use mount(8), because the mount syscall (mount(2)) requires we
@@ -211,6 +251,11 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 			return fmt.Errorf("%v: %v", out, err)
 		}
 	}
+	defer func() {
+		if err := syscall.Unmount(mntDir, 0); err != nil {
+			log.Error("unmount failed: %v", err)
+		}
+	}()
 
 	// copy files/folders into mntDir
 	for dst, src := range pairs {
@@ -221,6 +266,12 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		if err != nil {
 			return fmt.Errorf("%v: %v", out, err)
 		}
+	}
+
+	// explicitly flush buffers
+	out, err := processWrapper("blockdev", "--flushbufs", path)
+	if err != nil {
+		return fmt.Errorf("unable to flush: %v %v", out, err)
 	}
 
 	return nil
@@ -252,29 +303,8 @@ func parseInjectPairs(files []string) (map[string]string, error) {
 	return pairs, nil
 }
 
-// diskInjectCleanup handles unmounting, disconnecting nbd, and removing mount
-// directory after diskInject.
-func diskInjectCleanup(mntDir, nbdPath string) {
-	log.Debug("cleaning up vm inject: %s %s", mntDir, nbdPath)
-
-	out, err := processWrapper("umount", mntDir)
-	if err != nil {
-		log.Error("injectCleanup: %v, %v", out, err)
-	}
-
-	if err := nbd.DisconnectDevice(nbdPath); err != nil {
-		log.Error("qemu nbd disconnect: %v", err)
-		log.Warn("minimega was unable to disconnect %v", nbdPath)
-	}
-
-	err = os.Remove(mntDir)
-	if err != nil {
-		log.Error("rm mount dir: %v", err)
-	}
-}
-
-func cliDisk(c *minicli.Command, resp *minicli.Response) error {
-	image := c.StringArgs["image"]
+func cliDisk(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	image := filepath.Clean(c.StringArgs["image"])
 
 	// Ensure that relative paths are always relative to /files/
 	if !filepath.IsAbs(image) {
@@ -303,7 +333,7 @@ func cliDisk(c *minicli.Command, resp *minicli.Response) error {
 
 		return diskSnapshot(image, dst)
 	} else if c.BoolArgs["inject"] {
-		partition := "1"
+		var partition string
 
 		if strings.Contains(image, ":") {
 			parts := strings.Split(image, ":")
@@ -338,7 +368,7 @@ func cliDisk(c *minicli.Command, resp *minicli.Response) error {
 			return err
 		}
 
-		resp.Header = []string{"image", "format", "virtual size", "disk size", "backing file"}
+		resp.Header = []string{"image", "format", "virtualsize", "disksize", "backingfile"}
 		resp.Tabular = append(resp.Tabular, []string{
 			image, info.Format, info.VirtualSize, info.DiskSize, info.BackingFile,
 		})
@@ -346,6 +376,5 @@ func cliDisk(c *minicli.Command, resp *minicli.Response) error {
 		return nil
 	}
 
-	// boo, should be unreachable
-	return errors.New("unreachable")
+	return unreachable()
 }

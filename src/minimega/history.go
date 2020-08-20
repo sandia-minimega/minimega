@@ -46,18 +46,18 @@ the minimega command line and then saving them for later use.`,
 	},
 }
 
-func cliHistory(c *minicli.Command, resp *minicli.Response) error {
+func cliHistory(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Response = minicli.History()
 	return nil
 }
 
-func cliHistoryClear(c *minicli.Command, resp *minicli.Response) error {
+func cliHistoryClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	minicli.ClearHistory()
 	c.Record = false
 	return nil
 }
 
-func cliWrite(c *minicli.Command, resp *minicli.Response) error {
+func cliWrite(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	file, err := os.Create(c.StringArgs["file"])
 	if err != nil {
 		return err

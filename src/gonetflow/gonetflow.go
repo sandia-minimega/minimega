@@ -26,9 +26,11 @@ const (
 	UDP_BUFFER_DEPTH   = 65536
 )
 
+type Mode int
+
 const (
-	ASCII = iota
-	RAW
+	RAW Mode = iota
+	ASCII
 )
 
 type Netflow struct {
@@ -73,6 +75,17 @@ type Record struct {
 	ToS        int
 	SrcAS      int
 	DstAS      int
+}
+
+func (m Mode) String() string {
+	switch m {
+	case ASCII:
+		return "ascii"
+	case RAW:
+		return "raw"
+	}
+
+	return "???"
 }
 
 func (p Packet) GoString() string {
@@ -154,7 +167,7 @@ func (nf *Netflow) GetStats() string {
 	return o.String()
 }
 
-func (nf *Netflow) NewSocketWriter(network string, server string, mode int) error {
+func (nf *Netflow) NewSocketWriter(network string, server string, mode Mode) error {
 	log.Debugln("NewSocketWriter")
 	if _, ok := nf.writers[server]; ok {
 		return fmt.Errorf("netflow writer %v already exists", server)
@@ -186,7 +199,7 @@ func (nf *Netflow) NewSocketWriter(network string, server string, mode int) erro
 	return nil
 }
 
-func (nf *Netflow) NewFileWriter(filename string, mode int, compress bool) error {
+func (nf *Netflow) NewFileWriter(filename string, mode Mode, compress bool) error {
 	log.Debugln("NewFileWriter")
 	if _, ok := nf.writers[filename]; ok {
 		return fmt.Errorf("netflow writer %v already exists", filename)
@@ -240,6 +253,11 @@ func (nf *Netflow) RemoveWriter(path string) error {
 	}
 	nf.unregisterWriter(path)
 	return nil
+}
+
+// HasWriter returns true if we have any writers
+func (nf *Netflow) HasWriter() bool {
+	return len(nf.writers) > 0
 }
 
 func (nf *Netflow) unregisterWriter(path string) {

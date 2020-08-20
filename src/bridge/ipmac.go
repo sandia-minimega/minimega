@@ -2,14 +2,9 @@
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 
-// ipmac attempts to learn about active ip addresses associated with mac
-// addresses on a particular interface, usually a bridge that can see data from
-// many other interfaces. ipmac is used by creating a new ipmac object on a
-// particular interface, and providing one or more MAC addresses to filter on.
 package bridge
 
 import (
-	"io"
 	log "minilog"
 	"net"
 
@@ -37,14 +32,15 @@ func (b *Bridge) snooper() {
 
 	decodedLayers := []gopacket.LayerType{}
 
-	for {
+	for !b.destroyed() {
 		data, _, err := b.handle.ReadPacketData()
 		if err == pcap.NextErrorTimeoutExpired {
 			continue
-		} else if err == io.EOF {
-			break
 		} else if err != nil {
-			log.Error("error reading packet data: %v", err)
+			// only log error if it's not because we've been destroyed
+			if !b.destroyed() {
+				log.Error("error reading packet data: %v", err)
+			}
 			break
 		}
 
@@ -83,7 +79,7 @@ func (b *Bridge) updateIP(mac string, ip net.IP) {
 		return
 	}
 
-	log.Debug("got mac/ip pair:", mac, ip)
+	log.Debug("got mac/ip pair: %v, %v", mac, ip)
 
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()

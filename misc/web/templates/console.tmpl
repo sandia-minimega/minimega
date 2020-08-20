@@ -1,0 +1,50 @@
+{{define "content"}}
+<div id="content">
+    <div id="terminal"></div>
+</div>
+
+<link rel="stylesheet" href="/xterm.js/dist/xterm.css"/>
+<script src="/xterm.js/dist/xterm.js"></script>
+<script src="/xterm.js/addons/attach/attach.js"></script>
+<script src="/xterm.js/addons/attach/attach.js"></script>
+<script src="/xterm.js/addons/fit/fit.js"></script>
+<script>
+    $(document).ready(function() {
+		var pid = "{{ .Pid }}";
+
+		$('nav a[href$="' + "console" + '"]').addClass("current-view");
+
+		var terminalContainer = document.getElementById('terminal');
+		var term = new Terminal();
+
+		term.on('resize', function (size) {
+			var cols = size.cols;
+			var rows = size.rows;
+
+			var url = window.location.pathname + '/' + pid +'/size?cols=' + cols + '&rows=' + rows;
+
+			fetch(url, {method: 'POST', credentials: 'include'});
+		});
+
+		term.open(terminalContainer);
+		term.fit();
+
+		$(window).resize(function() {
+			term.fit();
+		});
+
+		protocol = "ws://";
+		if (window.location.protocol == "https:") {
+			protocol = "wss://";
+		}
+		path = window.location.pathname + '/' + pid + '/ws';
+		socketURL = protocol+window.location.host+path;
+
+		socket = new WebSocket(socketURL);
+		socket.onopen = function() {
+			term.attach(socket);
+			term._initialized = true;
+		};
+    });
+</script>
+{{end}}

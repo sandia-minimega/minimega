@@ -1,0 +1,76 @@
+OSPF options
+
+The minimega authors
+1 July 2019
+
+* Introduction
+
+OSPF exposes many options that you can tweak with minirouter. This article
+covers the `cost` metric.
+
+** Topology
+
+We will use the following simple topology:
+
+    vm config filesystem /root/uminirouterfs
+    vm config preinit /root/uminirouterfs/preinit
+    vm config networks a b
+    vm launch container routerA
+    vm config networks a c
+    vm launch container routerB
+    vm config networks b c
+    vm launch container routerC
+    router routerA interface 0 10.0.0.1/24
+    router routerA interface 1 10.0.1.1/24
+    router routerA route ospf 0 0
+    router routerA route ospf 0 1
+    router routerA commit
+    router routerB interface 0 10.0.0.2/24
+    router routerB interface 1 10.0.2.1/24
+    router routerB route ospf 0 0
+    router routerB route ospf 0 1
+    router routerB commit
+    router routerC interface 0 10.0.1.2/24
+    router routerC interface 1 10.0.2.2/24
+    router routerC route ospf 0 0
+    router routerC route ospf 0 1
+    router routerC commit
+    vm start all
+
+** OSPF costs
+
+OSPF uses cost to determine which paths to route through. These costs are
+typically set using the inverse of the speed but can be overridden. We will
+change the cost to force different routes through the network.
+
+Once the environment has launched, you can use `traceroute` through miniweb to
+see the path through the network:
+
+    // Connect to routerA via miniweb
+    / # traceroute 10.0.2.1
+    traceroute to 10.0.2.1 (10.0.2.1), 30 hops max, 46 byte packets
+     1  10.0.1.2 (10.0.1.2)  0.009 ms  0.005 ms  0.005 ms
+     2  10.0.2.1 (10.0.2.1)  0.005 ms  0.005 ms  0.005 ms
+
+In this environment, the path is A-C-B.
+
+We can tweak the cost on the A-C edge for routerA using the following commands:
+
+    router routerA route ospf 0 1 cost 20
+    router routerA commit
+
+The default cost is 10 so a cost of 20 changes the chosen route. After a few
+seconds, we can verify the new route:
+
+    // Connect to routerA via miniweb
+    / # traceroute 10.0.2.1
+    traceroute to 10.0.2.1 (10.0.2.1), 30 hops max, 46 byte packets
+     1  10.0.2.1 (10.0.2.1)  0.009 ms  0.005 ms  0.006 ms
+
+** Other OSPF options
+
+There are many other interface options for OSPF which are primarily used to
+control properties of the OSPF communication between the routers. See the
+interface section
+[[https://bird.network.cz/?get_doc&v=20&f=bird-6.html#ss6.8][here]] for more
+details.

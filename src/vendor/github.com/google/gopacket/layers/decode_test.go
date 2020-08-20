@@ -20,7 +20,7 @@ import (
 	"github.com/google/gopacket/bytediff"
 )
 
-var testSimpleTCPPacket []byte = []byte{
+var testSimpleTCPPacket = []byte{
 	0x00, 0x00, 0x0c, 0x9f, 0xf0, 0x20, 0xbc, 0x30, 0x5b, 0xe8, 0xd3, 0x49,
 	0x08, 0x00, 0x45, 0x00, 0x01, 0xa4, 0x39, 0xdf, 0x40, 0x00, 0x40, 0x06,
 	0x55, 0x5a, 0xac, 0x11, 0x51, 0x49, 0xad, 0xde, 0xfe, 0xe1, 0xc5, 0xf7,
@@ -177,7 +177,7 @@ func BenchmarkLazyNoCopy(b *testing.B) {
 
 func BenchmarkKnownStack(b *testing.B) {
 	stack := []gopacket.DecodingLayer{&Ethernet{}, &IPv4{}, &TCP{}, &gopacket.Payload{}}
-	var nf gopacket.DecodeFeedback = gopacket.NilDecodeFeedback
+	nf := gopacket.NilDecodeFeedback
 	for i := 0; i < b.N; i++ {
 		data := testSimpleTCPPacket[:]
 		for _, d := range stack {
@@ -203,6 +203,69 @@ func BenchmarkDecodingLayerParserHandlePanic(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		dlp.DecodeLayers(testSimpleTCPPacket, &decoded)
 	}
+}
+
+func benchmarkDecodingLayerParser(b *testing.B, dlc gopacket.DecodingLayerContainer, ignorePanic bool) {
+	decoded := make([]gopacket.LayerType, 0, 20)
+	dlc = dlc.Put(&Ethernet{})
+	dlc = dlc.Put(&IPv4{})
+	dlc = dlc.Put(&TCP{})
+	dlc = dlc.Put(&gopacket.Payload{})
+	dlp := gopacket.NewDecodingLayerParser(LayerTypeEthernet)
+	dlp.SetDecodingLayerContainer(dlc)
+	dlp.IgnorePanic = ignorePanic
+	for i := 0; i < b.N; i++ {
+		dlp.DecodeLayers(testSimpleTCPPacket, &decoded)
+	}
+}
+
+func BenchmarkDecodingLayerParserSparseIgnorePanic(b *testing.B) {
+	benchmarkDecodingLayerParser(b, gopacket.DecodingLayerSparse(nil), true)
+}
+
+func BenchmarkDecodingLayerParserSparseHandlePanic(b *testing.B) {
+	benchmarkDecodingLayerParser(b, gopacket.DecodingLayerSparse(nil), false)
+}
+
+func BenchmarkDecodingLayerParserArrayIgnorePanic(b *testing.B) {
+	benchmarkDecodingLayerParser(b, gopacket.DecodingLayerArray(nil), true)
+}
+
+func BenchmarkDecodingLayerParserArrayHandlePanic(b *testing.B) {
+	benchmarkDecodingLayerParser(b, gopacket.DecodingLayerArray(nil), false)
+}
+
+func BenchmarkDecodingLayerParserMapIgnorePanic(b *testing.B) {
+	benchmarkDecodingLayerParser(b, gopacket.DecodingLayerMap(nil), true)
+}
+
+func BenchmarkDecodingLayerParserMapHandlePanic(b *testing.B) {
+	benchmarkDecodingLayerParser(b, gopacket.DecodingLayerMap(nil), false)
+}
+
+func benchmarkDecodingLayerContainer(b *testing.B, dlc gopacket.DecodingLayerContainer) {
+	decoded := make([]gopacket.LayerType, 0, 20)
+	dlc = dlc.Put(&Ethernet{})
+	dlc = dlc.Put(&IPv4{})
+	dlc = dlc.Put(&TCP{})
+	dlc = dlc.Put(&gopacket.Payload{})
+	df := gopacket.NewDecodingLayerParser(LayerTypeEthernet)
+	decoder := dlc.LayersDecoder(LayerTypeEthernet, df)
+	for i := 0; i < b.N; i++ {
+		decoder(testSimpleTCPPacket, &decoded)
+	}
+}
+
+func BenchmarkDecodingLayerArray(b *testing.B) {
+	benchmarkDecodingLayerContainer(b, gopacket.DecodingLayerArray(nil))
+}
+
+func BenchmarkDecodingLayerMap(b *testing.B) {
+	benchmarkDecodingLayerContainer(b, gopacket.DecodingLayerMap(nil))
+}
+
+func BenchmarkDecodingLayerSparse(b *testing.B) {
+	benchmarkDecodingLayerContainer(b, gopacket.DecodingLayerSparse(nil))
 }
 
 func BenchmarkAlloc(b *testing.B) {
@@ -979,6 +1042,40 @@ func TestDecodingLayerParserFullTCPPacket(t *testing.T) {
 	}
 }
 
+func testDecodingLayerContainer(t *testing.T, dlc gopacket.DecodingLayerContainer) {
+	dlc = dlc.Put(&Ethernet{})
+	dlc = dlc.Put(&IPv4{})
+	dlc = dlc.Put(&TCP{})
+	dlc = dlc.Put(&gopacket.Payload{})
+	decoded := make([]gopacket.LayerType, 1)
+
+	// just as a DecodeFeedback
+	df := gopacket.NewDecodingLayerParser(LayerTypeEthernet)
+	decoder := dlc.LayersDecoder(LayerTypeEthernet, df)
+	typ, err := decoder(testSimpleTCPPacket, &decoded)
+	if err != nil {
+		t.Error("Error from decoder: ", err)
+	}
+	if typ != gopacket.LayerTypeZero {
+		t.Error("Unsupported layer type", typ)
+	}
+	if len(decoded) != 4 {
+		t.Error("Expected 4 layers parsed, instead got ", len(decoded))
+	}
+}
+
+func TestDecodingLayerMap(t *testing.T) {
+	testDecodingLayerContainer(t, gopacket.DecodingLayerMap(nil))
+}
+
+func TestDecodingLayerSparse(t *testing.T) {
+	testDecodingLayerContainer(t, gopacket.DecodingLayerSparse(nil))
+}
+
+func TestDecodingLayerArray(t *testing.T) {
+	testDecodingLayerContainer(t, gopacket.DecodingLayerArray(nil))
+}
+
 // testICMP is the packet:
 //   15:49:15.773265 IP 72.14.222.226 > 172.29.20.15: ICMP host 10.66.73.201 unreachable - admin prohibited filter, length 36
 //      0x0000:  24be 0527 0b17 001f cab3 75c0 0800 4500  $..'......u...E.
@@ -1074,7 +1171,56 @@ func BenchmarkDecodeMPLS(b *testing.B) {
 	}
 }
 
-// testPPPoE_ICMPv6 is the packet:
+// testPPPGREIPv4IPv6VLAN is the packet from http://packetlife.net/captures/gre_and_4over6.cap
+//04:35:03.821897 IP6 2402:f000:1:8e01::5555 > 2607:fcd0:100:2300::b108:2a6b: IP 16.0.0.200 > 192.52.166.154: GREv1, call 6016, seq 430001, ack 539254, length 119: IP 172.16.44.3.40768 > 8.8.8.8.53: 42540+ AAAA? xqt-detect-mode2-97712e88-167a-45b9-93ee-913140e76678. (71)
+//	0x0000:  6000 0000 008b 04f6 2402 f000 0001 8e01  `.......$.......
+//	0x0010:  0000 0000 0000 5555 2607 fcd0 0100 2300  ......UU&.....#.
+//	0x0020:  0000 0000 b108 2a6b 4500 008b 8caf 0000  ......*kE.......
+//	0x0030:  402f 75fe 1000 00c8 c034 a69a 3081 880b  @/u......4..0...
+//	0x0040:  0067 1780 0006 8fb1 0008 3a76 ff03 0021  .g........:v...!
+//	0x0050:  4500 0063 0000 4000 3c11 5667 ac10 2c03  E..c..@.<.Vg..,.
+//	0x0060:  0808 0808 9f40 0035 004f 2d23 a62c 0100  .....@.5.O-#.,..
+//	0x0070:  0001 0000 0000 0000 3578 7174 2d64 6574  ........5xqt-det
+//	0x0080:  6563 742d 6d6f 6465 322d 3937 3731 3265  ect-mode2-97712e
+//	0x0090:  3838 2d31 3637 612d 3435 6239 2d39 3365  88-167a-45b9-93e
+//	0x00a0:  652d 3931 3331 3430 6537 3636 3738 0000  e-913140e76678..
+//	0x00b0:  1c00 01
+var testPPPGREIPv4IPv6VLAN = []byte{
+	0xc5, 0x00, 0x00, 0x00, 0x82, 0xc4, 0x00, 0x12, 0x1e, 0xf2, 0x61, 0x3d, 0x81, 0x00, 0x00, 0x64,
+	0x86, 0xdd, 0x60, 0x00, 0x00, 0x00, 0x00, 0x8b, 0x04, 0xf6, 0x24, 0x02, 0xf0, 0x00, 0x00, 0x01,
+	0x8e, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x55, 0x55, 0x26, 0x07, 0xfc, 0xd0, 0x01, 0x00,
+	0x23, 0x00, 0x00, 0x00, 0x00, 0x00, 0xb1, 0x08, 0x2a, 0x6b, 0x45, 0x00, 0x00, 0x8b, 0x8c, 0xaf,
+	0x00, 0x00, 0x40, 0x2f, 0x75, 0xfe, 0x10, 0x00, 0x00, 0xc8, 0xc0, 0x34, 0xa6, 0x9a, 0x30, 0x81,
+	0x88, 0x0b, 0x00, 0x67, 0x17, 0x80, 0x00, 0x06, 0x8f, 0xb1, 0x00, 0x08, 0x3a, 0x76, 0xff, 0x03,
+	0x00, 0x21, 0x45, 0x00, 0x00, 0x63, 0x00, 0x00, 0x40, 0x00, 0x3c, 0x11, 0x56, 0x67, 0xac, 0x10,
+	0x2c, 0x03, 0x08, 0x08, 0x08, 0x08, 0x9f, 0x40, 0x00, 0x35, 0x00, 0x4f, 0xfb, 0x9f, 0xa6, 0x2c,
+	0x01, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x35, 0x78, 0x71, 0x74, 0x2d, 0x64,
+	0x65, 0x74, 0x65, 0x63, 0x74, 0x2d, 0x6d, 0x6f, 0x64, 0x65, 0x32, 0x2d, 0x39, 0x37, 0x37, 0x31,
+	0x32, 0x65, 0x38, 0x38, 0x2d, 0x31, 0x36, 0x37, 0x61, 0x2d, 0x34, 0x35, 0x62, 0x39, 0x2d, 0x39,
+	0x33, 0x65, 0x65, 0x2d, 0x39, 0x31, 0x33, 0x31, 0x34, 0x30, 0x65, 0x37, 0x36, 0x36, 0x37, 0x38,
+	0x00, 0x00, 0x1c, 0x00, 0x01,
+}
+
+func TestPPPGREIPv4IPv6VLAN(t *testing.T) {
+	p := gopacket.NewPacket(testPPPGREIPv4IPv6VLAN, LinkTypeEthernet, testDecodeOptions)
+	if p.ErrorLayer() != nil {
+		t.Error("Failed to decode packet:", p.ErrorLayer().Error())
+	}
+	checkLayers(p, []gopacket.LayerType{
+		LayerTypeEthernet,
+		LayerTypeDot1Q,
+		LayerTypeIPv6,
+		LayerTypeIPv4,
+		LayerTypeGRE,
+		LayerTypePPP,
+		LayerTypeIPv4,
+		LayerTypeUDP,
+		LayerTypeDNS,
+	}, t)
+	testSerialization(t, p, testPPPGREIPv4IPv6VLAN)
+}
+
+// testPPPoEICMPv6 is the packet:
 //   07:43:31.091560 PPPoE  [ses 0x11] IP6 fe80::c801:eff:fe88:8 > ff02::1: ICMP6, neighbor advertisement, tgt is fe80::c801:eff:fe88:8, length 24
 //      0x0000:  cc05 0e88 0000 ca01 0e88 0006 8864 1100  .............d..
 //      0x0010:  0011 0042 0057 6e00 0000 0018 3aff fe80  ...B.Wn.....:...
@@ -1082,7 +1228,7 @@ func BenchmarkDecodeMPLS(b *testing.B) {
 //      0x0030:  0000 0000 0000 0000 0000 0000 0001 8800  ................
 //      0x0040:  5083 8000 0000 fe80 0000 0000 0000 c801  P...............
 //      0x0050:  0eff fe88 0008                           ......
-var testPPPoE_ICMPv6 = []byte{
+var testPPPoEICMPv6 = []byte{
 	0xcc, 0x05, 0x0e, 0x88, 0x00, 0x00, 0xca, 0x01, 0x0e, 0x88, 0x00, 0x06, 0x88, 0x64, 0x11, 0x00,
 	0x00, 0x11, 0x00, 0x42, 0x00, 0x57, 0x6e, 0x00, 0x00, 0x00, 0x00, 0x18, 0x3a, 0xff, 0xfe, 0x80,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc8, 0x01, 0x0e, 0xff, 0xfe, 0x88, 0x00, 0x08, 0xff, 0x02,
@@ -1091,8 +1237,8 @@ var testPPPoE_ICMPv6 = []byte{
 	0x0e, 0xff, 0xfe, 0x88, 0x00, 0x08,
 }
 
-func TestPPPoE_ICMPv6(t *testing.T) {
-	p := gopacket.NewPacket(testPPPoE_ICMPv6, LinkTypeEthernet, testDecodeOptions)
+func TestPPPoEICMPv6(t *testing.T) {
+	p := gopacket.NewPacket(testPPPoEICMPv6, LinkTypeEthernet, testDecodeOptions)
 	if p.ErrorLayer() != nil {
 		t.Error("Failed to decode packet:", p.ErrorLayer().Error())
 	}
@@ -1104,15 +1250,15 @@ func TestPPPoE_ICMPv6(t *testing.T) {
 		LayerTypeICMPv6,
 		gopacket.LayerTypePayload,
 	}, t)
-	testSerialization(t, p, testPPPoE_ICMPv6)
+	testSerialization(t, p, testPPPoEICMPv6)
 }
-func BenchmarkDecodePPPoE_ICMPv6(b *testing.B) {
+func BenchmarkDecodePPPoEICMPv6(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		gopacket.NewPacket(testPPPoE_ICMPv6, LinkTypeEthernet, gopacket.NoCopy)
+		gopacket.NewPacket(testPPPoEICMPv6, LinkTypeEthernet, gopacket.NoCopy)
 	}
 }
 
-var testPFLog_UDP = []byte{
+var testPFLogUDP = []byte{
 	0x3d, 0x02, 0x00, 0x00, 0x65, 0x6e, 0x30, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x6c, 0x6f, 0x67, 0x67, 0x69, 0x6e, 0x67, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xae, 0xff, 0xff, 0xff, 0x7f,
@@ -1122,8 +1268,8 @@ var testPFLog_UDP = []byte{
 	0x01, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 }
 
-func TestPFLog_UDP(t *testing.T) {
-	p := gopacket.NewPacket(testPFLog_UDP, LinkTypePFLog, testDecodeOptions)
+func TestPFLogUDP(t *testing.T) {
+	p := gopacket.NewPacket(testPFLogUDP, LinkTypePFLog, testDecodeOptions)
 	if p.ErrorLayer() != nil {
 		t.Error("Failed to decode packet:", p.ErrorLayer().Error())
 	}
@@ -1219,4 +1365,16 @@ func TestSCTPChunkBadLength(t *testing.T) {
 	// this panic'd previously due to a zero length chunk getting
 	// repeatedly read
 	gopacket.NewPacket(data, LinkTypeEthernet, gopacket.Default)
+}
+
+// TestSTP
+func TestSTP(t *testing.T) {
+	testSTPpacket := []byte{
+		0x01, 0x80, 0xC2, 0x00, 0x00, 0x00, 0x00, 0x1C, 0x0E, 0x87, 0x85, 0x04, 0x00, 0x26, 0x42, 0x42,
+		0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x64, 0x00, 0x1C, 0x0E, 0x87, 0x78, 0x00, 0x00, 0x00,
+		0x00, 0x04, 0x80, 0x64, 0x00, 0x1C, 0x0E, 0x87, 0x85, 0x00, 0x80, 0x04, 0x01, 0x00, 0x14, 0x00,
+		0x02, 0x00, 0x0F, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	}
+	p := gopacket.NewPacket(testSTPpacket, LinkTypeEthernet, testDecodeOptions)
+	checkLayers(p, []gopacket.LayerType{LayerTypeEthernet, LayerTypeLLC, LayerTypeSTP}, t)
 }

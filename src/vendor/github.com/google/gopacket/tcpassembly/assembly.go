@@ -32,7 +32,7 @@ var memLog = flag.Bool("assembly_memuse_log", false, "If true, the github.com/go
 var debugLog = flag.Bool("assembly_debug_log", false, "If true, the github.com/google/gopacket/tcpassembly library will log verbose debugging information (at least one line per packet)")
 
 const invalidSequence = -1
-const uint32Max = 0xFFFFFFFF
+const uint32Size = 1 << 32
 
 // Sequence is a TCP sequence number.  It provides a few convenience functions
 // for handling TCP wrap-around.  The sequence should always be in the range
@@ -52,17 +52,17 @@ type Sequence int64
 // uint32 space to be after any sequence in the last quarter of that space, thus
 // wrapping the uint32 space.
 func (s Sequence) Difference(t Sequence) int {
-	if s > uint32Max-uint32Max/4 && t < uint32Max/4 {
-		t += uint32Max
-	} else if t > uint32Max-uint32Max/4 && s < uint32Max/4 {
-		s += uint32Max
+	if s > uint32Size-uint32Size/4 && t < uint32Size/4 {
+		t += uint32Size
+	} else if t > uint32Size-uint32Size/4 && s < uint32Size/4 {
+		s += uint32Size
 	}
 	return int(t - s)
 }
 
 // Add adds an integer to a sequence and returns the resulting sequence.
 func (s Sequence) Add(t int) Sequence {
-	return (s + Sequence(t)) & uint32Max
+	return (s + Sequence(t)) & (uint32Size - 1)
 }
 
 // Reassembly objects are passed by an Assembler into Streams using the
@@ -148,8 +148,7 @@ func (c *pageCache) next(ts time.Time) (p *page) {
 	p, c.free = c.free[i], c.free[:i]
 	p.prev = nil
 	p.next = nil
-	p.Seen = ts
-	p.Bytes = p.buf[:0]
+	p.Reassembly = Reassembly{Bytes: p.buf[:0], Seen: ts}
 	c.used++
 	return p
 }
@@ -201,7 +200,13 @@ func (p *StreamPool) connections() []*connection {
 	return conns
 }
 
-// FlushOlderThan finds any streams waiting for packets older than
+// FlushOptions provide options for flushing connections.
+type FlushOptions struct {
+	T        time.Time // If nonzero, only connections with data older than T are flushed
+	CloseAll bool      // If true, ALL connections are closed post flush, not just those that correctly see FIN/RST.
+}
+
+// FlushWithOptions finds any streams waiting for packets older than
 // the given time, and pushes through the data they have (IE: tells
 // them to stop waiting and skip the data they're waiting for).
 //
@@ -221,9 +226,13 @@ func (p *StreamPool) connections() []*connection {
 // AND the connection has not received any bytes since the passed-in time,
 // the connection will be closed.
 //
+// If CloseAll is set, it will close out connections that have been drained.
+// Regardless of the CloseAll setting, connections stale for the specified
+// time will be closed.
+//
 // Returns the number of connections flushed, and of those, the number closed
 // because of the flush.
-func (a *Assembler) FlushOlderThan(t time.Time) (flushed, closed int) {
+func (a *Assembler) FlushWithOptions(opt FlushOptions) (flushed, closed int) {
 	conns := a.connPool.connections()
 	closes := 0
 	flushes := 0
@@ -235,7 +244,7 @@ func (a *Assembler) FlushOlderThan(t time.Time) (flushed, closed int) {
 			conn.mu.Unlock()
 			continue
 		}
-		for conn.first != nil && conn.first.Seen.Before(t) {
+		for conn.first != nil && conn.first.Seen.Before(opt.T) {
 			a.skipFlush(conn)
 			flushed = true
 			if conn.closed {
@@ -243,7 +252,7 @@ func (a *Assembler) FlushOlderThan(t time.Time) (flushed, closed int) {
 				break
 			}
 		}
-		if !conn.closed && conn.first == nil && conn.lastSeen.Before(t) {
+		if opt.CloseAll && !conn.closed && conn.first == nil && conn.lastSeen.Before(opt.T) {
 			flushed = true
 			a.closeConnection(conn)
 			closes++
@@ -254,6 +263,11 @@ func (a *Assembler) FlushOlderThan(t time.Time) (flushed, closed int) {
 		conn.mu.Unlock()
 	}
 	return flushes, closes
+}
+
+// FlushOlderThan calls FlushWithOptions with the CloseAll option set to true.
+func (a *Assembler) FlushOlderThan(t time.Time) (flushed, closed int) {
+	return a.FlushWithOptions(FlushOptions{CloseAll: true, T: t})
 }
 
 // FlushAll flushes all remaining data into all remaining connections, closing

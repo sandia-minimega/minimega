@@ -5,10 +5,10 @@
 package minipager
 
 import (
-	"bufio"
 	"fmt"
-	"goreadline"
 	log "minilog"
+	"os"
+	"os/exec"
 	"strings"
 	"syscall"
 	"unsafe"
@@ -41,29 +41,25 @@ func (_ defaultPager) Page(output string) {
 		return
 	}
 
-	log.Debug("term height: %d", size.Row)
+	lines := strings.Count(output, "\n")
 
-	prompt := "-- press [ENTER] to show more, EOF to discard --"
-
-	scanner := bufio.NewScanner(strings.NewReader(output))
-outer:
-	for {
-		for i := uint16(0); i < size.Row-1; i++ {
-			if scanner.Scan() {
-				fmt.Println(scanner.Text()) // Println will add back the final '\n'
-			} else {
-				break outer // finished consuming from scanner
-			}
-		}
-
-		_, err := goreadline.Readline(prompt, false)
-		if err != nil {
-			fmt.Println()
-			break outer // EOF
-		}
+	if lines < 2*int(size.Row) {
+		fmt.Println(output)
+		return
 	}
 
-	if err := scanner.Err(); err != nil {
+	fmt.Printf("-- sending %v lines to $PAGER --\n", lines)
+
+	pager := os.Getenv("PAGER")
+	if pager == "" {
+		pager = "less"
+	}
+
+	cmd := exec.Command(pager)
+	cmd.Stdin = strings.NewReader(output)
+	cmd.Stdout = os.Stdout
+
+	if err := cmd.Run(); err != nil {
 		log.Error("problem paging: %s", err)
 	}
 }

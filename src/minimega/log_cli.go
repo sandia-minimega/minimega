@@ -12,10 +12,16 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 var (
+	// current log level
+	logLevel log.Level
+	// file that we are currently logging to
 	logFile *os.File
+
+	logRing *log.Ring
 )
 
 var logCLIHandlers = []minicli.Handler{
@@ -45,6 +51,20 @@ Log to a file. To disable file logging, call "clear log file".`,
 			"log file [file]",
 		},
 		Call: wrapSimpleCLI(cliLogFile),
+	},
+	{ // log ring
+		HelpShort: "enable, disable, or dump log ring",
+		HelpLong: `
+The log ring contains recent log messages, if it is enabled. By default
+the ring is not enabled. When enabling it, the user can specify a size. The
+larger the size, the more memory the logs will consume. The log ring can be
+cleared by re-enabling it with the same (or different) size.
+
+To disable the log ring, call "clear log ring".`,
+		Patterns: []string{
+			"log ring [size]",
+		},
+		Call: wrapSimpleCLI(cliLogRing),
 	},
 	{ // log filter
 		HelpShort: "filter logging messages",
@@ -82,61 +102,49 @@ Resets state for logging. See "help log ..." for more information.`,
 			"clear log <stderr,>",
 			"clear log <filter,>",
 			"clear log <syslog,>",
+			"clear log <ring,>",
 		},
 		Call: wrapSimpleCLI(cliLogClear),
 	},
 }
 
-func cliLogLevel(c *minicli.Command, resp *minicli.Response) error {
+func cliLogLevel(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if len(c.BoolArgs) == 0 {
 		// Print the level
-		resp.Response = *f_loglevel
+		resp.Response = logLevel.String()
 		return nil
 	}
 
 	// Bool args should only have a single key that is the log level
 	for k := range c.BoolArgs {
-		level, err := log.LevelInt(k)
-		if err != nil {
-			return errors.New("unreachable")
-		}
+		level, _ := log.ParseLevel(k)
 
-		*f_loglevel = k
-		// forget the error, if they don't exist we shouldn't be setting
-		// their level, so we're fine.
-		log.SetLevel("stdio", level)
-		log.SetLevel("file", level)
-		log.SetLevel("syslog", level)
+		logLevel = level
+		log.SetLevelAll(level)
 	}
 
 	return nil
 }
 
-func cliLogStderr(c *minicli.Command, resp *minicli.Response) error {
+func cliLogStderr(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["false"] {
 		// Turn off logging to stderr
-		log.DelLogger("stdio")
+		log.DelLogger("stderr")
 	} else if len(c.BoolArgs) == 0 {
 		// Print true or false depending on whether stderr is enabled
-		_, err := log.GetLevel("stdio")
+		_, err := log.GetLevel("stderr")
 		resp.Response = strconv.FormatBool(err == nil)
 	} else if c.BoolArgs["true"] {
-		// Enable stderr logging or adjust the level if already enabled
-		level, _ := log.LevelInt(*f_loglevel)
-		_, err := log.GetLevel("stdio")
-		if err != nil {
-			log.AddLogger("stdio", os.Stderr, level, true)
-		} else {
-			// TODO: Why do this? cliLogLevel updates stdio level whenever
-			// f_loglevel is changed.
-			log.SetLevel("stdio", level)
+		// Enable stderr logging if not already enabled
+		if _, err := log.GetLevel("stderr"); err != nil {
+			log.AddLogger("stderr", os.Stderr, logLevel, true)
 		}
 	}
 
 	return nil
 }
 
-func cliLogFile(c *minicli.Command, resp *minicli.Response) error {
+func cliLogFile(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if len(c.StringArgs) == 0 {
 		// Print true or false depending on whether file is enabled
 		if logFile != nil {
@@ -147,8 +155,6 @@ func cliLogFile(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	// Enable logging to file if it's not already enabled
-	level, _ := log.LevelInt(*f_loglevel)
-
 	if logFile != nil {
 		if err := stopFileLogger(); err != nil {
 			return err
@@ -166,11 +172,39 @@ func cliLogFile(c *minicli.Command, resp *minicli.Response) error {
 		return err
 	}
 
-	log.AddLogger("file", logFile, level, false)
+	log.AddLogger("file", logFile, logLevel, false)
 	return nil
 }
 
-func cliLogSyslog(c *minicli.Command, resp *minicli.Response) error {
+func cliLogRing(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if c.StringArgs["size"] == "" {
+		// must want a log dump
+		if logRing == nil {
+			return errors.New("cannot dump log ring, not enabled")
+		}
+
+		resp.Response = strings.Join(logRing.Dump(), "")
+		return nil
+	}
+
+	// make sure they passed a valid size
+	size, err := strconv.Atoi(c.StringArgs["size"])
+	if err != nil {
+		return err
+	}
+
+	if logRing != nil {
+		log.Info("re-enabling log ring")
+
+		log.DelLogger("ring")
+	}
+
+	logRing = log.NewRing(size)
+	log.AddLogRing("ring", logRing, logLevel)
+	return nil
+}
+
+func cliLogSyslog(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	var network string
 	var address string
 
@@ -185,12 +219,10 @@ func cliLogSyslog(c *minicli.Command, resp *minicli.Response) error {
 		}
 	}
 
-	level, _ := log.LevelInt(*f_loglevel)
-
-	return log.AddSyslog(network, address, "minimega", level)
+	return log.AddSyslog(network, address, "minimega", logLevel)
 }
 
-func cliLogFilter(c *minicli.Command, resp *minicli.Response) error {
+func cliLogFilter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if len(c.StringArgs) == 0 {
 		var filters []string
 		loggers := log.Loggers()
@@ -229,7 +261,7 @@ func cliLogFilter(c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliLogClear(c *minicli.Command, resp *minicli.Response) error {
+func cliLogClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// Reset file if explicitly cleared or we're clearing everything
 	if c.BoolArgs["file"] || len(c.BoolArgs) == 0 {
 		if err := stopFileLogger(); err != nil {
@@ -244,16 +276,22 @@ func cliLogClear(c *minicli.Command, resp *minicli.Response) error {
 
 	// Reset level if explicitly cleared or we're clearing everything
 	if c.BoolArgs["level"] || len(c.BoolArgs) == 0 {
-		// Reset to default level
-		*f_loglevel = "error"
-		log.SetLevel("stdio", log.ERROR)
-		log.SetLevel("file", log.ERROR)
+		// Reset to level from command line flags
+		logLevel = log.LevelFlag
+
+		log.SetLevelAll(logLevel)
 	}
 
 	// Reset stderr if explicitly cleared or we're clearing everything
 	if c.BoolArgs["stderr"] || len(c.BoolArgs) == 0 {
 		// Delete logger to stdout
-		log.DelLogger("stdio")
+		log.DelLogger("stderr")
+	}
+
+	// Reset log ring if explicitly cleared or we're clearing everything
+	if c.BoolArgs["ring"] || len(c.BoolArgs) == 0 {
+		log.DelLogger("ring")
+		logRing = nil
 	}
 
 	if c.BoolArgs["filter"] || len(c.BoolArgs) == 0 {
@@ -273,6 +311,11 @@ func cliLogClear(c *minicli.Command, resp *minicli.Response) error {
 // stopFileLogger gets rid of the previous file logger
 func stopFileLogger() error {
 	log.DelLogger("file")
+
+	// no op
+	if logFile == nil {
+		return nil
+	}
 
 	err := logFile.Close()
 	if err != nil {

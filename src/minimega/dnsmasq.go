@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 )
 
 type dnsmasqServer struct {
@@ -126,7 +127,7 @@ func init() {
 
 func dnsmasqHostInfo(c *minicli.Command, resp *minicli.Response) {
 	// print info about the mapping
-	resp.Header = []string{"ID", "MAC", "IP"}
+	resp.Header = []string{"id", "mac", "ip"}
 	resp.Tabular = [][]string{}
 	if c.StringArgs["ID"] == Wildcard {
 		for id, v := range dnsmasqServers {
@@ -152,7 +153,7 @@ func dnsmasqHostInfo(c *minicli.Command, resp *minicli.Response) {
 
 func dnsmasqDNSInfo(c *minicli.Command, resp *minicli.Response) {
 	// print info
-	resp.Header = []string{"ID", "IP", "Hostname"}
+	resp.Header = []string{"id", "ip", "hostname"}
 	resp.Tabular = [][]string{}
 	if c.StringArgs["ID"] == Wildcard {
 		for id, v := range dnsmasqServers {
@@ -177,7 +178,7 @@ func dnsmasqDNSInfo(c *minicli.Command, resp *minicli.Response) {
 }
 
 func dnsmasqDHCPOptionInfo(c *minicli.Command, resp *minicli.Response) {
-	resp.Header = []string{"ID", "Option"}
+	resp.Header = []string{"id", "option"}
 	resp.Tabular = [][]string{}
 	if c.StringArgs["ID"] == Wildcard {
 		for id, v := range dnsmasqServers {
@@ -232,7 +233,7 @@ func (d *dnsmasqServer) writeDHCPopts() {
 	ioutil.WriteFile(filepath.Join(d.DHCPoptsdir, "dhcp-options"), []byte(contents), 0755)
 }
 
-func cliDnsmasqConfigure(c *minicli.Command, resp *minicli.Response) error {
+func cliDnsmasqConfigure(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	argID := c.StringArgs["ID"]
 	id, err := strconv.Atoi(argID)
 	if argID != Wildcard && err != nil {
@@ -305,11 +306,10 @@ func cliDnsmasqConfigure(c *minicli.Command, resp *minicli.Response) error {
 		return nil
 	}
 
-	// boo, should be unreachable
-	return errors.New("unreachable")
+	return unreachable()
 }
 
-func cliDnsmasq(c *minicli.Command, resp *minicli.Response) error {
+func cliDnsmasq(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.StringArgs["id"] == Wildcard {
 		// Must be "kill all"
 		return dnsmasqKillAll()
@@ -334,16 +334,16 @@ func cliDnsmasq(c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	// Must be "list"
-	resp.Header = []string{"ID", "Listening Address", "Min", "Max", "Path", "PID"}
+	resp.Header = []string{"id", "address", "min", "max", "path", "pid"}
 	resp.Tabular = [][]string{}
-	for id, c := range dnsmasqServers {
+	for id, s := range dnsmasqServers {
 		pid := dnsmasqPID(id)
 		resp.Tabular = append(resp.Tabular, []string{
 			strconv.Itoa(id),
-			c.Addr,
-			c.MinRange,
-			c.MaxRange,
-			c.Path,
+			s.Addr,
+			s.MinRange,
+			s.MaxRange,
+			s.Path,
 			strconv.Itoa(pid)})
 	}
 
@@ -368,12 +368,7 @@ func dnsmasqKill(id int) error {
 	}
 
 	log.Infoln("killing dnsmasq server:", pid)
-
-	_, err := processWrapper("kill", fmt.Sprintf("%v", pid))
-	if err != nil {
-		return err
-	}
-	return nil
+	return syscall.Kill(pid, syscall.SIGTERM)
 }
 
 func dnsmasqStart(ip, min, max, hosts string) error {
@@ -409,7 +404,11 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		return err
 	}
 
-	p := process("dnsmasq")
+	p, err := process("dnsmasq")
+	if err != nil {
+		return err
+	}
+
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 	cmd := &exec.Cmd{

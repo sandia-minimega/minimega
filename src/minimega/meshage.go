@@ -6,15 +6,17 @@ package main
 
 import (
 	"encoding/gob"
-	"fmt"
+	"errors"
 	"iomeshage"
 	"math"
 	"math/rand"
 	"meshage"
 	"minicli"
 	log "minilog"
+	"miniplumber"
 	"ranges"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 	"version"
@@ -32,8 +34,9 @@ type meshageResponse struct {
 
 // meshageVMLaunch is sent by the scheduler to launch VMs on a remote host
 type meshageVMLaunch struct {
-	QueuedVMs       // embed
-	TID       int32 // unique ID for command/response pair
+	Namespace  string
+	*QueuedVMs       // embed
+	TID        int32 // unique ID for command/response pair
 }
 
 // meshageVMResponse is sent back to the scheduler to notify it of any errors
@@ -60,10 +63,11 @@ func init() {
 	gob.Register(meshageResponse{})
 	gob.Register(meshageVMLaunch{})
 	gob.Register(meshageVMResponse{})
-	gob.Register(iomeshage.IOMMessage{})
+	gob.Register(iomeshage.Message{})
+	gob.Register(miniplumber.Message{})
 }
 
-func meshageInit(host string, namespace string, degree, msaTimeout uint, port int) {
+func meshageStart(host, namespace string, degree, msaTimeout uint, port int) error {
 	meshageNode, meshageMessages = meshage.NewNode(host, namespace, degree, port, version.Revision)
 
 	meshageNode.Snoop = meshageSnooper
@@ -74,10 +78,7 @@ func meshageInit(host string, namespace string, degree, msaTimeout uint, port in
 	go meshageHandler()
 	go meshageVMLauncher()
 
-	iomeshageInit(meshageNode)
-
-	// wait a bit to let things settle
-	time.Sleep(500 * time.Millisecond)
+	return iomeshageStart(meshageNode)
 }
 
 func meshageMux() {
@@ -92,8 +93,10 @@ func meshageMux() {
 			meshageVMLaunchChan <- m
 		case meshageVMResponse:
 			meshageVMResponseChan <- m
-		case iomeshage.IOMMessage:
+		case iomeshage.Message:
 			iom.Messages <- m
+		case miniplumber.Message:
+			plumber.Messages <- m
 		default:
 			log.Errorln("got invalid message!")
 		}
@@ -101,71 +104,30 @@ func meshageMux() {
 }
 
 func meshageSnooper(m *meshage.Message) {
-	if reflect.TypeOf(m.Body) == reflect.TypeOf(iomeshage.IOMMessage{}) {
-		i := m.Body.(iomeshage.IOMMessage)
+	if reflect.TypeOf(m.Body) == reflect.TypeOf(iomeshage.Message{}) {
+		i := m.Body.(iomeshage.Message)
 		iom.MITM(&i)
 	}
 }
 
-// meshageRecipients expands a hosts into a list of hostnames. Supports
-// expanding Wildcard to all hosts in the mesh or all hosts in the active
-// namespace.
-func meshageRecipients(hosts string) ([]string, error) {
-	ns := GetNamespace()
-
-	if hosts == Wildcard {
-		if ns == nil {
-			return meshageNode.BroadcastRecipients(), nil
-		}
-
-		recipients := []string{}
-
-		// Wildcard expands to all hosts in the namespace, except the local
-		// host, if included
-		for host := range ns.Hosts {
-			if host == hostname {
-				log.Info("excluding localhost, %v, from `%v`", hostname, Wildcard)
-				continue
-			}
-
-			recipients = append(recipients, host)
-		}
-
-		return recipients, nil
-	}
-
+// meshageSend sends a command to a list of hosts, returning a channel that the
+// responses will be sent to. This is non-blocking -- the channel is created
+// and then returned after a couple of sanity checks.
+func meshageSend(c *minicli.Command, hosts string) (<-chan minicli.Responses, error) {
 	recipients, err := ranges.SplitList(hosts)
 	if err != nil {
 		return nil, err
 	}
 
-	// If a namespace is active, warn if the user is trying to mesh send hosts
-	// outside the namespace
-	if ns != nil {
-		for _, host := range recipients {
-			if !ns.Hosts[host] {
-				log.Warn("%v is not part of namespace %v", host, ns.Name)
+	for _, r := range recipients {
+		if r == Wildcard {
+			if len(recipients) > 1 {
+				return nil, errors.New("wildcard included amongst list of recipients")
 			}
+
+			recipients = meshageNode.BroadcastRecipients()
+			break
 		}
-	}
-
-	return recipients, nil
-}
-
-// meshageSend sends a command to a list of hosts, returning a channel that the
-// responses will be sent to. This is non-blocking -- the channel is created
-// and then returned after a couple of sanity checks. Should be not be invoked
-// as a goroutine as it checks the active namespace when expanding hosts.
-func meshageSend(c *minicli.Command, hosts string) (<-chan minicli.Responses, error) {
-	// HAX: Ensure we aren't sending read or mesh send commands over meshage
-	if hasCommand(c, "read") || hasCommand(c, "mesh send") {
-		return nil, fmt.Errorf("cannot run `%s` over mesh", c.Original)
-	}
-
-	// expand the hosts to a list of recipients, must be done synchronously
-	recipients, err := meshageRecipients(hosts)
-	if err != nil {
-		return nil, err
 	}
 
 	meshageCommandLock.Lock()
@@ -229,11 +191,15 @@ func meshageSend(c *minicli.Command, hosts string) (<-chan minicli.Responses, er
 // meshageLaunch sends a command to a launch VMs on the specified hosts,
 // returning a channel for the responses. This is non-blocking -- the channel
 // is created and then returned after a couple of sanity checks.
-func meshageLaunch(host string, queued QueuedVMs) <-chan minicli.Responses {
+func meshageLaunch(host, namespace string, queued *QueuedVMs) <-chan minicli.Responses {
 	out := make(chan minicli.Responses)
 
 	to := []string{host}
-	msg := meshageVMLaunch{QueuedVMs: queued, TID: rand.Int31()}
+	msg := meshageVMLaunch{
+		Namespace: namespace,
+		QueuedVMs: queued,
+		TID:       rand.Int31(),
+	}
 
 	go func() {
 		defer close(out)
@@ -256,8 +222,9 @@ func meshageLaunch(host string, queued QueuedVMs) <-chan minicli.Responses {
 				} else {
 					// wrap response up into a minicli.Response
 					resp := &minicli.Response{
-						Host:  host,
-						Error: strings.Join(body.Errors, "\n"),
+						Host:     host,
+						Response: strconv.Itoa(len(body.Errors)),
+						Error:    strings.Join(body.Errors, "\n"),
 					}
 
 					out <- minicli.Responses{resp}

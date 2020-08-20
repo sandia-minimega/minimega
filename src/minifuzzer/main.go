@@ -29,10 +29,6 @@ var (
 	f_exclude  = flag.String("exclude", "quit,read,write,deploy,nuke,shell", "commands to skip")
 	f_chars    = flag.String("chars", chars, "chars to use when generating strings for commands")
 	f_values   = flag.String("values", "foo,bar,test,0,1,2,3,all", "fixed values to use when generating commands")
-
-	f_loglevel = flag.String("level", "warn", "set log level: [debug, info, warn, error, fatal]")
-	f_log      = flag.Bool("v", true, "log on stderr")
-	f_logfile  = flag.String("logfile", "", "also log to file")
 )
 
 var (
@@ -59,10 +55,8 @@ func dial(retries int) (*miniclient.Conn, error) {
 
 // run a command against a live minimega instance, logging the command and the
 // response for inspection.
-func run(mm *miniclient.Conn, s string) {
-	log.Info("minimega: `%v`", s)
-
-	cmd := &minicli.Command{Original: s}
+func run(mm *miniclient.Conn, cmd string) {
+	log.Info("minimega: `%v`", cmd)
 
 	var res string
 
@@ -182,8 +176,6 @@ outerLoop:
 			run(mm, cmd)
 		}
 	}
-
-	return nil
 }
 
 // cleanup attempts to clean up minimega after a crash using the `-force` flag
@@ -216,7 +208,7 @@ func cleanup() error {
 func main() {
 	flag.Parse()
 
-	logSetup()
+	log.Init()
 
 	log.Debug("using minimega: %v", *f_minimega)
 

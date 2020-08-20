@@ -1,0 +1,221 @@
+## # static routes
+## clear cc responses
+## vm config filesystem $images/minirouterfs
+## vm config preinit $images/minirouterfs/preinit
+## vm config net a b
+## vm launch container routerA
+## vm config net b c
+## vm launch container routerB
+## vm config net a,00:1f:53:02:0b:51
+## vm launch container vmA
+## vm config net c,00:1f:53:02:0b:52
+## vm launch container vmB
+## router routerA interface 0 1.0.0.1/24
+## router routerA interface 1 2.0.0.1/24
+## router routerA dhcp 1.0.0.0 static 00:1f:53:02:0b:51 1.0.0.3
+## router routerA route static 3.0.0.0/24 2.0.0.2
+## router routerA route static 4.0.0.0/24 4.0.0.2
+## router routerA
+IPs:
+Network: 0: [1.0.0.1/24]
+Network: 1: [2.0.0.1/24]
+
+Listen address: 1.0.0.0
+Low address:    
+High address:   
+Router:         
+DNS:            
+Static IPs:     
+     00:1f:53:02:0b:51 1.0.0.3
+
+Static Routes:
+3.0.0.0/24	2.0.0.2
+4.0.0.0/24	4.0.0.2
+
+Log:
+## clear router routerA route static 4.0.0.0/24
+## router routerA
+IPs:
+Network: 0: [1.0.0.1/24]
+Network: 1: [2.0.0.1/24]
+
+Listen address: 1.0.0.0
+Low address:    
+High address:   
+Router:         
+DNS:            
+Static IPs:     
+     00:1f:53:02:0b:51 1.0.0.3
+
+Static Routes:
+3.0.0.0/24	2.0.0.2
+
+Log:
+## clear router routerA route
+## router routerA
+IPs:
+Network: 0: [1.0.0.1/24]
+Network: 1: [2.0.0.1/24]
+
+Listen address: 1.0.0.0
+Low address:    
+High address:   
+Router:         
+DNS:            
+Static IPs:     
+     00:1f:53:02:0b:51 1.0.0.3
+
+Log:
+## router routerA route static 3.0.0.0/24 2.0.0.2
+## router routerA commit
+## shell sort /tmp/minimega/files/minirouter-routerA
+bird commit
+bird flush
+bird routerid 2.0.0.1
+bird static 3.0.0.0/24 2.0.0.2 null
+dnsmasq commit
+dnsmasq dhcp static 1.0.0.0 00:1f:53:02:0b:51 1.0.0.3
+dnsmasq flush
+ip add 0 1.0.0.1/24
+ip add 1 2.0.0.1/24
+ip flush
+log level error
+route del default
+## router routerB interface 0 2.0.0.2/24
+## router routerB interface 1 3.0.0.2/24
+## router routerB dhcp 3.0.0.0 static 00:1f:53:02:0b:52 3.0.0.3
+## router routerB route static 1.0.0.0/24 2.0.0.1
+## router routerB commit
+## router vmA interface 0 dhcp
+## router vmA gw 1.0.0.1
+## router vmA commit
+## router vmB interface 0 dhcp
+## router vmB gw 3.0.0.2
+## router vmB commit
+## # named static routes
+## router routerA route static 0.0.0.0/0 2.0.0.2 defaultroute
+## router routerA route static 10.0.0.0/24 0 foobar
+## router routerA route static 11.0.0.0/24 0 foobar
+## router routerA
+IPs:
+Network: 0: [1.0.0.1/24]
+Network: 1: [2.0.0.1/24]
+
+Listen address: 1.0.0.0
+Low address:    
+High address:   
+Router:         
+DNS:            
+Static IPs:     
+     00:1f:53:02:0b:51 1.0.0.3
+
+Static Routes:
+3.0.0.0/24	2.0.0.2
+
+Named Static Routes:
+defaultroute
+	0.0.0.0/0	2.0.0.2
+foobar
+	10.0.0.0/24
+	11.0.0.0/24
+
+Log:
+## clear router routerA route static 11.0.0.0/24 foobar
+## router routerA
+IPs:
+Network: 0: [1.0.0.1/24]
+Network: 1: [2.0.0.1/24]
+
+Listen address: 1.0.0.0
+Low address:    
+High address:   
+Router:         
+DNS:            
+Static IPs:     
+     00:1f:53:02:0b:51 1.0.0.3
+
+Static Routes:
+3.0.0.0/24	2.0.0.2
+
+Named Static Routes:
+defaultroute
+	0.0.0.0/0	2.0.0.2
+foobar
+	10.0.0.0/24
+
+Log:
+## clear router routerA route static all foobar
+## router routerA
+IPs:
+Network: 0: [1.0.0.1/24]
+Network: 1: [2.0.0.1/24]
+
+Listen address: 1.0.0.0
+Low address:    
+High address:   
+Router:         
+DNS:            
+Static IPs:     
+     00:1f:53:02:0b:51 1.0.0.3
+
+Static Routes:
+3.0.0.0/24	2.0.0.2
+
+Named Static Routes:
+defaultroute
+	0.0.0.0/0	2.0.0.2
+
+Log:
+## clear router routerA route namedstatic 
+## router routerA
+IPs:
+Network: 0: [1.0.0.1/24]
+Network: 1: [2.0.0.1/24]
+
+Listen address: 1.0.0.0
+Low address:    
+High address:   
+Router:         
+DNS:            
+Static IPs:     
+     00:1f:53:02:0b:51 1.0.0.3
+
+Static Routes:
+3.0.0.0/24	2.0.0.2
+
+Log:
+## # endtoend
+## vm start routerA,routerB
+## shell sleep 5
+## vm start vmA,vmB
+## shell sleep 10
+## cc filter hostname=routerA
+## cc exec route -n
+## clear cc filter
+## cc filter hostname=routerB
+## cc exec route -n
+## clear cc filter
+## cc filter hostname=vmA
+## cc exec bash -c 'ping -c 4 3.0.0.3 | grep -o "4 packets transmitted, 4 received"'
+## clear cc filter
+## cc filter hostname=vmB
+## cc exec bash -c 'ping -c 4 1.0.0.3 | grep -o "4 packets transmitted, 4 received"'
+## clear cc filter
+## shell sleep 10
+## cc responses 13 raw
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+1.0.0.0         0.0.0.0         255.255.255.0   U     0      0        0 veth0
+2.0.0.0         0.0.0.0         255.255.255.0   U     0      0        0 veth1
+3.0.0.0         2.0.0.2         255.255.255.0   UG    0      0        0 veth1
+## cc responses 14 raw
+Kernel IP routing table
+Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
+1.0.0.0         2.0.0.1         255.255.255.0   UG    0      0        0 veth0
+2.0.0.0         0.0.0.0         255.255.255.0   U     0      0        0 veth0
+3.0.0.0         0.0.0.0         255.255.255.0   U     0      0        0 veth1
+## cc responses 15 raw
+4 packets transmitted, 4 received
+## cc responses 16 raw
+4 packets transmitted, 4 received
+
