@@ -2113,14 +2113,7 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 
 	for _, u := range users {
 		if role.Allowed("users", "list", u.Username()) {
-			user := &proto.User{
-				Username:  u.Username(),
-				FirstName: u.FirstName(),
-				LastName:  u.LastName(),
-				RoleName:  u.RoleName(),
-			}
-
-			resp = append(resp, user)
+			resp = append(resp, util.UserToProtobuf(*u))
 		}
 	}
 
@@ -2133,8 +2126,6 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 
 	w.Write(body)
 }
-
-/*
 
 // POST /users
 func CreateUser(w http.ResponseWriter, r *http.Request) {
@@ -2158,72 +2149,41 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var data map[string]interface{}
-	if err := json.Unmarshal(body, &data); err != nil {
+	var req proto.CreateUserRequest
+	if err := unmarshaler.Unmarshal(body, &req); err != nil {
 		log.Error("unmashaling request body - %v", err)
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	var user rbac.User
+	user := rbac.NewUser(req.GetUsername(), req.GetPassword())
 
-	if uname, ok := data["username"].(string); ok {
-		user.Username = uname
-	} else {
-		log.Error("creating user: no username provided")
-		http.Error(w, "must provide username", http.StatusBadRequest)
+	user.Spec.FirstName = req.GetFirstName()
+	user.Spec.LastName = req.GetLastName()
+
+	uRole, err := rbac.RoleFromConfig(req.GetRoleName())
+	if err != nil {
+		log.Error("role name not found - %s", req.GetRoleName())
+		http.Error(w, "role not found", http.StatusBadRequest)
 		return
 	}
 
-	if pass, ok := data["password"].(string); ok {
-		user.Password = pass
-	} else {
-		log.Error("creating user: no password provided")
-		http.Error(w, "must provide password", http.StatusBadRequest)
-		return
-	}
+	uRole.SetResourceNames(req.GetResourceNames()...)
 
-	if first, ok := data["first_name"].(string); ok {
-		user.FirstName = first
-	}
+	// allow user to get their own user details
+	uRole.AddPolicy(
+		[]string{"users"},
+		[]string{req.GetUsername()},
+		[]string{"get"},
+	)
 
-	if last, ok := data["last_name"].(string); ok {
-		user.LastName = last
-	}
+	user.Spec.Role = uRole.Spec
 
-	if rname, ok := data["role_name"].(string); ok {
-		policies := rbac.CreateBasePoliciesForRole(rname)
+	user.Save()
 
-		if resources, ok := data["resource_names"].([]interface{}); ok {
-			names := make([]string, len(resources))
-			for i, name := range resources {
-				if name, ok := name.(string); ok {
-					names[i] = name
-				}
-			}
+	resp := util.UserToProtobuf(*user)
 
-			for _, policy := range policies {
-				policy.SetResourceNames(names...)
-			}
-		}
-
-		user.Role = rbac.NewRole(rname, policies...)
-
-		// allow user to get their own user details
-		user.Role.AddPolicies(&rbac.Policy{
-			Resources:     []string{"users"},
-			ResourceNames: []string{user.Username},
-			Verbs:         []string{"get"},
-		})
-	}
-
-	// NOTE: The `AddUser` function clears the provided password
-	if err := database.AddUser(&user); err != nil {
-		http.Error(w, "error creating user", http.StatusInternalServerError)
-		return
-	}
-
-	marshalled, err := json.Marshal(user)
+	body, err = marshaler.Marshal(resp)
 	if err != nil {
 		log.Error("marshaling user %s: %v", user.Username, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -2232,14 +2192,12 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	broker.Broadcast(
 		broker.NewRequestPolicy("users", "create", ""),
-		broker.NewResource("user", user.Username, "create"),
-		marshalled,
+		broker.NewResource("user", req.GetUsername(), "create"),
+		body,
 	)
 
-	w.Write(marshalled)
+	w.Write(body)
 }
-
-*/
 
 // GET /users/{username}
 func GetUser(w http.ResponseWriter, r *http.Request) {
@@ -2382,23 +2340,31 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	w.Write(marshalled)
 }
 
+*/
+
 // DELETE /users/{username}
 func DeleteUser(w http.ResponseWriter, r *http.Request) {
 	log.Debug("DeleteUser HTTP handler called")
 
 	var (
 		ctx   = r.Context()
+		user  = ctx.Value("user").(string)
 		role  = ctx.Value("role").(rbac.Role)
 		vars  = mux.Vars(r)
 		uname = vars["username"]
 	)
+
+	if user == uname {
+		http.Error(w, "you cannot delete your own user", http.StatusForbidden)
+		return
+	}
 
 	if !role.Allowed("users", "delete", uname) {
 		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
-	if err := database.DeleteUser(uname); err != nil {
+	if err := config.Delete("user/" + uname); err != nil {
 		log.Error("deleting user %s: %v", uname, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -2412,6 +2378,8 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+/*
 
 func Signup(w http.ResponseWriter, r *http.Request) {
 	log.Debug("Signup HTTP handler called")

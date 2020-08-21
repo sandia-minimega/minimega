@@ -12,6 +12,15 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
+var NAME_TO_ROLE_CONFIG = map[string]string{
+	"Global Admin":      "global-admin",
+	"Global Viewer":     "global-viewer",
+	"Experiment Admin":  "experiment-admin",
+	"Experiment User":   "experiment-user",
+	"Experiment Viewer": "experiment-viewer",
+	"VM Viewer":         "vm-viewer",
+}
+
 type Role struct {
 	Spec *v1.RoleSpec
 
@@ -19,6 +28,10 @@ type Role struct {
 }
 
 func RoleFromConfig(name string) (*Role, error) {
+	if rname, ok := NAME_TO_ROLE_CONFIG[name]; ok {
+		name = rname
+	}
+
 	c, err := config.Get("role/" + name)
 	if err != nil {
 		return nil, fmt.Errorf("getting role from store: %w", err)
@@ -40,7 +53,11 @@ func (this *Role) SetResourceNames(names ...string) error {
 		}
 
 		for _, name := range names {
-			// TODO: validate
+			// Checking to make sure pattern given in 'name' is valid. Thus, the
+			// string provided to match it against is useless.
+			if _, err := filepath.Match(name, "useless"); err != nil {
+				continue
+			}
 
 			policy.ResourceNames = append(policy.ResourceNames, name)
 		}

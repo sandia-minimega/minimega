@@ -5,6 +5,8 @@ import (
 	"phenix/types"
 	"phenix/web/cache"
 	"phenix/web/proto"
+	"phenix/web/rbac"
+	"sort"
 )
 
 func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []mm.VM) *proto.Experiment {
@@ -106,4 +108,34 @@ func ExperimentScheduleToProtobuf(exp types.Experiment) *proto.ExperimentSchedul
 	}
 
 	return &proto.ExperimentSchedule{Schedule: sched}
+}
+
+func UserToProtobuf(u rbac.User) *proto.User {
+	user := &proto.User{
+		Username:  u.Username(),
+		FirstName: u.FirstName(),
+		LastName:  u.LastName(),
+		RoleName:  u.RoleName(),
+	}
+
+	if r := u.Spec.Role; r != nil {
+		rnamemap := make(map[string]struct{})
+
+		for _, p := range r.Policies {
+			for _, n := range p.ResourceNames {
+				rnamemap[n] = struct{}{}
+			}
+		}
+
+		var rnames []string
+		for n := range rnamemap {
+			rnames = append(rnames, n)
+		}
+
+		sort.Strings(rnames)
+
+		user.ResourceNames = rnames
+	}
+
+	return user
 }

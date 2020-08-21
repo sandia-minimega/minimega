@@ -14,14 +14,21 @@ message User {
   string first_name = 2;
   string last_name = 3;
   string role_name = 4;
-  string resource_names = 5;
+  repeated string resource_names = 5;
 }
 
 message UserList {
   repeated User users = 1;
 }
 
-message CreateUserRequest { string user = 1; }
+message CreateUserRequest {
+  string username = 1;
+  string password = 2;
+  string first_name = 3;
+  string last_name = 4;
+  string role_name = 5;
+  repeated string resource_names = 6;
+}
 
 message UpdateUserRequest { string user = 1; }
 

@@ -30,7 +30,7 @@ type serverOptions struct {
 func newServerOptions(opts ...ServerOption) serverOptions {
 	o := serverOptions{
 		endpoint:  ":3000",
-		users:     []string{"admin@foo.com:foobar:global-admin"},
+		users:     []string{"admin@foo.com:foobar:Global Admin"},
 		allowCORS: true, // TODO: default to false
 	}
 
@@ -170,10 +170,10 @@ func Start(opts ...ServerOption) error {
 	api.HandleFunc("/hosts", GetClusterHosts).Methods("GET", "OPTIONS")
 	api.HandleFunc("/logs", GetLogs).Methods("GET", "OPTIONS")
 	api.HandleFunc("/users", GetUsers).Methods("GET", "OPTIONS")
-	// api.HandleFunc("/users", CreateUser).Methods("POST", "OPTIONS")
+	api.HandleFunc("/users", CreateUser).Methods("POST", "OPTIONS")
 	api.HandleFunc("/users/{username}", GetUser).Methods("GET", "OPTIONS")
 	//api.HandleFunc("/users/{username}", UpdateUser).Methods("PATCH", "OPTIONS")
-	//api.HandleFunc("/users/{username}", DeleteUser).Methods("DELETE", "OPTIONS")
+	api.HandleFunc("/users/{username}", DeleteUser).Methods("DELETE", "OPTIONS")
 	//api.HandleFunc("/signup", Signup).Methods("POST", "OPTIONS")
 	api.HandleFunc("/login", Login).Methods("GET", "POST", "OPTIONS")
 	api.HandleFunc("/logout", Logout).Methods("GET", "OPTIONS")
