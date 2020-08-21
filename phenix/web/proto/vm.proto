@@ -21,6 +21,7 @@ message VM {
 
 message VMList {
   repeated VM vms = 1;
+  uint32 total = 2;
 }
 
 message Capture {

@@ -12,12 +12,16 @@ import (
 	"phenix/api/experiment"
 	"phenix/api/vm"
 	"phenix/types"
+	"phenix/web/proto"
 	"phenix/web/rbac"
 	"phenix/web/util"
 
 	log "github.com/activeshadow/libminimega/minilog"
 	"github.com/gorilla/websocket"
+	"google.golang.org/protobuf/encoding/protojson"
 )
+
+var marshaler = protojson.MarshalOptions{EmitUnpopulated: true}
 
 type vmScope struct {
 	exp  string
@@ -187,7 +191,6 @@ func (this *Client) read() {
 			size = int(payload["page_size"].(float64))
 		)
 
-		// Reusing `payload` variable here for response.
 		payload = map[string]interface{}{"total": len(allowed)}
 
 		if sort != "" {
@@ -208,9 +211,12 @@ func (this *Client) read() {
 
 		this.Unlock()
 
-		payload["vms"] = allowed
+		resp := &proto.VMList{
+			Total: uint32(len(allowed)),
+			Vms:   util.VMsToProtobuf(allowed),
+		}
 
-		marshalled, err := json.Marshal(payload)
+		body, err := marshaler.Marshal(resp)
 		if err != nil {
 			log.Error("marshaling experiment %s VMs for WebSocket client: %v", exp, err)
 			continue
@@ -218,7 +224,7 @@ func (this *Client) read() {
 
 		this.publish <- Publish{
 			Resource: NewResource("experiment/vms", expName, "list"),
-			Result:   marshalled,
+			Result:   body,
 		}
 	}
 }
