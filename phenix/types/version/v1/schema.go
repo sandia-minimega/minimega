@@ -119,6 +119,7 @@ components:
               enum:
               - kvm
               - container
+              - ""
               default: kvm
               example: kvm
             snapshot:
@@ -126,11 +127,13 @@ components:
               title: Snapshot Mode
               default: false
               example: false
+              nullable: true
             do_not_boot:
               type: boolean
               title: Do Not Boot VM
               default: false
               example: false
+              nullable: true
         hardware:
           type: object
           title: Node Hardware Configuration
@@ -146,6 +149,7 @@ components:
               - Haswell
               - core2duo
               - pentium3
+              - ""
               default: Broadwell
               example: Broadwell
             vcpus:
@@ -194,6 +198,7 @@ components:
                     - floppy
                     - pflash
                     - virtio
+                    - ""
                     default: ide
                     example: ide
                   cache_mode:
@@ -205,6 +210,7 @@ components:
                     - unsafe
                     - directsync
                     - writethrough
+                    - ""
                     default: writeback
                     example: writeback
                   inject_partition:
@@ -212,6 +218,7 @@ components:
                     title: Disk Image Partition to Inject Files Into
                     default: 1
                     example: 2
+                    nullable: true
         network:
           type: object
           title: Node Network Configuration

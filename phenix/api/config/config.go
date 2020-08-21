@@ -7,10 +7,12 @@ import (
 	"phenix/api/experiment"
 	"phenix/store"
 	"phenix/types"
+	"phenix/types/version"
 	v1 "phenix/types/version/v1"
 	"phenix/util"
 	"phenix/util/editor"
 
+	"github.com/activeshadow/structs"
 	"github.com/mitchellh/mapstructure"
 	"gopkg.in/yaml.v3"
 )
@@ -109,6 +111,47 @@ func Create(path string, validate bool) (*types.Config, error) {
 	c, err := types.NewConfigFromFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("creating new config from file: %w", err)
+	}
+
+	if c.Kind == "Topology" {
+		ver := version.StoredVersion["Topology"]
+
+		if c.APIVersion() != ver {
+			switch ver {
+			case "v1":
+				specs, err := v1.UpgradeTopology(c.APIVersion(), c.Spec)
+				if err != nil {
+					return nil, fmt.Errorf("upgrading topology to v1: %w", err)
+				}
+
+				for _, s := range specs {
+					switch spec := s.(type) {
+					case v1.TopologySpec:
+						c.Version = "phenix.sandia.gov/v1"
+						c.Spec = structs.MapDefaultCase(spec, structs.CASESNAKE)
+					case v1.ScenarioSpec:
+						scenario, err := types.NewConfig("scenario/" + c.Metadata.Name)
+						if err != nil {
+							return nil, fmt.Errorf("creating new v1 scenario config: %w", err)
+						}
+
+						scenario.Version = "phenix.sandia.gov/v1"
+						scenario.Spec = structs.MapDefaultCase(spec, structs.CASESNAKE)
+
+						if validate {
+							if err := types.ValidateConfigSpec(*scenario); err != nil {
+								return nil, fmt.Errorf("validating config: %w", err)
+							}
+						}
+
+						if err := store.Create(scenario); err != nil {
+							return nil, fmt.Errorf("storing config: %w", err)
+						}
+					}
+				}
+			}
+		}
+
 	}
 
 	if c.Kind == "Experiment" {
