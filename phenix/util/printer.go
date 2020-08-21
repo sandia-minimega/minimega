@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"phenix/internal/mm"
 	"phenix/types"
 	v1 "phenix/types/version/v1"
 
@@ -67,7 +68,7 @@ func PrintTableOfExperiments(writer io.Writer, exps ...types.Experiment) {
 // PrintTableOfVMs writes the given VMs to the given writer as an ASCII table.
 // The table headers are set to Host, Name, Running, Disk, Interfaces, and
 // Uptime.
-func PrintTableOfVMs(writer io.Writer, vms ...types.VM) {
+func PrintTableOfVMs(writer io.Writer, vms ...mm.VM) {
 	table := tablewriter.NewWriter(writer)
 
 	table.SetHeader([]string{"Host", "Name", "Running", "Disk", "Interfaces", "Uptime"})

@@ -49,7 +49,7 @@ func StartCapture(expName, vmName string, iface int, out string) error {
 		return fmt.Errorf("cannot capture on a disconnected interface")
 	}
 
-	captures := mm.GetVMCaptures(mm.NS(expName), mm.VM(vmName))
+	captures := mm.GetVMCaptures(mm.NS(expName), mm.VMName(vmName))
 
 	for _, capture := range captures {
 		if capture.Interface == iface {
@@ -61,7 +61,7 @@ func StartCapture(expName, vmName string, iface int, out string) error {
 		out = out + ".pcap"
 	}
 
-	if err := mm.StartVMCapture(mm.NS(expName), mm.VM(vmName), mm.CaptureInterface(iface), mm.CaptureFile(out)); err != nil {
+	if err := mm.StartVMCapture(mm.NS(expName), mm.VMName(vmName), mm.CaptureInterface(iface), mm.CaptureFile(out)); err != nil {
 		return fmt.Errorf("starting VM capture for interface %d on VM %s in experiment %s: %w", iface, vmName, expName, err)
 	}
 
@@ -84,7 +84,7 @@ func StopCaptures(expName, vmName string) error {
 		return fmt.Errorf("no VM name provided")
 	}
 
-	captures := mm.GetVMCaptures(mm.NS(expName), mm.VM(vmName))
+	captures := mm.GetVMCaptures(mm.NS(expName), mm.VMName(vmName))
 
 	if captures == nil {
 		return fmt.Errorf("VM %s in experiment %s: %w", vmName, expName, ErrNoCaptures)
@@ -101,7 +101,7 @@ func StopCaptures(expName, vmName string) error {
 		return fmt.Errorf("creating files directory for experiment %s: %w", expName, err)
 	}
 
-	if err := mm.StopVMCapture(mm.NS(expName), mm.VM(vmName)); err != nil {
+	if err := mm.StopVMCapture(mm.NS(expName), mm.VMName(vmName)); err != nil {
 		return fmt.Errorf("stopping VM captures for VM %s in experiment %s: %w", vmName, expName, err)
 	}
 

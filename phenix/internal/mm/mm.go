@@ -1,7 +1,5 @@
 package mm
 
-import "phenix/types"
-
 var DefaultMM MM = new(Minimega)
 
 type MM interface {
@@ -11,7 +9,7 @@ type MM interface {
 	LaunchVMs(string) error
 	GetLaunchProgress(string, int) (float64, error)
 
-	GetVMInfo(...Option) types.VMs
+	GetVMInfo(...Option) VMs
 	GetVMScreenshot(...Option) ([]byte, error)
 	GetVNCEndpoint(...Option) (string, error)
 	StartVM(...Option) error
@@ -24,9 +22,9 @@ type MM interface {
 
 	StartVMCapture(...Option) error
 	StopVMCapture(...Option) error
-	GetExperimentCaptures(...Option) []types.Capture
-	GetVMCaptures(...Option) []types.Capture
+	GetExperimentCaptures(...Option) []Capture
+	GetVMCaptures(...Option) []Capture
 
-	GetClusterHosts() (types.Hosts, error)
+	GetClusterHosts() (Hosts, error)
 	GetVLANs(...Option) (map[string]int, error)
 }

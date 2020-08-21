@@ -37,7 +37,7 @@ func NS(n string) Option {
 	}
 }
 
-func VM(v string) Option {
+func VMName(v string) Option {
 	return func(o *options) {
 		o.vm = v
 	}

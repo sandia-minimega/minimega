@@ -11,7 +11,7 @@ import (
 
 	"phenix/api/experiment"
 	"phenix/api/vm"
-	"phenix/types"
+	"phenix/internal/mm"
 	"phenix/web/proto"
 	"phenix/web/rbac"
 	"phenix/web/util"
@@ -162,7 +162,7 @@ func (this *Client) read() {
 		// always be true.
 		regex, _ := payload["filter"].(string)
 
-		allowed := types.VMs{}
+		allowed := mm.VMs{}
 
 		for _, vm := range vms {
 			// If there's an error, `matched` will be false.

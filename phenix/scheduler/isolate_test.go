@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"phenix/internal/mm"
-	"phenix/types"
 	v1 "phenix/types/version/v1"
 
 	"github.com/golang/mock/gomock"
@@ -22,8 +21,8 @@ func TestIsolateSchedulerManual(t *testing.T) {
 		Schedules: sched,
 	}
 
-	hosts := types.Hosts(
-		[]types.Host{
+	hosts := mm.Hosts(
+		[]mm.Host{
 			{
 				Name:     "compute0",
 				CPUs:     16,
@@ -66,8 +65,8 @@ func TestIsolateSchedulerFits(t *testing.T) {
 		Schedules: v1.Schedule{},
 	}
 
-	hosts := types.Hosts(
-		[]types.Host{
+	hosts := mm.Hosts(
+		[]mm.Host{
 			{
 				Name:     "compute1",
 				CPUs:     1,
@@ -110,8 +109,8 @@ func TestIsolateSchedulerUnoccupied(t *testing.T) {
 		Schedules: v1.Schedule{},
 	}
 
-	hosts := types.Hosts(
-		[]types.Host{
+	hosts := mm.Hosts(
+		[]mm.Host{
 			{
 				Name:     "compute1",
 				CPUs:     16,
@@ -155,8 +154,8 @@ func TestIsolateSchedulerAllOccupied(t *testing.T) {
 		Schedules: v1.Schedule{},
 	}
 
-	hosts := types.Hosts(
-		[]types.Host{
+	hosts := mm.Hosts(
+		[]mm.Host{
 			{
 				Name:     "compute1",
 				CPUs:     16,

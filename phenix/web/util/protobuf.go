@@ -1,12 +1,13 @@
 package util
 
 import (
+	"phenix/internal/mm"
 	"phenix/types"
 	"phenix/web/cache"
 	"phenix/web/proto"
 )
 
-func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []types.VM) *proto.Experiment {
+func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []mm.VM) *proto.Experiment {
 	pb := &proto.Experiment{
 		Name:      exp.Spec.ExperimentName,
 		Topology:  exp.Metadata.Annotations["topology"],
@@ -50,7 +51,7 @@ func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []types
 	return pb
 }
 
-func VMToProtobuf(vm types.VM) *proto.VM {
+func VMToProtobuf(vm mm.VM) *proto.VM {
 	return &proto.VM{
 		Name:        vm.Name,
 		Host:        vm.Host,
@@ -69,7 +70,7 @@ func VMToProtobuf(vm types.VM) *proto.VM {
 	}
 }
 
-func VMsToProtobuf(vms []types.VM) []*proto.VM {
+func VMsToProtobuf(vms []mm.VM) []*proto.VM {
 	pb := make([]*proto.VM, len(vms))
 
 	for i, vm := range vms {
@@ -79,7 +80,7 @@ func VMsToProtobuf(vms []types.VM) []*proto.VM {
 	return pb
 }
 
-func CaptureToProtobuf(capture types.Capture) *proto.Capture {
+func CaptureToProtobuf(capture mm.Capture) *proto.Capture {
 	return &proto.Capture{
 		Vm:        capture.VM,
 		Interface: uint32(capture.Interface),
@@ -87,7 +88,7 @@ func CaptureToProtobuf(capture types.Capture) *proto.Capture {
 	}
 }
 
-func CapturesToProtobuf(captures []types.Capture) []*proto.Capture {
+func CapturesToProtobuf(captures []mm.Capture) []*proto.Capture {
 	pb := make([]*proto.Capture, len(captures))
 
 	for i, capture := range captures {

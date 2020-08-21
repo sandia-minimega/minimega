@@ -238,7 +238,7 @@ func GetExperiment(w http.ResponseWriter, r *http.Request) {
 	// This will happen if another handler is currently acting on the
 	// experiment.
 	status := isExperimentLocked(name)
-	allowed := types.VMs{}
+	allowed := mm.VMs{}
 
 	for _, vm := range vms {
 		if role.Allowed("vms", "list", fmt.Sprintf("%s_%s", name, vm.Name)) {
@@ -633,7 +633,7 @@ func GetExperimentCaptures(w http.ResponseWriter, r *http.Request) {
 
 	var (
 		captures = mm.GetExperimentCaptures(mm.NS(name))
-		allowed  []types.Capture
+		allowed  []mm.Capture
 	)
 
 	for _, capture := range captures {
@@ -743,7 +743,7 @@ func GetVMs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allowed := types.VMs{}
+	allowed := mm.VMs{}
 
 	for _, vm := range vms {
 		if role.Allowed("vms", "list", fmt.Sprintf("%s_%s", exp, vm.Name)) {
@@ -915,7 +915,7 @@ func DeleteVM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := mm.KillVM(mm.NS(exp), mm.VM(name)); err != nil {
+	if err := mm.KillVM(mm.NS(exp), mm.VMName(name)); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -961,7 +961,7 @@ func StartVM(w http.ResponseWriter, r *http.Request) {
 		nil,
 	)
 
-	if err := mm.StartVM(mm.NS(exp), mm.VM(name)); err != nil {
+	if err := mm.StartVM(mm.NS(exp), mm.VMName(name)); err != nil {
 		broker.Broadcast(
 			broker.NewRequestPolicy("vms/start", "update", fullName),
 			broker.NewResource("experiment/vm", name, "errorStarting"),
@@ -1038,7 +1038,7 @@ func StopVM(w http.ResponseWriter, r *http.Request) {
 		nil,
 	)
 
-	if err := mm.StopVM(mm.NS(exp), mm.VM(name)); err != nil {
+	if err := mm.StopVM(mm.NS(exp), mm.VMName(name)); err != nil {
 		broker.Broadcast(
 			broker.NewRequestPolicy("vms/stop", "update", fullName),
 			broker.NewResource("experiment/vm", name, "errorStopping"),
@@ -1287,7 +1287,7 @@ func GetVNCWebSocket(w http.ResponseWriter, r *http.Request) {
 		name = vars["name"]
 	)
 
-	endpoint, err := mm.GetVNCEndpoint(mm.NS(exp), mm.VM(name))
+	endpoint, err := mm.GetVNCEndpoint(mm.NS(exp), mm.VMName(name))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -1314,7 +1314,7 @@ func GetVMCaptures(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	captures := mm.GetVMCaptures(mm.NS(exp), mm.VM(name))
+	captures := mm.GetVMCaptures(mm.NS(exp), mm.VMName(name))
 
 	body, err := marshaler.Marshal(&proto.CaptureList{Captures: util.CapturesToProtobuf(captures)})
 	if err != nil {
@@ -1358,7 +1358,7 @@ func StartVMCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := mm.StartVMCapture(mm.NS(exp), mm.VM(name), mm.CaptureInterface(int(req.Interface)), mm.CaptureFile(req.Filename)); err != nil {
+	if err := mm.StartVMCapture(mm.NS(exp), mm.VMName(name), mm.CaptureInterface(int(req.Interface)), mm.CaptureFile(req.Filename)); err != nil {
 		log.Error("starting VM capture for VM %s in experiment %s - %v", name, exp, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1391,7 +1391,7 @@ func StopVMCaptures(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := mm.StopVMCapture(mm.NS(exp), mm.VM(name))
+	err := mm.StopVMCapture(mm.NS(exp), mm.VMName(name))
 	if err != nil && err != mm.ErrNoCaptures {
 		log.Error("stopping VM capture for VM %s in experiment %s - %v", name, exp, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1759,7 +1759,7 @@ func GetAllVMs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allowed := types.VMs{}
+	allowed := mm.VMs{}
 
 	for _, exp := range exps {
 		vms, err := vm.List(exp.Spec.ExperimentName)
@@ -1916,14 +1916,14 @@ func GetClusterHosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allowed := []types.Host{}
+	allowed := []mm.Host{}
 	for _, host := range hosts {
 		if role.Allowed("hosts", "list", host.Name) {
 			allowed = append(allowed, host)
 		}
 	}
 
-	marshalled, err := json.Marshal(types.Cluster{Hosts: allowed})
+	marshalled, err := json.Marshal(mm.Cluster{Hosts: allowed})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"phenix/internal/mm"
-	"phenix/types"
 	v1 "phenix/types/version/v1"
 
 	"github.com/golang/mock/gomock"
@@ -18,8 +17,8 @@ func TestSubnetComputeSchedulerNoCommits(t *testing.T) {
 		Schedules: v1.Schedule{},
 	}
 
-	hosts := types.Hosts(
-		[]types.Host{
+	hosts := mm.Hosts(
+		[]mm.Host{
 			{
 				Name:      "compute0",
 				MemCommit: 0,
@@ -91,8 +90,8 @@ func TestSubnetComputeSchedulerSomePrescheduled(t *testing.T) {
 		},
 	}
 
-	hosts := types.Hosts(
-		[]types.Host{
+	hosts := mm.Hosts(
+		[]mm.Host{
 			{
 				Name:      "compute0",
 				MemCommit: 0,

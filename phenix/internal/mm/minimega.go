@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"phenix/internal/mm/mmcli"
-	"phenix/types"
 )
 
 var (
@@ -102,7 +101,7 @@ func (Minimega) GetLaunchProgress(ns string, expected int) (float64, error) {
 
 }
 
-func (this Minimega) GetVMInfo(opts ...Option) types.VMs {
+func (this Minimega) GetVMInfo(opts ...Option) VMs {
 	o := NewOptions(opts...)
 
 	cmd := mmcli.NewNamespacedCommand(o.ns)
@@ -113,10 +112,10 @@ func (this Minimega) GetVMInfo(opts ...Option) types.VMs {
 		cmd.Filters = []string{"name=" + o.vm}
 	}
 
-	var vms types.VMs
+	var vms VMs
 
 	for _, row := range mmcli.RunTabular(cmd) {
-		var vm types.VM
+		var vm VM
 
 		vm.Host = row["host"]
 		vm.Name = row["name"]
@@ -429,14 +428,14 @@ func (Minimega) StopVMCapture(opts ...Option) error {
 	return nil
 }
 
-func (Minimega) GetExperimentCaptures(opts ...Option) []types.Capture {
+func (Minimega) GetExperimentCaptures(opts ...Option) []Capture {
 	o := NewOptions(opts...)
 
 	cmd := mmcli.NewNamespacedCommand(o.ns)
 	cmd.Command = "capture"
 	cmd.Columns = []string{"interface", "path"}
 
-	var captures []types.Capture
+	var captures []Capture
 
 	for _, row := range mmcli.RunTabular(cmd) {
 		// `interface` column will be in the form of <vm_name>:<iface_idx>
@@ -445,7 +444,7 @@ func (Minimega) GetExperimentCaptures(opts ...Option) []types.Capture {
 		vm := iface[0]
 		idx, _ := strconv.Atoi(iface[1])
 
-		capture := types.Capture{
+		capture := Capture{
 			VM:        vm,
 			Interface: idx,
 			Filepath:  row["path"],
@@ -457,12 +456,12 @@ func (Minimega) GetExperimentCaptures(opts ...Option) []types.Capture {
 	return captures
 }
 
-func (this Minimega) GetVMCaptures(opts ...Option) []types.Capture {
+func (this Minimega) GetVMCaptures(opts ...Option) []Capture {
 	o := NewOptions(opts...)
 
 	var (
 		captures = this.GetExperimentCaptures(opts...)
-		keep     []types.Capture
+		keep     []Capture
 	)
 
 	for _, capture := range captures {
@@ -474,7 +473,7 @@ func (this Minimega) GetVMCaptures(opts ...Option) []types.Capture {
 	return keep
 }
 
-func (Minimega) GetClusterHosts() (types.Hosts, error) {
+func (Minimega) GetClusterHosts() (Hosts, error) {
 	// Get headnode details
 	hosts, err := processNamespaceHosts("minimega")
 	if err != nil {
@@ -482,14 +481,14 @@ func (Minimega) GetClusterHosts() (types.Hosts, error) {
 	}
 
 	if len(hosts) == 0 {
-		return []types.Host{}, fmt.Errorf("no cluster hosts found")
+		return []Host{}, fmt.Errorf("no cluster hosts found")
 	}
 
 	head := hosts[0]
 	head.Name = head.Name + " (headnode)"
 	head.Schedulable = false
 
-	cluster := []types.Host{head}
+	cluster := []Host{head}
 
 	// Used below to ensure the headnode doesn't show up in the list of
 	// cluster nodes twice.
@@ -563,17 +562,17 @@ func inject(disk string, part int, injects ...string) error {
 	return nil
 }
 
-func processNamespaceHosts(namespace string) (types.Hosts, error) {
+func processNamespaceHosts(namespace string) (Hosts, error) {
 	cmd := mmcli.NewNamespacedCommand(namespace)
 	cmd.Command = "host"
 
 	var (
-		hosts  types.Hosts
+		hosts  Hosts
 		status = mmcli.RunTabular(cmd)
 	)
 
 	for _, row := range status {
-		host := types.Host{Name: row["host"]}
+		host := Host{Name: row["host"]}
 		host.CPUs, _ = strconv.Atoi(row["cpus"])
 		host.CPUCommit, _ = strconv.Atoi(row["cpucommit"])
 		host.Load = strings.Split(row["load"], " ")

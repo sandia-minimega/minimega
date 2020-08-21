@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"phenix/internal/mm"
-	"phenix/types"
 	v1 "phenix/types/version/v1"
 )
 
@@ -64,7 +63,7 @@ func (subnetCompute) Schedule(spec *v1.ExperimentSpec) error {
 			continue
 		}
 
-		var scheduled *types.Host
+		var scheduled *mm.Host
 
 		if len(node.Network.Interfaces) == 0 {
 			return fmt.Errorf("node %s doesn't have any network interfaces", node.General.Hostname)

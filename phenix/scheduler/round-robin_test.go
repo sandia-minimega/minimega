@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"phenix/internal/mm"
-	"phenix/types"
 	v1 "phenix/types/version/v1"
 
 	"github.com/golang/mock/gomock"
@@ -18,8 +17,8 @@ func TestRoundRobinSchedulerNoVMs(t *testing.T) {
 		Schedules: v1.Schedule{},
 	}
 
-	hosts := types.Hosts(
-		[]types.Host{
+	hosts := mm.Hosts(
+		[]mm.Host{
 			{
 				Name: "compute0",
 				VMs:  0,
@@ -84,8 +83,8 @@ func TestRoundRobinSchedulerSomeVMs(t *testing.T) {
 		Schedules: v1.Schedule{},
 	}
 
-	hosts := types.Hosts(
-		[]types.Host{
+	hosts := mm.Hosts(
+		[]mm.Host{
 			{
 				Name: "compute0",
 				VMs:  0,
@@ -152,8 +151,8 @@ func TestRoundRobinSchedulerSomePrescheduled(t *testing.T) {
 		},
 	}
 
-	hosts := types.Hosts(
-		[]types.Host{
+	hosts := mm.Hosts(
+		[]mm.Host{
 			{
 				Name: "compute0",
 				VMs:  0,

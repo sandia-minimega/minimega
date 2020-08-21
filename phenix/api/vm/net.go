@@ -17,7 +17,7 @@ func Connect(expName, vmName string, iface int, vlan string) error {
 		return fmt.Errorf("no VM name provided")
 	}
 
-	err := mm.ConnectVMInterface(mm.NS(expName), mm.VM(vmName), mm.ConnectInterface(iface), mm.ConnectVLAN(vlan))
+	err := mm.ConnectVMInterface(mm.NS(expName), mm.VMName(vmName), mm.ConnectInterface(iface), mm.ConnectVLAN(vlan))
 	if err != nil {
 		return fmt.Errorf("connecting VM interface to VLAN: %w", err)
 	}
@@ -37,7 +37,7 @@ func Disonnect(expName, vmName string, iface int) error {
 		return fmt.Errorf("no VM name provided")
 	}
 
-	err := mm.DisconnectVMInterface(mm.NS(expName), mm.VM(vmName), mm.ConnectInterface(iface))
+	err := mm.DisconnectVMInterface(mm.NS(expName), mm.VMName(vmName), mm.ConnectInterface(iface))
 	if err != nil {
 		return fmt.Errorf("disconnecting VM interface: %w", err)
 	}

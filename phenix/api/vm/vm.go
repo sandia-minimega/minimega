@@ -7,7 +7,6 @@ import (
 
 	"phenix/api/experiment"
 	"phenix/internal/mm"
-	"phenix/types"
 )
 
 var vlanAliasRegex = regexp.MustCompile(`(.*) \(\d*\)`)
@@ -28,7 +27,7 @@ func Count(expName string) (int, error) {
 // List collects VMs, combining topology settings with running VM details if the
 // experiment is running. It returns a slice of VM structs and any errors
 // encountered while gathering them.
-func List(expName string) ([]types.VM, error) {
+func List(expName string) ([]mm.VM, error) {
 	if expName == "" {
 		return nil, fmt.Errorf("no experiment name provided")
 	}
@@ -39,8 +38,8 @@ func List(expName string) ([]types.VM, error) {
 	}
 
 	var (
-		running = make(map[string]types.VM)
-		vms     []types.VM
+		running = make(map[string]mm.VM)
+		vms     []mm.VM
 	)
 
 	if exp.Status.Running() {
@@ -50,7 +49,7 @@ func List(expName string) ([]types.VM, error) {
 	}
 
 	for idx, node := range exp.Spec.Topology.Nodes {
-		vm := types.VM{
+		vm := mm.VM{
 			ID:         idx,
 			Name:       node.General.Hostname,
 			Experiment: exp.Spec.ExperimentName,
@@ -104,7 +103,7 @@ func List(expName string) ([]types.VM, error) {
 // name. If the experiment is running, topology VM settings are combined with
 // running VM details. It returns a pointer to a VM struct, and any errors
 // encountered while retrieving the VM.
-func Get(expName, vmName string) (*types.VM, error) {
+func Get(expName, vmName string) (*mm.VM, error) {
 	if expName == "" {
 		return nil, fmt.Errorf("no experiment name provided")
 	}
@@ -118,14 +117,14 @@ func Get(expName, vmName string) (*types.VM, error) {
 		return nil, fmt.Errorf("getting experiment %s: %w", expName, err)
 	}
 
-	var vm *types.VM
+	var vm *mm.VM
 
 	for idx, node := range exp.Spec.Topology.Nodes {
 		if node.General.Hostname != vmName {
 			continue
 		}
 
-		vm = &types.VM{
+		vm = &mm.VM{
 			ID:         idx,
 			Name:       node.General.Hostname,
 			Experiment: exp.Spec.ExperimentName,
@@ -150,7 +149,7 @@ func Get(expName, vmName string) (*types.VM, error) {
 		return vm, nil
 	}
 
-	details := mm.GetVMInfo(mm.NS(expName), mm.VM(vmName))
+	details := mm.GetVMInfo(mm.NS(expName), mm.VMName(vmName))
 
 	if len(details) != 1 {
 		return vm, nil
@@ -185,7 +184,7 @@ func Get(expName, vmName string) (*types.VM, error) {
 }
 
 func Screenshot(expName, vmName, size string) ([]byte, error) {
-	screenshot, err := mm.GetVMScreenshot(mm.NS(expName), mm.VM(vmName), mm.ScreenshotSize(size))
+	screenshot, err := mm.GetVMScreenshot(mm.NS(expName), mm.VMName(vmName), mm.ScreenshotSize(size))
 	if err != nil {
 		return nil, fmt.Errorf("getting VM screenshot: %w", err)
 	}
@@ -209,7 +208,7 @@ func Pause(expName, vmName string) error {
 		return fmt.Errorf("stopping captures for VM %s in experiment %s: %w", vmName, expName, err)
 	}
 
-	if err := mm.StopVM(mm.NS(expName), mm.VM(vmName)); err != nil {
+	if err := mm.StopVM(mm.NS(expName), mm.VMName(vmName)); err != nil {
 		return fmt.Errorf("pausing VM: %w", err)
 	}
 
@@ -227,7 +226,7 @@ func Resume(expName, vmName string) error {
 		return fmt.Errorf("no VM name provided")
 	}
 
-	if err := mm.StartVM(mm.NS(expName), mm.VM(vmName)); err != nil {
+	if err := mm.StartVM(mm.NS(expName), mm.VMName(vmName)); err != nil {
 		return fmt.Errorf("resuming VM: %w", err)
 	}
 
@@ -277,7 +276,7 @@ func Redeploy(expName, vmName string, opts ...RedeployOption) error {
 
 	mmOpts := []mm.Option{
 		mm.NS(expName),
-		mm.VM(vmName),
+		mm.VMName(vmName),
 		mm.CPU(o.cpu),
 		mm.Mem(o.mem),
 		mm.Disk(o.disk),
@@ -303,7 +302,7 @@ func Kill(expName, vmName string) error {
 		return fmt.Errorf("no VM name provided")
 	}
 
-	if err := mm.KillVM(mm.NS(expName), mm.VM(vmName)); err != nil {
+	if err := mm.KillVM(mm.NS(expName), mm.VMName(vmName)); err != nil {
 		return fmt.Errorf("killing VM: %w", err)
 	}
 
