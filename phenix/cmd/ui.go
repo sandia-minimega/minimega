@@ -10,8 +10,8 @@ import (
 func newUiCmd() *cobra.Command {
 	desc := `Run the phenix UI server
 
-	Starts the UI server on the IP:port provided (or 0.0.0.0:3000 if not
-	provided).`
+  Starts the UI server on the IP:port provided (or 0.0.0.0:3000 if not
+  provided).`
 	cmd := &cobra.Command{
 		Use:   "ui <ip:port>",
 		Short: "Run the phenix UI",
