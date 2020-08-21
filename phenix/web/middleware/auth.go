@@ -75,6 +75,8 @@ func AuthMiddleware(enabled bool, jwtKey string) mux.MiddlewareFunc {
 				return
 			}
 
+			// Check to see that the token is still associated w/ the user (ie. the
+			// user didn't delete it because it became compromised).
 			if err := user.ValidateToken(token.Raw); err != nil {
 				http.Error(w, "user token error", http.StatusUnauthorized)
 				return

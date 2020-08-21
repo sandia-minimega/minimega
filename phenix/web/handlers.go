@@ -2520,14 +2520,10 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: validate password from UserSpec
-
-	/*
-		if err := database.ValidateUserPassword(user, pass); err != nil {
-			http.Error(w, "invalid creds", http.StatusUnauthorized)
-			return
-		}
-	*/
+	if err := u.ValidatePassword(pass); err != nil {
+		http.Error(w, "invalid creds", http.StatusUnauthorized)
+		return
+	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": user,

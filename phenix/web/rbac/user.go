@@ -1,6 +1,7 @@
 package rbac
 
 import (
+	"encoding/base64"
 	"fmt"
 
 	"phenix/api/config"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/activeshadow/structs"
 	"github.com/mitchellh/mapstructure"
+	"golang.org/x/crypto/bcrypt"
 )
 
 /*
@@ -42,6 +44,8 @@ spec:
 			- get
 */
 
+var ErrPasswordInvalid = fmt.Errorf("password invalid")
+
 type User struct {
 	Spec *v1.UserSpec
 
@@ -49,9 +53,14 @@ type User struct {
 }
 
 func NewUser(u, p string) *User {
+	hashed, err := bcrypt.GenerateFromPassword([]byte(p), bcrypt.DefaultCost)
+	if err != nil {
+		return nil
+	}
+
 	spec := &v1.UserSpec{
 		Username: u,
-		Password: p,
+		Password: string(hashed),
 	}
 
 	c := &types.Config{
@@ -127,7 +136,9 @@ func (this User) AddToken(token, note string) error {
 		this.Spec.Tokens = make(map[string]string)
 	}
 
-	this.Spec.Tokens[token] = note
+	enc := base64.StdEncoding.EncodeToString([]byte(token))
+
+	this.Spec.Tokens[enc] = note
 	this.config.Spec = structs.MapDefaultCase(this.Spec, structs.CASESNAKE)
 
 	if err := this.Save(); err != nil {
@@ -138,7 +149,9 @@ func (this User) AddToken(token, note string) error {
 }
 
 func (this User) DeleteToken(token string) error {
-	delete(this.Spec.Tokens, token)
+	enc := base64.StdEncoding.EncodeToString([]byte(token))
+
+	delete(this.Spec.Tokens, enc)
 
 	this.config.Spec = structs.MapDefaultCase(this.Spec, structs.CASESNAKE)
 
@@ -150,13 +163,27 @@ func (this User) DeleteToken(token string) error {
 }
 
 func (this User) ValidateToken(token string) error {
-	for t := range this.Spec.Tokens {
-		if token == t {
+	for enc := range this.Spec.Tokens {
+		t, _ := base64.StdEncoding.DecodeString(enc)
+
+		if token == string(t) {
 			return nil
 		}
 	}
 
 	return fmt.Errorf("token not found for user")
+}
+
+func (this User) ValidatePassword(p string) error {
+	if err := bcrypt.CompareHashAndPassword([]byte(this.Spec.Password), []byte(p)); err != nil {
+		if err == bcrypt.ErrMismatchedHashAndPassword {
+			return ErrPasswordInvalid
+		}
+
+		return err
+	}
+
+	return nil
 }
 
 func (this User) Save() error {

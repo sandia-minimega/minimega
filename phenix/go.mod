@@ -27,6 +27,7 @@ require (
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.7.1
 	go.etcd.io/bbolt v1.3.4
+	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
 	golang.org/x/net v0.0.0-20200226121028-0de0cce0169b
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20200323222414-85ca7c5b95cd // indirect
