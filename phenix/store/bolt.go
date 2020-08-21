@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"sync"
 	"time"
 
 	"phenix/types"
@@ -12,7 +13,10 @@ import (
 )
 
 type BoltDB struct {
-	db *bbolt.DB
+	sync.Mutex
+
+	db   *bbolt.DB
+	path string
 }
 
 func NewBoltDB() Store {
@@ -31,19 +35,40 @@ func (this *BoltDB) Init(opts ...Option) error {
 		return fmt.Errorf("invalid scheme '%s' for BoltDB endpoint", u.Scheme)
 	}
 
-	this.db, err = bbolt.Open(u.Host+u.Path, 0600, &bbolt.Options{NoFreelistSync: true})
+	this.path = u.Host + u.Path
+
+	return nil
+}
+
+func (this *BoltDB) open() error {
+	this.Lock()
+	defer this.Unlock()
+
+	var err error
+
+	this.db, err = bbolt.Open(this.path, 0600, &bbolt.Options{NoFreelistSync: true})
 	if err != nil {
-		return fmt.Errorf("opening BoltDB file: %w", err)
+		return err
 	}
 
 	return nil
 }
 
-func (this BoltDB) Close() error {
+func (this *BoltDB) Close() error {
+	this.Lock()
+	defer this.Unlock()
+
+	if this.db == nil {
+		return nil
+	}
+
 	return this.db.Close()
 }
 
-func (this BoltDB) List(kinds ...string) (types.Configs, error) {
+func (this *BoltDB) List(kinds ...string) (types.Configs, error) {
+	this.open()
+	defer this.Close()
+
 	var configs types.Configs
 
 	for _, kind := range kinds {
@@ -81,7 +106,10 @@ func (this BoltDB) List(kinds ...string) (types.Configs, error) {
 	return configs, nil
 }
 
-func (this BoltDB) Get(c *types.Config) error {
+func (this *BoltDB) Get(c *types.Config) error {
+	this.open()
+	defer this.Close()
+
 	v, err := this.get(c.Kind, c.Metadata.Name)
 	if err != nil {
 		return fmt.Errorf("getting config: %w", err)
@@ -94,7 +122,10 @@ func (this BoltDB) Get(c *types.Config) error {
 	return nil
 }
 
-func (this BoltDB) Create(c *types.Config) error {
+func (this *BoltDB) Create(c *types.Config) error {
+	this.open()
+	defer this.Close()
+
 	if _, err := this.get(c.Kind, c.Metadata.Name); err == nil {
 		return fmt.Errorf("config %s/%s already exists", c.Kind, c.Metadata.Name)
 	}
@@ -116,7 +147,10 @@ func (this BoltDB) Create(c *types.Config) error {
 	return nil
 }
 
-func (this BoltDB) Update(c *types.Config) error {
+func (this *BoltDB) Update(c *types.Config) error {
+	this.open()
+	defer this.Close()
+
 	if _, err := this.get(c.Kind, c.Metadata.Name); err != nil {
 		return fmt.Errorf("config does not exist")
 	}
@@ -135,11 +169,14 @@ func (this BoltDB) Update(c *types.Config) error {
 	return nil
 }
 
-func (this BoltDB) Patch(*types.Config, map[string]interface{}) error {
+func (this *BoltDB) Patch(*types.Config, map[string]interface{}) error {
 	return fmt.Errorf("BoltDB.Patch not implemented")
 }
 
-func (this BoltDB) Delete(c *types.Config) error {
+func (this *BoltDB) Delete(c *types.Config) error {
+	this.open()
+	defer this.Close()
+
 	if err := this.ensureBucket(c.Kind); err != nil {
 		return nil
 	}
@@ -156,7 +193,7 @@ func (this BoltDB) Delete(c *types.Config) error {
 	return nil
 }
 
-func (this BoltDB) get(b, k string) ([]byte, error) {
+func (this *BoltDB) get(b, k string) ([]byte, error) {
 	if err := this.ensureBucket(b); err != nil {
 		return nil, err
 	}
@@ -176,7 +213,7 @@ func (this BoltDB) get(b, k string) ([]byte, error) {
 	return v, nil
 }
 
-func (this BoltDB) put(b, k string, v []byte) error {
+func (this *BoltDB) put(b, k string, v []byte) error {
 	if err := this.ensureBucket(b); err != nil {
 		return err
 	}
@@ -193,7 +230,7 @@ func (this BoltDB) put(b, k string, v []byte) error {
 	return nil
 }
 
-func (this BoltDB) ensureBucket(name string) error {
+func (this *BoltDB) ensureBucket(name string) error {
 	return this.db.Update(func(tx *bbolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte(name))
 		if err != nil {
