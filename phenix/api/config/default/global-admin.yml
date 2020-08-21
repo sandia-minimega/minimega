@@ -1,0 +1,14 @@
+apiVersion: phenix.sandia.gov/v1
+kind: Role
+metadata:
+  name: global-admin
+spec:
+  roleName: Global Admin
+  policies:
+  - resources:
+    - "*"
+    - "*/*"
+    resourceNames:
+    - "*"
+    verbs:
+    - "*"

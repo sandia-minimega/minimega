@@ -15,6 +15,26 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+func Init() error {
+	for _, name := range AssetNames() {
+		var c types.Config
+
+		if err := yaml.Unmarshal(MustAsset(name), &c); err != nil {
+			return fmt.Errorf("unmarshaling default config %s: %w", name, err)
+		}
+
+		if _, err := Get("role/" + c.Metadata.Name); err == nil {
+			continue
+		}
+
+		if err := store.Create(&c); err != nil {
+			return fmt.Errorf("storing default config %s: %w", name, err)
+		}
+	}
+
+	return nil
+}
+
 // List collects configs of the given type (topology, scenario, experiment). If
 // no config type is specified, or `all` is specified, then all the known
 // configs will be collected. It returns a slice of configs and any errors
@@ -27,7 +47,7 @@ func List(which string) (types.Configs, error) {
 
 	switch which {
 	case "", "all":
-		configs, err = store.List("Topology", "Scenario", "Experiment", "Image", "User")
+		configs, err = store.List("Topology", "Scenario", "Experiment", "Image", "User", "Role")
 	case "topology":
 		configs, err = store.List("Topology")
 	case "scenario":
@@ -38,6 +58,8 @@ func List(which string) (types.Configs, error) {
 		configs, err = store.List("Image")
 	case "user":
 		configs, err = store.List("User")
+	case "role":
+		configs, err = store.List("Role")
 	default:
 		return nil, util.HumanizeError(fmt.Errorf("unknown config kind provided: %s", which), "")
 	}

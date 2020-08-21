@@ -32,7 +32,7 @@ func configKindArgsValidator(multi, allowAll bool) cobra.PositionalArgs {
 				return fmt.Errorf("expects 1 arg(s) in the form of <config kind>/<config name>")
 			}
 
-			kinds := []string{"topology", "scenario", "experiment", "image", "user"}
+			kinds := []string{"topology", "scenario", "experiment", "image", "user", "role"}
 
 			if allowAll {
 				kinds = append(kinds, "all")

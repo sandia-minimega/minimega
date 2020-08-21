@@ -9,6 +9,7 @@ VERSION := $(VER) (commit $(COMMIT)) $(DATE)
 
 GOSOURCES := $(shell find . \( -name '*.go' \))
 UISOURCES := $(shell find ./web/ui/src \( -name '*.js' -o -name '*.vue' \))
+CONFIGS   := $(shell find api/config/default \( -name '*' \))
 TEMPLATES := $(shell find tmpl/templates \( -name '*' \))
 
 THISFILE := $(lastword $(MAKEFILE_LIST))
@@ -55,7 +56,10 @@ bin/protoc-gen-go:
 	go install google.golang.org/protobuf/cmd/protoc-gen-go
 
 .PHONY: generate-bindata
-generate-bindata: tmpl/bindata.go web/bindata.go
+generate-bindata: api/config/bindata.go tmpl/bindata.go web/bindata.go
+
+api/config/bindata.go: $(CONFIGS) bin/go-bindata
+	$(GOBIN)/go-bindata -pkg config -prefix api/config/default -o api/config/bindata.go api/config/default/...
 
 tmpl/bindata.go: $(TEMPLATES) bin/go-bindata
 	$(GOBIN)/go-bindata -pkg tmpl -prefix tmpl/templates -o tmpl/bindata.go tmpl/templates/...

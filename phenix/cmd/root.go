@@ -4,6 +4,7 @@ import (
 	goflag "flag"
 	"fmt"
 	"os"
+	"phenix/api/config"
 	"phenix/store"
 	"phenix/util"
 	"phenix/version"
@@ -37,6 +38,10 @@ var rootCmd = &cobra.Command{
 
 		if err := util.InitFatalLogWriter(errFile, errOut); err != nil {
 			return fmt.Errorf("Unable to initialize fatal log writer: %w", err)
+		}
+
+		if err := config.Init(); err != nil {
+			return fmt.Errorf("Unable to initialize default configs: %w", err)
 		}
 
 		return nil

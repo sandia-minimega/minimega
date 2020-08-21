@@ -1,0 +1,15 @@
+apiVersion: phenix.sandia.gov/v1
+kind: Role
+metadata:
+  name: global-viewer
+spec:
+  roleName: Global Viewer
+  policies:
+  - resources:
+    - "*"
+    - "*/*"
+    resourceNames:
+    - "*"
+    verbs:
+    - list
+    - get
