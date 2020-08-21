@@ -6,6 +6,7 @@ import (
 	"phenix/api/config"
 	"phenix/store"
 	"phenix/types"
+	v1 "phenix/types/version/v1"
 
 	"github.com/activeshadow/structs"
 	"github.com/mitchellh/mapstructure"
@@ -41,20 +42,50 @@ spec:
 			- get
 */
 
-type UserSpec struct {
-	Username  string `yaml:"username" json:"username"`
-	Password  string `yaml:"password" json:"password"`
-	FirstName string `yaml:"firstName" json:"first_name"`
-	LastName  string `yaml:"lastName" json:"last_name"`
-	Role      *Role  `yaml:"rbac" json:"rbac" structs:"rbac" mapstructure:"rbac"`
-
-	Tokens map[string]string `yaml:"tokens" json:"tokens"`
-}
-
 type User struct {
-	Spec *UserSpec
+	Spec *v1.UserSpec
 
 	config *types.Config
+}
+
+func NewUser(u, p string) *User {
+	spec := &v1.UserSpec{
+		Username: u,
+		Password: p,
+	}
+
+	c := &types.Config{
+		Version:  "phenix.sandia.gov/v1",
+		Kind:     "User",
+		Metadata: types.ConfigMetadata{Name: u},
+		Spec:     structs.MapDefaultCase(spec, structs.CASESNAKE),
+	}
+
+	if err := store.Create(c); err != nil {
+		return nil
+	}
+
+	return &User{Spec: spec, config: c}
+}
+
+func GetUsers() ([]*User, error) {
+	configs, err := config.List("user")
+	if err != nil {
+		return nil, fmt.Errorf("getting user configs: %w", err)
+	}
+
+	users := make([]*User, len(configs))
+
+	for i, c := range configs {
+		var u v1.UserSpec
+		if err := mapstructure.Decode(c.Spec, &u); err != nil {
+			return nil, fmt.Errorf("decoding user config: %w", err)
+		}
+
+		users[i] = &User{Spec: &u}
+	}
+
+	return users, nil
 }
 
 func GetUser(uname string) (*User, error) {
@@ -63,7 +94,7 @@ func GetUser(uname string) (*User, error) {
 		return nil, fmt.Errorf("getting user config: %w", err)
 	}
 
-	var u UserSpec
+	var u v1.UserSpec
 	if err := mapstructure.Decode(c.Spec, &u); err != nil {
 		return nil, fmt.Errorf("decoding user config: %w", err)
 	}
@@ -99,7 +130,7 @@ func (this User) AddToken(token, note string) error {
 	this.Spec.Tokens[token] = note
 	this.config.Spec = structs.MapDefaultCase(this.Spec, structs.CASESNAKE)
 
-	if err := store.Update(this.config); err != nil {
+	if err := this.Save(); err != nil {
 		return fmt.Errorf("persisting new user token: %w", err)
 	}
 
@@ -111,7 +142,7 @@ func (this User) DeleteToken(token string) error {
 
 	this.config.Spec = structs.MapDefaultCase(this.Spec, structs.CASESNAKE)
 
-	if err := store.Update(this.config); err != nil {
+	if err := this.Save(); err != nil {
 		return fmt.Errorf("deleting user token: %w", err)
 	}
 
@@ -128,18 +159,29 @@ func (this User) ValidateToken(token string) error {
 	return fmt.Errorf("token not found for user")
 }
 
-func (this User) GetRole() (*Role, error) {
-	if this.Spec.Role == nil {
-		return nil, fmt.Errorf("user has no role assigned")
+func (this User) Save() error {
+	if err := store.Update(this.config); err != nil {
+		return fmt.Errorf("updating user in store: %w", err)
 	}
 
-	this.Spec.Role.MapPolicies()
+	return nil
+}
 
-	this.Spec.Role.AddPolicies(&Policy{
-		Resources:     []string{"users"},
-		ResourceNames: []string{this.Spec.Username},
-		Verbs:         []string{"get"},
-	})
+func (this User) Role() (Role, error) {
+	if this.Spec.Role == nil {
+		return Role{}, fmt.Errorf("user has no role assigned")
+	}
 
-	return this.Spec.Role, nil
+	return Role{Spec: this.Spec.Role}, nil
+}
+
+func (this *User) SetRole(role *Role) error {
+	this.Spec.Role = role.Spec
+	this.config.Spec = structs.MapDefaultCase(this.Spec, structs.CASESNAKE)
+
+	if err := this.Save(); err != nil {
+		return fmt.Errorf("setting user role: %w", err)
+	}
+
+	return nil
 }

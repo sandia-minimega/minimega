@@ -2080,8 +2080,6 @@ func GetLogs(w http.ResponseWriter, r *http.Request) {
 	w.Write(marshalled)
 }
 
-/*
-
 // GET /users
 func GetUsers(w http.ResponseWriter, r *http.Request) {
 	log.Debug("GetUsers HTTP handler called")
@@ -2096,28 +2094,38 @@ func GetUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	users, err := database.GetUsers()
+	users, err := rbac.GetUsers()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
 
-	allowed := []rbac.User{}
-	for _, user := range users {
-		if role.Allowed("users", "list", user.Username) {
-			allowed = append(allowed, user)
+	var resp []*proto.User
+
+	for _, u := range users {
+		if role.Allowed("users", "list", u.Username()) {
+			user := &proto.User{
+				Username:  u.Username(),
+				FirstName: u.FirstName(),
+				LastName:  u.LastName(),
+				RoleName:  u.RoleName(),
+			}
+
+			resp = append(resp, user)
 		}
 	}
 
-	marshalled, err := json.Marshal(map[string]interface{}{"users": allowed})
+	body, err := marshaler.Marshal(&proto.UserList{Users: resp})
 	if err != nil {
 		log.Error("marshaling users: %v", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.Write(marshalled)
+	w.Write(body)
 }
+
+/*
 
 // POST /users
 func CreateUser(w http.ResponseWriter, r *http.Request) {

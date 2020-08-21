@@ -481,6 +481,10 @@ func (Minimega) GetClusterHosts() (types.Hosts, error) {
 		return nil, fmt.Errorf("processing headnode details: %w", err)
 	}
 
+	if len(hosts) == 0 {
+		return []types.Host{}, fmt.Errorf("no cluster hosts found")
+	}
+
 	head := hosts[0]
 	head.Name = head.Name + " (headnode)"
 	head.Schedulable = false
