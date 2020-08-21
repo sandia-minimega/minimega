@@ -15,11 +15,11 @@ import (
 	"time"
 
 	"phenix/api/cluster"
+	"phenix/api/config"
 	"phenix/api/experiment"
 	"phenix/api/vm"
 	"phenix/app"
 	"phenix/internal/mm"
-	"phenix/store"
 	"phenix/types"
 	"phenix/web/broker"
 	"phenix/web/cache"
@@ -1838,7 +1838,7 @@ func GetTopologies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	topologies, err := store.List("topology")
+	topologies, err := config.List("topology")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
