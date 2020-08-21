@@ -7,15 +7,12 @@ import (
 	"strings"
 
 	"phenix/api/config"
-	"phenix/store"
-	"phenix/types"
 	"phenix/web/broker"
 	"phenix/web/middleware"
 	"phenix/web/rbac"
 	"phenix/web/util"
 
 	log "github.com/activeshadow/libminimega/minilog"
-	"github.com/activeshadow/structs"
 	assetfs "github.com/elazarl/go-bindata-assetfs"
 	"github.com/gorilla/mux"
 )
@@ -33,7 +30,7 @@ type serverOptions struct {
 func newServerOptions(opts ...ServerOption) serverOptions {
 	o := serverOptions{
 		endpoint:  ":3000",
-		users:     []string{"admin@foo.com:foobar:Global Admin"},
+		users:     []string{"admin@foo.com:foobar:global-admin"},
 		allowCORS: true, // TODO: default to false
 	}
 
@@ -89,38 +86,25 @@ func Start(opts ...ServerOption) error {
 			continue
 		}
 
-		user := rbac.UserSpec{
-			Username: uname,
-			Password: pword,
+		user := rbac.NewUser(uname, pword)
+
+		role, err := rbac.RoleFromConfig(rname)
+		if err != nil {
+			return fmt.Errorf("getting %s role: %w", rname, err)
 		}
 
-		policies := rbac.CreateBasePoliciesForRole(rname)
-
-		for _, policy := range policies {
-			policy.SetResourceNames(creds[3:]...)
-		}
-
-		user.Role = rbac.NewRole(rname, policies...)
+		role.SetResourceNames(creds[3:]...)
 
 		// allow user to get their own user details
-		user.Role.AddPolicies(&rbac.Policy{
-			Resources:     []string{"users"},
-			ResourceNames: []string{uname},
-			Verbs:         []string{"get"},
-		})
+		role.AddPolicy(
+			[]string{"users"},
+			[]string{uname},
+			[]string{"get"},
+		)
+
+		user.SetRole(role)
 
 		log.Debug("creating default user - %+v", user)
-
-		c := &types.Config{
-			Version:  "phenix.sandia.gov/v1",
-			Kind:     "User",
-			Metadata: types.ConfigMetadata{Name: uname},
-			Spec:     structs.MapDefaultCase(user, structs.CASESNAKE),
-		}
-
-		if err := store.Create(c); err != nil {
-			return fmt.Errorf("adding new user: %w", err)
-		}
 	}
 
 	router := mux.NewRouter().StrictSlash(true)
@@ -185,8 +169,8 @@ func Start(opts ...ServerOption) error {
 	api.HandleFunc("/disks", GetDisks).Methods("GET", "OPTIONS")
 	api.HandleFunc("/hosts", GetClusterHosts).Methods("GET", "OPTIONS")
 	api.HandleFunc("/logs", GetLogs).Methods("GET", "OPTIONS")
+	api.HandleFunc("/users", GetUsers).Methods("GET", "OPTIONS")
 	/*
-		api.HandleFunc("/users", GetUsers).Methods("GET", "OPTIONS")
 		api.HandleFunc("/users", CreateUser).Methods("POST", "OPTIONS")
 		api.HandleFunc("/users/{username}", GetUser).Methods("GET", "OPTIONS")
 		api.HandleFunc("/users/{username}", UpdateUser).Methods("PATCH", "OPTIONS")

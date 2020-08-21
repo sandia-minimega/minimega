@@ -80,7 +80,7 @@ func AuthMiddleware(enabled bool, jwtKey string) mux.MiddlewareFunc {
 				return
 			}
 
-			role, err := user.GetRole()
+			role, err := user.Role()
 			if err != nil {
 				fmt.Println(err)
 				// TODO: we will get an error here if the user doesn't yet have a role
@@ -91,7 +91,7 @@ func AuthMiddleware(enabled bool, jwtKey string) mux.MiddlewareFunc {
 			}
 
 			ctx = context.WithValue(ctx, "user", user.Username())
-			ctx = context.WithValue(ctx, "role", *role)
+			ctx = context.WithValue(ctx, "role", role)
 			ctx = context.WithValue(ctx, "jwt", token.Raw)
 
 			h.ServeHTTP(w, r.WithContext(ctx))
@@ -100,7 +100,11 @@ func AuthMiddleware(enabled bool, jwtKey string) mux.MiddlewareFunc {
 
 	noAuthMiddleware := func(h http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			h.ServeHTTP(w, r)
+			role, _ := rbac.RoleFromConfig("global-admin")
+
+			ctx := context.WithValue(r.Context(), "role", *role)
+
+			h.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
 
