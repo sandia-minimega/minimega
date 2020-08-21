@@ -18,30 +18,34 @@ func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []types
 		Vms:       VMsToProtobuf(vms),
 	}
 
-	var apps []string
+	if exp.Spec.Scenario != nil && exp.Spec.Scenario.Apps != nil {
+		var apps []string
 
-	for _, app := range exp.Spec.Scenario.Apps.Experiment {
-		apps = append(apps, app.Name)
-	}
-
-	for _, app := range exp.Spec.Scenario.Apps.Host {
-		apps = append(apps, app.Name)
-	}
-
-	pb.Apps = apps
-
-	var vlans []*proto.VLAN
-
-	for alias := range exp.Spec.VLANs.Aliases {
-		vlan := &proto.VLAN{
-			Vlan:  uint32(exp.Spec.VLANs.Aliases[alias]),
-			Alias: alias,
+		for _, app := range exp.Spec.Scenario.Apps.Experiment {
+			apps = append(apps, app.Name)
 		}
 
-		vlans = append(vlans, vlan)
+		for _, app := range exp.Spec.Scenario.Apps.Host {
+			apps = append(apps, app.Name)
+		}
+
+		pb.Apps = apps
 	}
 
-	pb.Vlans = vlans
+	if exp.Spec.VLANs != nil {
+		var vlans []*proto.VLAN
+
+		for alias := range exp.Spec.VLANs.Aliases {
+			vlan := &proto.VLAN{
+				Vlan:  uint32(exp.Spec.VLANs.Aliases[alias]),
+				Alias: alias,
+			}
+
+			vlans = append(vlans, vlan)
+		}
+
+		pb.Vlans = vlans
+	}
 
 	return pb
 }

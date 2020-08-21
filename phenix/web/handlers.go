@@ -22,6 +22,7 @@ import (
 	"phenix/store"
 	"phenix/types"
 	"phenix/web/broker"
+	"phenix/web/cache"
 	"phenix/web/proto"
 	"phenix/web/rbac"
 	"phenix/web/util"
@@ -75,6 +76,14 @@ func GetExperiments(w http.ResponseWriter, r *http.Request) {
 		// This will happen if another handler is currently acting on the
 		// experiment.
 		status := isExperimentLocked(exp.Metadata.Name)
+
+		if status == "" {
+			if exp.Status.Running() {
+				status = cache.StatusStarted
+			} else {
+				status = cache.StatusStopped
+			}
+		}
 
 		// TODO: limit per-experiment VMs based on RBAC
 
