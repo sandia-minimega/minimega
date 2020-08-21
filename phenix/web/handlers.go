@@ -2239,6 +2239,8 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 	w.Write(marshalled)
 }
 
+*/
+
 // GET /users/{username}
 func GetUser(w http.ResponseWriter, r *http.Request) {
 	log.Debug("GetUser HTTP handler called")
@@ -2255,21 +2257,30 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := database.GetUser(uname)
+	user, err := rbac.GetUser(uname)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	marshalled, err := json.Marshal(user)
+	resp := &proto.User{
+		Username:  user.Username(),
+		FirstName: user.FirstName(),
+		LastName:  user.LastName(),
+		RoleName:  user.RoleName(),
+	}
+
+	body, err := marshaler.Marshal(resp)
 	if err != nil {
 		log.Error("marshaling user %s: %v", user.Username, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.Write(marshalled)
+	w.Write(body)
 }
+
+/*
 
 // PATCH /users/{username}
 func UpdateUser(w http.ResponseWriter, r *http.Request) {
