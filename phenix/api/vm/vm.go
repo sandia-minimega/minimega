@@ -57,6 +57,7 @@ func List(expName string) ([]mm.VM, error) {
 			RAM:        node.Hardware.Memory,
 			Disk:       node.Hardware.Drives[0].Image,
 			Interfaces: make(map[string]string),
+			DoNotBoot:  *node.General.DoNotBoot,
 		}
 
 		for _, iface := range node.Network.Interfaces {

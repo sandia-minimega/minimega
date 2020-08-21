@@ -162,9 +162,19 @@ func (this *Client) read() {
 		// always be true.
 		regex, _ := payload["filter"].(string)
 
+		// If `show_dnb` was not provided client-side, `showDNB` will be false,
+		// which is the default we want.
+		showDNB, _ := payload["show_dnb"].(bool)
+
 		allowed := mm.VMs{}
 
 		for _, vm := range vms {
+			// If the VM is marked as do not boot, and we're not showing VMs marked as
+			// such, continue on to the next VM right away.
+			if vm.DoNotBoot && !showDNB {
+				continue
+			}
+
 			// If there's an error, `matched` will be false.
 			if matched, _ := regexp.MatchString(regex, vm.Name); !matched {
 				continue
