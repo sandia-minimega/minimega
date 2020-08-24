@@ -42,3 +42,5 @@ EXPOSE 2345
 EXPOSE 3000
 
 ENTRYPOINT ["dlv", "debug", "--headless", "--listen=:2345", "--log", "--api-version=2"]
+
+CMD ["--", "ui", "--jwt-signing-key=a"]
