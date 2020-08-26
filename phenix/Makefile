@@ -26,13 +26,17 @@ export GOBIN
 all:
 
 clean:
+	$(RM) app/mock.go
 	$(RM) bin/phenix
+	$(RM) internal/mm/mock.go
+	$(RM) store/mock.go
 	$(RM) tmpl/bindata.go
+	$(RM) util/shell/mock.go
 	$(RM) web/bindata.go
 	$(RM) web/proto/*.pb.go
-	$(RM) web/public/index.html
 	$(RM) web/public/docs/index.html
 	$(RM) web/public/favicon.ico
+	$(RM) web/public/index.html
 	$(RM) -r web/public/assets
 	$(RM) -r web/ui/dist
 	$(RM) -r web/ui/node_modules
