@@ -19,6 +19,8 @@ func Init(opts ...Option) error {
 	switch u.Scheme {
 	case "bolt":
 		DefaultStore = NewBoltDB()
+	case "etcd":
+		DefaultStore = NewEtcd()
 	default:
 		return fmt.Errorf("unknown store scheme '%s'", u.Scheme)
 	}
