@@ -9,8 +9,8 @@ with open("README", "r") as readme_file:
 setup(
     name='minimega',
     description="Python API for minimega",
-    author="minimega team",
-    author_email="UNKNOWN",
+    author="minimega dev team",
+    author_email="minimega-dev@sandia.gov",
     long_description=readme_content,
     license="GPLv3",
     url="https://minimega.org",
