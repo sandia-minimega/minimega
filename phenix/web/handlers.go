@@ -215,6 +215,7 @@ func GetExperiment(w http.ResponseWriter, r *http.Request) {
 		sortDir = query.Get("sortDir")
 		pageNum = query.Get("pageNum")
 		perPage = query.Get("perPage")
+		showDNB = query.Get("show_dnb") != ""
 	)
 
 	if !role.Allowed("experiments", "get", name) {
@@ -241,6 +242,10 @@ func GetExperiment(w http.ResponseWriter, r *http.Request) {
 	allowed := mm.VMs{}
 
 	for _, vm := range vms {
+		if vm.DoNotBoot && !showDNB {
+			continue
+		}
+
 		if role.Allowed("vms", "list", fmt.Sprintf("%s_%s", name, vm.Name)) {
 			if vm.Running && size != "" {
 				screenshot, err := util.GetScreenshot(name, vm.Name, size)
