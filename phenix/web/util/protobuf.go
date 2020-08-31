@@ -19,6 +19,8 @@ func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []mm.VM
 		VlanMin:   uint32(exp.Spec.VLANs.Min),
 		VlanMax:   uint32(exp.Spec.VLANs.Max),
 		Vms:       VMsToProtobuf(vms),
+		VlanCount: uint32(len(exp.Spec.VLANs.Aliases)),
+		VmCount:   uint32(len(vms)),
 	}
 
 	if exp.Spec.Scenario != nil && exp.Spec.Scenario.Apps != nil {

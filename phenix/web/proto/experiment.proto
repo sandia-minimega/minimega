@@ -14,14 +14,18 @@ message Experiment {
 	string name = 2;
 	string topology = 3;
 	string scenario = 4;
-	string start_time = 5;
+	string start_time = 5 [json_name="start_time"];
 	bool running = 6;
 	string status = 7;
-	uint32 vlan_min = 8;
-	uint32 vlan_max = 9;
+	uint32 vlan_min = 8 [json_name="vlan_min"];
+	uint32 vlan_max = 9 [json_name="vlan_max"];
 	repeated VLAN vlans = 10;
 	repeated VM vms = 12;
 	repeated string apps = 13;
+
+	// TODO: depricate
+	uint32 vlan_count = 14 [json_name="vlan_count"];
+	uint32 vm_count = 15 [json_name="vm_count"];
 }
 
 message ExperimentList {
@@ -58,8 +62,8 @@ message CreateExperimentRequest {
 	string name = 1;
 	string topology = 2;
 	string scenario = 3;
-	uint32 vlan_min = 4;
-	uint32 vlan_max = 5;
+	uint32 vlan_min = 4 [json_name="vlan_min"];
+	uint32 vlan_max = 5 [json_name="vlan_max"];
 }
 
 message SnapshotRequest {

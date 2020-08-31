@@ -6,7 +6,7 @@ message HostsRequest {
 	string name = 1;
 	string cpus = 2;
 	repeated uint32 load = 3;
-	uint32 mem_used = 4;
+	uint32 mem_used = 4 [json_name="mem_used"];
 	uint32 bandwidth = 5;
 	uint32 no_vms = 6;
 	string uptime = 7;
