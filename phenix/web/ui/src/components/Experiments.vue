@@ -339,6 +339,7 @@
             for ( let i = 0; i < exp.length; i++ ) {
               if ( exp[i].name == msg.resource.name ) {
                 exp[i] = msg.result;
+                exp[i].status = 'started';
 
                 break;
               }
