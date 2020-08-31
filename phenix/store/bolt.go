@@ -42,7 +42,6 @@ func (this *BoltDB) Init(opts ...Option) error {
 
 func (this *BoltDB) open() error {
 	this.Lock()
-	defer this.Unlock()
 
 	var err error
 
@@ -55,7 +54,6 @@ func (this *BoltDB) open() error {
 }
 
 func (this *BoltDB) Close() error {
-	this.Lock()
 	defer this.Unlock()
 
 	if this.db == nil {
