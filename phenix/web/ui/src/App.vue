@@ -29,6 +29,7 @@ login and returns a user to Experiments component if successful.
     
     beforeDestroy () {
       this.$disconnect();
+      this.unwatch();
     },
     
     created () {
@@ -47,17 +48,34 @@ login and returns a user to Experiments component if successful.
         this.$store.commit( 'LOGIN', { "user": user, "remember": true } );
       }
 
-      this.$store.watch(
-        (_, getters) => getters.token,
-        (token, old) => {
-          if (token != old) {
-            console.log('auth token updated -- initializing websocket');
+      this.wsConnect();
 
-            this.$disconnect();
-            this.$connect('//' + location.host + '/api/v1/ws?token=' + token);
-          }
+      this.unwatch = this.$store.watch(
+        (_, getters) => getters.auth,
+        () => {
+          console.log(auth);
+
+          // Disconnect the websocket client no matter what on auth changes.
+          this.$disconnect();
+          this.wsConnect();
         }
       )
+    },
+
+    methods: {
+      wsConnect () {
+        if (this.$store.getters.auth) {
+          console.log('client authenticated -- initializing websocket');
+
+          let path = '/api/v1/ws';
+
+          if (this.$store.getters.token) {
+            path += '?token=' + this.$store.getters.token;
+          }
+
+          this.$connect('//' + location.host + path);
+        }
+      }
     }
   }
 </script>
