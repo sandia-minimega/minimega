@@ -511,6 +511,12 @@ func (Minimega) GetClusterHosts() (Hosts, error) {
 		cluster = append(cluster, host)
 	}
 
+	// If there's only one host in the cluster (ie. the head node), then make it
+	// schedulable.
+	if len(cluster) == 1 {
+		cluster[0].Schedulable = true
+	}
+
 	return cluster, nil
 }
 
