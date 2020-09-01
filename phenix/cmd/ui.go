@@ -20,13 +20,28 @@ func newUiCmd() *cobra.Command {
 			var (
 				endpoint = ":3000"
 				jwtKey   = MustGetString(cmd.Flags(), "jwt-signing-key")
+				logReq   = MustGetBool(cmd.Flags(), "log-requests")
+				logFull  = MustGetBool(cmd.Flags(), "log-full")
 			)
 
 			if len(args) > 0 {
 				endpoint = args[0]
 			}
 
-			if err := web.Start(web.ServeOnEndpoint(endpoint), web.ServeWithJWTKey(jwtKey)); err != nil {
+			opts := []web.ServerOption{
+				web.ServeWithJWTKey(jwtKey),
+				web.ServeOnEndpoint(endpoint),
+			}
+
+			if logReq {
+				opts = append(opts, web.ServeWithLogs("requests"))
+			}
+
+			if logFull {
+				opts = append(opts, web.ServeWithLogs("full"))
+			}
+
+			if err := web.Start(opts...); err != nil {
 				return util.HumanizeError(err, "Unable to serve UI").Humanized()
 			}
 
@@ -35,6 +50,8 @@ func newUiCmd() *cobra.Command {
 	}
 
 	cmd.Flags().String("jwt-signing-key", "", "Secret key used to sign JWT for authentication")
+	cmd.Flags().Bool("log-requests", false, "Log API requests")
+	cmd.Flags().Bool("log-full", false, "Log API requests and responses")
 
 	return cmd
 }
