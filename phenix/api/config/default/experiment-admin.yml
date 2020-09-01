@@ -1,0 +1,36 @@
+apiVersion: phenix.sandia.gov/v1
+kind: Role
+metadata:
+  name: experiment-admin
+spec:
+  roleName: Experiment Admin
+  policies:
+  - resources:
+    - experiments
+    - "experiments/*"
+    verbs:
+    - list
+    - get
+    - update
+  - resources:
+    - vms
+    - "vms/*"
+    verbs:
+    - list
+    - get
+    - create
+    - update
+    - patch
+    - delete
+  - resources:
+    - disks
+    resourceNames:
+    - "*"
+    verbs:
+    - list
+  - resources:
+    - hosts
+    resourceNames:
+    - "*"
+    verbs:
+    - list

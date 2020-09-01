@@ -1,0 +1,21 @@
+apiVersion: phenix.sandia.gov/v1
+kind: Role
+metadata:
+  name: experiment-viewer
+spec:
+  roleName: Experiment Viewer
+  policies:
+  - resources:
+    - experiments
+    - "experiments/*"
+    - vms
+    - "vms/*"
+    verbs:
+    - list
+    - get
+  - resources:
+    - hosts
+    resourceNames:
+    - "*"
+    verbs:
+    - list

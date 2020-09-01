@@ -1,0 +1,16 @@
+apiVersion: phenix.sandia.gov/v1
+kind: Role
+metadata:
+  name: vm-viewer
+spec:
+  roleName: VM Viewer
+  policies:
+  - resources:
+    - vms
+    verbs:
+    - list
+  - resources:
+    - "vms/screenshot"
+    - "vms/vnc"
+    verbs:
+    - get
