@@ -45,3 +45,26 @@ message VMRedeployRequest {
   string disk = 4;
   bool injects = 5;
 }
+
+message UpdateVMRequest {
+  string exp = 1;
+  string name = 2;
+  uint32 cpus = 3;
+  uint32 ram = 4;
+  string disk = 5;
+
+  oneof boot {
+    bool do_not_boot = 6 [json_name="dnb"];
+  }
+
+  VMInterface interface = 7;
+
+  oneof cluster_host {
+    string host = 8;
+  }
+}
+
+message VMInterface {
+  uint32 index = 1;
+  string vlan = 2;
+}

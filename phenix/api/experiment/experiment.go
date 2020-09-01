@@ -403,6 +403,22 @@ func Stop(name string) error {
 	return nil
 }
 
+func Running(name string) bool {
+	c, _ := types.NewConfig("experiment/" + name)
+
+	if err := store.Get(c); err != nil {
+		return false
+	}
+
+	var status v1.ExperimentStatus
+
+	if err := mapstructure.Decode(c.Status, &status); err != nil {
+		return false
+	}
+
+	return status.Running()
+}
+
 func Save(opts ...SaveOption) error {
 	o := newSaveOptions(opts...)
 

@@ -831,65 +831,87 @@ func GetVM(w http.ResponseWriter, r *http.Request) {
 // PATCH /experiments/{exp}/vms/{name}
 func UpdateVM(w http.ResponseWriter, r *http.Request) {
 	log.Debug("UpdateVM HTTP handler called")
+	var (
+		ctx  = r.Context()
+		role = ctx.Value("role").(rbac.Role)
+		vars = mux.Vars(r)
+		exp  = vars["exp"]
+		name = vars["name"]
+	)
 
-	http.Error(w, "updating a VM is not implemented", http.StatusNotImplemented)
+	if !role.Allowed("vms", "patch", fmt.Sprintf("%s_%s", exp, name)) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
 
-	/*
-		var (
-			ctx  = r.Context()
-			role = ctx.Value("role").(rbac.Role)
-			vars = mux.Vars(r)
-			exp  = vars["exp"]
-			name = vars["name"]
-		)
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-		if !role.Allowed("vms", "patch", fmt.Sprintf("%s_%s", exp, name)) {
-			http.Error(w, "forbidden", http.StatusForbidden)
-			return
-		}
+	var req proto.UpdateVMRequest
+	if err := unmarshaler.Unmarshal(body, &req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
-		body, err := ioutil.ReadAll(r.Body)
+	opts := []vm.UpdateOption{
+		vm.UpdateExperiment(exp),
+		vm.UpdateVM(name),
+		vm.UpdateWithCPU(int(req.Cpus)),
+		vm.UpdateWithMem(int(req.Ram)),
+		vm.UpdateWithDisk(req.Disk),
+	}
+
+	if req.Interface != nil {
+		opts = append(opts, vm.UpdateWithInterface(int(req.Interface.Index), req.Interface.Vlan))
+	}
+
+	switch req.Boot.(type) {
+	case *proto.UpdateVMRequest_DoNotBoot:
+		opts = append(opts, vm.UpdateWithDNB(req.GetDoNotBoot()))
+	}
+
+	switch req.ClusterHost.(type) {
+	case *proto.UpdateVMRequest_Host:
+		opts = append(opts, vm.UpdateWithHost(req.GetHost()))
+	}
+
+	if err := vm.Update(opts...); err != nil {
+		log.Error("updating VM: %v", err)
+		http.Error(w, "unable to update VM", http.StatusInternalServerError)
+		return
+	}
+
+	vm, err := vm.Get(exp, name)
+	if err != nil {
+		http.Error(w, "unable to get VM", http.StatusInternalServerError)
+		return
+	}
+
+	if vm.Running {
+		screenshot, err := util.GetScreenshot(exp, name, "215")
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			log.Error("getting screenshot: %v", err)
+		} else {
+			vm.Screenshot = "data:image/png;base64," + base64.StdEncoding.EncodeToString(screenshot)
 		}
+	}
 
-		var req map[string]interface{}
-		err = json.Unmarshal(body, &req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
+	body, err = marshaler.Marshal(util.VMToProtobuf(*vm))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-		vm, err := api.UpdateVM(exp, name, req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	broker.Broadcast(
+		broker.NewRequestPolicy("vms", "patch", fmt.Sprintf("%s_%s", exp, name)),
+		broker.NewResource("experiment/vm", fmt.Sprintf("%s/%s", exp, name), "update"),
+		body,
+	)
 
-		if vm.Running {
-			screenshot, err := util.GetScreenshot(exp, name, "215")
-			if err != nil {
-				log.Error("getting screenshot: %v", err)
-			} else {
-				vm.Screenshot = "data:image/png;base64," + base64.StdEncoding.EncodeToString(screenshot)
-			}
-		}
-
-		marshalled, err := json.Marshal(vm)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		broker.Broadcast(
-			broker.NewRequestPolicy("vms", "patch", fmt.Sprintf("%s_%s", exp, name)),
-			broker.NewResource("experiment/vm", fmt.Sprintf("%s/%s", exp, name), "update"),
-			marshalled,
-		)
-
-		w.Write(marshalled)
-	*/
+	w.Write(body)
 }
 
 // DELETE /experiments/{exp}/vms/{name}

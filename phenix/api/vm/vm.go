@@ -92,6 +92,8 @@ func List(expName string) ([]mm.VM, error) {
 					vm.IPv4[idx] = "n/a"
 				}
 			}
+		} else {
+			vm.Host = exp.Spec.Schedules[vm.Name]
 		}
 
 		vms = append(vms, vm)
@@ -147,6 +149,7 @@ func Get(expName, vmName string) (*mm.VM, error) {
 	}
 
 	if !exp.Status.Running() {
+		vm.Host = exp.Spec.Schedules[vm.Name]
 		return vm, nil
 	}
 
@@ -182,6 +185,71 @@ func Get(expName, vmName string) (*mm.VM, error) {
 	}
 
 	return vm, nil
+}
+
+func Update(opts ...UpdateOption) error {
+	o := newUpdateOptions(opts...)
+
+	if o.exp == "" || o.vm == "" {
+		return fmt.Errorf("experiment or VM name not provided")
+	}
+
+	running := experiment.Running(o.exp)
+
+	if running && o.iface == nil {
+		return fmt.Errorf("only interface connections can be updated while experiment is running")
+	}
+
+	// The only setting that can be updated while an experiment is running is the
+	// VLAN an interface is connected to.
+	if running {
+		if o.iface.vlan == "" {
+			return Disonnect(o.exp, o.vm, o.iface.index)
+		} else {
+			return Connect(o.exp, o.vm, o.iface.index, o.iface.vlan)
+		}
+	}
+
+	exp, err := experiment.Get(o.exp)
+	if err != nil {
+		return fmt.Errorf("unable to get experiment %s: %w", o.exp, err)
+	}
+
+	vm := exp.Spec.Topology.FindNodeByName(o.vm)
+	if vm == nil {
+		return fmt.Errorf("unable to find VM %s in experiment %s", o.vm, o.exp)
+	}
+
+	if o.cpu != 0 {
+		vm.Hardware.VCPU = o.cpu
+	}
+
+	if o.mem != 0 {
+		vm.Hardware.Memory = o.mem
+	}
+
+	if o.disk != "" {
+		vm.Hardware.Drives[0].Image = o.disk
+	}
+
+	if o.dnb != nil {
+		vm.General.DoNotBoot = o.dnb
+	}
+
+	if o.host != nil {
+		if *o.host == "" {
+			delete(exp.Spec.Schedules, o.vm)
+		} else {
+			exp.Spec.Schedules[o.vm] = *o.host
+		}
+	}
+
+	err = experiment.Save(experiment.SaveWithName(o.exp), experiment.SaveWithSpec(exp.Spec))
+	if err != nil {
+		return fmt.Errorf("unable to save experiment with updated VM: %w", err)
+	}
+
+	return nil
 }
 
 func Screenshot(expName, vmName, size string) ([]byte, error) {

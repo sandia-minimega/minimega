@@ -1,5 +1,81 @@
 package vm
 
+type UpdateOption func(*updateOptions)
+
+type iface struct {
+	index int
+	vlan  string
+}
+
+type updateOptions struct {
+	exp   string
+	vm    string
+	cpu   int
+	mem   int
+	disk  string
+	dnb   *bool
+	iface *iface
+	host  *string
+}
+
+func newUpdateOptions(opts ...UpdateOption) updateOptions {
+	var o updateOptions
+
+	for _, opt := range opts {
+		opt(&o)
+	}
+
+	return o
+}
+
+func UpdateExperiment(e string) UpdateOption {
+	return func(o *updateOptions) {
+		o.exp = e
+	}
+}
+
+func UpdateVM(v string) UpdateOption {
+	return func(o *updateOptions) {
+		o.vm = v
+	}
+}
+
+func UpdateWithCPU(c int) UpdateOption {
+	return func(o *updateOptions) {
+		o.cpu = c
+	}
+}
+
+func UpdateWithMem(m int) UpdateOption {
+	return func(o *updateOptions) {
+		o.mem = m
+	}
+}
+
+func UpdateWithDisk(d string) UpdateOption {
+	return func(o *updateOptions) {
+		o.disk = d
+	}
+}
+
+func UpdateWithInterface(i int, v string) UpdateOption {
+	return func(o *updateOptions) {
+		o.iface = &iface{index: i, vlan: v}
+	}
+}
+
+func UpdateWithDNB(b bool) UpdateOption {
+	return func(o *updateOptions) {
+		o.dnb = &b
+	}
+}
+
+func UpdateWithHost(h string) UpdateOption {
+	return func(o *updateOptions) {
+		o.host = &h
+	}
+}
+
 // RedeployOption is a function that configures options for a VM redeployment.
 // It is used in `vm.Redeploy`.
 type RedeployOption func(*redeployOptions)
