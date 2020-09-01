@@ -2182,9 +2182,7 @@ func CreateUser(w http.ResponseWriter, r *http.Request) {
 		[]string{"get"},
 	)
 
-	user.Spec.Role = uRole.Spec
-
-	user.Save()
+	user.SetRole(uRole)
 
 	resp := util.UserToProtobuf(*user)
 

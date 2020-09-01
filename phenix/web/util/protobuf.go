@@ -124,6 +124,19 @@ func UserToProtobuf(u rbac.User) *proto.User {
 		rnamemap := make(map[string]struct{})
 
 		for _, p := range r.Policies {
+			var skip bool
+
+			for _, pn := range p.Resources {
+				if pn == "disks" || pn == "hosts" || pn == "users" {
+					skip = true
+					break
+				}
+			}
+
+			if skip {
+				continue
+			}
+
 			for _, n := range p.ResourceNames {
 				rnamemap[n] = struct{}{}
 			}

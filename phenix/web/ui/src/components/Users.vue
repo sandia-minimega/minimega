@@ -116,7 +116,7 @@
               {{ props.row.last_name }}
             </b-table-column>
             <b-table-column field="role" label="Role" sortable>
-              {{ props.row.role ? props.row.role.name : "Not yet assigned" }}
+              {{ props.row.role_name ? props.row.role_name : "Not yet assigned" }}
             </b-table-column>
             <b-table-column v-if="adminUser()" label="Delete" width="50" centered>
               <button class="button is-light is-small" @click="deleteUser( props.row.username )">
@@ -378,28 +378,7 @@
           }
         }
 
-        if ( this.user.role ) {
-          this.user.role_name = this.user.role.name;
-
-          let resource_names = [];
-
-          for ( let i = 0; i < this.user.role.policies.length; i++ ) {
-            let policy = this.user.role.policies[i];
-
-            let ignore = [ 'disks', 'hosts', 'users' ];
-            if ( ignore.includes( policy.resources[0] ) ) {
-              continue;
-            }
-
-            if ( policy.resource_names ) {
-              for ( let j = 0; j < policy.resource_names.length; j++ ) {
-                resource_names.push( policy.resource_names[j] );
-              }
-            }
-          }
-
-          this.user.resource_names = _.uniq( resource_names ).join(' ');
-        }
+        this.user.resource_names = _.uniq(this.user.resource_names).join(' ');
 
         this.isEditActive = true;
       },
