@@ -1447,7 +1447,7 @@
             onConfirm: () => {
               this.isWaiting = true;
 
-              let update = { "interface": { "index": index, "vlan": 0 } };
+              let update = { "interface": { "index": index, "vlan": "" } };
 
               this.$http.patch(
                 'experiments/' + this.$route.params.id + '/vms/' + name, update
@@ -1494,7 +1494,7 @@
             onConfirm: () => {
               this.isWaiting = true;
 
-              let update = { "interface": { "index": index, "vlan": vlan.vlan } };
+              let update = { "interface": { "index": index, "vlan": vlan.alias } };
 
               this.$http.patch(
                 'experiments/' + this.$route.params.id + '/vms/' + name, update

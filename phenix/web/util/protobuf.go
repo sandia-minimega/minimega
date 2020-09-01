@@ -3,6 +3,7 @@ package util
 import (
 	"phenix/internal/mm"
 	"phenix/types"
+	v1 "phenix/types/version/v1"
 	"phenix/web/cache"
 	"phenix/web/proto"
 	"phenix/web/rbac"
@@ -37,12 +38,20 @@ func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []mm.VM
 		pb.Apps = apps
 	}
 
-	if exp.Spec.VLANs != nil {
+	var aliases v1.VLANAliases
+
+	if exp.Status != nil {
+		aliases = exp.Status.VLANs
+	} else {
+		aliases = exp.Spec.VLANs.Aliases
+	}
+
+	if aliases != nil {
 		var vlans []*proto.VLAN
 
-		for alias := range exp.Spec.VLANs.Aliases {
+		for alias := range aliases {
 			vlan := &proto.VLAN{
-				Vlan:  uint32(exp.Spec.VLANs.Aliases[alias]),
+				Vlan:  uint32(aliases[alias]),
 				Alias: alias,
 			}
 
