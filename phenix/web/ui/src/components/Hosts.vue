@@ -19,7 +19,7 @@ available for experiments, the number of VMs, and host uptime.
       default-sort="name">
         <template slot-scope="props">
           <b-table-column field="name" label="Name" width="150" sortable>
-            {{ props.row.name }}
+            {{ hostName(props.row) }}
           </b-table-column>
           <b-table-column field="cpus" label="CPUs" width="50" sortable centered>
             {{ props.row.cpus }}
@@ -119,6 +119,14 @@ available for experiments, the number of VMs, and host uptime.
         } else {
           return 'is-danger';
         }
+      },
+
+      hostName ( host ) {
+        if (host.headnode) {
+          return host.name + ' (headnode)';
+        }
+
+        return host.name;
       }
     },
     

@@ -134,6 +134,7 @@ type Host struct {
 	VMs         int      `json:"vms"`
 	Uptime      float64  `json:"uptime"`
 	Schedulable bool     `json:"schedulable"`
+	Headnode    bool     `json:"headnode"`
 }
 
 type VMs []VM

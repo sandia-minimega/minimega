@@ -485,14 +485,10 @@ func (Minimega) GetClusterHosts() (Hosts, error) {
 	}
 
 	head := hosts[0]
-	head.Name = head.Name + " (headnode)"
 	head.Schedulable = false
+	head.Headnode = true
 
-	cluster := []Host{head}
-
-	// Used below to ensure the headnode doesn't show up in the list of
-	// cluster nodes twice.
-	headnode := hosts[0].Name
+	var cluster []Host
 
 	// Get compute nodes details
 	hosts, err = processNamespaceHosts("__phenix__")
@@ -503,7 +499,8 @@ func (Minimega) GetClusterHosts() (Hosts, error) {
 	for _, host := range hosts {
 		// This will happen if the headnode is included as a compute node
 		// (ie. when there's only one node in the cluster).
-		if host.Name == headnode {
+		if host.Name == head.Name {
+			head.Schedulable = true
 			continue
 		}
 
@@ -511,11 +508,7 @@ func (Minimega) GetClusterHosts() (Hosts, error) {
 		cluster = append(cluster, host)
 	}
 
-	// If there's only one host in the cluster (ie. the head node), then make it
-	// schedulable.
-	if len(cluster) == 1 {
-		cluster[0].Schedulable = true
-	}
+	cluster = append(cluster, head)
 
 	return cluster, nil
 }
