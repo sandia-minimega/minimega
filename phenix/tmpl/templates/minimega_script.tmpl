@@ -40,9 +40,9 @@ vm config cpu {{ .Hardware.CPU }}
 vm config memory {{ .Hardware.Memory }}
 vm config snapshot {{ .General.Snapshot }}
         {{- if .General.Snapshot }}
-vm config disk {{ .Hardware.DiskConfig ($.SnapshotName .General.Hostname) }}
+vm config disk {{ .Hardware.DiskConfig ($.SnapshotName .General.Hostname) }},writeback
         {{- else }}
-vm config disk {{ .Hardware.DiskConfig "" }}
+vm config disk {{ .Hardware.DiskConfig "" }},writeback
         {{- end }}
         {{- if eq .Hardware.OSType "linux" }}
 vm config qemu-append -vga qxl

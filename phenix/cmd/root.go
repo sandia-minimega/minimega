@@ -4,10 +4,11 @@ import (
 	goflag "flag"
 	"fmt"
 	"os"
+
 	"phenix/api/config"
+	"phenix/internal/common"
 	"phenix/store"
 	"phenix/util"
-	"phenix/version"
 
 	log "github.com/activeshadow/libminimega/minilog"
 	homedir "github.com/mitchellh/go-homedir"
@@ -16,16 +17,23 @@ import (
 )
 
 var (
-	cfgFile       string
-	storeEndpoint string
-	errFile       string
+	phenixBase       string
+	minimegaBase     string
+	hostnameSuffixes string
+	cfgFile          string
+	storeEndpoint    string
+	errFile          string
 )
 
 var rootCmd = &cobra.Command{
-	Use:     "phenix",
-	Short:   "A cli application for phēnix",
-	Version: version.Version,
+	Use:   "phenix",
+	Short: "A cli application for phēnix",
+	// Version: version.Version,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		common.PhenixBase = MustGetString(cmd.Flags(), "phenix-base")
+		common.MinimegaBase = MustGetString(cmd.Flags(), "minimega-base")
+		common.HostnameSuffixes = MustGetString(cmd.Flags(), "hostname-suffixes")
+
 		var (
 			endpoint = MustGetString(cmd.Flags(), "store.endpoint")
 			errFile  = MustGetString(cmd.Flags(), "log.error-file")
@@ -65,6 +73,9 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
+	rootCmd.PersistentFlags().StringVar(&phenixBase, "phenix-base", "/phenix", "base phenix directory")
+	rootCmd.PersistentFlags().StringVar(&minimegaBase, "minimega-base", "/tmp/minimega", "base minimega directory")
+	rootCmd.PersistentFlags().StringVar(&hostnameSuffixes, "hostname-suffixes", "", "hostname suffixes to strip")
 	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config.file", "C", "", "config file (default: $HOME/.phenix.yml)")
 	rootCmd.PersistentFlags().StringVarP(&storeEndpoint, "store.endpoint", "S", "", "endpoint for storage service (default: bolt://$HOME/.phenix.bdb)")
 	// rootCmd.PersistentFlags().IntP("log.verbosity", "V", 0, "log verbosity (0 - 10)")

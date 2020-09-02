@@ -3,12 +3,14 @@ package mm
 import (
 	"encoding/base64"
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"phenix/internal/common"
 	"phenix/internal/mm/mmcli"
 )
 
@@ -362,6 +364,23 @@ func (Minimega) KillVM(opts ...Option) error {
 	return flush(o.ns)
 }
 
+func (Minimega) GetVMHost(opts ...Option) (string, error) {
+	o := NewOptions(opts...)
+
+	cmd := mmcli.NewNamespacedCommand(o.ns)
+	cmd.Command = "vm info"
+	cmd.Columns = []string{"host"}
+	cmd.Filters = []string{"name=" + o.vm}
+
+	status := mmcli.RunTabular(cmd)
+
+	if len(status) == 0 {
+		return "", fmt.Errorf("VM %s not found", o.vm)
+	}
+
+	return status[0]["host"], nil
+}
+
 func (Minimega) ConnectVMInterface(opts ...Option) error {
 	o := NewOptions(opts...)
 
@@ -511,6 +530,24 @@ func (Minimega) GetClusterHosts() (Hosts, error) {
 	cluster = append(cluster, head)
 
 	return cluster, nil
+}
+
+func (Minimega) IsHeadnode(node string) bool {
+	headnode, _ := os.Hostname()
+
+	// Trim host name suffixes (like -minimega, or -gophenix) potentially added to
+	// Docker containers by Docker Compose config.
+	for _, s := range strings.Split(common.HostnameSuffixes, ",") {
+		headnode = strings.TrimSuffix(headnode, s)
+	}
+
+	// Trim node name suffixes (like -minimega, or -gophenix) potentially added to
+	// Docker containers by Docker Compose config.
+	for _, s := range strings.Split(common.HostnameSuffixes, ",") {
+		node = strings.TrimSuffix(node, s)
+	}
+
+	return node == headnode
 }
 
 func (Minimega) GetVLANs(opts ...Option) (map[string]int, error) {

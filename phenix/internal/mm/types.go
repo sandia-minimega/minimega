@@ -230,3 +230,17 @@ type Capture struct {
 	Interface int    `json:"interface"`
 	Filepath  string `json:"filepath"`
 }
+
+type BlockDevice struct {
+	Device   string `json:"device"`
+	Inserted *struct {
+		File string `json:"file"`
+	} `json:"inserted"`
+}
+
+type BlockDeviceJobs struct {
+	Device string `json:"device"`
+	Status string `json:"io-status"`
+	Length int    `json:"len"`
+	Offset int    `json:"offset"`
+}

@@ -16,6 +16,7 @@ type MM interface {
 	StopVM(...Option) error
 	RedeployVM(...Option) error
 	KillVM(...Option) error
+	GetVMHost(...Option) (string, error)
 
 	ConnectVMInterface(...Option) error
 	DisconnectVMInterface(...Option) error
@@ -26,5 +27,6 @@ type MM interface {
 	GetVMCaptures(...Option) []Capture
 
 	GetClusterHosts() (Hosts, error)
+	IsHeadnode(string) bool
 	GetVLANs(...Option) (map[string]int, error)
 }

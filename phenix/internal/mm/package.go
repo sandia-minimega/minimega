@@ -44,6 +44,10 @@ func KillVM(opts ...Option) error {
 	return DefaultMM.KillVM(opts...)
 }
 
+func GetVMHost(opts ...Option) (string, error) {
+	return DefaultMM.GetVMHost(opts...)
+}
+
 func ConnectVMInterface(opts ...Option) error {
 	return DefaultMM.ConnectVMInterface(opts...)
 }
@@ -70,6 +74,10 @@ func GetVMCaptures(opts ...Option) []Capture {
 
 func GetClusterHosts() (Hosts, error) {
 	return DefaultMM.GetClusterHosts()
+}
+
+func IsHeadnode(node string) bool {
+	return DefaultMM.IsHeadnode(node)
 }
 
 func GetVLANs(opts ...Option) (map[string]int, error) {

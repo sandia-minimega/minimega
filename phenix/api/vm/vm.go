@@ -1,12 +1,25 @@
 package vm
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
+	"strconv"
+	"strings"
+	"time"
 
 	"phenix/api/experiment"
+	"phenix/internal/common"
+	"phenix/internal/file"
 	"phenix/internal/mm"
+	"phenix/internal/mm/mmcli"
+
+	"golang.org/x/sync/errgroup"
 )
 
 var vlanAliasRegex = regexp.MustCompile(`(.*) \(\d*\)`)
@@ -379,25 +392,455 @@ func Kill(expName, vmName string) error {
 }
 
 func Snapshots(expName, vmName string) ([]string, error) {
-	// TODO
+	snapshots, err := file.GetExperimentSnapshots(expName)
+	if err != nil {
+		return nil, fmt.Errorf("getting list of experiment snapshots: %w", err)
+	}
 
-	return nil, nil
+	var (
+		prefix = fmt.Sprintf("%s__", vmName)
+		names  []string
+	)
+
+	for _, ss := range snapshots {
+		if strings.HasPrefix(ss, prefix) {
+			names = append(names, ss)
+		}
+	}
+
+	return names, nil
 }
 
 func Snapshot(expName, vmName, out string, cb func(string)) error {
-	// TODO
+	vm, err := Get(expName, vmName)
+	if err != nil {
+		return fmt.Errorf("getting VM details: %w", err)
+	}
+
+	if !vm.Running {
+		return errors.New("VM is not running")
+	}
+
+	out = strings.TrimSuffix(out, filepath.Ext(out))
+	out = fmt.Sprintf("%s_%s__%s", expName, vmName, out)
+
+	// ***** BEGIN: SNAPSHOT VM *****
+
+	// Get minimega's snapshot path for VM
+
+	cmd := mmcli.NewNamespacedCommand(expName)
+	cmd.Command = "vm info"
+	cmd.Columns = []string{"host", "id"}
+	cmd.Filters = []string{"name=" + vmName}
+
+	status := mmcli.RunTabular(cmd)
+
+	if len(status) == 0 {
+		return fmt.Errorf("VM %s not found", vmName)
+	}
+
+	cmd.Columns = nil
+	cmd.Filters = nil
+
+	var (
+		host = status[0]["host"]
+		fp   = fmt.Sprintf("%s/%s", common.MinimegaBase, status[0]["id"])
+	)
+
+	qmp := fmt.Sprintf(`{ "execute": "query-block" }`)
+	cmd.Command = fmt.Sprintf("vm qmp %s '%s'", vmName, qmp)
+
+	res, err := mmcli.SingleResponse(mmcli.Run(cmd))
+	if err != nil {
+		return fmt.Errorf("querying for block device details for VM %s: %w", vmName, err)
+	}
+
+	var v map[string][]mm.BlockDevice
+	json.Unmarshal([]byte(res), &v)
+
+	var device string
+
+	for _, dev := range v["return"] {
+		if dev.Inserted != nil {
+			if strings.HasPrefix(dev.Inserted.File, fp) {
+				device = dev.Device
+				break
+			}
+		}
+	}
+
+	target := fmt.Sprintf("%s/images/%s.qc2", common.PhenixBase, out)
+
+	qmp = fmt.Sprintf(`{ "execute": "drive-backup", "arguments": { "device": "%s", "sync": "top", "target": "%s" } }`, device, target)
+	cmd.Command = fmt.Sprintf(`vm qmp %s '%s'`, vmName, qmp)
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("starting disk snapshot for VM %s: %w", vmName, err)
+	}
+
+	qmp = fmt.Sprintf(`{ "execute": "query-block-jobs" }`)
+	cmd.Command = fmt.Sprintf(`vm qmp %s '%s'`, vmName, qmp)
+
+	for {
+		res, err := mmcli.SingleResponse(mmcli.Run(cmd))
+		if err != nil {
+			return fmt.Errorf("querying for block device jobs for VM %s: %w", vmName, err)
+		}
+
+		var v map[string][]mm.BlockDeviceJobs
+		json.Unmarshal([]byte(res), &v)
+
+		if len(v["return"]) == 0 {
+			break
+		}
+
+		for _, job := range v["return"] {
+			if job.Device != device {
+				continue
+			}
+
+			if cb != nil {
+				// Cut progress in half since drive backup is 1 of 2 steps.
+				progress := float64(job.Offset) / float64(job.Length)
+				progress = progress * 0.5
+
+				cb(fmt.Sprintf("%f", progress))
+			}
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	// ***** END: SNAPSHOT VM *****
+
+	// ***** BEGIN: MIGRATE VM *****
+
+	cmd.Command = fmt.Sprintf("vm migrate %s %s.SNAP", vmName, out)
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("starting memory snapshot for VM %s: %w", vmName, err)
+	}
+
+	cmd.Command = "vm migrate"
+	cmd.Columns = []string{"name", "status", "complete (%)"}
+	cmd.Filters = []string{"name=" + vmName}
+
+	for {
+		status := mmcli.RunTabular(cmd)[0]
+
+		if cb != nil {
+			if status["status"] == "completed" {
+				cb("completed")
+			} else {
+				// Cut progress in half and add 0.5 to it since migrate is 2 of 2 steps.
+				progress, _ := strconv.ParseFloat(status["complete (%)"], 64)
+				progress = 0.5 + (progress * 0.5)
+
+				cb(fmt.Sprintf("%f", progress))
+			}
+		}
+
+		if status["status"] == "completed" {
+			break
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	// ***** END: MIGRATE VM *****
+
+	cmd.Command = fmt.Sprintf("vm start %s", vmName)
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("resuming VM %s after snapshot: %w", vmName, err)
+	}
+
+	var (
+		dst       = fmt.Sprintf("%s/images/%s/files", common.PhenixBase, expName)
+		cmdPrefix string
+	)
+
+	if !mm.IsHeadnode(host) {
+		cmdPrefix = "mesh send " + host
+	}
+
+	cmd = mmcli.NewCommand()
+	cmd.Command = fmt.Sprintf("%s shell mkdir -p %s", cmdPrefix, dst)
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("ensuring experiment files directory exists: %w", err)
+	}
+
+	final := strings.TrimPrefix(out, expName+"_")
+
+	cmd.Command = fmt.Sprintf("%s shell mv %s/images/%s.SNAP %s/%s.SNAP", cmdPrefix, common.PhenixBase, out, dst, final)
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("moving memory snapshot to experiment files directory: %w", err)
+	}
+
+	cmd.Command = fmt.Sprintf("%s shell mv %s/images/%s.qc2 %s/%s.qc2", cmdPrefix, common.PhenixBase, out, dst, final)
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("moving disk snapshot to experiment files directory: %w", err)
+	}
 
 	return nil
+
 }
 
 func Restore(expName, vmName, snap string) error {
-	// TODO
+	snap = strings.TrimSuffix(snap, filepath.Ext(snap))
+
+	snapshots, err := Snapshots(expName, vmName)
+	if err != nil {
+		return fmt.Errorf("getting list of snapshots for VM: %w", err)
+	}
+
+	var found bool
+
+	for _, ss := range snapshots {
+		if snap == ss {
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("snapshot does not exist on cluster")
+	}
+
+	snap = fmt.Sprintf("%s/files/%s", expName, snap)
+
+	cmd := mmcli.NewNamespacedCommand(expName)
+	cmd.Command = fmt.Sprintf("vm config clone %s", vmName)
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("cloning config for VM %s: %w", vmName, err)
+	}
+
+	cmd.Command = fmt.Sprintf("vm config migrate %s.SNAP", snap)
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("configuring migrate file for VM %s: %w", vmName, err)
+	}
+
+	cmd.Command = fmt.Sprintf("vm config disk %s.qc2,writeback", snap)
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("configuring disk file for VM %s: %w", vmName, err)
+	}
+
+	cmd.Command = fmt.Sprintf("vm kill %s", vmName)
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("killing VM %s: %w", vmName, err)
+	}
+
+	// TODO: explicitly flush killed VM by name once we start using that version
+	// of minimega.
+	cmd.Command = "vm flush"
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("flushing VMs: %w", err)
+	}
+
+	cmd.Command = fmt.Sprintf("vm launch kvm %s", vmName)
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("relaunching VM %s: %w", vmName, err)
+	}
+
+	cmd.Command = "vm launch"
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("scheduling VM %s: %w", vmName, err)
+	}
+
+	cmd.Command = fmt.Sprintf("vm start %s", vmName)
+
+	if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+		return fmt.Errorf("starting VM %s: %w", vmName, err)
+	}
 
 	return nil
+
 }
 
-func Commit(expName, vmName, out string, cb func(float64)) (string, error) {
-	// TODO
+func CommitToDisk(expName, vmName, out string, cb func(float64)) (string, error) {
+	// Determine name of new disk image, if not provided.
 
-	return "", nil
+	if out == "" {
+		var err error
+
+		out, err = GetNewDiskName(expName, vmName)
+		if err != nil {
+			return "", fmt.Errorf("getting new disk name for VM %s in experiment %s: %w", vmName, expName, err)
+		}
+	}
+
+	base, err := getBaseImage(expName, vmName)
+	if err != nil {
+		return "", fmt.Errorf("getting base image for VM %s in experiment %s: %w", vmName, expName, err)
+	}
+
+	// Get compute node VM is running on.
+
+	cmd := mmcli.NewNamespacedCommand(expName)
+	cmd.Command = "vm info"
+	cmd.Columns = []string{"host", "name", "id", "state"}
+	cmd.Filters = []string{"name=" + vmName}
+
+	status := mmcli.RunTabular(cmd)
+
+	if len(status) == 0 {
+		return "", fmt.Errorf("VM not found")
+	}
+
+	var (
+		// Get current disk snapshot on the compute node (based on VM ID).
+		snap = "/tmp/minimega/" + status[0]["id"] + "/disk-0.qcow2"
+		node = status[0]["host"]
+	)
+
+	base = common.PhenixBase + "/images/" + base
+	out = common.PhenixBase + "/images/" + out
+
+	wait, ctx := errgroup.WithContext(context.Background())
+
+	// Make copy of base image locally on headnode. Using a context here will help
+	// cancel the potentially long running copy of a large base image if the other
+	// Goroutine below fails.
+
+	wait.Go(func() error {
+		copier := newCopier()
+		s := copier.subscribe()
+
+		go func() {
+			for p := range s {
+				// If the callback is set, intercept it to reflect the copy stage as the
+				// initial 80% of the effort.
+				if cb != nil {
+					cb(p * 0.8)
+				}
+			}
+		}()
+
+		if err := copier.copy(ctx, base, out); err != nil {
+			os.Remove(out) // cleanup
+			return fmt.Errorf("making copy of backing image: %w", err)
+		}
+
+		return nil
+	})
+
+	// VM can't be running or we won't be able to copy snapshot remotely.
+	if status[0]["state"] != "QUIT" {
+		cmd = mmcli.NewNamespacedCommand(expName)
+		cmd.Command = "vm kill " + vmName
+
+		if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+			return "", fmt.Errorf("stopping VM: %w", err)
+		}
+	}
+
+	// Copy minimega snapshot disk on remote machine to a location (still on
+	// remote machine) that can be seen by minimega files. Then use minimega `file
+	// get` to copy it to the headnode.
+
+	wait.Go(func() error {
+		var cmdPrefix string
+
+		if !mm.IsHeadnode(node) {
+			cmdPrefix = "mesh send " + node
+		}
+
+		tmp := fmt.Sprintf("%s/images/%s/tmp", common.PhenixBase, expName)
+
+		cmd := mmcli.NewCommand()
+		cmd.Command = fmt.Sprintf("%s shell mkdir -p %s", cmdPrefix, tmp)
+
+		if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+			return fmt.Errorf("ensuring experiment tmp directory exists: %w", err)
+		}
+
+		tmp = fmt.Sprintf("%s/images/%s/tmp/%s.qc2", common.PhenixBase, expName, vmName)
+		cmd.Command = fmt.Sprintf("%s shell cp %s %s", cmdPrefix, snap, tmp)
+
+		if err := mmcli.ErrorResponse(mmcli.Run(cmd)); err != nil {
+			return fmt.Errorf("copying snapshot remotely: %w", err)
+		}
+
+		headnode, _ := os.Hostname()
+		tmp = fmt.Sprintf("%s/tmp/%s.qc2", expName, vmName)
+
+		if err := file.CopyFile(tmp, headnode, nil); err != nil {
+			return fmt.Errorf("pulling snapshot to headnode: %w", err)
+		}
+
+		return nil
+	})
+
+	if err := wait.Wait(); err != nil {
+		return "", fmt.Errorf("preparing images for rebase/commit: %w", err)
+	}
+
+	snap = fmt.Sprintf("%s/images/%s/tmp/%s.qc2", common.PhenixBase, expName, vmName)
+
+	shell := exec.Command("qemu-img", "rebase", "-b", out, snap)
+
+	res, err := shell.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("rebasing snapshot (%s): %w", string(res), err)
+	}
+
+	done := make(chan struct{})
+	defer close(done)
+
+	if cb != nil {
+		stat, _ := os.Stat(out)
+		targetSize := float64(stat.Size())
+
+		stat, _ = os.Stat(snap)
+		targetSize += float64(stat.Size())
+
+		go func() {
+			for {
+				select {
+				case <-done:
+					return
+				default:
+					// We sleep at the beginning instead of the end to ensure the command
+					// we shell out to below has time to run before we try to stat the
+					// destination file.
+					time.Sleep(2 * time.Second)
+
+					stat, err := os.Stat(out)
+					if err != nil {
+						continue
+					}
+
+					p := float64(stat.Size()) / targetSize
+
+					cb(0.8 + (p * 0.2))
+				}
+			}
+		}()
+	}
+
+	shell = exec.Command("qemu-img", "commit", snap)
+
+	res, err = shell.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("committing snapshot (%s): %w", string(res), err)
+	}
+
+	out, _ = filepath.Rel(common.PhenixBase+"/images/", out)
+
+	if err := file.SyncFile(out, nil); err != nil {
+		return "", fmt.Errorf("syncing new backing image across cluster: %w", err)
+	}
+
+	return out, nil
+
 }

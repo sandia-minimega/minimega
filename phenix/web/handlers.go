@@ -1727,7 +1727,7 @@ func CommitVM(w http.ResponseWriter, r *http.Request) {
 
 	cb := func(s float64) { status <- s }
 
-	if filename, err = vm.Commit(exp, name, filename, cb); err != nil {
+	if filename, err = vm.CommitToDisk(exp, name, filename, cb); err != nil {
 		broker.Broadcast(
 			broker.NewRequestPolicy("vms/commit", "create", fullName),
 			broker.NewResource("experiment/vm/commit", exp+"/"+name, "errorCommitting"),
