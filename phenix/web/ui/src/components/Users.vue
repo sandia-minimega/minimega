@@ -178,7 +178,7 @@
           case 'create': {
             let user = msg.result;
 
-            user.role.resource_names = user.role.resource_names.join( ' ' );
+            user.resource_names = user.resource_names.join( ' ' );
             users.push( user );
       
             this.users = [ ...users ];
@@ -196,7 +196,7 @@
               if ( users[i].username == msg.resource.name ) {
                 let user = msg.result;
 
-                user.role.resource_names = user.role.resource_names.join( ' ' );
+                user.resource_names = user.resource_names.join( ' ' );
                 users[i] = user;
 
                 break;
@@ -399,7 +399,6 @@
         }
         
         delete this.user.id;
-        delete this.user.role;
         
         let user = this.user;
 
