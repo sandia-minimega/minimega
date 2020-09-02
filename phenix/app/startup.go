@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"phenix/internal/common"
 	"phenix/tmpl"
 	"phenix/types"
 	v1 "phenix/types/version/v1"
@@ -102,9 +103,7 @@ func (this *Startup) Configure(exp *types.Experiment) error {
 func (this Startup) PreStart(exp *types.Experiment) error {
 	// note in the mako file that there does not appear to be timezone or hostname for rhel and centos
 	startupDir := exp.Spec.BaseDir + "/startup"
-
-	// currently assuming /phenix/images for image directory
-	imageDir := "/phenix/images/"
+	imageDir := common.PhenixBase + "/images/"
 
 	if err := os.MkdirAll(startupDir, 0755); err != nil {
 		return fmt.Errorf("creating experiment startup directory path: %w", err)

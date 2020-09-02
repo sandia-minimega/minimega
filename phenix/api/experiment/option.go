@@ -1,6 +1,9 @@
 package experiment
 
-import v1 "phenix/types/version/v1"
+import (
+	"phenix/internal/common"
+	v1 "phenix/types/version/v1"
+)
 
 type CreateOption func(*createOptions)
 
@@ -21,7 +24,7 @@ func newCreateOptions(opts ...CreateOption) createOptions {
 	}
 
 	if o.baseDir == "" {
-		o.baseDir = "/phenix/experiments/" + o.name
+		o.baseDir = common.PhenixBase + "/experiments/" + o.name
 	}
 
 	return o

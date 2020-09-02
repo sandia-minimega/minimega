@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"phenix/internal/common"
 )
 
 type Schedule map[string]string
@@ -34,7 +35,7 @@ type ExperimentStatus struct {
 
 func (this *ExperimentSpec) SetDefaults() {
 	if this.BaseDir == "" {
-		this.BaseDir = "/phenix/experiments/" + this.ExperimentName
+		this.BaseDir = common.PhenixBase + "/experiments/" + this.ExperimentName
 	}
 
 	if !filepath.IsAbs(this.BaseDir) {
