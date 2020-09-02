@@ -131,6 +131,30 @@ func (this User) RoleName() string {
 	return this.Spec.Role.Name
 }
 
+func (this User) UpdateFirstName(name string) error {
+	this.Spec.FirstName = name
+
+	this.config.Spec = structs.MapDefaultCase(this.Spec, structs.CASESNAKE)
+
+	if err := this.Save(); err != nil {
+		return fmt.Errorf("updating user first name: %w", err)
+	}
+
+	return nil
+}
+
+func (this User) UpdateLastName(name string) error {
+	this.Spec.LastName = name
+
+	this.config.Spec = structs.MapDefaultCase(this.Spec, structs.CASESNAKE)
+
+	if err := this.Save(); err != nil {
+		return fmt.Errorf("updating user last name: %w", err)
+	}
+
+	return nil
+}
+
 func (this User) AddToken(token, note string) error {
 	if this.Spec.Tokens == nil {
 		this.Spec.Tokens = make(map[string]string)

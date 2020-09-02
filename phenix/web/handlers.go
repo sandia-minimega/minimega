@@ -2242,7 +2242,7 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := rbac.GetUser(uname)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "unable to get user", http.StatusInternalServerError)
 		return
 	}
 
@@ -2262,8 +2262,6 @@ func GetUser(w http.ResponseWriter, r *http.Request) {
 
 	w.Write(body)
 }
-
-/*
 
 // PATCH /users/{username}
 func UpdateUser(w http.ResponseWriter, r *http.Request) {
@@ -2287,69 +2285,57 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var data map[string]interface{}
-
-	if err := json.Unmarshal(body, &data); err != nil {
+	var req proto.UpdateUserRequest
+	if err := json.Unmarshal(body, &req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if first, ok := data["first_name"].(string); ok {
-		if err := database.UpdateUserSetting(uname, "first_name", first); err != nil {
-			log.Error("updating first_name for user %s: %v", uname, err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-
-	if last, ok := data["last_name"].(string); ok {
-		if err := database.UpdateUserSetting(uname, "last_name", last); err != nil {
-			log.Error("updating last_name for user %s: %v", uname, err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-
-	if rname, ok := data["role_name"].(string); ok {
-		policies := rbac.CreateBasePoliciesForRole(rname)
-
-		if resources, ok := data["resource_names"].([]interface{}); ok {
-			names := make([]string, len(resources))
-			for i, name := range resources {
-				if name, ok := name.(string); ok {
-					names[i] = name
-				}
-			}
-
-			for _, policy := range policies {
-				policy.SetResourceNames(names...)
-			}
-		}
-
-		role := rbac.NewRole(rname, policies...)
-
-		// allow user to get their own user details
-		role.AddPolicies(&rbac.Policy{
-			Resources:     []string{"users"},
-			ResourceNames: []string{uname},
-			Verbs:         []string{"get"},
-		})
-
-		if err := database.UpdateUserSetting(uname, "role", role); err != nil {
-			log.Error("updating role for user %s: %v", uname, err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-
-	user, err := database.GetUser(uname)
+	u, err := rbac.GetUser(uname)
 	if err != nil {
-		log.Error("getting user %s: %v", uname, err)
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, "unable to get user", http.StatusInternalServerError)
 		return
 	}
 
-	marshalled, err := json.Marshal(user)
+	if req.FirstName != "" {
+		if err := u.UpdateFirstName(req.FirstName); err != nil {
+			log.Error("updating first name for user %s: %v", uname, err)
+			http.Error(w, "unable to update user", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if req.LastName != "" {
+		if err := u.UpdateLastName(req.LastName); err != nil {
+			log.Error("updating last name for user %s: %v", uname, err)
+			http.Error(w, "unable to update user", http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if req.RoleName != "" {
+		uRole, err := rbac.RoleFromConfig(req.GetRoleName())
+		if err != nil {
+			log.Error("role name not found - %s", req.GetRoleName())
+			http.Error(w, "role not found", http.StatusBadRequest)
+			return
+		}
+
+		uRole.SetResourceNames(req.GetResourceNames()...)
+
+		// allow user to get their own user details
+		uRole.AddPolicy(
+			[]string{"users"},
+			[]string{uname},
+			[]string{"get"},
+		)
+
+		u.SetRole(uRole)
+	}
+
+	resp := util.UserToProtobuf(*u)
+
+	body, err = marshaler.Marshal(resp)
 	if err != nil {
 		log.Error("marshaling user %s: %v", uname, err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -2359,13 +2345,11 @@ func UpdateUser(w http.ResponseWriter, r *http.Request) {
 	broker.Broadcast(
 		broker.NewRequestPolicy("users", "patch", uname),
 		broker.NewResource("user", uname, "update"),
-		marshalled,
+		body,
 	)
 
-	w.Write(marshalled)
+	w.Write(body)
 }
-
-*/
 
 // DELETE /users/{username}
 func DeleteUser(w http.ResponseWriter, r *http.Request) {

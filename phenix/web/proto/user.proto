@@ -30,7 +30,13 @@ message CreateUserRequest {
   repeated string resource_names = 6 [json_name="resource_names"];
 }
 
-message UpdateUserRequest { string user = 1; }
+message UpdateUserRequest {
+  string username = 1;
+  string first_name = 2 [json_name="first_name"];
+  string last_name = 3 [json_name="last_name"];
+  string role_name = 4 [json_name="role_name"];
+  repeated string resource_names = 5 [json_name="resource_names"];
+}
 
 message LoginRequest {
   string user = 1;
