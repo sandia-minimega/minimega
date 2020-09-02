@@ -200,7 +200,7 @@ func newConfigCreateCmd() *cobra.Command {
 			for _, f := range args {
 				c, err := config.Create(f, !skip)
 				if err != nil {
-					err := util.HumanizeError(err, "Unable to create configuration from "+f+"; verify the file is present.")
+					err := util.HumanizeError(err, "Unable to create configuration from "+f)
 					return err.Humanized()
 				}
 
