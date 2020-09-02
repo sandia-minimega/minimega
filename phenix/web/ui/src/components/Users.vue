@@ -472,11 +472,6 @@
                 
                 this.users = [ ...users ];
             
-                this.$buefy.toast.open({
-                  message: 'The user ' + username + ' was deleted.',
-                  type: 'is-success'
-                });
-            
                 this.isWaiting = false;
               }, response => {
                 this.$buefy.toast.open({
