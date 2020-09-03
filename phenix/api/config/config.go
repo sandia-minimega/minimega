@@ -128,7 +128,7 @@ func Create(path string, validate bool) (*types.Config, error) {
 					switch spec := s.(type) {
 					case v1.TopologySpec:
 						c.Version = "phenix.sandia.gov/v1"
-						c.Spec = structs.MapDefaultCase(spec, structs.CASESNAKE)
+						c.Spec = structs.MapWithOptions(spec, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty())
 					case v1.ScenarioSpec:
 						scenario, err := types.NewConfig("scenario/" + c.Metadata.Name)
 						if err != nil {
@@ -136,7 +136,7 @@ func Create(path string, validate bool) (*types.Config, error) {
 						}
 
 						scenario.Version = "phenix.sandia.gov/v1"
-						scenario.Spec = structs.MapDefaultCase(spec, structs.CASESNAKE)
+						scenario.Spec = structs.MapWithOptions(spec, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty())
 
 						if validate {
 							if err := types.ValidateConfigSpec(*scenario); err != nil {

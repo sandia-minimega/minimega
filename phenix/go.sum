@@ -19,6 +19,10 @@ github.com/activeshadow/libminimega v0.0.0-20190412123224-5384445d4b63 h1:i6MTIv
 github.com/activeshadow/libminimega v0.0.0-20190412123224-5384445d4b63/go.mod h1:Y09dvSAoxSu+uVxC/+pvXYgmENf71+FFli+ehB9V+pY=
 github.com/activeshadow/structs v1.2.0 h1:B9XSE1rEej0rk47SAPrqEtwTxrNay+NO/A/1a0AqBF0=
 github.com/activeshadow/structs v1.2.0/go.mod h1:WzbsdEG2b9nJB0jGD3l+tfNqkEH1Zpi6GEdu+US1KGc=
+github.com/activeshadow/structs v1.2.1-0.20200903180424-9199e721648f h1:gxKTK/oEbc8rXKCAEQiTH124quPtbF7StCC7azr5mn4=
+github.com/activeshadow/structs v1.2.1-0.20200903180424-9199e721648f/go.mod h1:WzbsdEG2b9nJB0jGD3l+tfNqkEH1Zpi6GEdu+US1KGc=
+github.com/activeshadow/structs v1.2.1-0.20200903181238-868567c2d0f9 h1:ejN5epB9tuwIFQZGBGpI4AKSke75np4ovDF/qx44rOk=
+github.com/activeshadow/structs v1.2.1-0.20200903181238-868567c2d0f9/go.mod h1:WzbsdEG2b9nJB0jGD3l+tfNqkEH1Zpi6GEdu+US1KGc=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf/go.mod h1:ybxpYRFXyAe+OPACYpWeL0wqObRcbAqCMya13uyzqw0=
 github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e/go.mod h1:3U/XgcO3hCbHZ8TKRvWD2dDTCfh9M9ya+I9JpbB7O8o=
