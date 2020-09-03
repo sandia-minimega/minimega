@@ -4,7 +4,7 @@ go 1.14
 
 require (
 	github.com/activeshadow/libminimega v0.0.0-20190412123224-5384445d4b63
-	github.com/activeshadow/structs v1.2.1-0.20200903181238-868567c2d0f9
+	github.com/activeshadow/structs v1.3.0
 	github.com/cescoferraro/go-jwt-middleware v0.0.0-20161113181124-eb52b4929b4e
 	github.com/codegangsta/negroni v1.0.0 // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
