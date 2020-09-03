@@ -87,4 +87,8 @@ type VM struct {
 	// network ordering from minimega may not be the same as network
 	// ordering in the experiment database.
 	Interfaces map[string]string `json:"-"`
+
+	// Used internally for showing VM details.
+	OSType   string                 `json:"-"`
+	Metadata map[string]interface{} `json:"-"`
 }

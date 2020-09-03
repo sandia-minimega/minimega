@@ -1,6 +1,7 @@
 package util
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"sort"
@@ -70,7 +71,20 @@ func PrintTableOfExperiments(writer io.Writer, exps ...types.Experiment) {
 func PrintTableOfVMs(writer io.Writer, vms ...types.VM) {
 	table := tablewriter.NewWriter(writer)
 
-	table.SetHeader([]string{"Host", "Name", "Running", "Disk", "Interfaces", "Uptime"})
+	switch len(vms) {
+	case 0:
+		return
+	case 1:
+		buildSingleVMTable(table, vms[0])
+	default:
+		buildMultipleVMTable(table, vms...)
+	}
+
+	table.Render()
+}
+
+func buildMultipleVMTable(table *tablewriter.Table, vms ...types.VM) {
+	table.SetHeader([]string{"Host", "Name", "Running", "Disk", "Interfaces", "Uptime", "Memory", "VCPUs", "OS Type"})
 	table.SetAutoWrapText(false)
 	table.SetColWidth(50)
 
@@ -89,10 +103,44 @@ func PrintTableOfVMs(writer io.Writer, vms ...types.VM) {
 			uptime = (time.Duration(vm.Uptime) * time.Second).String()
 		}
 
-		table.Append([]string{vm.Host, vm.Name, running, vm.Disk, strings.Join(ifaces, "\n"), uptime})
+		table.Append([]string{vm.Host, vm.Name, running, vm.Disk, strings.Join(ifaces, "\n"), uptime, strconv.Itoa(vm.RAM), strconv.Itoa(vm.CPUs), vm.OSType})
+	}
+}
+
+func buildSingleVMTable(table *tablewriter.Table, vm types.VM) {
+	table.SetHeader([]string{"Setting", "Value"})
+	table.SetAutoWrapText(false)
+	table.SetColWidth(50)
+	table.SetAlignment(tablewriter.ALIGN_LEFT)
+
+	var (
+		ifaces   []string
+		uptime   string
+		metadata []byte
+	)
+
+	for idx, nw := range vm.Networks {
+		ifaces = append(ifaces, fmt.Sprintf("ID: %d, IP: %s, VLAN: %s", idx, vm.IPv4[idx], nw))
 	}
 
-	table.Render()
+	if vm.Running {
+		uptime = (time.Duration(vm.Uptime) * time.Second).String()
+	}
+
+	if len(vm.Metadata) > 0 {
+		metadata, _ = json.MarshalIndent(vm.Metadata, "", "  ")
+	}
+
+	table.Append([]string{"Host", vm.Host})
+	table.Append([]string{"Name", vm.Name})
+	table.Append([]string{"Running", strconv.FormatBool(vm.Running)})
+	table.Append([]string{"Disk", vm.Disk})
+	table.Append([]string{"Interfaces", strings.Join(ifaces, "\n")})
+	table.Append([]string{"Uptime", uptime})
+	table.Append([]string{"VCPUs", strconv.Itoa(vm.CPUs)})
+	table.Append([]string{"Memory", strconv.Itoa(vm.RAM)})
+	table.Append([]string{"OS Type", vm.OSType})
+	table.Append([]string{"Metadata", string(metadata)})
 }
 
 func PrintTableOfImageConfigs(writer io.Writer, optional []string, imgs ...types.Image) {
