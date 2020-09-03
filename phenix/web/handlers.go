@@ -1961,7 +1961,7 @@ func GetClusterHosts(w http.ResponseWriter, r *http.Request) {
 
 // GET /logs
 func GetLogs(w http.ResponseWriter, r *http.Request) {
-	if !f_serviceLogs {
+	if !o.publishLogs {
 		w.WriteHeader(http.StatusNotImplemented)
 	}
 
@@ -1985,9 +1985,8 @@ func GetLogs(w http.ResponseWriter, r *http.Request) {
 		wait    errgroup.Group
 
 		logFiles = map[string]string{
-			"minimega": f_mmLogFile,
-			"phenix":   f_phenixLogFile,
-			"gophenix": f_gophenixLogFile,
+			"minimega": o.minimegaLogs,
+			"phenix":   o.phenixLogs,
 		}
 	)
 

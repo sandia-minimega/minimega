@@ -5,6 +5,7 @@ package mmcli
 import (
 	"errors"
 	"fmt"
+	"phenix/internal/common"
 	"strings"
 	"sync"
 
@@ -82,7 +83,7 @@ func Run(c *Command) chan *miniclient.Response {
 	var err error
 
 	if mm == nil {
-		if mm, err = miniclient.Dial(f_minimegaBase); err != nil {
+		if mm, err = miniclient.Dial(common.MinimegaBase); err != nil {
 			return wrapErr(fmt.Errorf("unable to dial: %w", err))
 		}
 	}
@@ -92,7 +93,7 @@ func Run(c *Command) chan *miniclient.Response {
 		s := err.Error()
 
 		if strings.Contains(s, "broken pipe") || strings.Contains(s, "no such file or directory") {
-			if mm, err = miniclient.Dial(f_minimegaBase); err != nil {
+			if mm, err = miniclient.Dial(common.MinimegaBase); err != nil {
 				return wrapErr(fmt.Errorf("unable to redial: %w", err))
 
 			}

@@ -23,8 +23,13 @@ type serverOptions struct {
 	endpoint  string
 	jwtKey    string
 	users     []string
-	logs      string
 	allowCORS bool
+
+	logMiddleware string
+
+	publishLogs  bool
+	phenixLogs   string
+	minimegaLogs string
 }
 
 func newServerOptions(opts ...ServerOption) serverOptions {
@@ -36,6 +41,10 @@ func newServerOptions(opts ...ServerOption) serverOptions {
 
 	for _, opt := range opts {
 		opt(&o)
+	}
+
+	if o.phenixLogs != "" || o.minimegaLogs != "" {
+		o.publishLogs = true
 	}
 
 	return o
@@ -59,15 +68,27 @@ func ServeWithUsers(u string) ServerOption {
 	}
 }
 
-func ServeWithLogs(l string) ServerOption {
-	return func(o *serverOptions) {
-		o.logs = l
-	}
-}
-
 func ServeWithCORS(c bool) ServerOption {
 	return func(o *serverOptions) {
 		o.allowCORS = c
+	}
+}
+
+func ServeWithMiddlewareLogging(l string) ServerOption {
+	return func(o *serverOptions) {
+		o.logMiddleware = l
+	}
+}
+
+func ServePhenixLogs(p string) ServerOption {
+	return func(o *serverOptions) {
+		o.phenixLogs = p
+	}
+}
+
+func ServeMinimegaLogs(m string) ServerOption {
+	return func(o *serverOptions) {
+		o.minimegaLogs = m
 	}
 }
 
@@ -184,7 +205,7 @@ func Start(opts ...ServerOption) error {
 		api.Use(middleware.AllowCORS)
 	}
 
-	switch o.logs {
+	switch o.logMiddleware {
 	case "full":
 		log.Info("full HTTP logging is enabled")
 		api.Use(middleware.LogFull)
@@ -201,7 +222,7 @@ func Start(opts ...ServerOption) error {
 
 	log.Info("Starting log publisher")
 
-	go PublishLogs(context.Background())
+	go PublishLogs(context.Background(), o.phenixLogs, o.minimegaLogs)
 
 	log.Info("Starting HTTP server on %s", o.endpoint)
 

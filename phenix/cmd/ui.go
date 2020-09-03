@@ -5,40 +5,29 @@ import (
 	"phenix/web"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 func newUiCmd() *cobra.Command {
 	desc := `Run the phenix UI server
 
-  Starts the UI server on the IP:port provided (or 0.0.0.0:3000 if not
-  provided).`
+  Starts the UI server on the IP:port provided.`
 	cmd := &cobra.Command{
-		Use:   "ui <ip:port>",
+		Use:   "ui",
 		Short: "Run the phenix UI",
 		Long:  desc,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var (
-				endpoint = ":3000"
-				jwtKey   = MustGetString(cmd.Flags(), "jwt-signing-key")
-				logReq   = MustGetBool(cmd.Flags(), "log-requests")
-				logFull  = MustGetBool(cmd.Flags(), "log-full")
-			)
-
-			if len(args) > 0 {
-				endpoint = args[0]
-			}
-
 			opts := []web.ServerOption{
-				web.ServeWithJWTKey(jwtKey),
-				web.ServeOnEndpoint(endpoint),
+				web.ServeOnEndpoint(viper.GetString("ui.listen-endpoint")),
+				web.ServeWithJWTKey(viper.GetString("ui.jwt-signing-key")),
 			}
 
-			if logReq {
-				opts = append(opts, web.ServeWithLogs("requests"))
+			if MustGetBool(cmd.Flags(), "log-requests") {
+				opts = append(opts, web.ServeWithMiddlewareLogging("requests"))
 			}
 
-			if logFull {
-				opts = append(opts, web.ServeWithLogs("full"))
+			if MustGetBool(cmd.Flags(), "log-full") {
+				opts = append(opts, web.ServeWithMiddlewareLogging("full"))
 			}
 
 			if err := web.Start(opts...); err != nil {
@@ -49,9 +38,26 @@ func newUiCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().String("jwt-signing-key", "", "Secret key used to sign JWT for authentication")
+	cmd.Flags().StringP("listen-endpoint", "e", "0.0.0.0:3000", "endpoint to listen on")
+	cmd.Flags().StringP("jwt-signing-key", "k", "", "Secret key used to sign JWT for authentication")
+	cmd.Flags().String("logs.phenix-path", "", "path to phenix log file to publish to UI")
+	cmd.Flags().String("logs.minimega-path", "", "path to minimega log file to publish to UI")
+
+	viper.BindPFlag("ui.listen-endpoint", cmd.Flags().Lookup("listen-endpoint"))
+	viper.BindPFlag("ui.jwt-signing-key", cmd.Flags().Lookup("jwt-signing-key"))
+	viper.BindPFlag("logs.phenix-path", cmd.Flags().Lookup("logs.phenix-path"))
+	viper.BindPFlag("logs.minimega-path", cmd.Flags().Lookup("logs.minimega-path"))
+
+	viper.BindEnv("ui.listen-endpoint")
+	viper.BindEnv("ui.jwt-signing-key")
+	viper.BindEnv("logs.phenix-path")
+	viper.BindEnv("logs.minimega-path")
+
 	cmd.Flags().Bool("log-requests", false, "Log API requests")
 	cmd.Flags().Bool("log-full", false, "Log API requests and responses")
+
+	cmd.Flags().MarkHidden("log-requests")
+	cmd.Flags().MarkHidden("log-full")
 
 	return cmd
 }

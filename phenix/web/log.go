@@ -3,7 +3,6 @@ package web
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"regexp"
 
 	"phenix/web/broker"
@@ -11,126 +10,113 @@ import (
 	"github.com/hpcloud/tail"
 )
 
-var (
-	f_mmLogFile       string
-	f_phenixLogFile   string
-	f_gophenixLogFile string
-	f_serviceLogs     bool
+var logLineRegex = regexp.MustCompile(`\A(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2})\s* (DEBUG|INFO|WARN|WARNING|ERROR|FATAL) .*?: (.*)\z`)
 
-	logLineRegex = regexp.MustCompile(`\A(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2})\s* (DEBUG|INFO|WARN|WARNING|ERROR|FATAL) .*?: (.*)\z`)
+type LogKind int
+
+const (
+	_ LogKind = iota
+	LOG_PHENIX
+	LOG_MINIMEGA
 )
 
-func init() {
-	flag.BoolVar(&f_serviceLogs, "log.publish", false, "publish service logs to UI (gophenix, phenix, minimega logs)")
-	flag.StringVar(&f_mmLogFile, "log.mm-file", "", "path to minimega log file")
-	flag.StringVar(&f_phenixLogFile, "log.phenix-file", "", "path to phenix log file")
-	flag.StringVar(&f_gophenixLogFile, "log.gophenix-file", "", "path to gophenix log file")
+type logLine struct {
+	kind LogKind
+	line string
 }
 
-func PublishLogs(ctx context.Context) {
-	if !f_serviceLogs {
+func PublishLogs(ctx context.Context, phenix, minimega string) {
+	if phenix == "" && minimega == "" {
 		return
 	}
 
-	mmLogs, err := tail.TailFile(f_mmLogFile, tail.Config{Follow: true, ReOpen: true, Poll: true})
-	if err != nil {
-		panic("setting up tail for minimega logs: " + err.Error())
+	logs := make(chan logLine)
+
+	if phenix != "" {
+		phenixLogs, err := tail.TailFile(phenix, tail.Config{Follow: true, ReOpen: true, Poll: true})
+		if err != nil {
+			panic("setting up tail for phenix logs: " + err.Error())
+		}
+
+		go func() {
+			for l := range phenixLogs.Lines {
+				logs <- logLine{kind: LOG_PHENIX, line: l.Text}
+			}
+		}()
 	}
 
-	phenixLogs, err := tail.TailFile(f_phenixLogFile, tail.Config{Follow: true, ReOpen: true, Poll: true})
-	if err != nil {
-		panic("setting up tail for phenix logs: " + err.Error())
-	}
+	if minimega != "" {
+		mmLogs, err := tail.TailFile(minimega, tail.Config{Follow: true, ReOpen: true, Poll: true})
+		if err != nil {
+			panic("setting up tail for minimega logs: " + err.Error())
+		}
 
-	gophenixLogs, err := tail.TailFile(f_gophenixLogFile, tail.Config{Follow: true, ReOpen: true, Poll: true})
-	if err != nil {
-		panic("setting up tail for gophenix logs: " + err.Error())
+		go func() {
+			for l := range mmLogs.Lines {
+				logs <- logLine{kind: LOG_MINIMEGA, line: l.Text}
+			}
+		}()
 	}
 
 	// Used to detect multi-line logs in tailed log files.
 	var (
-		mmBody       map[string]interface{}
-		phenixBody   map[string]interface{}
-		gophenixBody map[string]interface{}
+		mmBody     map[string]interface{}
+		phenixBody map[string]interface{}
 	)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case log := <-mmLogs.Lines:
-			parts := logLineRegex.FindStringSubmatch(log.Text)
+		case l := <-logs:
+			parts := logLineRegex.FindStringSubmatch(l.line)
 
-			if len(parts) == 4 {
-				mmBody = map[string]interface{}{
-					"source":    "minimega",
-					"timestamp": parts[1],
-					"level":     parts[2],
-					"log":       parts[3],
+			switch l.kind {
+			case LOG_PHENIX:
+				if len(parts) == 4 {
+					phenixBody = map[string]interface{}{
+						"source":    "gophenix",
+						"timestamp": parts[1],
+						"level":     parts[2],
+						"log":       parts[3],
+					}
+				} else if phenixBody != nil {
+					phenixBody["log"] = l.line
+				} else {
+					continue
 				}
-			} else if mmBody != nil {
-				mmBody["log"] = log.Text
-			} else {
+
+				marshalled, _ := json.Marshal(phenixBody)
+
+				broker.Broadcast(
+					nil,
+					broker.NewResource("log", "gophenix", "update"),
+					marshalled,
+				)
+			case LOG_MINIMEGA:
+				if len(parts) == 4 {
+					mmBody = map[string]interface{}{
+						"source":    "minimega",
+						"timestamp": parts[1],
+						"level":     parts[2],
+						"log":       parts[3],
+					}
+				} else if mmBody != nil {
+					mmBody["log"] = l.line
+				} else {
+					continue
+				}
+
+				marshalled, _ := json.Marshal(mmBody)
+
+				broker.Broadcast(
+					nil,
+					broker.NewResource("log", "minimega", "update"),
+					marshalled,
+				)
+			default:
 				continue
 			}
-
-			marshalled, _ := json.Marshal(mmBody)
-
-			broker.Broadcast(
-				nil,
-				broker.NewResource("log", "minimega", "update"),
-				marshalled,
-			)
-		case log := <-phenixLogs.Lines:
-			parts := logLineRegex.FindStringSubmatch(log.Text)
-
-			if len(parts) == 4 {
-				if parts[2] == "WARNING" {
-					parts[2] = "WARN"
-				}
-
-				phenixBody = map[string]interface{}{
-					"source":    "phenix",
-					"timestamp": parts[1],
-					"level":     parts[2],
-					"log":       parts[3],
-				}
-			} else if phenixBody != nil {
-				phenixBody["log"] = log.Text
-			} else {
-				continue
-			}
-
-			marshalled, _ := json.Marshal(phenixBody)
-
-			broker.Broadcast(
-				nil,
-				broker.NewResource("log", "phenix", "update"),
-				marshalled,
-			)
-		case log := <-gophenixLogs.Lines:
-			parts := logLineRegex.FindStringSubmatch(log.Text)
-
-			if len(parts) == 4 {
-				gophenixBody = map[string]interface{}{
-					"source":    "gophenix",
-					"timestamp": parts[1],
-					"level":     parts[2],
-					"log":       parts[3],
-				}
-			} else if gophenixBody != nil {
-				gophenixBody["log"] = log.Text
-			} else {
-				continue
-			}
-
-			marshalled, _ := json.Marshal(gophenixBody)
-
-			broker.Broadcast(
-				nil,
-				broker.NewResource("log", "gophenix", "update"),
-				marshalled,
-			)
 		}
 	}
 }

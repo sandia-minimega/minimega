@@ -4,6 +4,7 @@ import (
 	goflag "flag"
 	"fmt"
 	"os"
+	"strings"
 
 	"phenix/api/config"
 	"phenix/internal/common"
@@ -20,7 +21,6 @@ var (
 	phenixBase       string
 	minimegaBase     string
 	hostnameSuffixes string
-	cfgFile          string
 	storeEndpoint    string
 	errFile          string
 )
@@ -30,14 +30,14 @@ var rootCmd = &cobra.Command{
 	Short: "A cli application for phēnix",
 	// Version: version.Version,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		common.PhenixBase = MustGetString(cmd.Flags(), "phenix-base")
-		common.MinimegaBase = MustGetString(cmd.Flags(), "minimega-base")
-		common.HostnameSuffixes = MustGetString(cmd.Flags(), "hostname-suffixes")
+		common.PhenixBase = viper.GetString("base-dir.phenix")
+		common.MinimegaBase = viper.GetString("base-dir.minimega")
+		common.HostnameSuffixes = viper.GetString("hostname-suffixes")
 
 		var (
-			endpoint = MustGetString(cmd.Flags(), "store.endpoint")
-			errFile  = MustGetString(cmd.Flags(), "log.error-file")
-			errOut   = MustGetBool(cmd.Flags(), "log.error-stderr")
+			endpoint = viper.GetString("store.endpoint")
+			errFile  = viper.GetString("log.error-file")
+			errOut   = viper.GetBool("log.error-stderr")
 		)
 
 		if err := store.Init(store.Endpoint(endpoint)); err != nil {
@@ -56,6 +56,7 @@ var rootCmd = &cobra.Command{
 	},
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
 		util.CloseLogWriter()
+		viper.WriteConfigAs("/tmp/phenix.yml")
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -73,18 +74,26 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVar(&phenixBase, "phenix-base", "/phenix", "base phenix directory")
-	rootCmd.PersistentFlags().StringVar(&minimegaBase, "minimega-base", "/tmp/minimega", "base minimega directory")
+	rootCmd.PersistentFlags().StringVar(&phenixBase, "base-dir.phenix", "/phenix", "base phenix directory")
+	rootCmd.PersistentFlags().StringVar(&minimegaBase, "base-dir.minimega", "/tmp/minimega", "base minimega directory")
 	rootCmd.PersistentFlags().StringVar(&hostnameSuffixes, "hostname-suffixes", "", "hostname suffixes to strip")
-	rootCmd.PersistentFlags().StringVarP(&cfgFile, "config.file", "C", "", "config file (default: $HOME/.phenix.yml)")
-	rootCmd.PersistentFlags().StringVarP(&storeEndpoint, "store.endpoint", "S", "", "endpoint for storage service (default: bolt://$HOME/.phenix.bdb)")
-	// rootCmd.PersistentFlags().IntP("log.verbosity", "V", 0, "log verbosity (0 - 10)")
-	rootCmd.PersistentFlags().StringVarP(&errFile, "log.error-file", "E", "", "log fatal errors to file (default: $HOME/.phenix.err)")
-	rootCmd.PersistentFlags().BoolP("log.error-stderr", "V", false, "log fatal errors to STDERR")
+	// rootCmd.PersistentFlags().Int("log.verbosity", 0, "log verbosity (0 - 10)")
+	rootCmd.PersistentFlags().Bool("log.error-stderr", false, "log fatal errors to STDERR")
 	// rootCmd.PersistentFlags().AddGoFlagSet(goflag.CommandLine)
+
+	if home, err := homedir.Dir(); err == nil {
+		rootCmd.PersistentFlags().StringVar(&storeEndpoint, "store.endpoint", fmt.Sprintf("bolt://%s/.phenix.bdb", home), "endpoint for storage service")
+		rootCmd.PersistentFlags().StringVar(&errFile, "log.error-file", fmt.Sprintf("%s/.phenix.err", home), "log fatal errors to file")
+	} else {
+		rootCmd.PersistentFlags().StringVar(&storeEndpoint, "store.endpoint", "/etc/phenix/.phenix.bdb", "endpoint for storage service")
+		rootCmd.PersistentFlags().StringVar(&errFile, "log.error-file", "/etc/phenix/.phenix.err", "log fatal errors to file")
+	}
+
+	viper.BindPFlags(rootCmd.PersistentFlags())
 }
 
 func initConfig() {
+	// TODO: stop setting minimega debug logging by default
 	goflag.VisitAll(func(f *goflag.Flag) {
 		switch f.Name {
 		case "level":
@@ -96,34 +105,20 @@ func initConfig() {
 
 	log.Init()
 
-	var home string
+	viper.SetConfigName("config")
 
-	if cfgFile == "" || storeEndpoint == "" || errFile == "" {
-		var err error
+	// Config paths - first look in current directory, then home directory (if
+	// discoverable), then finally global config directory.
+	viper.AddConfigPath(".")
 
-		// Find home directory.
-		home, err = homedir.Dir()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
+	if home, err := homedir.Dir(); err == nil {
+		viper.AddConfigPath(home + "/.config/phenix")
 	}
 
-	if cfgFile == "" {
-		viper.AddConfigPath(home)
-		viper.SetConfigName(".phenix")
-	} else {
-		viper.SetConfigFile(cfgFile)
-	}
+	viper.AddConfigPath("/etc/phenix")
 
-	if storeEndpoint == "" {
-		storeEndpoint = "bolt://" + home + "/.phenix.bdb"
-	}
-
-	if errFile == "" {
-		errFile = home + "/.phenix.err"
-	}
-
+	viper.SetEnvPrefix("PHENIX")
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 	viper.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.
