@@ -132,14 +132,14 @@ func newVMRedeployCmd() *cobra.Command {
 		part int
 	)
 
-	desc := `Redeploy a running experiment
+	desc := `Redeploy a running experiment VM
 	 
   Used to redeploy a running virtual machine for a specific experiment; several 
   values can be modified`
 
 	cmd := &cobra.Command{
 		Use:   "redeploy <experiment name> <vm name>",
-		Short: "Redeploy a running experiment",
+		Short: "Redeploy a running experiment VM",
 		Long:  desc,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 2 {

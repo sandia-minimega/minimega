@@ -3,7 +3,6 @@ package mm
 import (
 	"encoding/base64"
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -533,7 +532,14 @@ func (Minimega) GetClusterHosts() (Hosts, error) {
 }
 
 func (Minimega) IsHeadnode(node string) bool {
-	headnode, _ := os.Hostname()
+	// Get headnode details
+	hosts, _ := processNamespaceHosts("minimega")
+
+	if len(hosts) == 0 {
+		return false // ???
+	}
+
+	headnode := hosts[0].Name
 
 	// Trim host name suffixes (like -minimega, or -gophenix) potentially added to
 	// Docker containers by Docker Compose config.
