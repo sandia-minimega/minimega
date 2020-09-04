@@ -391,7 +391,7 @@ func main() {
 						ArgsUsage:   "<experiment name> <algorithm>",
 						Action: func(ctx *cli.Context) error {
 							if ctx.Args().Len() != 2 {
-								return cli.Exit("Must provide all arguments", 1)
+								return cli.Exit("Must provide an experiment name and algorithm", 1)
 							}
 
 							var (
@@ -661,7 +661,7 @@ func main() {
 						},
 						Action: func(ctx *cli.Context) error {
 							if ctx.Args().Len() != 2 {
-								return cli.Exit("Must provide all arguments", 1)
+								return cli.Exit("Must provide an experiment name and VM name", 1)
 							}
 
 							var (
@@ -707,7 +707,7 @@ func main() {
 						ArgsUsage:   "<experiment name> <vm name>",
 						Action: func(ctx *cli.Context) error {
 							if ctx.Args().Len() != 2 {
-								return cli.Exit("Must provide all arguments", 1)
+								return cli.Exit("Must provide an experiment name and VM name", 1)
 							}
 
 							var (
@@ -744,7 +744,7 @@ func main() {
 								ArgsUsage: "<experiment name> <vm name> <iface index> <vlan id>",
 								Action: func(ctx *cli.Context) error {
 									if ctx.Args().Len() != 4 {
-										return cli.Exit("Must provide all arguments", 1)
+										return cli.Exit("Must provide an experiment name, VM name, IFACE index, VLAN ID", 1)
 									}
 
 									var (
@@ -774,7 +774,7 @@ func main() {
 								ArgsUsage: "<experiment name> <vm name> <iface index>",
 								Action: func(ctx *cli.Context) error {
 									if ctx.Args().Len() != 3 {
-										return cli.Exit("Must provide all arguments", 1)
+										return cli.Exit("Must provide an experiment name, VM name, IFACE index", 1)
 									}
 
 									var (
@@ -810,7 +810,7 @@ func main() {
 								ArgsUsage: "<experiment name> <vm name> <iface index> </path/to/out file>",
 								Action: func(ctx *cli.Context) error {
 									if ctx.Args().Len() != 4 {
-										return cli.Exit("Must provide all arguments", 1)
+										return cli.Exit("Must provide an experiment name, VM name, IFACE index, /path/to/out file", 1)
 									}
 
 									var (
@@ -840,7 +840,7 @@ func main() {
 								ArgsUsage: "<experiment name> <vm name>",
 								Action: func(ctx *cli.Context) error {
 									if ctx.Args().Len() != 2 {
-										return cli.Exit("Must provide all arguments", 1)
+										return cli.Exit("Must provide an experiment name and VM name", 1)
 									}
 
 									var (
