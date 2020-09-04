@@ -28,19 +28,19 @@ type Interface struct {
 type Route struct {
 	Destination string `json:"destination" yaml:"destination"`
 	Next        string `json:"next" yaml:"next"`
-	Cost        int    `json:"cost" yaml:"cost"`
+	Cost        *int   `json:"cost" yaml:"cost"`
 }
 
 type OSPF struct {
 	RouterID               string `json:"router_id" yaml:"router_id" mapstructure:"router_id"`
 	Areas                  []Area `json:"areas" yaml:"areas" mapstructure:"areas"`
-	DeadInterval           int    `json:"dead_interval" yaml:"dead_interval" mapstructure:"dead_interval"`
-	HelloInterval          int    `json:"hello_interval" yaml:"hello_interval" mapstructure:"hello_interval"`
-	RetransmissionInterval int    `json:"retransmission_interval" yaml:"retransmission_interval" mapstructure:"retransmission_interval"`
+	DeadInterval           *int   `json:"dead_interval" yaml:"dead_interval" mapstructure:"dead_interval"`
+	HelloInterval          *int   `json:"hello_interval" yaml:"hello_interval" mapstructure:"hello_interval"`
+	RetransmissionInterval *int   `json:"retransmission_interval" yaml:"retransmission_interval" mapstructure:"retransmission_interval"`
 }
 
 type Area struct {
-	AreaID       int           `json:"area_id" yaml:"area_id" mapstructure:"area_id"`
+	AreaID       *int          `json:"area_id" yaml:"area_id" mapstructure:"area_id"`
 	AreaNetworks []AreaNetwork `json:"area_networks" yaml:"area_networks" mapstructure:"area_networks"`
 }
 

@@ -54,13 +54,20 @@ func UpgradeTopology(version string, spec map[string]interface{}) ([]interface{}
 	// all v0 metadata is associated w/ the SCEPTRE app).
 
 	if version == "v0" {
-		var topoV0 v0.TopologySpec
-		if err := mapstructure.Decode(spec, &topoV0); err != nil {
+		var (
+			topoV0 v0.TopologySpec
+			topoV1 TopologySpec
+		)
+
+		// Using WeakDecode here since v0 schema uses strings for some integer
+		// values.
+		if err := mapstructure.WeakDecode(spec, &topoV0); err != nil {
 			return nil, fmt.Errorf("decoding topology into v0 spec: %w", err)
 		}
 
-		var topoV1 TopologySpec
-		if err := mapstructure.Decode(spec, &topoV1); err != nil {
+		// Using WeakDecode here since v0 schema uses strings for some integer
+		// values.
+		if err := mapstructure.WeakDecode(spec, &topoV1); err != nil {
 			return nil, fmt.Errorf("decoding topology into v1 spec: %w", err)
 		}
 
@@ -72,7 +79,7 @@ func UpgradeTopology(version string, spec map[string]interface{}) ([]interface{}
 			if node.Metadata != nil {
 				host := Host{
 					Hostname: node.General.Hostname,
-					Metadata: structs.Map(node.Metadata),
+					Metadata: structs.MapWithOptions(node.Metadata, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty()),
 				}
 
 				app.Hosts = append(app.Hosts, host)

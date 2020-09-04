@@ -43,16 +43,16 @@ type Node struct {
 type General struct {
 	Hostname    string `json:"hostname" yaml:"hostname"`
 	Description string `json:"description" yaml:"description"`
-	VMType      VMType `json:"vm_type" yaml:"vm_type" mapstructure:"vm_type"`
+	VMType      VMType `json:"vm_type" yaml:"vm_type" structs:"vm_type" mapstructure:"vm_type"`
 	Snapshot    *bool  `json:"snapshot" yaml:"snapshot"`
 	DoNotBoot   *bool  `json:"do_not_boot" yaml:"do_not_boot" structs:"do_not_boot" mapstructure:"do_not_boot"`
 }
 
 type Hardware struct {
 	CPU    CPU     `json:"cpu" yaml:"cpu"`
-	VCPU   int     `json:"vcpus" yaml:"vcpus"`
-	Memory int     `json:"memory" yaml:"memory"`
-	OSType OSType  `json:"os_type" yaml:"os_type" mapstructure:"os_type"`
+	VCPU   int     `json:"vcpus,string" yaml:"vcpus"`
+	Memory int     `json:"memory,string" yaml:"memory"`
+	OSType OSType  `json:"os_type" yaml:"os_type" structs:"os_type" mapstructure:"os_type"`
 	Drives []Drive `json:"drives" yaml:"drives"`
 }
 
@@ -60,7 +60,7 @@ type Drive struct {
 	Image           string `json:"image" yaml:"image"`
 	Interface       string `json:"interface" yaml:"interface"`
 	CacheMode       string `json:"cache_mode" yaml:"cache_mode"`
-	InjectPartition *int   `json:"inject_partition" yaml:"inject_partition" mapstructure:"inject_partition"`
+	InjectPartition *int   `json:"inject_partition,string" yaml:"inject_partition" structs:"inject_partition" mapstructure:"inject_partition"`
 }
 
 type Injection struct {

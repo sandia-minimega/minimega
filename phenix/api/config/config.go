@@ -113,6 +113,11 @@ func Create(path string, validate bool) (*types.Config, error) {
 		return nil, fmt.Errorf("creating new config from file: %w", err)
 	}
 
+	var created []*types.Config
+
+	// Support topology upgrades from v0 (pre phenix config file) to v1.
+	// TODO: this is really ugly and needs to be cleaned up / refactored, but it
+	// works.
 	if c.Kind == "Topology" {
 		ver := version.StoredVersion["Topology"]
 
@@ -147,11 +152,12 @@ func Create(path string, validate bool) (*types.Config, error) {
 						if err := store.Create(scenario); err != nil {
 							return nil, fmt.Errorf("storing config: %w", err)
 						}
+
+						created = append(created, scenario)
 					}
 				}
 			}
 		}
-
 	}
 
 	if c.Kind == "Experiment" {
@@ -162,11 +168,23 @@ func Create(path string, validate bool) (*types.Config, error) {
 
 	if validate {
 		if err := types.ValidateConfigSpec(*c); err != nil {
+			// If main config fails to validate, then delete any ancillary configs
+			// that were created above.
+			for _, e := range created {
+				store.Delete(e)
+			}
+
 			return nil, fmt.Errorf("validating config: %w", err)
 		}
 	}
 
 	if err := store.Create(c); err != nil {
+		// If main config fails to create, then delete any ancillary configs that
+		// were created above.
+		for _, e := range created {
+			store.Delete(e)
+		}
+
 		return nil, fmt.Errorf("storing config: %w", err)
 	}
 
