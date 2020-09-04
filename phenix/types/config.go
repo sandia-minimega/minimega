@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	v1 "phenix/types/version/v1"
+
+	"github.com/activeshadow/structs"
 	"gopkg.in/yaml.v3"
 )
 
@@ -73,6 +76,34 @@ func NewConfigFromFile(path string) (*Config, error) {
 	}
 
 	return &c, nil
+}
+
+func NewConfigFromSpec(name string, spec interface{}) (*Config, error) {
+	// TODO: add more case statements to this as more upgraders are added.
+	switch spec := spec.(type) {
+	case v1.TopologySpec:
+		c, err := NewConfig("topology/" + name)
+		if err != nil {
+			return nil, fmt.Errorf("creating new v1 scenario config: %w", err)
+		}
+
+		c.Version = "phenix.sandia.gov/v1"
+		c.Spec = structs.MapWithOptions(spec, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty())
+
+		return c, nil
+	case v1.ScenarioSpec:
+		c, err := NewConfig("scenario/" + name)
+		if err != nil {
+			return nil, fmt.Errorf("creating new v1 scenario config: %w", err)
+		}
+
+		c.Version = "phenix.sandia.gov/v1"
+		c.Spec = structs.MapWithOptions(spec, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty())
+
+		return c, nil
+	}
+
+	return nil, fmt.Errorf("unknown spec provided")
 }
 
 func (this Config) APIGroup() string {

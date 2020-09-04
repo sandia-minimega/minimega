@@ -2,6 +2,7 @@ package v1
 
 import (
 	"fmt"
+	"phenix/types/upgrade"
 	v0 "phenix/types/version/v0"
 
 	"github.com/activeshadow/structs"
@@ -46,7 +47,7 @@ func (this TopologySpec) FindNodesWithLabels(labels ...string) []*Node {
 	return nodes
 }
 
-func UpgradeTopology(version string, spec map[string]interface{}) ([]interface{}, error) {
+func (TopologySpec) Upgrade(version string, spec map[string]interface{}) ([]interface{}, error) {
 	// This is a fairly simple upgrade path. The only difference between v0 and v1
 	// is the lack of topology metadata in v1. Key names and such stayed the same.
 	// The idea here is to decode the spec into both v0 and v1 (v1 should ignore
@@ -98,4 +99,8 @@ func UpgradeTopology(version string, spec map[string]interface{}) ([]interface{}
 	}
 
 	return nil, fmt.Errorf("unknown version %s to upgrade from", version)
+}
+
+func init() {
+	upgrade.RegisterUpgrader("topology/v1", new(TopologySpec))
 }

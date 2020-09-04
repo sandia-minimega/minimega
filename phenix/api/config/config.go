@@ -7,12 +7,12 @@ import (
 	"phenix/api/experiment"
 	"phenix/store"
 	"phenix/types"
+	"phenix/types/upgrade"
 	"phenix/types/version"
 	v1 "phenix/types/version/v1"
 	"phenix/util"
 	"phenix/util/editor"
 
-	"github.com/activeshadow/structs"
 	"github.com/mitchellh/mapstructure"
 	"gopkg.in/yaml.v3"
 )
@@ -113,53 +113,59 @@ func Create(path string, validate bool) (*types.Config, error) {
 		return nil, fmt.Errorf("creating new config from file: %w", err)
 	}
 
-	var created []*types.Config
+	// *** BEGIN config upgrade process ***
 
-	// Support topology upgrades from v0 (pre phenix config file) to v1.
-	// TODO: this is really ugly and needs to be cleaned up / refactored, but it
-	// works.
-	if c.Kind == "Topology" {
-		ver := version.StoredVersion["Topology"]
+	// Get current version of config being stored (ie. v1)
+	sv := version.StoredVersion[c.Kind]
 
-		if c.APIVersion() != ver {
-			switch ver {
-			case "v1":
-				specs, err := v1.UpgradeTopology(c.APIVersion(), c.Spec)
-				if err != nil {
-					return nil, fmt.Errorf("upgrading topology to v1: %w", err)
-				}
+	// Check if the specified version of this config is the stored version.
+	if c.APIVersion() != sv {
+		// Specified version of this config is not the stored version, so get
+		// upgrader for the config kind.
+		upgrader := upgrade.GetUpgrader(c.Kind + "/" + sv)
 
-				for _, s := range specs {
-					switch spec := s.(type) {
-					case v1.TopologySpec:
-						c.Version = "phenix.sandia.gov/v1"
-						c.Spec = structs.MapWithOptions(spec, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty())
-					case v1.ScenarioSpec:
-						scenario, err := types.NewConfig("scenario/" + c.Metadata.Name)
-						if err != nil {
-							return nil, fmt.Errorf("creating new v1 scenario config: %w", err)
-						}
+		// Abort if no upgrader is registered for this config kind.
+		if upgrader == nil {
+			return nil, fmt.Errorf("config needs to be upgraded to %s but no upgrader found", sv)
+		}
 
-						scenario.Version = "phenix.sandia.gov/v1"
-						scenario.Spec = structs.MapWithOptions(spec, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty())
+		// Upgrade the config using the registered upgrader.
+		specs, err := upgrader.Upgrade(c.APIVersion(), c.Spec)
+		if err != nil {
+			return nil, fmt.Errorf("upgrading config to %s: %w", sv, err)
+		}
 
-						if validate {
-							if err := types.ValidateConfigSpec(*scenario); err != nil {
-								return nil, fmt.Errorf("validating config: %w", err)
-							}
-						}
+		// Track config to return, since upgrader may produce multiple configs (but
+		// only one of each kind).
+		var toReturn *types.Config
 
-						if err := store.Create(scenario); err != nil {
-							return nil, fmt.Errorf("storing config: %w", err)
-						}
+		for _, s := range specs {
+			cfg, err := types.NewConfigFromSpec(c.Metadata.Name, s)
+			if err != nil {
+				return nil, fmt.Errorf("creating new config: %w", err)
+			}
 
-						created = append(created, scenario)
-					}
+			if validate {
+				if err := types.ValidateConfigSpec(*cfg); err != nil {
+					return nil, fmt.Errorf("validating config: %w", err)
 				}
 			}
+
+			if err := store.Create(cfg); err != nil {
+				return nil, fmt.Errorf("storing config: %w", err)
+			}
+
+			if toReturn == nil && cfg.Kind == c.Kind {
+				toReturn = cfg
+			}
 		}
+
+		return toReturn, nil
 	}
 
+	// *** END config upgrade process ***
+
+	// TODO: consider using config hooks (once merged in) to handle this.
 	if c.Kind == "Experiment" {
 		if err := experiment.CreateFromConfig(c); err != nil {
 			return nil, fmt.Errorf("creating experiment config spec: %w", err)
@@ -168,23 +174,11 @@ func Create(path string, validate bool) (*types.Config, error) {
 
 	if validate {
 		if err := types.ValidateConfigSpec(*c); err != nil {
-			// If main config fails to validate, then delete any ancillary configs
-			// that were created above.
-			for _, e := range created {
-				store.Delete(e)
-			}
-
 			return nil, fmt.Errorf("validating config: %w", err)
 		}
 	}
 
 	if err := store.Create(c); err != nil {
-		// If main config fails to create, then delete any ancillary configs that
-		// were created above.
-		for _, e := range created {
-			store.Delete(e)
-		}
-
 		return nil, fmt.Errorf("storing config: %w", err)
 	}
 
