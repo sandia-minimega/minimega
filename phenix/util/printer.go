@@ -84,7 +84,7 @@ func PrintTableOfVMs(writer io.Writer, vms ...mm.VM) {
 	table.Render()
 }
 
-func buildMultipleVMTable(table *tablewriter.Table, vms ...types.VM) {
+func buildMultipleVMTable(table *tablewriter.Table, vms ...mm.VM) {
 	table.SetHeader([]string{"Host", "Name", "Running", "Disk", "Interfaces", "Uptime", "Memory", "VCPUs", "OS Type"})
 	table.SetAutoWrapText(false)
 	table.SetColWidth(50)
@@ -108,7 +108,7 @@ func buildMultipleVMTable(table *tablewriter.Table, vms ...types.VM) {
 	}
 }
 
-func buildSingleVMTable(table *tablewriter.Table, vm types.VM) {
+func buildSingleVMTable(table *tablewriter.Table, vm mm.VM) {
 	table.SetHeader([]string{"Setting", "Value"})
 	table.SetAutoWrapText(false)
 	table.SetColWidth(50)
