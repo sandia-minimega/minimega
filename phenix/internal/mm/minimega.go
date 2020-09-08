@@ -161,7 +161,12 @@ func (this Minimega) GetVMInfo(opts ...Option) VMs {
 
 		// Only expect one row returned
 		resp := mmcli.RunTabular(cmd)[0]
-		vm.Disk = resp["backingfile"]
+
+		if resp["backingfile"] == "" {
+			vm.Disk = resp["image"]
+		} else {
+			vm.Disk = resp["backingfile"]
+		}
 
 		vms = append(vms, vm)
 	}

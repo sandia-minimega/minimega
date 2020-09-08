@@ -1213,6 +1213,13 @@ func RedeployVM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Get the VM details again since redeploying may have changed them.
+	v, err = vm.Get(exp, name)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	screenshot, err := util.GetScreenshot(exp, name, "215")
 	if err != nil {
 		log.Error("getting screenshot - %v", err)
