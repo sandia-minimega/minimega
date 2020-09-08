@@ -114,7 +114,7 @@ func Ranges(opts ...Option) (map[string][2]int, error) {
 	}
 
 	for _, exp := range exps {
-		if exp.Status.StartTime != "" {
+		if exp.Status.Running() {
 			var (
 				min = 0
 				max = 0

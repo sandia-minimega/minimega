@@ -17,10 +17,7 @@ func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []mm.VM
 		StartTime: exp.Status.StartTime,
 		Running:   exp.Status.Running(),
 		Status:    string(status),
-		VlanMin:   uint32(exp.Spec.VLANs.Min),
-		VlanMax:   uint32(exp.Spec.VLANs.Max),
 		Vms:       VMsToProtobuf(vms),
-		VlanCount: uint32(len(exp.Spec.VLANs.Aliases)),
 		VmCount:   uint32(len(vms)),
 	}
 
@@ -40,10 +37,31 @@ func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []mm.VM
 
 	var aliases v1.VLANAliases
 
-	if exp.Status != nil {
+	if exp.Status.Running() {
 		aliases = exp.Status.VLANs
+
+		var (
+			min = 0
+			max = 0
+		)
+
+		for _, k := range exp.Status.VLANs {
+			if min == 0 || k < min {
+				min = k
+			}
+
+			if max == 0 || k > max {
+				max = k
+			}
+		}
+
+		pb.VlanMin = uint32(min)
+		pb.VlanMax = uint32(max)
 	} else {
 		aliases = exp.Spec.VLANs.Aliases
+
+		pb.VlanMin = uint32(exp.Spec.VLANs.Min)
+		pb.VlanMax = uint32(exp.Spec.VLANs.Max)
 	}
 
 	if aliases != nil {
@@ -59,6 +77,7 @@ func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []mm.VM
 		}
 
 		pb.Vlans = vlans
+		pb.VlanCount = uint32(len(exp.Spec.VLANs.Aliases))
 	}
 
 	return pb
