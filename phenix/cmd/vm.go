@@ -264,7 +264,7 @@ func newVMNetCmd() *cobra.Command {
 		Short: "Connect a VM interface to a VLAN",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 4 {
-				return fmt.Errorf("Must provide an experiment name, vm name, iface index, vlan id")
+				return fmt.Errorf("Must provide an experiment name, VM name, iface index, and VLAN ID")
 			}
 
 			var (
@@ -294,7 +294,7 @@ func newVMNetCmd() *cobra.Command {
 		Short: "Disconnect a VM interface",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 3 {
-				return fmt.Errorf("Must provide an experiment name, vm name, iface index>")
+				return fmt.Errorf("Must provide an experiment name, VM name, and iface index>")
 			}
 
 			var (
@@ -344,7 +344,7 @@ func newVMCaptureCmd() *cobra.Command {
 		Short: "Start a packet capture",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 4 {
-				return fmt.Errorf("Must provide an experiment name, vm name, iface index, /path/to/out file")
+				return fmt.Errorf("Must provide an experiment name, VM name, iface index, and /path/to/out file")
 			}
 
 			var (
@@ -374,7 +374,7 @@ func newVMCaptureCmd() *cobra.Command {
 		Short: "Stop all packet captures",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 2 {
-				return fmt.Errorf("Must provide an experiment name, vm name>")
+				return fmt.Errorf("Must provide an experiment and VM name")
 			}
 
 			var (
