@@ -100,7 +100,7 @@ func newVMPauseCmd() *cobra.Command {
 func newVMResumeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "resume <experiment name> <vm name>",
-		Short: "Resume a paused VM fora  specific experiment",
+		Short: "Resume a paused VM for a specific experiment",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) != 2 {
 				return fmt.Errorf("Must provide an experiment and VM name")
