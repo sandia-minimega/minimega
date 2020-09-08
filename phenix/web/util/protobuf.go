@@ -17,8 +17,12 @@ func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []mm.VM
 		StartTime: exp.Status.StartTime,
 		Running:   exp.Status.Running(),
 		Status:    string(status),
-		Vms:       VMsToProtobuf(vms),
 		VmCount:   uint32(len(vms)),
+	}
+
+	pb.Vms = make([]*proto.VM, len(vms))
+	for i, v := range vms {
+		pb.Vms[i] = VMToProtobuf(exp.Metadata.Name, v)
 	}
 
 	if exp.Spec.Scenario != nil && exp.Spec.Scenario.Apps != nil {
@@ -83,7 +87,7 @@ func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []mm.VM
 	return pb
 }
 
-func VMToProtobuf(vm mm.VM) *proto.VM {
+func VMToProtobuf(exp string, vm mm.VM) *proto.VM {
 	return &proto.VM{
 		Name:        vm.Name,
 		Host:        vm.Host,
@@ -99,17 +103,8 @@ func VMToProtobuf(vm mm.VM) *proto.VM {
 		Screenshot:  vm.Screenshot,
 		Running:     vm.Running,
 		Redeploying: vm.Redeploying,
+		Experiment:  exp,
 	}
-}
-
-func VMsToProtobuf(vms []mm.VM) []*proto.VM {
-	pb := make([]*proto.VM, len(vms))
-
-	for i, vm := range vms {
-		pb[i] = VMToProtobuf(vm)
-	}
-
-	return pb
 }
 
 func CaptureToProtobuf(capture mm.Capture) *proto.Capture {

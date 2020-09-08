@@ -17,6 +17,7 @@ message VM {
   string screenshot = 12;
   bool running = 13;
   bool redeploying = 14;
+  string experiment = 15;
 }
 
 message VMList {

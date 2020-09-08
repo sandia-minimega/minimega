@@ -776,7 +776,14 @@ func GetVMs(w http.ResponseWriter, r *http.Request) {
 		allowed = allowed.Paginate(n, s)
 	}
 
-	body, err := marshaler.Marshal(&proto.VMList{Vms: util.VMsToProtobuf(allowed)})
+	resp := &proto.VMList{Total: uint32(len(allowed))}
+
+	resp.Vms = make([]*proto.VM, len(allowed))
+	for i, v := range allowed {
+		resp.Vms[i] = util.VMToProtobuf(exp, v)
+	}
+
+	body, err := marshaler.Marshal(resp)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -819,7 +826,7 @@ func GetVM(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body, err := marshaler.Marshal(util.VMToProtobuf(*vm))
+	body, err := marshaler.Marshal(util.VMToProtobuf(exp, *vm))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -899,7 +906,7 @@ func UpdateVM(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	body, err = marshaler.Marshal(util.VMToProtobuf(*vm))
+	body, err = marshaler.Marshal(util.VMToProtobuf(exp, *vm))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1018,7 +1025,7 @@ func StartVM(w http.ResponseWriter, r *http.Request) {
 		v.Screenshot = "data:image/png;base64," + base64.StdEncoding.EncodeToString(screenshot)
 	}
 
-	body, err := marshaler.Marshal(util.VMToProtobuf(*v))
+	body, err := marshaler.Marshal(util.VMToProtobuf(exp, *v))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1088,7 +1095,7 @@ func StopVM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err := marshaler.Marshal(util.VMToProtobuf(*v))
+	body, err := marshaler.Marshal(util.VMToProtobuf(exp, *v))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1139,7 +1146,7 @@ func RedeployVM(w http.ResponseWriter, r *http.Request) {
 
 	v.Redeploying = true
 
-	body, _ := marshaler.Marshal(util.VMToProtobuf(*v))
+	body, _ := marshaler.Marshal(util.VMToProtobuf(exp, *v))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -1227,7 +1234,7 @@ func RedeployVM(w http.ResponseWriter, r *http.Request) {
 		v.Screenshot = "data:image/png;base64," + base64.StdEncoding.EncodeToString(screenshot)
 	}
 
-	body, _ = marshaler.Marshal(util.VMToProtobuf(*v))
+	body, _ = marshaler.Marshal(util.VMToProtobuf(exp, *v))
 
 	broker.Broadcast(
 		broker.NewRequestPolicy("vms/redeploy", "update", fullName),
@@ -1758,7 +1765,7 @@ func CommitVM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	payload.Vm = util.VMToProtobuf(*v)
+	payload.Vm = util.VMToProtobuf(exp, *v)
 	body, _ = marshaler.Marshal(payload)
 
 	broker.Broadcast(
@@ -1793,7 +1800,7 @@ func GetAllVMs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allowed := mm.VMs{}
+	allowed := []*proto.VM{}
 
 	for _, exp := range exps {
 		vms, err := vm.List(exp.Spec.ExperimentName)
@@ -1802,11 +1809,16 @@ func GetAllVMs(w http.ResponseWriter, r *http.Request) {
 		}
 
 		for _, v := range vms {
-			if role.Allowed("vms", "list", fmt.Sprintf("%s_%s", exp.Spec.ExperimentName, v.Name)) {
+			if !role.Allowed("vms", "list", fmt.Sprintf("%s_%s", exp.Spec.ExperimentName, v.Name)) {
 				continue
 			}
 
-			if exp.Status.Running() && v.Running && size != "" {
+			// TODO: add `show_dnb` query option.
+			if !v.Running {
+				continue
+			}
+
+			if size != "" {
 				screenshot, err := util.GetScreenshot(exp.Spec.ExperimentName, v.Name, size)
 				if err != nil {
 					log.Error("getting screenshot: %v", err)
@@ -1815,11 +1827,13 @@ func GetAllVMs(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			allowed = append(allowed, v)
+			allowed = append(allowed, util.VMToProtobuf(exp.Spec.ExperimentName, v))
 		}
 	}
 
-	body, err := marshaler.Marshal(&proto.VMList{Vms: util.VMsToProtobuf(allowed)})
+	resp := &proto.VMList{Total: uint32(len(allowed)), Vms: allowed}
+
+	body, err := marshaler.Marshal(resp)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

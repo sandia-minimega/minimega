@@ -221,9 +221,11 @@ func (this *Client) read() {
 
 		this.Unlock()
 
-		resp := &proto.VMList{
-			Total: uint32(len(allowed)),
-			Vms:   util.VMsToProtobuf(allowed),
+		resp := &proto.VMList{Total: uint32(len(allowed))}
+
+		resp.Vms = make([]*proto.VM, len(allowed))
+		for i, v := range allowed {
+			resp.Vms[i] = util.VMToProtobuf(exp.Metadata.Name, v)
 		}
 
 		body, err := marshaler.Marshal(resp)
