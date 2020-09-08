@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -109,9 +110,9 @@ func (this Node) FileInjects(basedir string) string {
 
 	for i, inject := range this.Injections {
 		if strings.HasPrefix(inject.Src, "/") {
-			injects[i] = inject.Src + ":" + inject.Dst
+			injects[i] = fmt.Sprintf(`"%s":"%s"`, inject.Src, inject.Dst)
 		} else {
-			injects[i] = basedir + "/" + inject.Src + ":" + inject.Dst
+			injects[i] = fmt.Sprintf(`"%s/%s":"%s"`, basedir, inject.Src, inject.Dst)
 		}
 	}
 

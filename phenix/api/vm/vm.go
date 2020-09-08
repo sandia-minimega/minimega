@@ -71,6 +71,7 @@ func List(expName string) ([]mm.VM, error) {
 			Disk:       node.Hardware.Drives[0].Image,
 			Interfaces: make(map[string]string),
 			DoNotBoot:  *node.General.DoNotBoot,
+			OSType:     string(node.Hardware.OSType),
 		}
 
 		for _, iface := range node.Network.Interfaces {
@@ -151,12 +152,22 @@ func Get(expName, vmName string) (*mm.VM, error) {
 			RAM:        node.Hardware.Memory,
 			Disk:       node.Hardware.Drives[0].Image,
 			Interfaces: make(map[string]string),
+			OSType:     string(node.Hardware.OSType),
+			Metadata:   make(map[string]interface{}),
 		}
 
 		for _, iface := range node.Network.Interfaces {
 			vm.IPv4 = append(vm.IPv4, iface.Address)
 			vm.Networks = append(vm.Networks, iface.VLAN)
 			vm.Interfaces[iface.VLAN] = iface.Address
+		}
+
+		for _, app := range exp.GetHostApps() {
+			for _, h := range app.Hosts {
+				if h.Hostname == vm.Name {
+					vm.Metadata[app.Name] = h.Metadata
+				}
+			}
 		}
 	}
 
