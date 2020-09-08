@@ -2,10 +2,13 @@ package experiment
 
 import (
 	"fmt"
+	"io/ioutil"
 	"strings"
 	"time"
 
 	"phenix/app"
+	"phenix/internal/common"
+	"phenix/internal/file"
 	"phenix/internal/mm"
 	"phenix/scheduler"
 	"phenix/store"
@@ -309,10 +312,12 @@ func Start(name string, dryrun bool) error {
 		status.VLANs = spec.VLANs.Aliases
 	} else {
 		if err := mm.ReadScriptFromFile(filename); err != nil {
+			mm.ClearNamespace(exp.Spec.ExperimentName)
 			return fmt.Errorf("reading minimega script: %w", err)
 		}
 
 		if err := mm.LaunchVMs(exp.Spec.ExperimentName); err != nil {
+			mm.ClearNamespace(exp.Spec.ExperimentName)
 			return fmt.Errorf("launching experiment VMs: %w", err)
 		}
 
@@ -456,19 +461,45 @@ func Save(opts ...SaveOption) error {
 }
 
 func Delete(name string) error {
-	// TODO
+	if Running(name) {
+		return fmt.Errorf("cannot delete a running experiment")
+	}
+
+	c, _ := types.NewConfig("experiment/" + name)
+
+	if err := store.Get(c); err != nil {
+		return fmt.Errorf("getting experiment %s: %w", name, err)
+	}
+
+	if err := store.Delete(c); err != nil {
+		return fmt.Errorf("deleting experiment %s: %w", name, err)
+	}
 
 	return nil
 }
 
 func Files(name string) ([]string, error) {
-	// TODO
-
-	return nil, nil
+	return file.GetExperimentFileNames(name)
 }
 
-func File(name, file string) ([]byte, error) {
-	// TODO
+func File(name, fileName string) ([]byte, error) {
+	files, err := file.GetExperimentFileNames(name)
+	if err != nil {
+		return nil, fmt.Errorf("getting list of experiment files: %w", err)
+	}
 
-	return nil, nil
+	for _, f := range files {
+		if fileName == f {
+			path := fmt.Sprintf("%s/%s/files/%s", common.PhenixBase, name, f)
+
+			data, err := ioutil.ReadFile(path)
+			if err != nil {
+				return nil, fmt.Errorf("reading contents of file: %w", err)
+			}
+
+			return data, nil
+		}
+	}
+
+	return nil, fmt.Errorf("file not found")
 }
