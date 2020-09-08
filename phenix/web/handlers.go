@@ -360,7 +360,7 @@ func StartExperiment(w http.ResponseWriter, r *http.Request) {
 	status := make(chan result)
 
 	go func() {
-		if err := experiment.Start(name, false); err != nil {
+		if err := experiment.Start(experiment.StartWithName(name)); err != nil {
 			status <- result{nil, err}
 		}
 

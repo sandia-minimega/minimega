@@ -119,6 +119,8 @@ func newExperimentCreateCmd() *cobra.Command {
 				experiment.CreateWithTopology(MustGetString(cmd.Flags(), "topology")),
 				experiment.CreateWithScenario(MustGetString(cmd.Flags(), "scenario")),
 				experiment.CreateWithBaseDirectory(MustGetString(cmd.Flags(), "base-dir")),
+				experiment.CreateWithVLANMin(MustGetInt(cmd.Flags(), "vlan-min")),
+				experiment.CreateWithVLANMax(MustGetInt(cmd.Flags(), "vlan-max")),
 			}
 
 			if err := experiment.Create(opts...); err != nil {
@@ -136,6 +138,8 @@ func newExperimentCreateCmd() *cobra.Command {
 	cmd.MarkFlagRequired("topology")
 	cmd.Flags().StringP("scenario", "s", "", "Name of an existing scenario to use (optional)")
 	cmd.Flags().StringP("base-dir", "d", "", "Base directory to use for experiment (optional)")
+	cmd.Flags().Int("vlan-min", 0, "VLAN pool minimum")
+	cmd.Flags().Int("vlan-max", 0, "VLAN pool maximum")
 
 	return cmd
 }
@@ -243,7 +247,14 @@ func newExperimentStartCmd() *cobra.Command {
 			}
 
 			for _, exp := range experiments {
-				if err := experiment.Start(exp, dryrun); err != nil {
+				opts := []experiment.StartOption{
+					experiment.StartWithName(exp),
+					experiment.StartWithDryRun(dryrun),
+					experiment.StartWithVLANMin(MustGetInt(cmd.Flags(), "vlan-min")),
+					experiment.StartWithVLANMax(MustGetInt(cmd.Flags(), "vlan-max")),
+				}
+
+				if err := experiment.Start(opts...); err != nil {
 					err := util.HumanizeError(err, "Unable to start the "+exp+" experiment")
 					return err.Humanized()
 				}
@@ -260,6 +271,8 @@ func newExperimentStartCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolP("dry-run", "", false, "Do everything but actually call out to minimega")
+	cmd.Flags().Int("vlan-min", 0, "VLAN pool minimum")
+	cmd.Flags().Int("vlan-max", 0, "VLAN pool maximum")
 
 	return cmd
 }
@@ -332,7 +345,7 @@ func newExperimentRestartCmd() *cobra.Command {
 				return err.Humanized()
 			}
 
-			if err := experiment.Start(exp, dryrun); err != nil {
+			if err := experiment.Start(experiment.StartWithName(exp), experiment.StartWithDryRun(dryrun)); err != nil {
 				err := util.HumanizeError(err, "Unable to start the "+exp+" experiment")
 				return err.Humanized()
 			}

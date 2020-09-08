@@ -114,10 +114,17 @@ func Create(opts ...CreateOption) error {
 		},
 	}
 
+	vlans := v1.VLANSpec{
+		Aliases: make(v1.VLANAliases),
+		Min:     o.vlanMin,
+		Max:     o.vlanMax,
+	}
+
 	spec := map[string]interface{}{
 		"experimentName": o.name,
 		"baseDir":        o.baseDir,
 		"topology":       topo.Spec,
+		"vlans":          &vlans,
 	}
 
 	var scenario *types.Config
@@ -273,11 +280,13 @@ func Schedule(opts ...ScheduleOption) error {
 
 // Start starts the experiment with the given name. It returns any errors
 // encountered while starting the experiment.
-func Start(name string, dryrun bool) error {
-	c, _ := types.NewConfig("experiment/" + name)
+func Start(opts ...StartOption) error {
+	o := newStartOptions(opts...)
+
+	c, _ := types.NewConfig("experiment/" + o.name)
 
 	if err := store.Get(c); err != nil {
-		return fmt.Errorf("getting experiment %s from store: %w", name, err)
+		return fmt.Errorf("getting experiment %s from store: %w", o.name, err)
 	}
 
 	var status v1.ExperimentStatus
@@ -296,6 +305,14 @@ func Start(name string, dryrun bool) error {
 		return fmt.Errorf("decoding experiment spec: %w", err)
 	}
 
+	if o.vlanMin != 0 {
+		spec.VLANs.Min = o.vlanMin
+	}
+
+	if o.vlanMax != 0 {
+		spec.VLANs.Max = o.vlanMax
+	}
+
 	exp := types.Experiment{Metadata: c.Metadata, Spec: &spec, Status: &status}
 
 	if err := app.ApplyApps(app.ACTIONPRESTART, &exp); err != nil {
@@ -308,7 +325,7 @@ func Start(name string, dryrun bool) error {
 		return fmt.Errorf("generating minimega script: %w", err)
 	}
 
-	if dryrun {
+	if o.dryrun {
 		status.VLANs = spec.VLANs.Aliases
 	} else {
 		if err := mm.ReadScriptFromFile(filename); err != nil {
@@ -337,7 +354,7 @@ func Start(name string, dryrun bool) error {
 		status.VLANs = vlans
 	}
 
-	if dryrun {
+	if o.dryrun {
 		status.StartTime = time.Now().Format(time.RFC3339) + "-DRYRUN"
 	} else {
 		status.StartTime = time.Now().Format(time.RFC3339)

@@ -146,3 +146,46 @@ func ScheduleWithAlgorithm(a string) ScheduleOption {
 		o.algorithm = a
 	}
 }
+
+type StartOption func(*startOptions)
+
+type startOptions struct {
+	name    string
+	dryrun  bool
+	vlanMin int
+	vlanMax int
+}
+
+func newStartOptions(opts ...StartOption) startOptions {
+	var o startOptions
+
+	for _, opt := range opts {
+		opt(&o)
+	}
+
+	return o
+}
+
+func StartWithName(n string) StartOption {
+	return func(o *startOptions) {
+		o.name = n
+	}
+}
+
+func StartWithDryRun(d bool) StartOption {
+	return func(o *startOptions) {
+		o.dryrun = d
+	}
+}
+
+func StartWithVLANMin(m int) StartOption {
+	return func(o *startOptions) {
+		o.vlanMin = m
+	}
+}
+
+func StartWithVLANMax(m int) StartOption {
+	return func(o *startOptions) {
+		o.vlanMax = m
+	}
+}

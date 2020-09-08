@@ -23,3 +23,12 @@ func MustGetBool(flags *pflag.FlagSet, name string) bool {
 
 	return val
 }
+
+func MustGetInt(flags *pflag.FlagSet, name string) int {
+	val, err := flags.GetInt(name)
+	if err != nil {
+		panic(fmt.Sprintf("Getting value for %s: %v", name, err))
+	}
+
+	return val
+}
