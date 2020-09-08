@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"phenix/internal/mm"
 	"phenix/internal/mm/mmcli"
 )
 
@@ -210,7 +211,7 @@ func (MMClusterFiles) GetExperimentSnapshots(exp string) ([]string, error) {
 func (MMClusterFiles) CopyFile(path, dest string, status CopyStatus) error {
 	cmd := mmcli.NewCommand()
 
-	if isHeadnode(dest) {
+	if mm.IsHeadnode(dest) {
 		cmd.Command = fmt.Sprintf(`file get %s`, path)
 	} else {
 		cmd.Command = fmt.Sprintf(`mesh send %s file get %s`, dest, path)
@@ -220,7 +221,7 @@ func (MMClusterFiles) CopyFile(path, dest string, status CopyStatus) error {
 		return fmt.Errorf("copying file to destination: %w", err)
 	}
 
-	if isHeadnode(dest) {
+	if mm.IsHeadnode(dest) {
 		cmd.Command = fmt.Sprintf(`file status`)
 	} else {
 		cmd.Command = fmt.Sprintf(`mesh send %s file status`, dest)
