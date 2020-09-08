@@ -7,8 +7,8 @@ import (
 	"phenix/api/experiment"
 	"phenix/store"
 	"phenix/types"
-	"phenix/types/upgrade"
 	"phenix/types/version"
+	"phenix/types/version/upgrade"
 	v1 "phenix/types/version/v1"
 	"phenix/util"
 	"phenix/util/editor"
@@ -130,7 +130,7 @@ func Create(path string, validate bool) (*types.Config, error) {
 		}
 
 		// Upgrade the config using the registered upgrader.
-		specs, err := upgrader.Upgrade(c.APIVersion(), c.Spec)
+		specs, err := upgrader.Upgrade(c.APIVersion(), c.Spec, c.Metadata)
 		if err != nil {
 			return nil, fmt.Errorf("upgrading config to %s: %w", sv, err)
 		}
