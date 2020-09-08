@@ -107,7 +107,7 @@ func (this Minimega) GetVMInfo(opts ...Option) VMs {
 
 	cmd := mmcli.NewNamespacedCommand(o.ns)
 	cmd.Command = "vm info"
-	cmd.Columns = []string{"host", "name", "state", "uptime", "vlan", "tap"}
+	cmd.Columns = []string{"host", "name", "state", "uptime", "vlan", "tap", "memory", "vcpus", "disks"}
 
 	if o.vm != "" {
 		cmd.Filters = []string{"name=" + o.vm}
@@ -146,6 +146,22 @@ func (this Minimega) GetVMInfo(opts ...Option) VMs {
 		if err == nil {
 			vm.Uptime = uptime.Seconds()
 		}
+
+		vm.RAM, _ = strconv.Atoi(row["memory"])
+		vm.CPUs, _ = strconv.Atoi(row["vcpus"])
+
+		// TODO: confirm multiple disks are separated by whitespace.
+		disk := strings.Fields(row["disks"])[0]
+		// diskspec can include multiple settings separated by comma. Path to disk
+		// will always be first setting.
+		disk = strings.Split(disk, ",")[0]
+
+		cmd = mmcli.NewCommand()
+		cmd.Command = "vm disk info " + disk
+
+		// Only expect one row returned
+		resp := mmcli.RunTabular(cmd)[0]
+		vm.Disk = resp["backingfile"]
 
 		vms = append(vms, vm)
 	}

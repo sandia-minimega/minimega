@@ -85,6 +85,9 @@ func List(expName string) ([]mm.VM, error) {
 			vm.Networks = details.Networks
 			vm.Taps = details.Taps
 			vm.Uptime = details.Uptime
+			vm.CPUs = details.CPUs
+			vm.RAM = details.RAM
+			vm.Disk = details.Disk
 
 			// Reset slice of IPv4 addresses so we can be sure to align them correctly
 			// with minimega networks below.
@@ -177,6 +180,9 @@ func Get(expName, vmName string) (*mm.VM, error) {
 	vm.Networks = details[0].Networks
 	vm.Taps = details[0].Taps
 	vm.Uptime = details[0].Uptime
+	vm.CPUs = details[0].CPUs
+	vm.RAM = details[0].RAM
+	vm.Disk = details[0].Disk
 
 	// Reset slice of IPv4 addresses so we can be sure to align them correctly
 	// with minimega networks below.
