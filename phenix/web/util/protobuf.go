@@ -77,7 +77,7 @@ func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []mm.VM
 		}
 
 		pb.Vlans = vlans
-		pb.VlanCount = uint32(len(exp.Spec.VLANs.Aliases))
+		pb.VlanCount = uint32(len(aliases))
 	}
 
 	return pb

@@ -157,7 +157,7 @@ func (this Minimega) GetVMInfo(opts ...Option) VMs {
 		disk = strings.Split(disk, ",")[0]
 
 		cmd = mmcli.NewCommand()
-		cmd.Command = "vm disk info " + disk
+		cmd.Command = "disk info " + disk
 
 		// Only expect one row returned
 		resp := mmcli.RunTabular(cmd)[0]
