@@ -136,6 +136,15 @@ func Create(opts ...CreateOption) error {
 			return fmt.Errorf("scenario doesn't exist")
 		}
 
+		topo, ok := scenario.Metadata.Annotations["topology"]
+		if !ok {
+			return fmt.Errorf("topology annotation missing from scenario")
+		}
+
+		if topo != o.topology {
+			return fmt.Errorf("experiment/scenario topology mismatch")
+		}
+
 		meta.Annotations["scenario"] = o.scenario
 		spec["scenario"] = scenario.Spec
 	}

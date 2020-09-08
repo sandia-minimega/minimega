@@ -187,6 +187,7 @@ func Start(opts ...ServerOption) error {
 	api.HandleFunc("/vms", GetAllVMs).Methods("GET", "OPTIONS")
 	api.HandleFunc("/applications", GetApplications).Methods("GET", "OPTIONS")
 	api.HandleFunc("/topologies", GetTopologies).Methods("GET", "OPTIONS")
+	api.HandleFunc("/topologies/{topo}/scenarios", GetScenarios).Methods("GET", "OPTIONS")
 	api.HandleFunc("/disks", GetDisks).Methods("GET", "OPTIONS")
 	api.HandleFunc("/hosts", GetClusterHosts).Methods("GET", "OPTIONS")
 	api.HandleFunc("/logs", GetLogs).Methods("GET", "OPTIONS")

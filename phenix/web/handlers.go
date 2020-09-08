@@ -1887,6 +1887,49 @@ func GetTopologies(w http.ResponseWriter, r *http.Request) {
 	w.Write(body)
 }
 
+// GET /topologies/{topo}/scenarios
+func GetScenarios(w http.ResponseWriter, r *http.Request) {
+	log.Debug("GetScenarios HTTP handler called")
+
+	var (
+		ctx  = r.Context()
+		role = ctx.Value("role").(rbac.Role)
+		vars = mux.Vars(r)
+		topo = vars["topo"]
+	)
+
+	if !role.Allowed("scenarios", "list") {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+
+	scenarios, err := config.List("scenario")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	allowed := []string{}
+	for _, s := range scenarios {
+		// We only care about scenarios pertaining to the given topology.
+		if t := s.Metadata.Annotations["topology"]; t != topo {
+			continue
+		}
+
+		if role.Allowed("scenarios", "list", s.Metadata.Name) {
+			allowed = append(allowed, s.Metadata.Name)
+		}
+	}
+
+	body, err := marshaler.Marshal(&proto.ScenarioList{Scenarios: allowed})
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Write(body)
+}
+
 // GET /disks
 func GetDisks(w http.ResponseWriter, r *http.Request) {
 	log.Debug("GetDisks HTTP handler called")
