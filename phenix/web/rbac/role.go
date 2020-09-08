@@ -47,6 +47,17 @@ func RoleFromConfig(name string) (*Role, error) {
 }
 
 func (this *Role) SetResourceNames(names ...string) error {
+	// Gracefully handle when no names or a single empty name is passed,
+	// defaulting to allow all.
+	switch len(names) {
+	case 0:
+		names = []string{"*"}
+	case 1:
+		if names[0] == "" {
+			names[0] = "*"
+		}
+	}
+
 	for _, policy := range this.Spec.Policies {
 		if policy.ResourceNames != nil {
 			return fmt.Errorf("resource names already exist for policy")

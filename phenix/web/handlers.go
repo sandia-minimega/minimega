@@ -2437,60 +2437,60 @@ func DeleteUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-/*
-
 func Signup(w http.ResponseWriter, r *http.Request) {
 	log.Debug("Signup HTTP handler called")
 
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "no data provided in POST", http.StatusBadRequest)
+		log.Error("reading request body - %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	var user rbac.User
-
-	if err := json.Unmarshal(body, &user); err != nil {
-		http.Error(w, "invalid data provided in POST", http.StatusBadRequest)
+	var req proto.SignupUserRequest
+	if err := unmarshaler.Unmarshal(body, &req); err != nil {
+		log.Error("unmashaling request body - %v", err)
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
-	// NOTE: The `AddUser` function clears the provided password
-	if err := database.AddUser(&user); err != nil {
-		http.Error(w, "error creating user", http.StatusInternalServerError)
-		return
-	}
+	u := rbac.NewUser(req.GetUsername(), req.GetPassword())
+
+	u.Spec.FirstName = req.GetFirstName()
+	u.Spec.LastName = req.GetLastName()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": user.Username,
-		"uid": user.ID,
+		"sub": u.Username(),
+		"exp": time.Now().Add(24 * time.Hour).Unix(),
 	})
 
 	// Sign and get the complete encoded token as a string using the secret
-	signed, err := token.SignedString([]byte(f_jwtKey))
+	signed, err := token.SignedString([]byte(o.jwtKey))
 	if err != nil {
 		http.Error(w, "failed to sign JWT", http.StatusInternalServerError)
 		return
 	}
 
-	database.AddUserToken(user.Username, signed)
-
-	data := map[string]interface{}{
-		"username":   user.Username,
-		"first_name": user.FirstName,
-		"last_name":  user.LastName,
-		"token":      signed,
+	if err := u.AddToken(signed, time.Now().Format(time.RFC3339)); err != nil {
+		http.Error(w, "", http.StatusInternalServerError)
+		return
 	}
 
-	marshalled, err := json.Marshal(data)
+	resp := &proto.LoginResponse{
+		Username:  u.Username(),
+		FirstName: u.FirstName(),
+		LastName:  u.LastName(),
+		Token:     signed,
+	}
+
+	body, err = marshaler.Marshal(resp)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	w.Write(marshalled)
+	w.Write(body)
 }
-*/
 
 func Login(w http.ResponseWriter, r *http.Request) {
 	log.Debug("Login HTTP handler called")
@@ -2552,7 +2552,7 @@ func Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"sub": user,
+		"sub": u.Username(),
 		"exp": time.Now().Add(24 * time.Hour).Unix(),
 	})
 
