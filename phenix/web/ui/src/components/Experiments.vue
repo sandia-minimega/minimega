@@ -24,9 +24,10 @@
                             the form" 
                             type="is-light is-right" 
                             multilined> -->
-          <b-field v-if="createModal.scenarios" label="Scenarios">
+          <b-field v-if="createModal.showScenarios" label="Scenarios">
             <!-- <b-select v-if="createModal.scenarios != null" @input="( t ) => getScenarios( t )" expanded> -->
-            <b-select v-if="createModal.scenarios" v-model="createModal.scenario" expanded>
+            <b-select v-if="createModal.showScenarios" v-model="createModal.scenario" expanded>
+              <option value="">Not Selected</option>
               <option v-for="( a, s ) in createModal.scenarios" :key="s" :value="s">
                 {{ s }}
               </option>
@@ -634,7 +635,7 @@
         const experimentData = {
           name: this.createModal.name,
           topology: this.createModal.topology,
-          apps: this.createModal.apps,
+          scenario: this.createModal.scenario,
           vlan_min: +this.createModal.vlan_min,
           vlan_max: +this.createModal.vlan_max
         }
@@ -686,11 +687,19 @@
 
       getScenarios ( topo ) {
         console.log('getScenarios for ' + topo);
+
+        // Reset these values for the case where a topo with scenarios was
+        // initially selected, then another topo with no scenarios was
+        // subsequently selected.
+        this.createModal.scenarios = {};
+        this.createModal.showScenarios = false;
+
         this.$http.get( 'topologies/' + topo + '/scenarios' ).then(
           response => {
             response.json().then( state => {
               if ( state.scenarios != null && Object.keys(state.scenarios).length != 0 ) {
                 this.createModal.scenarios = state.scenarios;
+                this.createModal.showScenarios = true;
               }
 
               console.log(this.createModal.scenarios);
@@ -718,7 +727,9 @@
           nameErrType: null,
           nameErrMsg: null,
           topology: null,
-          scenarios: null,
+          showScenarios: false,
+          scenarios: {},
+          scenario: null,
           apps: [],
           vlan_min: null,
           vlan_max: null
@@ -754,7 +765,8 @@
           nameErrType: null,
           nameErrMsg: null,
           topology: null,
-          scenarios: null,
+          showScenarios: false,
+          scenarios: {},
           scenario: null,
           apps: [],
           vlan_min: null,

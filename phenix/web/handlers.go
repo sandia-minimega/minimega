@@ -1933,20 +1933,6 @@ func GetScenarios(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	/*
-		allowed := []string{}
-		for _, s := range scenarios {
-			// We only care about scenarios pertaining to the given topology.
-			if t := s.Metadata.Annotations["topology"]; t != topo {
-				continue
-			}
-
-			if role.Allowed("scenarios", "list", s.Metadata.Name) {
-				allowed = append(allowed, s.Metadata.Name)
-			}
-		}
-	*/
-
 	allowed := make(map[string]*structpb.ListValue)
 
 	for _, s := range scenarios {
