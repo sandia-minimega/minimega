@@ -225,12 +225,18 @@ func (Minimega) GetVNCEndpoint(opts ...Option) (string, error) {
 	cmd := mmcli.NewNamespacedCommand(o.ns)
 	cmd.Command = "vm info"
 	cmd.Columns = []string{"host", "vnc_port"}
-	cmd.Filters = []string{"type=kvm", fmt.Sprintf("name=%s_%s", o.ns, o.vm)}
+	cmd.Filters = []string{"type=kvm", fmt.Sprintf("name=%s", o.vm)}
 
 	var endpoint string
 
 	for _, vm := range mmcli.RunTabular(cmd) {
-		endpoint = fmt.Sprintf("%s:%s", vm["host"], vm["vnc_port"])
+		host := vm["host"]
+
+		if IsHeadnode(host) {
+			host = "localhost"
+		}
+
+		endpoint = fmt.Sprintf("%s:%s", host, vm["vnc_port"])
 	}
 
 	if endpoint == "" {
