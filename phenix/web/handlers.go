@@ -17,6 +17,7 @@ import (
 	"phenix/api/cluster"
 	"phenix/api/config"
 	"phenix/api/experiment"
+	"phenix/api/scenario"
 	"phenix/api/vm"
 	"phenix/app"
 	"phenix/internal/mm"
@@ -35,6 +36,7 @@ import (
 	"golang.org/x/net/websocket"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/protobuf/encoding/protojson"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 var (
@@ -1930,7 +1932,22 @@ func GetScenarios(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	allowed := []string{}
+	/*
+		allowed := []string{}
+		for _, s := range scenarios {
+			// We only care about scenarios pertaining to the given topology.
+			if t := s.Metadata.Annotations["topology"]; t != topo {
+				continue
+			}
+
+			if role.Allowed("scenarios", "list", s.Metadata.Name) {
+				allowed = append(allowed, s.Metadata.Name)
+			}
+		}
+	*/
+
+	allowed := make(map[string]*structpb.ListValue)
+
 	for _, s := range scenarios {
 		// We only care about scenarios pertaining to the given topology.
 		if t := s.Metadata.Annotations["topology"]; t != topo {
@@ -1938,7 +1955,19 @@ func GetScenarios(w http.ResponseWriter, r *http.Request) {
 		}
 
 		if role.Allowed("scenarios", "list", s.Metadata.Name) {
-			allowed = append(allowed, s.Metadata.Name)
+			apps, err := scenario.AppList(s.Metadata.Name)
+			if err != nil {
+				log.Error("getting apps for scenario %s: %v", s.Metadata.Name, err)
+				continue
+			}
+
+			list := make([]interface{}, len(apps))
+			for i, a := range apps {
+				list[i] = a
+			}
+
+			val, _ := structpb.NewList(list)
+			allowed[s.Metadata.Name] = val
 		}
 	}
 

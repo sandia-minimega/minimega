@@ -3,6 +3,7 @@ syntax = "proto3";
 option go_package = "web/proto";
 
 import "web/proto/vm.proto";
+import "google/protobuf/struct.proto";
 
 message VLAN {
 	uint32 vlan = 1;
@@ -47,7 +48,8 @@ message TopologyList {
 }
 
 message ScenarioList {
-	repeated string scenarios = 1;
+	// Key is scenario name, value is string slice of apps in scenario.
+	map<string, google.protobuf.ListValue> scenarios = 1;
 }
 
 message DiskList {
