@@ -19,32 +19,21 @@
               </option>
             </b-select>
           </b-field>
-          <!-- <b-tooltip label="this list is scrollable and supports multiple selections, 
-                            you can select or unselect applications before submitting 
-                            the form" 
-                            type="is-light is-right" 
-                            multilined> -->
           <b-field v-if="createModal.showScenarios" label="Scenarios">
-            <!-- <b-select v-if="createModal.scenarios != null" @input="( t ) => getScenarios( t )" expanded> -->
-            <b-select v-if="createModal.showScenarios" v-model="createModal.scenario" expanded>
-              <option value="">Not Selected</option>
+            <b-select v-if="createModal.showScenarios" v-model="createModal.scenario" expanded placeholder="Not Selected">
+              <option value="">None</option>
               <option v-for="( a, s ) in createModal.scenarios" :key="s" :value="s">
                 {{ s }}
               </option>
             </b-select>
           </b-field>
-            <!-- <b-icon icon="question-circle" style="color:#383838"></b-icon> -->
-          <!-- </b-tooltip> -->
-          <!-- <b-select @input="( value ) => addApp( value )" expanded>
-            <option v-for="( a, index ) in applications" :key="index" :value="a">
-              {{ a }}
-            </option>
-          </b-select> -->
-          <b-tag v-for="( a, index ) in createModal.scenarios[createModal.scenario]" 
-                 :key="index" 
-                 type="is-light">
-            {{ a }}
-          </b-tag>
+          <b-taglist>
+            <b-tag v-for="( a, index ) in createModal.scenarios[createModal.scenario]" 
+                  :key="index" 
+                  type="is-light">
+              {{ a }}  
+            </b-tag>
+          </b-taglist>
           <br><br>
           <b-field label="VLAN Range">
             <b-field>
@@ -65,7 +54,6 @@
             <h1 class="title">
               There are no experiments!
             </h1>
-              <!-- <b-button v-if="adminUser()" type="is-success" outlined @click="updateTopologies(); updateApplications(); createModal.active = true">Create One Now!</b-button> -->
               <b-button v-if="adminUser()" type="is-success" outlined @click="updateTopologies(); createModal.active = true">Create One Now!</b-button>
           </div>
         </div>
@@ -91,7 +79,6 @@
         &nbsp; &nbsp;
         <p v-if="globalUser()" class="control">
           <b-tooltip label="create a new experiment" type="is-light is-left" multilined>
-            <!-- <button class="button is-light" @click="updateTopologies(); updateApplications(); createModal.active = true"> -->
             <button class="button is-light" @click="updateTopologies(); createModal.active = true">
               <b-icon icon="plus"></b-icon>
             </button>
@@ -458,24 +445,6 @@
           }
         );
       },
-      
-      // updateApplications () {
-      //   this.$http.get( 'applications' ).then(
-      //     response => {
-      //       response.json().then( state => {
-      //         this.applications = state.applications;
-      //         this.isWaiting = false;
-      //       });
-      //     }, response => {
-      //       this.isWaiting = false;
-      //       this.$buefy.toast.open({
-      //         message: 'Getting the applications failed.',
-      //         type: 'is-danger',
-      //         duration: 4000
-      //       });
-      //     }
-      //   );
-      // },
 
       globalUser () {
         return [ 'Global Admin' ].includes( this.$store.getters.role );
@@ -640,9 +609,6 @@
           vlan_max: +this.createModal.vlan_max
         }
         
-        // var appsUnique = Array.from(new Set( experimentData.apps ));
-        // experimentData.apps = appsUnique;
-        
         if ( !this.createModal.name ) {
           this.$buefy.toast.open({
             message: 'You must include a name for the experiment.',
@@ -686,8 +652,6 @@
       },
 
       getScenarios ( topo ) {
-        console.log('getScenarios for ' + topo);
-
         // Reset these values for the case where a topo with scenarios was
         // initially selected, then another topo with no scenarios was
         // subsequently selected.
@@ -701,8 +665,6 @@
                 this.createModal.scenarios = state.scenarios;
                 this.createModal.showScenarios = true;
               }
-
-              console.log(this.createModal.scenarios);
             });
           }, response => {
             this.isWaiting = false;
@@ -715,11 +677,6 @@
         );
       },
 
-      addApp ( app ) {
-        this.createModal.apps.push( app )
-        this.createModal.apps = _.uniq( this.createModal.apps )
-      },
-      
       resetCreateModal () {
         this.createModal = {
           active: false,
@@ -730,7 +687,6 @@
           showScenarios: false,
           scenarios: {},
           scenario: null,
-          apps: [],
           vlan_min: null,
           vlan_max: null
         }
@@ -768,13 +724,11 @@
           showScenarios: false,
           scenarios: {},
           scenario: null,
-          apps: [],
           vlan_min: null,
           vlan_max: null
         },
         experiments: [],
         topologies: [],
-        // applications: [],
         searchName: '',
         filtered: null,
         isMenuActive: false,
