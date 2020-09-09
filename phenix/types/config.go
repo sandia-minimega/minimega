@@ -81,7 +81,11 @@ func NewConfigFromFile(path string) (*Config, error) {
 func NewConfigFromSpec(name string, spec interface{}) (*Config, error) {
 	// TODO: add more case statements to this as more upgraders are added.
 	switch spec := spec.(type) {
-	case v1.TopologySpec:
+	case Config:
+		return &spec, nil
+	case *Config:
+		return spec, nil
+	case v1.TopologySpec, *v1.TopologySpec:
 		c, err := NewConfig("topology/" + name)
 		if err != nil {
 			return nil, fmt.Errorf("creating new v1 scenario config: %w", err)
@@ -91,7 +95,7 @@ func NewConfigFromSpec(name string, spec interface{}) (*Config, error) {
 		c.Spec = structs.MapWithOptions(spec, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty())
 
 		return c, nil
-	case v1.ScenarioSpec:
+	case v1.ScenarioSpec, *v1.ScenarioSpec:
 		c, err := NewConfig("scenario/" + name)
 		if err != nil {
 			return nil, fmt.Errorf("creating new v1 scenario config: %w", err)

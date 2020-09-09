@@ -76,7 +76,12 @@ func (topology) Upgrade(version string, spec map[string]interface{}, md types.Co
 				Apps: &v1.Apps{Host: []v1.HostApp{app}},
 			}
 
-			results = append(results, scenario)
+			config, _ := types.NewConfig("scenario/" + md.Name)
+			config.Version = "phenix.sandia.gov/v1"
+			config.Metadata.Annotations = map[string]string{"topology": "mosaics"}
+			config.Spec = structs.MapWithOptions(scenario, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty())
+
+			results = append(results, config)
 		}
 
 		return results, nil
