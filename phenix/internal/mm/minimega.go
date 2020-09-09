@@ -529,6 +529,10 @@ func (Minimega) GetClusterHosts() (Hosts, error) {
 
 	var cluster []Host
 
+	// Clear dummy namespace used for getting compute nodes in case a new compute
+	// node has been added since the last time the dummy namespace was created.
+	ClearNamespace("__phenix__")
+
 	// Get compute nodes details
 	hosts, err = processNamespaceHosts("__phenix__")
 	if err != nil {
