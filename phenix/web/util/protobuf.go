@@ -14,6 +14,7 @@ func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []mm.VM
 	pb := &proto.Experiment{
 		Name:      exp.Spec.ExperimentName,
 		Topology:  exp.Metadata.Annotations["topology"],
+		Scenario:  exp.Metadata.Annotations["scenario"],
 		StartTime: exp.Status.StartTime,
 		Running:   exp.Status.Running(),
 		Status:    string(status),
