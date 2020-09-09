@@ -13,31 +13,36 @@
             <b-input type="text" v-model="createModal.name" v-focus></b-input>
           </b-field>
           <b-field label="Experiment Topology">
-            <b-select placeholder="Select a topology" v-model="createModal.topology" expanded>
+            <b-select placeholder="Select a topology" v-model="createModal.topology" @input="getScenarios" expanded>
               <option v-for="( t, index ) in topologies" :key="index" :value="t">
                 {{ t }}
               </option>
             </b-select>
           </b-field>
-          <b-tooltip label="this list is scrollable and supports multiple selections, 
+          <!-- <b-tooltip label="this list is scrollable and supports multiple selections, 
                             you can select or unselect applications before submitting 
                             the form" 
                             type="is-light is-right" 
-                            multilined>
-            <b-field label="Applications"></b-field>
-            <b-icon icon="question-circle" style="color:#383838"></b-icon>
-          </b-tooltip>
-          <b-select @input="( value ) => addApp( value )" expanded>
+                            multilined> -->
+          <b-field v-if="createModal.scenarios" label="Scenarios">
+            <!-- <b-select v-if="createModal.scenarios != null" @input="( t ) => getScenarios( t )" expanded> -->
+            <b-select v-if="createModal.scenarios" v-model="createModal.scenario" expanded>
+              <option v-for="( a, s ) in createModal.scenarios" :key="s" :value="s">
+                {{ s }}
+              </option>
+            </b-select>
+          </b-field>
+            <!-- <b-icon icon="question-circle" style="color:#383838"></b-icon> -->
+          <!-- </b-tooltip> -->
+          <!-- <b-select @input="( value ) => addApp( value )" expanded>
             <option v-for="( a, index ) in applications" :key="index" :value="a">
               {{ a }}
             </option>
-          </b-select>
-          <b-tag v-for="( p, index ) in createModal.apps" 
+          </b-select> -->
+          <b-tag v-for="( a, index ) in createModal.scenarios[createModal.scenario]" 
                  :key="index" 
-                 type="is-light" 
-                 closable 
-                 @close="createModal.apps.splice( index, 1 )">
-            {{ p }}
+                 type="is-light">
+            {{ a }}
           </b-tag>
           <br><br>
           <b-field label="VLAN Range">
@@ -59,7 +64,8 @@
             <h1 class="title">
               There are no experiments!
             </h1>
-              <b-button v-if="adminUser()" type="is-success" outlined @click="updateTopologies(); updateApplications(); createModal.active = true">Create One Now!</b-button>
+              <!-- <b-button v-if="adminUser()" type="is-success" outlined @click="updateTopologies(); updateApplications(); createModal.active = true">Create One Now!</b-button> -->
+              <b-button v-if="adminUser()" type="is-success" outlined @click="updateTopologies(); createModal.active = true">Create One Now!</b-button>
           </div>
         </div>
       </section>
@@ -84,7 +90,8 @@
         &nbsp; &nbsp;
         <p v-if="globalUser()" class="control">
           <b-tooltip label="create a new experiment" type="is-light is-left" multilined>
-            <button class="button is-light" @click="updateTopologies(); updateApplications(); createModal.active = true">
+            <!-- <button class="button is-light" @click="updateTopologies(); updateApplications(); createModal.active = true"> -->
+            <button class="button is-light" @click="updateTopologies(); createModal.active = true">
               <b-icon icon="plus"></b-icon>
             </button>
           </b-tooltip>
@@ -451,23 +458,23 @@
         );
       },
       
-      updateApplications () {
-        this.$http.get( 'applications' ).then(
-          response => {
-            response.json().then( state => {
-              this.applications = state.applications;
-              this.isWaiting = false;
-            });
-          }, response => {
-            this.isWaiting = false;
-            this.$buefy.toast.open({
-              message: 'Getting the applications failed.',
-              type: 'is-danger',
-              duration: 4000
-            });
-          }
-        );
-      },
+      // updateApplications () {
+      //   this.$http.get( 'applications' ).then(
+      //     response => {
+      //       response.json().then( state => {
+      //         this.applications = state.applications;
+      //         this.isWaiting = false;
+      //       });
+      //     }, response => {
+      //       this.isWaiting = false;
+      //       this.$buefy.toast.open({
+      //         message: 'Getting the applications failed.',
+      //         type: 'is-danger',
+      //         duration: 4000
+      //       });
+      //     }
+      //   );
+      // },
 
       globalUser () {
         return [ 'Global Admin' ].includes( this.$store.getters.role );
@@ -632,8 +639,8 @@
           vlan_max: +this.createModal.vlan_max
         }
         
-        var appsUnique = Array.from(new Set( experimentData.apps ));
-        experimentData.apps = appsUnique;
+        // var appsUnique = Array.from(new Set( experimentData.apps ));
+        // experimentData.apps = appsUnique;
         
         if ( !this.createModal.name ) {
           this.$buefy.toast.open({
@@ -677,6 +684,28 @@
         this.resetCreateModal();
       },
 
+      getScenarios ( topo ) {
+        console.log('getScenarios for ' + topo);
+        this.$http.get( 'topologies/' + topo + '/scenarios' ).then(
+          response => {
+            response.json().then( state => {
+              if ( state.scenarios != null && Object.keys(state.scenarios).length != 0 ) {
+                this.createModal.scenarios = state.scenarios;
+              }
+
+              console.log(this.createModal.scenarios);
+            });
+          }, response => {
+            this.isWaiting = false;
+            this.$buefy.toast.open({
+              message: 'Getting the scenarios failed.',
+              type: 'is-danger',
+              duration: 4000
+            });
+          }
+        );
+      },
+
       addApp ( app ) {
         this.createModal.apps.push( app )
         this.createModal.apps = _.uniq( this.createModal.apps )
@@ -689,6 +718,7 @@
           nameErrType: null,
           nameErrMsg: null,
           topology: null,
+          scenarios: null,
           apps: [],
           vlan_min: null,
           vlan_max: null
@@ -724,13 +754,15 @@
           nameErrType: null,
           nameErrMsg: null,
           topology: null,
+          scenarios: null,
+          scenario: null,
           apps: [],
           vlan_min: null,
           vlan_max: null
         },
         experiments: [],
         topologies: [],
-        applications: [],
+        // applications: [],
         searchName: '',
         filtered: null,
         isMenuActive: false,
