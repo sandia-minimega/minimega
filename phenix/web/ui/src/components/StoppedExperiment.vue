@@ -20,34 +20,24 @@
       </div>
     </b-modal>
     <hr>
-    <b-field position="is-left">
-      <p class="control">
-        <h3>Experiment: {{ this.$route.params.id }}</h3>
-      </p>
-    </b-field>
-    <b-field v-if="experiment.scenario" position="is-left">
-      <p class="control">
-        <h3 v-if="experiment.scenario">Scenario: {{ experiment.scenario }}</h3>
-        <b-taglist v-if="experiment.scenario">
-          <b-tag v-for="( a, index ) in experiment.apps" 
-                  :key="index" 
-                  type="is-light">
+    <div class="level is-vcentered">
+      <div class="level-item">
+        <span style="font-weight: bold; font-size: x-large;">Experiment:</span>&nbsp;
+        <b-taglist><b-tag type="is-light">{{ this.$route.params.id }}</b-tag></b-taglist>
+      </div>
+      <div class="level-item" v-if="experiment.scenario">
+        <span style="font-weight: bold; font-size: x-large;">Scenario:</span>&nbsp;
+        <b-taglist><b-tag type="is-light">{{ experiment.scenario }}</b-tag></b-taglist>
+      </div>
+      <div class="level-item" v-if="experiment.scenario">
+        <span style="font-weight: bold; font-size: x-large;">Apps:</span>&nbsp;
+        <b-taglist>
+          <b-tag v-for="( a, index ) in experiment.apps" :key="index" type="is-light">
             {{ a }}  
           </b-tag>
         </b-taglist>
-      </p>
-    </b-field>
-    <b-field v-if="experiment.scenario" position="is-left">
-      <p class="control">
-        <b-taglist v-if="experiment.scenario">
-          <b-tag v-for="( a, index ) in experiment.apps" 
-                  :key="index" 
-                  type="is-light">
-            {{ a }}  
-          </b-tag>
-        </b-taglist>
-      </p>
-    </b-field>
+      </div>
+    </div>
     <b-field v-if="experimentUser() || experimentViewer()" position="is-right">
       <b-autocomplete
         v-model="searchName"
@@ -80,7 +70,7 @@
         </b-tooltip>
       </p>  
     </b-field>
-    <div>
+    <div style="margin-top: -5em;">
       <b-tabs @change="updateFiles">
         <b-tab-item label="Table">
           <b-table
