@@ -145,9 +145,9 @@
             <!-- <b-table-column field="scenario" label="Scenario" width="200">
               {{ props.row.scenario | stringify | lowercase }}
             </b-table-column> -->
-            <b-table-column field="apps" label="Applications" width="200">
+            <!-- <b-table-column field="apps" label="Applications" width="200">
               {{ props.row.apps | stringify | lowercase }}
-            </b-table-column>
+            </b-table-column> -->
             <b-table-column field="start_time" label="Start Time" width="250" sortable>
               {{ props.row.start_time }}
             </b-table-column>

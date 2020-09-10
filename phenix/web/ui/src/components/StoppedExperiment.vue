@@ -22,15 +22,13 @@
     <hr>
     <div class="level is-vcentered">
       <div class="level-item">
-        <span style="font-weight: bold; font-size: x-large;">Experiment:</span>&nbsp;
-        <b-taglist><b-tag type="is-light">{{ this.$route.params.id }}</b-tag></b-taglist>
+        <span style="font-weight: bold; font-size: x-large;">Experiment: {{ this.$route.params.id }}</span>&nbsp;
       </div>
       <div class="level-item" v-if="experiment.scenario">
-        <span style="font-weight: bold; font-size: x-large;">Scenario:</span>&nbsp;
-        <b-taglist><b-tag type="is-light">{{ experiment.scenario }}</b-tag></b-taglist>
+        <span style="font-weight: bold;">Scenario: {{ experiment.scenario }}</span>&nbsp;
       </div>
       <div class="level-item" v-if="experiment.scenario">
-        <span style="font-weight: bold; font-size: x-large;">Apps:</span>&nbsp;
+        <span style="font-weight: bold;">Apps:</span>&nbsp;
         <b-taglist>
           <b-tag v-for="( a, index ) in experiment.apps" :key="index" type="is-light">
             {{ a }}  
