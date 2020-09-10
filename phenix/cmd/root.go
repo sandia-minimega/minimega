@@ -1,9 +1,9 @@
 package cmd
 
 import (
-	goflag "flag"
 	"fmt"
 	"os"
+	"os/user"
 	"strings"
 
 	"phenix/api/config"
@@ -11,8 +11,6 @@ import (
 	"phenix/store"
 	"phenix/util"
 
-	log "github.com/activeshadow/libminimega/minilog"
-	homedir "github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -79,39 +77,35 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&hostnameSuffixes, "hostname-suffixes", "", "hostname suffixes to strip")
 	// rootCmd.PersistentFlags().Int("log.verbosity", 0, "log verbosity (0 - 10)")
 	rootCmd.PersistentFlags().Bool("log.error-stderr", false, "log fatal errors to STDERR")
-	// rootCmd.PersistentFlags().AddGoFlagSet(goflag.CommandLine)
 
-	if home, err := homedir.Dir(); err == nil {
+	uid, home := getCurrentUserInfo()
+
+	if uid == "0" {
+		os.MkdirAll("/etc/phenix", 0755)
+		os.MkdirAll("/var/log/phenix", 0755)
+
+		rootCmd.PersistentFlags().StringVar(&storeEndpoint, "store.endpoint", "/etc/phenix/store.bdb", "endpoint for storage service")
+		rootCmd.PersistentFlags().StringVar(&errFile, "log.error-file", "/var/log/phenix/error.log", "log fatal errors to file")
+	} else {
 		rootCmd.PersistentFlags().StringVar(&storeEndpoint, "store.endpoint", fmt.Sprintf("bolt://%s/.phenix.bdb", home), "endpoint for storage service")
 		rootCmd.PersistentFlags().StringVar(&errFile, "log.error-file", fmt.Sprintf("%s/.phenix.err", home), "log fatal errors to file")
-	} else {
-		rootCmd.PersistentFlags().StringVar(&storeEndpoint, "store.endpoint", "/etc/phenix/.phenix.bdb", "endpoint for storage service")
-		rootCmd.PersistentFlags().StringVar(&errFile, "log.error-file", "/etc/phenix/.phenix.err", "log fatal errors to file")
 	}
 
 	viper.BindPFlags(rootCmd.PersistentFlags())
 }
 
 func initConfig() {
-	// TODO: stop setting minimega debug logging by default
-	goflag.VisitAll(func(f *goflag.Flag) {
-		switch f.Name {
-		case "level":
-			f.Value.Set("debug")
-		case "verbose":
-			f.Value.Set("true")
-		}
-	})
-
-	log.Init()
-
 	viper.SetConfigName("config")
 
 	// Config paths - first look in current directory, then home directory (if
 	// discoverable), then finally global config directory.
 	viper.AddConfigPath(".")
 
-	if home, err := homedir.Dir(); err == nil {
+	uid, home := getCurrentUserInfo()
+
+	// The default config path added below is the same config path that should be
+	// used for the root user, so don't worry about handling uid = 0 here.
+	if uid != "0" {
 		viper.AddConfigPath(home + "/.config/phenix")
 	}
 
@@ -125,4 +119,33 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
+}
+
+func getCurrentUserInfo() (string, string) {
+	u, err := user.Current()
+	if err != nil {
+		panic("unable to determine current user: " + err.Error())
+	}
+
+	var (
+		uid  = u.Uid
+		home = u.HomeDir
+		sudo = os.Getenv("SUDO_USER")
+	)
+
+	// Only trust `SUDO_USER` env variable if we're currently running as root and,
+	// if set, use it to lookup the actual user that ran the sudo command.
+	if u.Uid == "0" && sudo != "" {
+		u, err := user.Lookup(sudo)
+		if err != nil {
+			panic("unable to lookup sudo user: " + err.Error())
+		}
+
+		// `uid` and `home` will now reflect the user ID and home directory of the
+		// actual user that ran the sudo command.
+		uid = u.Uid
+		home = u.HomeDir
+	}
+
+	return uid, home
 }
