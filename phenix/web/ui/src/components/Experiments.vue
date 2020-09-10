@@ -19,14 +19,19 @@
               </option>
             </b-select>
           </b-field>
-          <b-field v-if="createModal.showScenarios" label="Scenarios">
-            <b-select v-if="createModal.showScenarios" v-model="createModal.scenario" expanded placeholder="Not Selected">
-              <option value="">None</option>
+          <b-tooltip label="a scenario is a collection of user app configurations for a topology 
+                           and they are optional" 
+                           type="is-light is-right" 
+                           multilined>
+            <b-field v-if="createModal.showScenarios" label="Scenarios"></b-field>
+            <b-icon v-if="createModal.showScenarios" icon="question-circle" style="color:#383838"></b-icon>
+          </b-tooltip>
+            <b-select v-if="createModal.showScenarios" v-model="createModal.scenario" expanded placeholder="None">
               <option v-for="( a, s ) in createModal.scenarios" :key="s" :value="s">
                 {{ s }}
               </option>
             </b-select>
-          </b-field>
+          <br>
           <b-taglist>
             <b-tag v-for="( a, index ) in createModal.scenarios[createModal.scenario]" 
                   :key="index" 
@@ -137,6 +142,9 @@
             <b-table-column field="topology" label="Topology" width="200">
               {{ props.row.topology | lowercase }}
             </b-table-column>
+            <!-- <b-table-column field="scenario" label="Scenario" width="200">
+              {{ props.row.scenario | stringify | lowercase }}
+            </b-table-column> -->
             <b-table-column field="apps" label="Applications" width="200">
               {{ props.row.apps | stringify | lowercase }}
             </b-table-column>
@@ -415,6 +423,9 @@
           response => {
             response.json().then( state => {
               this.experiments = state.experiments;
+
+              console.log(this.experiments);
+
               this.isWaiting = false;
             });
           }, response => {

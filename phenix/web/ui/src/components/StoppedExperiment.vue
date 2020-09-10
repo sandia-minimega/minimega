@@ -25,6 +25,29 @@
         <h3>Experiment: {{ this.$route.params.id }}</h3>
       </p>
     </b-field>
+    <b-field v-if="experiment.scenario" position="is-left">
+      <p class="control">
+        <h3 v-if="experiment.scenario">Scenario: {{ experiment.scenario }}</h3>
+        <b-taglist v-if="experiment.scenario">
+          <b-tag v-for="( a, index ) in experiment.apps" 
+                  :key="index" 
+                  type="is-light">
+            {{ a }}  
+          </b-tag>
+        </b-taglist>
+      </p>
+    </b-field>
+    <b-field v-if="experiment.scenario" position="is-left">
+      <p class="control">
+        <b-taglist v-if="experiment.scenario">
+          <b-tag v-for="( a, index ) in experiment.apps" 
+                  :key="index" 
+                  type="is-light">
+            {{ a }}  
+          </b-tag>
+        </b-taglist>
+      </p>
+    </b-field>
     <b-field v-if="experimentUser() || experimentViewer()" position="is-right">
       <b-autocomplete
         v-model="searchName"
