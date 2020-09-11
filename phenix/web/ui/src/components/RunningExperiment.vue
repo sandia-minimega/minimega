@@ -220,11 +220,11 @@
         </button>
       </p>
       &nbsp; &nbsp;
-      <p class="control buttons">
+      <p class="control">
         <b-button v-if="adminUser()" class="button is-danger" slot="trigger" icon-right="stop" @click="stop"></b-button>
       </p>
     </b-field>
-    <div>
+    <div style="margin-top: -4em;">
       <b-tabs @change="updateFiles">
         <b-tab-item label="Table">
           <b-table

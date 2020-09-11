@@ -51,7 +51,7 @@
         </button>
       </p>
       &nbsp; &nbsp;
-      <p class="control buttons">
+      <p class="control">
         <b-button v-if="adminUser()" class="button is-success" slot="trigger" icon-right="play" @click="start"></b-button>
       </p>
       &nbsp; &nbsp;
@@ -68,7 +68,7 @@
         </b-tooltip>
       </p>  
     </b-field>
-    <div style="margin-top: -5em;">
+    <div style="margin-top: -4em;">
       <b-tabs @change="updateFiles">
         <b-tab-item label="Table">
           <b-table

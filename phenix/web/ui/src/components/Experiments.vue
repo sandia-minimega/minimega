@@ -90,7 +90,7 @@
           </b-tooltip>
         </p>
       </b-field>
-      <div>
+      <div style="margin-top: -1em;">
         <b-table
           :data="filteredExperiments"
           :paginated="table.isPaginated && paginationNeeded"
@@ -142,9 +142,9 @@
             <b-table-column field="topology" label="Topology" width="200">
               {{ props.row.topology | lowercase }}
             </b-table-column>
-            <!-- <b-table-column field="scenario" label="Scenario" width="200">
-              {{ props.row.scenario | stringify | lowercase }}
-            </b-table-column> -->
+            <b-table-column field="scenario" label="Scenario" width="200">
+              {{ props.row.scenario | lowercase }}
+            </b-table-column>
             <!-- <b-table-column field="apps" label="Applications" width="200">
               {{ props.row.apps | stringify | lowercase }}
             </b-table-column> -->
