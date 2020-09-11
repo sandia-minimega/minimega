@@ -842,9 +842,6 @@
           let state = await resp.json();
 
           this.experiment  = state;
-
-          console.log(this.experiment);
-
           this.search.vms  = state.vms.map( vm => { return vm.name } );
           this.table.total = state.vm_count;
 
