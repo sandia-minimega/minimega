@@ -1,5 +1,6 @@
 #!/bin/bash
 
+MODULE="github.com/sandia-minimega/minimega"
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 . $SCRIPT_DIR/env.bash
@@ -12,15 +13,18 @@ echo "package version
 var (
 	Revision = \"$VERSION\"
 	Date     = \"$DATE\"
-)" > $SCRIPT_DIR/src/version/version.go
+)" > $SCRIPT_DIR/internal/version/version.go
+
+DIRECTORY_ARRAY=("$SCRIPT_DIR/cmd $SCRIPT_DIR/internal $SCRIPT_DIR/pkg")
 
 # testing
 echo "TESTING"
-for i in `ls $SCRIPT_DIR/src | grep -v vendor | grep -v plumbing`
-do
-	go test $i
-	if [[ $? != 0 ]]; then
-		exit 1
-	fi
+for i in ${DIRECTORY_ARRAY[@]}; do
+    for j in `ls $i | grep -v vendor | grep -v plumbing`
+    do
+        go test $i/$j
+        if [[ $? != 0 ]]; then
+            exit 1
+        fi
+    done
 done
-echo
