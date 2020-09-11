@@ -84,7 +84,7 @@ func init() {
 		os.MkdirAll("/etc/phenix", 0755)
 		os.MkdirAll("/var/log/phenix", 0755)
 
-		rootCmd.PersistentFlags().StringVar(&storeEndpoint, "store.endpoint", "/etc/phenix/store.bdb", "endpoint for storage service")
+		rootCmd.PersistentFlags().StringVar(&storeEndpoint, "store.endpoint", fmt.Sprintf("bolt:///etc/phenix/store.bdb"), "endpoint for storage service")
 		rootCmd.PersistentFlags().StringVar(&errFile, "log.error-file", "/var/log/phenix/error.log", "log fatal errors to file")
 	} else {
 		rootCmd.PersistentFlags().StringVar(&storeEndpoint, "store.endpoint", fmt.Sprintf("bolt://%s/.phenix.bdb", home), "endpoint for storage service")
