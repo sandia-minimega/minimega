@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+    log "minilog"
 )
 
 // Register a callback to a connection and event code. A callback is a function
@@ -33,11 +34,11 @@ func (irc *Connection) RemoveCallback(eventcode string, i int) bool {
 			delete(irc.events[eventcode], i)
 			return true
 		}
-		irc.Log.Printf("Event found, but no callback found at id %d\n", i)
+		log.Debug("Event found, but no callback found at id %d\n", i)
 		return false
 	}
 
-	irc.Log.Println("Event not found")
+	log.Debugln("Event not found")
 	return false
 }
 
@@ -51,7 +52,7 @@ func (irc *Connection) ClearCallback(eventcode string) bool {
 		return true
 	}
 
-	irc.Log.Println("Event not found")
+	log.Debugln("Event not found")
 	return false
 }
 
@@ -64,9 +65,9 @@ func (irc *Connection) ReplaceCallback(eventcode string, i int, callback func(*E
 			event[i] = callback
 			return
 		}
-		irc.Log.Printf("Event found, but no callback found at id %d\n", i)
+		log.Debug("Event found, but no callback found at id %d\n", i)
 	}
-	irc.Log.Printf("Event not found. Use AddCallBack\n")
+	log.Debug("Event not found. Use AddCallBack\n")
 }
 
 // Execute all callbacks associated with a given event.
@@ -78,7 +79,7 @@ func (irc *Connection) RunCallbacks(event *Event) {
 		if i := strings.LastIndex(msg, "\x01"); i > 0 {
 			msg = msg[1:i]
 		} else {
-			irc.Log.Printf("Invalid CTCP Message: %s\n", strconv.Quote(msg))
+			log.Debug("Invalid CTCP Message: %s\n", strconv.Quote(msg))
 			return
 		}
 
@@ -111,19 +112,19 @@ func (irc *Connection) RunCallbacks(event *Event) {
 
 	if callbacks, ok := irc.events[event.Code]; ok {
 		if irc.VerboseCallbackHandler {
-			irc.Log.Printf("%v (%v) >> %#v\n", event.Code, len(callbacks), event)
+			log.Debug("%v (%v) >> %#v\n", event.Code, len(callbacks), event)
 		}
 
 		for _, callback := range callbacks {
 			callback(event)
 		}
 	} else if irc.VerboseCallbackHandler {
-		irc.Log.Printf("%v (0) >> %#v\n", event.Code, event)
+		log.Debug("%v (0) >> %#v\n", event.Code, event)
 	}
 
 	if callbacks, ok := irc.events["*"]; ok {
 		if irc.VerboseCallbackHandler {
-			irc.Log.Printf("%v (0) >> %#v\n", event.Code, event)
+			log.Debug("%v (0) >> %#v\n", event.Code, event)
 		}
 
 		for _, callback := range callbacks {
@@ -184,7 +185,7 @@ func (irc *Connection) setupCallbacks() {
 		ns, _ := strconv.ParseInt(e.Message(), 10, 64)
 		delta := time.Duration(time.Now().UnixNano() - ns)
 		if irc.Debug {
-			irc.Log.Printf("Lag: %.3f s\n", delta.Seconds())
+			log.Debug("Lag: %.3f s\n", delta.Seconds())
 		}
 	})
 

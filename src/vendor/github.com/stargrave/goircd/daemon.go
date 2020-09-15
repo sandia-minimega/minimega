@@ -21,7 +21,7 @@ package goircd
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
+	log "minilog"
 	"net"
 	"regexp"
 	"sort"
@@ -48,6 +48,14 @@ var (
 	roomSinks  map[*Room]chan ClientEvent = make(map[*Room]chan ClientEvent)
 )
 
+var (
+    HitFunc func()
+)
+
+func HitCallback(fn func()) {
+    HitFunc = fn
+}
+
 func SendLusers(client *Client) {
 	lusers := 0
 	clientsM.RLock()
@@ -67,7 +75,7 @@ func SendMotd(client *Client) {
 	}
 	motdText, err := ioutil.ReadFile(*motd)
 	if err != nil {
-		log.Printf("Can not read motd file %s: %v", *motd, err)
+		log.Debug("Can not read motd file %s: %v", *motd, err)
 		client.ReplyNicknamed("422", "Error reading MOTD File")
 		return
 	}
@@ -100,7 +108,7 @@ func SendWhois(client *Client, nicknames []string) {
 	Found:
 		hostPort, _, err = net.SplitHostPort(c.conn.RemoteAddr().String())
 		if err != nil {
-			log.Printf("Can't parse RemoteAddr %q: %v", hostPort, err)
+			log.Debug("Can't parse RemoteAddr %q: %v", hostPort, err)
 			hostPort = "Unknown"
 		}
 		client.ReplyNicknamed("311", *c.nickname, *c.username, hostPort, "*", *c.realname)
@@ -215,7 +223,7 @@ func ClientRegister(client *Client, cmd string, cols []string) {
 			}
 			contents, err := ioutil.ReadFile(*passwords)
 			if err != nil {
-				log.Fatalf("Can no read passwords file %s: %s", *passwords, err)
+				log.Fatal("Can no read passwords file %s: %s", *passwords, err)
 				return
 			}
 			for _, entry := range strings.Split(string(contents), "\n") {
@@ -236,7 +244,7 @@ func ClientRegister(client *Client, cmd string, cols []string) {
 		client.ReplyNicknamed("004", *hostname+" goircd o o")
 		SendLusers(client)
 		SendMotd(client)
-		log.Println(client, "logged in")
+		log.Debugln(client, "logged in")
 	}
 }
 
@@ -290,7 +298,7 @@ func HandlerJoin(client *Client, cmd string) {
 		}
 		roomsM.RUnlock()
 		roomNew, roomSink = RoomRegister(room)
-		log.Println("Room", roomNew, "created")
+		log.Debugln("Room", roomNew, "created")
 		if key != "" {
 			roomNew.key = &key
 			roomNew.StateSave()
@@ -314,12 +322,13 @@ func Processor(events chan ClientEvent, finished chan struct{}) {
 	for event := range events {
 		now = time.Now()
 		client := event.client
+        HitFunc()
 		switch event.eventType {
 		case EventTick:
 			clientsM.RLock()
 			for c := range clients {
 				if c.recvTimestamp.Add(PingTimeout).Before(now) {
-					log.Println(c, "ping timeout")
+					log.Debugln(c, "ping timeout")
 					c.Close()
 					continue
 				}
@@ -328,7 +337,7 @@ func Processor(events chan ClientEvent, finished chan struct{}) {
 						c.Msg("PING :" + *hostname)
 						c.sendTimestamp = time.Now()
 					} else {
-						log.Println(c, "ping timeout")
+						log.Debugln(c, "ping timeout")
 						c.Close()
 					}
 				}
@@ -337,7 +346,7 @@ func Processor(events chan ClientEvent, finished chan struct{}) {
 			roomsM.Lock()
 			for rn, r := range rooms {
 				if *statedir == "" && len(r.members) == 0 {
-					log.Println(rn, "emptied room")
+					log.Debugln(rn, "emptied room")
 					delete(rooms, rn)
 					close(roomSinks[r])
 					delete(roomSinks, r)
@@ -370,10 +379,10 @@ func Processor(events chan ClientEvent, finished chan struct{}) {
 			cols := strings.SplitN(event.text, " ", 2)
 			cmd := strings.ToUpper(cols[0])
 			if *verbose {
-				log.Println(client, "command", cmd)
+				log.Debugln(client, "command", cmd)
 			}
 			if cmd == "QUIT" {
-				log.Println(client, "quit")
+				log.Debugln(client, "quit")
 				client.Close()
 				continue
 			}

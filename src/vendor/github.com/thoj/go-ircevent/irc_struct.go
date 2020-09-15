@@ -6,7 +6,6 @@ package irc
 
 import (
 	"crypto/tls"
-	"log"
 	"net"
 	"sync"
 	"time"
@@ -44,7 +43,6 @@ type Connection struct {
 	lastMessage time.Time
 
 	VerboseCallbackHandler bool
-	Log                    *log.Logger
 
 	stopped bool
 	quit    bool //User called Quit, do not reconnect.

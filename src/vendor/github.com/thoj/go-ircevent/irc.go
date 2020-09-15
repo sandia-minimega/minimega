@@ -24,9 +24,8 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"log"
+	log "minilog"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -36,7 +35,15 @@ const (
 	VERSION = "go-ircevent v2.1"
 )
 
+var (
+    HitFunc func()
+)
+
 var ErrDisconnected = errors.New("Disconnect Called")
+
+func (irc *Connection) HitCallback(fn func()) {
+    HitFunc = fn
+}
 
 // Read data from a connection. To be used as a goroutine.
 func (irc *Connection) readLoop() {
@@ -71,7 +78,7 @@ func (irc *Connection) readLoop() {
 			}
 
 			if irc.Debug {
-				irc.Log.Printf("<-- %s\n", strings.TrimSpace(msg))
+				log.Debug("<-- %s\n", strings.TrimSpace(msg))
 			}
 
 			irc.Lock()
@@ -136,13 +143,14 @@ func (irc *Connection) writeLoop() {
 			}
 
 			if irc.Debug {
-				irc.Log.Printf("--> %s\n", strings.TrimSpace(b))
+				log.Debug("--> %s\n", strings.TrimSpace(b))
 			}
 
 			// Set a write deadline based on the time out
 			irc.socket.SetWriteDeadline(time.Now().Add(irc.Timeout))
 
 			_, err := irc.socket.Write([]byte(b))
+            HitFunc()
 
 			// Past blocking write, bin timeout
 			var zero time.Time
@@ -201,9 +209,9 @@ func (irc *Connection) Loop() {
 		close(irc.end)
 		irc.Wait()
 		for !irc.isQuitting() {
-			irc.Log.Printf("Error, disconnected: %s\n", err)
+			log.Debug("Error, disconnected: %s\n", err)
 			if err = irc.Reconnect(); err != nil {
-				irc.Log.Printf("Error while reconnecting: %s\n", err)
+				log.Debug("Error while reconnecting: %s\n", err)
 				time.Sleep(60 * time.Second)
 			} else {
 				errChan = irc.ErrorChan()
@@ -398,9 +406,6 @@ func (irc *Connection) Connect(server string) error {
 	if !((port >= 0) && (port <= 65535)) {
 		return errors.New("port number outside valid range")
 	}
-	if irc.Log == nil {
-		return errors.New("'Log' points to nil")
-	}
 	if len(irc.nick) == 0 {
 		return errors.New("empty 'nick'")
 	}
@@ -419,7 +424,7 @@ func (irc *Connection) Connect(server string) error {
 	}
 
 	irc.stopped = false
-	irc.Log.Printf("Connected to %s (%s)\n", irc.Server, irc.socket.RemoteAddr())
+	log.Debug("Connected to %s (%s)\n", irc.Server, irc.socket.RemoteAddr())
 
 	irc.pwrite = make(chan string, 10)
 	irc.Error = make(chan error, 2)
@@ -470,7 +475,6 @@ func IRC(nick, user string) *Connection {
 		nick:        nick,
 		nickcurrent: nick,
 		user:        user,
-		Log:         log.New(os.Stdout, "", log.LstdFlags),
 		end:         make(chan struct{}),
 		Version:     VERSION,
 		KeepAlive:   4 * time.Minute,

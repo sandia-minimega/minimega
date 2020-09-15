@@ -28,7 +28,7 @@ var (
 	f_ircport       = flag.String("ircport", "6667", "port to use for IRC client or server")
 	f_channels      = flag.String("channels", "#general,#random", "overwrite default IRC channels to join, seperated by commas")
 	f_messages      = flag.String("messages", "", "path to file containing IRC client messages to use")
-	f_markov        = flag.Bool("markov", true, "disable using markov chains")
+	f_markov        = flag.Bool("markov", true, "use markov chains")
 	f_httpCookies   = flag.Bool("httpcookies", false, "enable cookie jar in http/https clients")
 	f_httpUserAgent = flag.String("http-user-agent", "", "set a custom user-agent string")
 	f_ftp           = flag.Bool("ftp", false, "enable ftp service")

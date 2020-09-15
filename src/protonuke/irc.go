@@ -43,6 +43,10 @@ type Conversation struct {
 	counter   int
 }
 
+func updateIRCHitCount() {
+	ircReportChan <- 1
+}
+
 func ircClient() {
 	t := NewEventTicker(*f_mean, *f_stddev, *f_min, *f_max)
 	log.Debugln("ircClient")
@@ -66,6 +70,7 @@ func ircClient() {
 	host, original := randomHost()
 	nick := randomNick()
 	client := irc.IRC(nick, nick)
+	client.HitCallback(updateIRCHitCount)
 
 	// generate list of channels to join
 	n := 1
@@ -348,9 +353,13 @@ func ircClient() {
 
 	// connect
 	log.Debug("[nick %v] connecting to irc host %v from %v", client.GetNick(), host, original)
-	err := client.Connect(host + ":" + port)
-	if err != nil {
-		log.Fatal("%v", err)
+	for {
+		err := client.Connect(host + ":" + port)
+		if err == nil {
+			break
+		} else {
+			log.Error("%v", err)
+		}
 	}
 	client.Loop()
 }
@@ -358,6 +367,7 @@ func ircClient() {
 func ircServer() {
 	port := *f_ircport
 	settings := goircd.Settings{Hostname: "localhost", Bind: ":" + port, Motd: "", Logdir: "", Statedir: "", Passwords: "", TlsBind: "", TlsPEM: "", Verbose: false}
+	goircd.HitCallback(updateIRCHitCount)
 	goircd.SetSettings(settings)
 
 	events := make(chan goircd.ClientEvent)

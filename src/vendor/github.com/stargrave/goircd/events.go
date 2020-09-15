@@ -21,7 +21,7 @@ package goircd
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
+	log "minilog"
 	"os"
 	"path"
 	"time"
@@ -80,7 +80,7 @@ func Logger(logdir string, events <-chan LogEvent) {
 		logfile = path.Join(logdir, event.where+".log")
 		fd, err = os.OpenFile(logfile, mode, perm)
 		if err != nil {
-			log.Println("Can not open logfile", logfile, err)
+			log.Debugln("Can not open logfile", logfile, err)
 			continue
 		}
 		if event.meta {
@@ -91,7 +91,7 @@ func Logger(logdir string, events <-chan LogEvent) {
 		_, err = fd.WriteString(fmt.Sprintf(format, time.Now(), event.who, event.what))
 		fd.Close()
 		if err != nil {
-			log.Println("Error writing to logfile", logfile, err)
+			log.Debugln("Error writing to logfile", logfile, err)
 		}
 	}
 }
@@ -114,7 +114,7 @@ func StateKeeper(statedir string, events <-chan StateEvent) {
 		data = event.topic + "\n" + event.key + "\n"
 		err = ioutil.WriteFile(fn, []byte(data), os.FileMode(0660))
 		if err != nil {
-			log.Printf("Can not write statefile %s: %v", fn, err)
+			log.Debug("Can not write statefile %s: %v", fn, err)
 		}
 	}
 }
