@@ -3,6 +3,7 @@ package upgrade
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"phenix/types"
 	v0 "phenix/types/version/v0"
@@ -30,6 +31,19 @@ func (topology) Upgrade(version string, spec map[string]interface{}, md types.Co
 			topoV0 v0.TopologySpec
 			topoV1 v1.TopologySpec
 		)
+
+		nodeTypes := []string{
+			"provider",
+			"opc",
+			"hmi",
+			"scada-server",
+			"engineer-workstation",
+			"historian",
+			"elk",
+			"ignition",
+			"client",
+			"fep",
+		}
 
 		// Using WeakDecode here since v0 schema uses strings for some integer
 		// values.
@@ -62,12 +76,26 @@ func (topology) Upgrade(version string, spec map[string]interface{}, md types.Co
 
 		for _, node := range topoV0.Nodes {
 			if node.Metadata != nil {
-				host := v1.Host{
-					Hostname: node.General.Hostname,
-					Metadata: structs.MapWithOptions(node.Metadata, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty()),
-				}
+				md := structs.MapWithOptions(node.Metadata, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty())
 
-				app.Hosts = append(app.Hosts, host)
+				// Metadata might be empty if v0 topology contained metadata keys not
+				// recognized by v0.Metadata struct.
+				if len(md) > 0 {
+					md["type"] = "field-device"
+
+					for _, typ := range nodeTypes {
+						if strings.Contains(node.General.Hostname, typ) {
+							md["type"] = typ
+						}
+					}
+
+					host := v1.Host{
+						Hostname: node.General.Hostname,
+						Metadata: md,
+					}
+
+					app.Hosts = append(app.Hosts, host)
+				}
 			}
 		}
 

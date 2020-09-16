@@ -4,15 +4,15 @@ type Metadata struct {
 	Infrastructure       string       `json:"infrastructure" yaml:"infrastructure"`
 	Provider             string       `json:"provider" yaml:"provider"`
 	Simulator            string       `json:"simulator" yaml:"simulator"`
-	PublishEndpoint      string       `json:"publish_endpoint" yaml:"publish_endpoint"`
+	PublishEndpoint      string       `json:"publish_endpoint" yaml:"publish_endpoint" mapstructure:"publish_endpoint" structs:"publish_endpoint"`
 	CycleTime            string       `json:"cycle_time" yaml:"cycle_time"`
 	DNP3                 []DNP3       `json:"dnp3" yaml:"dnp3"`
-	DNP3Serial           []DNP3Serial `json:"dnp3-serial" yaml:"dnp3-serial"`
+	DNP3Serial           []DNP3Serial `json:"dnp3-serial" yaml:"dnp3-serial" mapstructure:"dnp3-serial" structs:"dnp3-serial"`
 	Modbus               []Modbus     `json:"modbus" yaml:"modbus"`
 	Logic                string       `json:"logic" yaml:"logic"`
-	ConnectedRTU         []string     `json:"connected_rtus" yaml:"connected_rtus"`
-	ConnectToSCADA       bool         `json:"connect_to_scada" yaml:"connect_to_scada"`
-	ManualRegisterConfig string       `json:"manual_register_config" yaml:"manual_register_config"`
+	ConnectedRTU         []string     `json:"connected_rtus" yaml:"connected_rtus" mapstructure:"connected_rtus" structs:"connected_rtus"`
+	ConnectToSCADA       bool         `json:"connect_to_scada" yaml:"connect_to_scada" mapstructure:"connect_to_scada" structs:"connect_to_scada"`
+	ManualRegisterConfig string       `json:"manual_register_config" yaml:"manual_register_config" mapstructure:"manual_register_config" structs:"manual_register_config"`
 }
 
 type DNP3 struct {
