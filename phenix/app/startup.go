@@ -3,7 +3,7 @@ package app
 import (
 	"fmt"
 	"os"
-
+	"path/filepath"
 	"phenix/internal/common"
 	"phenix/tmpl"
 	"phenix/types"
@@ -110,8 +110,14 @@ func (this Startup) PreStart(exp *types.Experiment) error {
 	}
 
 	for _, node := range exp.Spec.Topology.Nodes {
+		//Check if user provided an absolute path to image
+		//If not provide default path /phenix/images/
+		imagePath := node.Hardware.Drives[0].Image
+		if !filepath.IsAbs(node.Hardware.Drives[0].Image) {
+			imagePath = imageDir + imagePath
+		}
 		// check if the disk image is present, if not set do not boot to true
-		if _, err := os.Stat(imageDir + node.Hardware.Drives[0].Image); os.IsNotExist(err) {
+		if _, err := os.Stat(imagePath); os.IsNotExist(err) {
 			dnb := true
 			node.General.DoNotBoot = &dnb
 		}
