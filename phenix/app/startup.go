@@ -66,10 +66,12 @@ func (this *Startup) Configure(exp *types.Experiment) error {
 				a := &v1.Injection{
 					Src: hostnameFile,
 					Dst: "/etc/phenix/startup/1_hostname-start.sh",
+					Permissions: "0755",
 				}
 				b := &v1.Injection{
 					Src: timezoneFile,
 					Dst: "/etc/phenix/startup/2_timezone-start.sh",
+					Permissions: "0755",
 				}
 				c := &v1.Injection{
 					Src: ifaceFile,
@@ -87,10 +89,12 @@ func (this *Startup) Configure(exp *types.Experiment) error {
 			a := &v1.Injection{
 				Src: startupFile,
 				Dst: "startup.ps1",
+				Permissions: "0755",
 			}
 			b := &v1.Injection{
 				Src: schedFile,
 				Dst: "ProgramData/Microsoft/Windows/Start Menu/Programs/StartUp/startup_scheduler.cmd",
+				Permissions: "0755",
 			}
 
 			node.Injections = append(node.Injections, a, b)

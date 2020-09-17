@@ -3,6 +3,8 @@ package v1
 import (
 	"fmt"
 	"strings"
+	"strconv"
+	"os"
 )
 
 type VMType string
@@ -71,6 +73,7 @@ type Injection struct {
 	Src         string `json:"src" yaml:"src"`
 	Dst         string `json:"dst" yaml:"dst"`
 	Description string `json:"description" yaml:"description"`
+	Permissions string `json:"permissions" ymal:"permissions"`
 }
 
 func (this *Node) SetDefaults() {
@@ -114,8 +117,13 @@ func (this Node) FileInjects(basedir string) string {
 		} else {
 			injects[i] = fmt.Sprintf(`"%s/%s":"%s"`, basedir, inject.Src, inject.Dst)
 		}
+		if inject.Permissions == "" || len(inject.Permissions) > 4 {
+			inject.Permissions = "0664"
+		}
+		perms,_ := strconv.ParseInt(inject.Permissions,8,64)
+		err :=  os.Chmod(inject.Src,os.FileMode(perms))
+		fmt.Println("File %s injected to $s with permissions %s i: %v",inject.Src,inject.Dst,inject.Permissions,err)
 	}
-
 	return strings.Join(injects, " ")
 }
 

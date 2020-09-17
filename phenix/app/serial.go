@@ -46,6 +46,7 @@ func (Serial) Configure(exp *types.Experiment) error {
 			a := &v1.Injection{
 				Src:         serialFile,
 				Dst:         "/etc/phenix/serial-startup.bash",
+				Permissions:	"0755",
 				Description: "",
 			}
 

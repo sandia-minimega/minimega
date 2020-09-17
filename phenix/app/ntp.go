@@ -54,6 +54,7 @@ func (this *NTP) Configure(exp *types.Experiment) error {
 			a := &v1.Injection{
 				Src:         ntpFile,
 				Dst:         "ntp.ps1",
+				Permissions:	"0755",
 				Description: "",
 			}
 

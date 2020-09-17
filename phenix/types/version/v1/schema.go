@@ -419,10 +419,11 @@ components:
                 title: Destination Location to Inject File To
                 minLength: 1
                 example: sceptre/ACTIVSg2000.PWB
-              description:
-                type: string
-                title: Description of File Being Injected
                 example: PowerWorld case binary data
+              permissions:
+                type: string
+                title: Injected file permissions (UNIX style)
+                example: 0664
     iface:
       type: object
       required:
