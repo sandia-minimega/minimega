@@ -26,7 +26,6 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "phenix",
 	Short: "A cli application for phēnix",
-	// Version: version.Version,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		common.PhenixBase = viper.GetString("base-dir.phenix")
 		common.MinimegaBase = viper.GetString("base-dir.minimega")
@@ -54,7 +53,6 @@ var rootCmd = &cobra.Command{
 	},
 	PersistentPostRunE: func(cmd *cobra.Command, args []string) error {
 		util.CloseLogWriter()
-		viper.WriteConfigAs("/tmp/phenix.yml")
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {

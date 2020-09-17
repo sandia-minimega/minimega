@@ -5,9 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os/exec"
 
+	"phenix/internal/common"
+	"phenix/scheduler"
 	"phenix/types"
 	"phenix/util/shell"
+)
+
+const (
+	EXIT_SCHEDULE int = 300
 )
 
 var ErrUserAppNotFound = errors.New("user app not found")
@@ -81,10 +88,32 @@ func (this UserApp) shellOut(action Action, exp *types.Experiment) error {
 		shell.Command(cmdName),
 		shell.Args(string(action)),
 		shell.Stdin(data),
+		shell.Env( // TODO: update to reflect options provided by user
+			"PHENIX_LOG_LEVEL=DEBUG",
+			"PHENIX_LOG_FILE=/tmp/phenix-apps.log",
+			"PHENIX_DIR="+common.PhenixBase,
+		),
 	}
 
 	stdOut, stdErr, err := shell.ExecCommand(context.Background(), opts...)
 	if err != nil {
+		var exitErr *exec.ExitError
+
+		// The user app returned a non-zero exit status, so see if it matches any of
+		// our special exit codes and handle accordingly.
+		if errors.As(err, &exitErr) {
+			switch exitErr.ExitCode() {
+			case EXIT_SCHEDULE:
+				sched := string(stdOut)
+
+				if err := scheduler.Schedule(sched, exp.Spec); err != nil {
+					return fmt.Errorf("scheduling experiment with %s: %w", sched, err)
+				}
+
+				return this.shellOut(action, exp)
+			}
+		}
+
 		// FIXME: improve on this
 		fmt.Printf(string(stdErr))
 

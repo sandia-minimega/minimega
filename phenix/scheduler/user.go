@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"phenix/internal/common"
 	v1 "phenix/types/version/v1"
 	"phenix/util/shell"
 )
@@ -49,6 +50,11 @@ func (this userScheduler) shellOut(spec *v1.ExperimentSpec) error {
 	opts := []shell.Option{
 		shell.Command(cmdName),
 		shell.Stdin(data),
+		shell.Env( // TODO: update to reflect options provided by user
+			"PHENIX_LOG_LEVEL=DEBUG",
+			"PHENIX_LOG_FILE=/tmp/phenix-apps.log",
+			"PHENIX_DIR="+common.PhenixBase,
+		),
 	}
 
 	stdOut, stdErr, err := shell.ExecCommand(context.Background(), opts...)
