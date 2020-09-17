@@ -33,16 +33,24 @@ func (topology) Upgrade(version string, spec map[string]interface{}, md types.Co
 		)
 
 		nodeTypes := []string{
-			"provider",
-			"opc",
-			"hmi",
-			"scada-server",
-			"engineer-workstation",
-			"historian",
-			"elk",
-			"ignition",
 			"client",
+			"data-concentrator",
+			"elk",
+			"engineer-workstation",
 			"fep",
+			"historian",
+			"hmi",
+			"opc",
+			"provider",
+			"scada-server",
+		}
+
+		elkNodes := []string{
+			"fep",
+			"plc",
+			"provier",
+			"relay",
+			"rtu",
 		}
 
 		// Using WeakDecode here since v0 schema uses strings for some integer
@@ -81,12 +89,30 @@ func (topology) Upgrade(version string, spec map[string]interface{}, md types.Co
 				// Metadata might be empty if v0 topology contained metadata keys not
 				// recognized by v0.Metadata struct.
 				if len(md) > 0 {
+					// Default type if no other node types defined above match.
 					md["type"] = "field-device"
+					var labels []string
 
-					for _, typ := range nodeTypes {
-						if strings.Contains(node.General.Hostname, typ) {
-							md["type"] = typ
+					for _, t := range nodeTypes {
+						if strings.Contains(node.General.Hostname, t) {
+							md["type"] = t
+							break
 						}
+					}
+
+					for _, e := range elkNodes {
+						if strings.Contains(node.General.Hostname, e) {
+							labels = append(labels, "elk")
+							break
+						}
+					}
+
+					if strings.Contains(node.General.Hostname, "ignition") {
+						labels = append(labels, "ignition")
+					}
+
+					if labels != nil {
+						md["labels"] = labels
 					}
 
 					host := v1.Host{
