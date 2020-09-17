@@ -106,6 +106,8 @@ func (this *Node) SetDefaults() {
 	if this.Hardware.OSType == OSType_NotSet {
 		this.Hardware.OSType = OSType_Linux
 	}
+
+	this.Network.SetDefaults()
 }
 
 func (this Node) FileInjects(baseDir string) string {

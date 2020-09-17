@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"phenix/internal/common"
+	"phenix/internal/mm"
 	v1 "phenix/types/version/v1"
 	"phenix/util/shell"
 )
@@ -42,7 +43,20 @@ func (this userScheduler) shellOut(spec *v1.ExperimentSpec) error {
 		return fmt.Errorf("external user scheduler %s does not exist in your path: %w", cmdName, ErrUserSchedulerNotFound)
 	}
 
-	data, err := json.Marshal(spec)
+	cluster, err := mm.GetClusterHosts()
+	if err != nil {
+		return fmt.Errorf("getting cluster hosts: %w", err)
+	}
+
+	exp := struct {
+		Spec  *v1.ExperimentSpec `json:"spec"`
+		Hosts mm.Hosts           `json:"hosts"`
+	}{
+		Spec:  spec,
+		Hosts: cluster,
+	}
+
+	data, err := json.Marshal(exp)
 	if err != nil {
 		return fmt.Errorf("marshaling experiment spec to JSON: %w", err)
 	}
@@ -65,9 +79,11 @@ func (this userScheduler) shellOut(spec *v1.ExperimentSpec) error {
 		return fmt.Errorf("user scheduler %s command %s failed: %w", this.options.Name, cmdName, err)
 	}
 
-	if err := json.Unmarshal(stdOut, spec); err != nil {
+	if err := json.Unmarshal(stdOut, &exp); err != nil {
 		return fmt.Errorf("unmarshaling experiment spec from JSON: %w", err)
 	}
+
+	spec.Schedules = exp.Spec.Schedules
 
 	return nil
 }

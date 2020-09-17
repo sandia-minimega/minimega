@@ -21,6 +21,7 @@ type Interface struct {
 	BaudRate   int    `json:"baud_rate" yaml:"baud_rate" mapstructure:"baud_rate"`
 	Device     string `json:"device" yaml:"device"`
 	VLAN       string `json:"vlan" yaml:"vlan"`
+	Bridge     string `json:"bridge" yaml:"bridge"`
 	Autostart  bool   `json:"autostart" yaml:"autostart"`
 	MAC        string `json:"mac" yaml:"mac"`
 	MTU        int    `json:"mtu" yaml:"mtu"`
@@ -75,11 +76,20 @@ type AddrPort struct {
 	Port    int    `json:"port" yaml:"port"`
 }
 
+func (this *Network) SetDefaults() {
+	for idx, iface := range this.Interfaces {
+		if iface.Bridge == "" {
+			iface.Bridge = "phenix"
+			this.Interfaces[idx] = iface
+		}
+	}
+}
+
 func (this Network) InterfaceConfig() string {
 	configs := make([]string, len(this.Interfaces))
 
 	for i, iface := range this.Interfaces {
-		config := []string{iface.VLAN}
+		config := []string{iface.Bridge, iface.VLAN}
 
 		if iface.MAC != "" {
 			config = append(config, iface.MAC)

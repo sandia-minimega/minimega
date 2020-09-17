@@ -454,6 +454,10 @@ components:
           title: Interface MTU
           default: 1500
           example: 1500
+        bridge:
+          type: string
+          title: OpenVSwitch Bridge
+          default: phenix
     iface_address:
       type: object
       required:
