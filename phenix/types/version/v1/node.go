@@ -2,9 +2,9 @@ package v1
 
 import (
 	"fmt"
-	"strings"
-	"strconv"
 	"os"
+	"strconv"
+	"strings"
 )
 
 type VMType string
@@ -73,7 +73,7 @@ type Injection struct {
 	Src         string `json:"src" yaml:"src"`
 	Dst         string `json:"dst" yaml:"dst"`
 	Description string `json:"description" yaml:"description"`
-	Permissions string `json:"permissions" ymal:"permissions"`
+	Permissions string `json:"permissions" yaml:"permissions"`
 }
 
 func (this *Node) SetDefaults() {
@@ -108,22 +108,25 @@ func (this *Node) SetDefaults() {
 	}
 }
 
-func (this Node) FileInjects(basedir string) string {
+func (this Node) FileInjects(baseDir string) string {
 	injects := make([]string, len(this.Injections))
 
 	for i, inject := range this.Injections {
 		if strings.HasPrefix(inject.Src, "/") {
 			injects[i] = fmt.Sprintf(`"%s":"%s"`, inject.Src, inject.Dst)
 		} else {
-			injects[i] = fmt.Sprintf(`"%s/%s":"%s"`, basedir, inject.Src, inject.Dst)
+			injects[i] = fmt.Sprintf(`"%s/%s":"%s"`, baseDir, inject.Src, inject.Dst)
 		}
-		if inject.Permissions == "" || len(inject.Permissions) > 4 {
-			inject.Permissions = "0664"
+
+		if inject.Permissions != "" && len(inject.Permissions) <= 4 {
+			if perms, err := strconv.ParseInt(inject.Permissions, 8, 64); err == nil {
+				// Update file permissions on local disk before it gets injected into
+				// disk image.
+				os.Chmod(inject.Src, os.FileMode(perms))
+			}
 		}
-		perms,_ := strconv.ParseInt(inject.Permissions,8,64)
-		err :=  os.Chmod(inject.Src,os.FileMode(perms))
-		fmt.Println("File %s injected to $s with permissions %s i: %v",inject.Src,inject.Dst,inject.Permissions,err)
 	}
+
 	return strings.Join(injects, " ")
 }
 
