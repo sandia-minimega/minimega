@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
 	"phenix/internal/common"
 	"phenix/tmpl"
 	"phenix/types"
@@ -64,13 +65,13 @@ func (this *Startup) Configure(exp *types.Experiment) error {
 				)
 
 				a := &v1.Injection{
-					Src: hostnameFile,
-					Dst: "/etc/phenix/startup/1_hostname-start.sh",
+					Src:         hostnameFile,
+					Dst:         "/etc/phenix/startup/1_hostname-start.sh",
 					Permissions: "0755",
 				}
 				b := &v1.Injection{
-					Src: timezoneFile,
-					Dst: "/etc/phenix/startup/2_timezone-start.sh",
+					Src:         timezoneFile,
+					Dst:         "/etc/phenix/startup/2_timezone-start.sh",
 					Permissions: "0755",
 				}
 				c := &v1.Injection{
@@ -87,13 +88,13 @@ func (this *Startup) Configure(exp *types.Experiment) error {
 			)
 
 			a := &v1.Injection{
-				Src: startupFile,
-				Dst: "startup.ps1",
+				Src:         startupFile,
+				Dst:         "startup.ps1",
 				Permissions: "0755",
 			}
 			b := &v1.Injection{
-				Src: schedFile,
-				Dst: "ProgramData/Microsoft/Windows/Start Menu/Programs/StartUp/startup_scheduler.cmd",
+				Src:         schedFile,
+				Dst:         "ProgramData/Microsoft/Windows/Start Menu/Programs/StartUp/startup_scheduler.cmd",
 				Permissions: "0755",
 			}
 
@@ -114,12 +115,14 @@ func (this Startup) PreStart(exp *types.Experiment) error {
 	}
 
 	for _, node := range exp.Spec.Topology.Nodes {
-		//Check if user provided an absolute path to image
-		//If not provide default path /phenix/images/
+		// Check if user provided an absolute path to image. If not, prepend path
+		// with default image path.
 		imagePath := node.Hardware.Drives[0].Image
-		if !filepath.IsAbs(node.Hardware.Drives[0].Image) {
+
+		if !filepath.IsAbs(imagePath) {
 			imagePath = imageDir + imagePath
 		}
+
 		// check if the disk image is present, if not set do not boot to true
 		if _, err := os.Stat(imagePath); os.IsNotExist(err) {
 			dnb := true
