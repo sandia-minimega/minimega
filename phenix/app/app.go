@@ -16,8 +16,6 @@ func init() {
 	apps["startup"] = new(Startup)
 	apps["user-shell"] = new(UserApp)
 	apps["vyatta"] = new(Vyatta)
-
-	defaultApps = []string{"ntp", "serial", "startup", "vyatta"}
 }
 
 // Action represents the different experiment lifecycle hooks.
@@ -31,8 +29,14 @@ const (
 )
 
 var (
-	apps        = make(map[string]App)
-	defaultApps []string
+	apps = make(map[string]App)
+
+	defaultApps = map[string]struct{}{
+		"ntp":     struct{}{},
+		"serial":  struct{}{},
+		"startup": struct{}{},
+		"vyatta":  struct{}{},
+	}
 )
 
 // List returns a list of non-default phenix applications.
@@ -45,19 +49,12 @@ func List() []string {
 			continue
 		}
 
-		var exclude bool
-
 		// Don't include default apps in the list since they always get applied.
-		for _, d := range defaultApps {
-			if name == d {
-				exclude = true
-				break
-			}
+		if _, ok := defaultApps[name]; ok {
+			continue
 		}
 
-		if !exclude {
-			names = append(names, name)
-		}
+		names = append(names, name)
 	}
 
 	for _, name := range shell.FindCommandsWithPrefix("phenix-app-") {
@@ -82,10 +79,10 @@ func GetApp(name string) App {
 
 // DefaultApps returns a slice of all the initialized default phenix apps.
 func DefaultApps() []App {
-	a := make([]App, len(defaultApps))
+	var a []App
 
-	for i, app := range defaultApps {
-		a[i] = GetApp(app)
+	for app := range defaultApps {
+		a = append(a, apps[app])
 	}
 
 	return a
@@ -157,6 +154,11 @@ func ApplyApps(action Action, exp *types.Experiment) error {
 
 	if exp.Spec.Scenario != nil && exp.Spec.Scenario.Apps != nil {
 		for _, e := range exp.Spec.Scenario.Apps.Experiment {
+			// Don't apply default apps again if configured via the Scenario.
+			if _, ok := defaultApps[e.Name]; ok {
+				continue
+			}
+
 			a := GetApp(e.Name)
 
 			switch action {
@@ -197,6 +199,11 @@ func ApplyApps(action Action, exp *types.Experiment) error {
 		}
 
 		for _, h := range exp.Spec.Scenario.Apps.Host {
+			// Don't apply default apps again if configured via the Scenario.
+			if _, ok := defaultApps[h.Name]; ok {
+				continue
+			}
+
 			a := GetApp(h.Name)
 
 			switch action {
