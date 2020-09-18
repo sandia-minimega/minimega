@@ -80,11 +80,26 @@ func (topology) Upgrade(version string, spec map[string]interface{}, md types.Co
 
 		results := []interface{}{topoV1}
 
-		app := v1.HostApp{Name: "sceptre"}
+		startupApp := v1.HostApp{Name: "startup"}
+		sceptreApp := v1.HostApp{Name: "sceptre"}
 
 		for _, node := range topoV0.Nodes {
 			if node.Metadata != nil {
 				md := structs.MapWithOptions(node.Metadata, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty())
+
+				if dc, ok := md["domain_controller"]; ok {
+					host := v1.Host{
+						Hostname: node.General.Hostname,
+						Metadata: map[string]interface{}{"domain_controller": dc},
+					}
+
+					startupApp.Hosts = append(startupApp.Hosts, host)
+
+					// Delete the domain controller metadata just in case there is SCEPTRE
+					// metadata also. This way, the domain controller metadata doesn't get
+					// included in the host metadata for the SCEPTRE app.
+					delete(md, "domain_controller")
+				}
 
 				// Metadata might be empty if v0 topology contained metadata keys not
 				// recognized by v0.Metadata struct.
@@ -120,15 +135,23 @@ func (topology) Upgrade(version string, spec map[string]interface{}, md types.Co
 						Metadata: md,
 					}
 
-					app.Hosts = append(app.Hosts, host)
+					sceptreApp.Hosts = append(sceptreApp.Hosts, host)
 				}
 			}
 		}
 
-		if len(app.Hosts) > 0 {
-			scenario := v1.ScenarioSpec{
-				Apps: &v1.Apps{Host: []v1.HostApp{app}},
+		if len(startupApp.Hosts) > 0 || len(sceptreApp.Hosts) > 0 {
+			apps := new(v1.Apps)
+
+			if len(startupApp.Hosts) > 0 {
+				apps.Host = append(apps.Host, startupApp)
 			}
+
+			if len(sceptreApp.Hosts) > 0 {
+				apps.Host = append(apps.Host, sceptreApp)
+			}
+
+			scenario := v1.ScenarioSpec{Apps: apps}
 
 			config, _ := types.NewConfig("scenario/" + md.Name)
 			config.Version = "phenix.sandia.gov/v1"

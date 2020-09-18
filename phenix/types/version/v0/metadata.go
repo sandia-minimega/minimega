@@ -13,6 +13,8 @@ type Metadata struct {
 	ConnectedRTU         []string     `json:"connected_rtus" yaml:"connected_rtus" mapstructure:"connected_rtus" structs:"connected_rtus"`
 	ConnectToSCADA       bool         `json:"connect_to_scada" yaml:"connect_to_scada" mapstructure:"connect_to_scada" structs:"connect_to_scada"`
 	ManualRegisterConfig string       `json:"manual_register_config" yaml:"manual_register_config" mapstructure:"manual_register_config" structs:"manual_register_config"`
+
+	DomainController DomainController `json:"domain_controller" yaml:"domain_controller" mapstructure:"domain_controller" structs:"domain_controller"`
 }
 
 type DNP3 struct {
@@ -43,4 +45,11 @@ type ReadWrite struct {
 	Field          string `json:"field" yaml:"field"`
 	RegisterNumber int    `json:"register_number" yaml:"register_number"`
 	RegisterType   string `json:"register_type" yaml:"register_type"`
+}
+
+type DomainController struct {
+	IP       string `json:"ip" yaml:"ip" mapstructure:"ip" structs:"ip"`
+	Domain   string `json:"domain" yaml:"domain" mapstructure:"domain" structs:"domain"`
+	Username string `json:"username" yaml:"username" mapstructure:"username" structs:"username"`
+	Password string `json:"password" yaml:"password" mapstructure:"password" structs:"password"`
 }
