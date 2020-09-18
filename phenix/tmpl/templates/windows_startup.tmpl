@@ -3,9 +3,9 @@ Import-Module C:\Windows\System32\UIAutomation.0.8.7B3.NET35\UIAutomation.dll
 Write-Output "Configuring network interfaces..."
 $wmi = gwmi win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"'
 
-{{ $length := len .Network.Interfaces }}
+{{ $length := len .Node.Network.Interfaces }}
 
-{{ range $idx, $iface := .Network.Interfaces }}
+{{ range $idx, $iface := .Node.Network.Interfaces }}
   {{ $mask := $iface.NetworkMask }}
 Do {
   {{ if gt $length 1 }}
@@ -23,6 +23,11 @@ $wmi[{{ $idx }}].SetGateways('{{ $iface.Gateway }}', 1) | Out-Null
 $wmi.SetGateways('{{ $iface.Gateway }}', 1) | Out-Null
     {{ end }}
   {{ end }}
+{{ end }}
+
+{{ if ne (index .Metadata "domain_controller") "" }}
+$adapters = Get-NetAdapter | sort -Property ifIndex
+Set-DnsClientServerAddress -InterfaceIndex $adapters[0].ifIndex -ServerAddresses "{{ index .Metadata "domain_controller" "ip" }}"
 {{ end }}
 
 Write-Output "Done."
@@ -46,17 +51,49 @@ Write-Output "Changing hostname."
 {{/* Is this Windows variable? */}}
 $host_name = hostname
 
-if (( $host_name -eq "{{ .General.Hostname }}" ) -or ("{{ .General.Hostname }} -like "*provider*")) {
+if ( $host_name -eq "{{ .Node.General.Hostname }}" ) {
+{{ if ne (index .Metadata "domain_controller") "" }}
+  $domain = "{{ index .Metadata "domain_controller" "domain" }}"
+  $username = "{{ index .Metadata "domain_controller" "username" }}"
+  $password = "{{ index .Metadata "domain_controller" "password" }}" | ConvertTo-SecureString -AsPlainText -Force
+  $credential = New-Object System.Management.Automation.PSCredential($username,$password)
+  $sysinfo = systeminfo /fo csv | ConvertFrom-Csv
+
+  if ($sysinfo.Domain.contains($domain.ToUpper())) {
+      Write-Output "Deleting startup script..."
+      While (Test-Path C:\startup.ps1) {
+          Start-Sleep -m 500
+          Remove-Item $MyInvocation.InvocationName
+      }
+      exit
+  }
+
+  Write-Output "Joining $domain domain"
+  Add-Computer -DomainName $domain -Credential $credential
+
+  Write-Output "Adding auto logon"
+  $path = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+
+  Set-ItemProperty -Path $path -Name DefaultUserName -Value $username
+  Set-ItemProperty -Path $path -Name DefaultPassword -Value {{ index .Metadata "domain_controller" "password" }}
+  Set-ItemProperty -Path $path -Name DefaultDomainName -Value $domain
+  Set-ItemProperty -Path $path -Name AutoAdminLogon -Value 1
+{{ end }}
+
   Write-Output "Deleting hostname script..."
   While (Test-Path C:\startup.ps1) {
     Start-Sleep -m 500
     Remove-Item $MyInvocation.InvocationName
   }
+{{ if ne (index .Metadata "domain_controller") "" }}
+  Write-Output "Domain joined..  Restarting..."
+  Restart-Computer
+{{ end }}
 } else {
   Write-Output "Changing hostname"
 
   $computer_info = Get-WmiObject -Class Win32_ComputerSystem
-  $computer_info.Rename("{{ .General.Hostname }}")
+  $computer_info.Rename("{{ .Node.General.Hostname }}")
 
   Write-Output "Deleting configuration script..."
 

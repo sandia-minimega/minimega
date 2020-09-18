@@ -163,9 +163,33 @@ func (this Startup) PreStart(exp *types.Experiment) error {
 				return fmt.Errorf("generating linux interfaces config: %w", err)
 			}
 		} else if node.Hardware.OSType == v1.OSType_Windows {
+			// Temporary struct to send to the Windows Startup template.
+			data := struct {
+				Node     *v1.Node
+				Metadata map[string]interface{}
+			}{
+				Node:     node,
+				Metadata: make(map[string]interface{}),
+			}
+
+			// Check to see if a scenario exists for this experiment and if it
+			// contains a "startup" host app. If so, see if this node has a metadata
+			// entry in the scenario app configuration.
+			if apps := exp.GetHostApps(); apps != nil {
+				for _, app := range apps {
+					if app.Name == "startup" {
+						for _, host := range app.Hosts {
+							if host.Hostname == node.General.Hostname {
+								data.Metadata = host.Metadata
+							}
+						}
+					}
+				}
+			}
+
 			startupFile := startupDir + "/" + node.General.Hostname + "-startup.ps1"
 
-			if err := tmpl.CreateFileFromTemplate("windows_startup.tmpl", node, startupFile); err != nil {
+			if err := tmpl.CreateFileFromTemplate("windows_startup.tmpl", data, startupFile); err != nil {
 				return fmt.Errorf("generating windows startup config: %w", err)
 			}
 
