@@ -25,7 +25,7 @@ $wmi.SetGateways('{{ $iface.Gateway }}', 1) | Out-Null
   {{ end }}
 {{ end }}
 
-{{ if ne (index .Metadata "domain_controller") "" }}
+{{ if .Metadata.domain_controller }}
 $adapters = Get-NetAdapter | sort -Property ifIndex
 Set-DnsClientServerAddress -InterfaceIndex $adapters[0].ifIndex -ServerAddresses "{{ index .Metadata "domain_controller" "ip" }}"
 {{ end }}
@@ -52,7 +52,7 @@ Write-Output "Changing hostname."
 $host_name = hostname
 
 if ( $host_name -eq "{{ .Node.General.Hostname }}" ) {
-{{ if ne (index .Metadata "domain_controller") "" }}
+{{ if .Metadata.domain_controller }}
   $domain = "{{ index .Metadata "domain_controller" "domain" }}"
   $username = "{{ index .Metadata "domain_controller" "username" }}"
   $password = "{{ index .Metadata "domain_controller" "password" }}" | ConvertTo-SecureString -AsPlainText -Force
@@ -85,7 +85,7 @@ if ( $host_name -eq "{{ .Node.General.Hostname }}" ) {
     Start-Sleep -m 500
     Remove-Item $MyInvocation.InvocationName
   }
-{{ if ne (index .Metadata "domain_controller") "" }}
+{{ if .Metadata.domain_controller }}
   Write-Output "Domain joined..  Restarting..."
   Restart-Computer
 {{ end }}
