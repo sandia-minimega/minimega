@@ -11,12 +11,14 @@ type Apps struct {
 
 type ExperimentApp struct {
 	Name     string                 `json:"name" yaml:"name"`
+	AssetDir string                 `json:"assetDir" yaml:"assetDir" structs:"assetDir" mapstructure:"assetDir"`
 	Metadata map[string]interface{} `json:"metadata" yaml:"metadata"`
 }
 
 type HostApp struct {
-	Name  string `json:"name" yaml:"name"`
-	Hosts []Host `json:"hosts" yaml:"hosts"`
+	Name     string `json:"name" yaml:"name"`
+	AssetDir string `json:"assetDir" yaml:"assetDir" structs:"assetDir" mapstructure:"assetDir"`
+	Hosts    []Host `json:"hosts" yaml:"hosts"`
 }
 
 type Host struct {
