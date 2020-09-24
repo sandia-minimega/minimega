@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"strconv"
-	"strings"
 
 	"phenix/api/vm"
 	"phenix/util"
@@ -31,7 +30,7 @@ func newVMInfoCmd() *cobra.Command {
   virtual machine name is optional, when included will display only that VM.`
 
 	cmd := &cobra.Command{
-		Use:   "info <experiment name>/<vm name>",
+		Use:   "info <experiment name> <vm name>",
 		Short: "Table of virtual machine(s)",
 		Long:  desc,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -39,11 +38,14 @@ func newVMInfoCmd() *cobra.Command {
 				return fmt.Errorf("Must provide an experiment name")
 			}
 
-			parts := strings.Split(args[0], "/")
+			var (
+				expName = args[0]
+				vmName  = args[1]
+			)
 
 			switch len(parts) {
 			case 1:
-				vms, err := vm.List(parts[0])
+				vms, err := vm.List(expName)
 				if err != nil {
 					err := util.HumanizeError(err, "Unable to get a list of VMs")
 					return err.Humanized()
@@ -51,9 +53,9 @@ func newVMInfoCmd() *cobra.Command {
 
 				util.PrintTableOfVMs(os.Stdout, vms...)
 			case 2:
-				vm, err := vm.Get(parts[0], parts[1])
+				vm, err := vm.Get(expName, vmName)
 				if err != nil {
-					err := util.HumanizeError(err, "Unable to get information for the "+parts[1]+" VM")
+					err := util.HumanizeError(err, "Unable to get information for the "+vmName+" VM")
 					return err.Humanized()
 				}
 
