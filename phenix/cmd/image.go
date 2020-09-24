@@ -368,7 +368,7 @@ func newImageRemoveCmd() *cobra.Command {
 func newImageUpdateCmd() *cobra.Command {
 	desc := `Update a script on an image configuration
 	
-  Used to remove scripts, packages, and/or overlays to an existing virtual disk 
+  Used to update scripts, packages, and/or overlays to an existing virtual disk 
   image configuration`
 
 	cmd := &cobra.Command{
