@@ -83,9 +83,9 @@ func newConfigListCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var kinds string
 
-			if len(args) < 1 {
-				return fmt.Errorf("Must include kind as argument of either: all, topology, scenario, experiment, or image")
-			}
+			// if len(args) < 1 {
+			// 	return fmt.Errorf("Must include kind as argument of either: all, topology, scenario, experiment, or image")
+			// }
 
 			if len(args) > 0 {
 				kinds = args[0]
