@@ -67,7 +67,12 @@ func newImageCreateCmd() *cobra.Command {
 	desc := `Create a disk image configuration
 
   Used to create a virtual disk image configuration from which to build 
-  an image`
+	an image.
+	
+	When specifying the --size option, the following units can be used:
+	
+	M - Megabytes
+	G - Gigabytes`
 
 	example := `
   phenix image create <image name>
@@ -81,8 +86,12 @@ func newImageCreateCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var img v1.Image
 
-			if len(args) < 1 {
+			if len(args) == 0 {
 				return fmt.Errorf("Must provide an image name")
+			} else if len(args) > 1 {
+				// This might happen if, for example, multiple overlays are provided to
+				// the overlays flag space-delimited instead of comma-delimited.
+				return fmt.Errorf("Must provide an image name as the only argument (check that you are using commas where required for flags)")
 			}
 
 			name := args[0]
@@ -105,6 +114,11 @@ func newImageCreateCmd() *cobra.Command {
 
 			if scripts := MustGetString(cmd.Flags(), "scripts"); scripts != "" {
 				img.ScriptPaths = strings.Split(scripts, ",")
+			}
+
+			units := img.Size[len(img.Size)-1:]
+			if units != "M" && units != "G" {
+				return fmt.Errorf("Must provide a valid unit for disk size option (e.g., '500M' or '10G')")
 			}
 
 			if err := image.Create(name, &img); err != nil {
