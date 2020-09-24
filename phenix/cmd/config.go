@@ -17,11 +17,11 @@ func configKindArgsValidator(multi, allowAll bool) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {
 		if multi {
 			if len(args) == 0 {
-				return fmt.Errorf("expects at least 1 arg(s), received 0")
+				return fmt.Errorf("Must provide at least one argument")
 			}
 		} else {
 			if narg := len(args); narg != 1 {
-				return fmt.Errorf("expects 1 arg(s), received %d", narg)
+				return fmt.Errorf("Expected a single argument, received %d", narg)
 			}
 		}
 
@@ -29,7 +29,7 @@ func configKindArgsValidator(multi, allowAll bool) cobra.PositionalArgs {
 			tokens := strings.Split(arg, "/")
 
 			if len(tokens) != 2 {
-				return fmt.Errorf("expects 1 arg(s) in the form of <config kind>/<config name>")
+				return fmt.Errorf("Expected an argument in the form of <config kind>/<config name>")
 			}
 
 			kinds := []string{"topology", "scenario", "experiment", "image", "user", "role"}
@@ -39,7 +39,7 @@ func configKindArgsValidator(multi, allowAll bool) cobra.PositionalArgs {
 			}
 
 			if kind := tokens[0]; !util.StringSliceContains(kinds, kind) {
-				return fmt.Errorf("expects config kind to be one of %v, received %s", kinds, kind)
+				return fmt.Errorf("Expects the configuration kind to be one of %v, received %s", kinds, kind)
 			}
 		}
 
@@ -189,8 +189,11 @@ func newConfigCreateCmd() *cobra.Command {
 		Use:   "create </path/to/filename> ...",
 		Short: "Create a configuration(s)",
 		Long:  desc,
-		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) > 0 {
+				return fmt.Errorf("Must provide at least one configuration file")
+			}
+
 			skip := MustGetBool(cmd.Flags(), "skip-validation")
 
 			for _, f := range args {
