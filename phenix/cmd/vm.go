@@ -38,14 +38,9 @@ func newVMInfoCmd() *cobra.Command {
 				return fmt.Errorf("Must provide an experiment name")
 			}
 
-			var (
-				expName = args[0]
-				vmName  = args[1]
-			)
-
-			switch len(parts) {
+			switch len(args) {
 			case 1:
-				vms, err := vm.List(expName)
+				vms, err := vm.List(args[0])
 				if err != nil {
 					err := util.HumanizeError(err, "Unable to get a list of VMs")
 					return err.Humanized()
@@ -53,9 +48,9 @@ func newVMInfoCmd() *cobra.Command {
 
 				util.PrintTableOfVMs(os.Stdout, vms...)
 			case 2:
-				vm, err := vm.Get(expName, vmName)
+				vm, err := vm.Get(args[0], args[1])
 				if err != nil {
-					err := util.HumanizeError(err, "Unable to get information for the "+vmName+" VM")
+					err := util.HumanizeError(err, "Unable to get information for the "+args[1]+" VM")
 					return err.Humanized()
 				}
 
