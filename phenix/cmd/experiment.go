@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"phenix/api/config"
 	"phenix/api/experiment"
 	"phenix/app"
@@ -95,29 +96,57 @@ func newExperimentSchedulersCmd() *cobra.Command {
 func newExperimentCreateCmd() *cobra.Command {
 	desc := `Create an experiment
 
-  Used to create an experiment from an existing configuration; can be a 
-  topology, or topology and scenario. (Optional are the arguments for scenario 
-  or base directory.)`
+  Used to create an experiment from existing configurations; can be a
+  topology, or topology and scenario, or paths to topology/scenario
+  configuration files (YAML or JSON). (Optional are the arguments for
+  scenario or base directory.)`
 
 	example := `
-  phenix experiment create <experiment name> -t <topology name>
-  phenix experiment create <experiment name> -t <topology name> -s <scenario name>
-  phenix experiment create <experiment name> -t <topology name> -s <scenario name> -d </path/to/dir/>`
+  phenix experiment create <experiment name> -t <topology name or /path/to/filename>
+  phenix experiment create <experiment name> -t <topology name or /path/to/filename> -s <scenario name or /path/to/filename>
+  phenix experiment create <experiment name> -t <topology name or /path/to/filename> -s <scenario name or /path/to/filename> -d </path/to/dir/>`
 
-	cmd := &cobra.Command{ //need to check args
+	cmd := &cobra.Command{
 		Use:     "create <experiment name>",
 		Short:   "Create an experiment",
 		Long:    desc,
 		Example: example,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 {
-				return fmt.Errorf("Must provide an experiment name") // this does not work because of topology requirement
+				return fmt.Errorf("Must provide an experiment name")
+			}
+
+			var (
+				topology = MustGetString(cmd.Flags(), "topology")
+				scenario = MustGetString(cmd.Flags(), "scenario")
+			)
+
+			if ext := filepath.Ext(topology); ext != "" {
+				c, err := config.Create(topology, true)
+				if err != nil {
+					err := util.HumanizeError(err, "Unable to create configuration from "+topology)
+					return err.Humanized()
+				}
+
+				topology = c.Metadata.Name
+			}
+
+			// If scenario is not provided, then ext will be an empty string, so the
+			// following won't be run.
+			if ext := filepath.Ext(scenario); ext != "" {
+				c, err := config.Create(scenario, true)
+				if err != nil {
+					err := util.HumanizeError(err, "Unable to create configuration from "+scenario)
+					return err.Humanized()
+				}
+
+				scenario = c.Metadata.Name
 			}
 
 			opts := []experiment.CreateOption{
 				experiment.CreateWithName(args[0]),
-				experiment.CreateWithTopology(MustGetString(cmd.Flags(), "topology")),
-				experiment.CreateWithScenario(MustGetString(cmd.Flags(), "scenario")),
+				experiment.CreateWithTopology(topology),
+				experiment.CreateWithScenario(scenario),
 				experiment.CreateWithBaseDirectory(MustGetString(cmd.Flags(), "base-dir")),
 				experiment.CreateWithVLANMin(MustGetInt(cmd.Flags(), "vlan-min")),
 				experiment.CreateWithVLANMax(MustGetInt(cmd.Flags(), "vlan-max")),
