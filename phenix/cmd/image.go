@@ -50,7 +50,11 @@ func newImageListCmd() *cobra.Command {
 				optional = append(optional, "Mirror")
 			}
 
-			util.PrintTableOfImageConfigs(os.Stdout, optional, imgs...)
+			if len(imgs) == 0 {
+				fmt.Println("\nThere are no image configurations available\n")
+			} else {
+				util.PrintTableOfImageConfigs(os.Stdout, optional, imgs...)
+			}
 
 			return nil
 		},
