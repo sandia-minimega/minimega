@@ -4,6 +4,8 @@
 
 URL=https://github.com/sandia-minimega/minimega.git
 ROOT=$(go env GOPATH)
+SDKFILE=google-cloud-sdk-299.0.0-linux-x86_64.tar.gz
+SDKURL=https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/$SDKFILE
 
 if [ ! -d $ROOT/src ]; then
     mkdir -p $ROOT/src
@@ -12,21 +14,35 @@ fi
 REPO=$ROOT/src/minimega
 TARGET=$ROOT/src/mmorg
 SDK=$ROOT/src/google-cloud-sdk
+GOMOD=$ROOT/src/go.mod
 
 PATH=$PATH:/usr/local/go/bin
 
+# If this has been run before and there are leftover files, the build will not work
 if [ -d $REPO ]; then
     rm -rf $REPO
 fi
-
-git clone $URL $REPO
-(cd $REPO && bash all.bash)
 
 if [ -d $TARGET ]; then
     rm -rf $TARGET
 fi
 
+if [ -d $SDK ]; then
+    rm -rf $SDK
+fi
+
+if [ -f $GOMOD ]; then
+    rm $GOMOD
+fi
+
+git clone $URL $REPO
+(cd $REPO && bash all.bash)
+
 mkdir $TARGET
+
+# Get Google cloud sdk
+wget -P $ROOT/src $SDKURL
+tar -xvf $ROOT/src/$SDKFILE -C $ROOT/src
 
 # copy appengine
 cp $REPO/misc/appengine/app.yaml $TARGET
@@ -57,4 +73,4 @@ cd $TARGET
 GOPATH=$ROOT $SDK/bin/gcloud app deploy --verbosity=debug --project pivotal-sonar-90317 --version 1
 
 # update minimega.org
-#GOPATH=$TARGET $SDK/bin/gcloud app deploy --quiet --project even-electron-88116 --version 1
+#GOPATH=$ROOT $SDK/bin/gcloud app deploy --verbosity=debug --project even-electron-88116 --version 1
