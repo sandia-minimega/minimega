@@ -262,7 +262,7 @@ func newExperimentStartCmd() *cobra.Command {
 			if args[0] == "all" {
 				exps, err := experiment.List()
 				if err != nil {
-					err := util.HumanizeError(err, "Unable to start all experiments") // did not return in testing; do we want to test for length of experiments list?
+					err := util.HumanizeError(err, "Unable to start all experiments")
 					return err.Humanized()
 				}
 
