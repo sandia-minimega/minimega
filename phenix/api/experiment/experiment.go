@@ -61,7 +61,10 @@ func Get(name string) (*types.Experiment, error) {
 		return nil, fmt.Errorf("no experiment name provided")
 	}
 
-	c, _ := types.NewConfig("experiment/" + name)
+	c, err := types.NewConfig("experiment/" + name)
+	if err != nil {
+		return nil, fmt.Errorf("getting experiment: %w", err)
+	}
 
 	if err := store.Get(c); err != nil {
 		return nil, fmt.Errorf("getting experiment %s from store: %w", name, err)
