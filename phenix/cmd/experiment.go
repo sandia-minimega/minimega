@@ -8,6 +8,7 @@ import (
 	"phenix/api/experiment"
 	"phenix/app"
 	"phenix/scheduler"
+	"phenix/types"
 	"phenix/util"
 	"strings"
 
@@ -176,7 +177,9 @@ func newExperimentCreateCmd() *cobra.Command {
 func newExperimentDeleteCmd() *cobra.Command {
 	desc := `Delete an experiment
 
-  Used to delete an exisitng experiment; experiment must be stopped`
+  Used to delete an exisitng experiment; experiment must be stopped.
+  Using 'all' instead of a specific experiment name will include all 
+  stopped experiments`
 
 	cmd := &cobra.Command{
 		Use:   "delete <experiment name>",
@@ -184,24 +187,43 @@ func newExperimentDeleteCmd() *cobra.Command {
 		Long:  desc,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			name := args[0] // errors out without line 153, cobra error is not very informative
+			var (
+				name        = args[0]
+				experiments []types.Experiment
+			)
 
-			exp, err := experiment.Get(name)
-			if err != nil {
-				err := util.HumanizeError(err, "Unable to get the "+name+" experiment")
-				return err.Humanized()
+			if name == "all" {
+				var err error
+
+				experiments, err = experiment.List()
+				if err != nil {
+					err := util.HumanizeError(err, "Unable to delete all experiments")
+					return err.Humanized()
+				}
+			} else {
+				exp, err := experiment.Get(name)
+				if err != nil {
+					err := util.HumanizeError(err, "Unable to delete the "+name+" experiment")
+					return err.Humanized()
+				}
+
+				experiments = []types.Experiment{*exp}
 			}
 
-			if exp.Status.Running() {
-				return fmt.Errorf("Cannot delete a running experiment")
-			}
+			for _, exp := range experiments {
+				if exp.Status.Running() {
+					fmt.Printf("Not deleting running experiment %s\n", exp.Metadata.Name)
+					continue
+				}
 
-			if err := config.Delete("experiment/" + name); err != nil {
-				err := util.HumanizeError(err, "Unable to delete the "+name+" experiment")
-				return err.Humanized()
-			}
+				if err := config.Delete("experiment/" + exp.Metadata.Name); err != nil {
+					err := util.HumanizeError(err, "Unable to delete the "+exp.Metadata.Name+" experiment")
+					fmt.Println(err.Humanize())
+					continue
+				}
 
-			fmt.Printf("The %s experiment was deleted\n", name)
+				fmt.Printf("The %s experiment was deleted\n", exp.Metadata.Name)
+			}
 
 			return nil
 		},
@@ -245,8 +267,8 @@ func newExperimentStartCmd() *cobra.Command {
 	desc := `Start an experiment
 
   Used to start a stopped experiment, using 'all' instead of a specific 
-  experiment name will include all experiments; dry-run will do everything but 
-  call out to minimega.`
+  experiment name will include all stopped experiments; dry-run will do 
+  everything but call out to minimega.`
 
 	cmd := &cobra.Command{
 		Use:   "start <experiment name>",
@@ -255,43 +277,51 @@ func newExperimentStartCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var (
+				name        = args[0]
 				dryrun      = MustGetBool(cmd.Flags(), "dry-run")
-				experiments []string
+				experiments []types.Experiment
 			)
 
-			if args[0] == "all" {
-				exps, err := experiment.List()
+			if name == "all" {
+				var err error
+
+				experiments, err = experiment.List()
 				if err != nil {
 					err := util.HumanizeError(err, "Unable to start all experiments")
 					return err.Humanized()
 				}
-
-				for _, exp := range exps {
-					if exp.Status.StartTime == "" {
-						experiments = append(experiments, exp.Spec.ExperimentName)
-					}
-				}
 			} else {
-				experiments = []string{args[0]}
+				exp, err := experiment.Get(name)
+				if err != nil {
+					err := util.HumanizeError(err, "Unable to start the "+name+" experiment")
+					return err.Humanized()
+				}
+
+				experiments = []types.Experiment{*exp}
 			}
 
 			for _, exp := range experiments {
+				if exp.Status.Running() {
+					fmt.Printf("Not starting already running experiment %s\n", exp.Metadata.Name)
+					continue
+				}
+
 				opts := []experiment.StartOption{
-					experiment.StartWithName(exp),
+					experiment.StartWithName(exp.Metadata.Name),
 					experiment.StartWithDryRun(dryrun),
 					experiment.StartWithVLANMin(MustGetInt(cmd.Flags(), "vlan-min")),
 					experiment.StartWithVLANMax(MustGetInt(cmd.Flags(), "vlan-max")),
 				}
 
 				if err := experiment.Start(opts...); err != nil {
-					err := util.HumanizeError(err, "Unable to start the "+exp+" experiment")
+					err := util.HumanizeError(err, "Unable to start the "+exp.Metadata.Name+" experiment")
 					return err.Humanized()
 				}
 
 				if dryrun {
-					fmt.Printf("The %s experiment was started in a dry-run\n", exp)
+					fmt.Printf("The %s experiment was started in a dry-run\n", exp.Metadata.Name)
 				} else {
-					fmt.Printf("The %s experiment was started\n", exp)
+					fmt.Printf("The %s experiment was started\n", exp.Metadata.Name)
 				}
 			}
 
@@ -310,7 +340,7 @@ func newExperimentStopCmd() *cobra.Command {
 	desc := `Stop an experiment
 
   Used to stop a running experiment, using 'all' instead of a specific 
-  experiment name will include all experiments.`
+  experiment name will include all running experiments.`
 
 	cmd := &cobra.Command{
 		Use:   "stop <experiment name>",
@@ -318,31 +348,41 @@ func newExperimentStopCmd() *cobra.Command {
 		Long:  desc,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var experiments []string
+			var (
+				name        = args[0]
+				experiments []types.Experiment
+			)
 
-			if args[0] == "all" {
-				exps, err := experiment.List()
+			if name == "all" {
+				var err error
+
+				experiments, err = experiment.List()
 				if err != nil {
 					err := util.HumanizeError(err, "Unable to stop all experiments")
 					return err.Humanized()
 				}
-
-				for _, exp := range exps {
-					if exp.Status.StartTime != "" {
-						experiments = append(experiments, exp.Spec.ExperimentName)
-					}
-				}
 			} else {
-				experiments = []string{args[0]}
-			}
-
-			for _, exp := range experiments {
-				if err := experiment.Stop(exp); err != nil {
-					err := util.HumanizeError(err, "Unable to stop the "+exp+" experiment")
+				exp, err := experiment.Get(name)
+				if err != nil {
+					err := util.HumanizeError(err, "Unable to stop the "+name+" experiment")
 					return err.Humanized()
 				}
 
-				fmt.Printf("The %s experiment was stopped\n", exp)
+				experiments = []types.Experiment{*exp}
+			}
+
+			for _, exp := range experiments {
+				if !exp.Status.Running() {
+					fmt.Printf("Not stopping already stopped experiment %s\n", exp.Metadata.Name)
+					continue
+				}
+
+				if err := experiment.Stop(exp.Metadata.Name); err != nil {
+					err := util.HumanizeError(err, "Unable to stop the "+exp.Metadata.Name+" experiment")
+					return err.Humanized()
+				}
+
+				fmt.Printf("The %s experiment was stopped\n", exp.Metadata.Name)
 			}
 
 			return nil
@@ -355,8 +395,9 @@ func newExperimentStopCmd() *cobra.Command {
 func newExperimentRestartCmd() *cobra.Command {
 	desc := `Restart an experiment
 
-  Used to restart a running experiment; dry-run will do everything but call out 
-  to minimega.`
+  Used to restart a running experiment, using 'all' instead of a specific 
+  experiment name will include all running experiments; dry-run will do 
+  everything but call out to minimega.`
 
 	cmd := &cobra.Command{
 		Use:   "restart <experiment name>",
@@ -365,21 +406,47 @@ func newExperimentRestartCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var (
-				exp    = args[0]
-				dryrun = MustGetBool(cmd.Flags(), "dry-run")
+				name        = args[0]
+				dryrun      = MustGetBool(cmd.Flags(), "dry-run")
+				experiments []types.Experiment
 			)
 
-			if err := experiment.Stop(exp); err != nil {
-				err := util.HumanizeError(err, "Unable to stop the "+exp+" experiment")
-				return err.Humanized()
+			if name == "all" {
+				var err error
+
+				experiments, err = experiment.List()
+				if err != nil {
+					err := util.HumanizeError(err, "Unable to restart all experiments")
+					return err.Humanized()
+				}
+			} else {
+				exp, err := experiment.Get(name)
+				if err != nil {
+					err := util.HumanizeError(err, "Unable to restart the "+name+" experiment")
+					return err.Humanized()
+				}
+
+				experiments = []types.Experiment{*exp}
 			}
 
-			if err := experiment.Start(experiment.StartWithName(exp), experiment.StartWithDryRun(dryrun)); err != nil {
-				err := util.HumanizeError(err, "Unable to start the "+exp+" experiment")
-				return err.Humanized()
-			}
+			for _, exp := range experiments {
+				if !exp.Status.Running() {
+					fmt.Printf("Not restarting stopped experiment %s\n", exp.Metadata.Name)
+					continue
+				}
 
-			fmt.Printf("The %s experiment was restarted\n", exp)
+				if err := experiment.Stop(exp.Metadata.Name); err != nil {
+					err := util.HumanizeError(err, "Unable to stop the "+exp.Metadata.Name+" experiment")
+					return err.Humanized()
+				}
+
+				if err := experiment.Start(experiment.StartWithName(exp.Metadata.Name), experiment.StartWithDryRun(dryrun)); err != nil {
+					err := util.HumanizeError(err, "Unable to start the "+exp.Metadata.Name+" experiment")
+					return err.Humanized()
+				}
+
+				fmt.Printf("The %s experiment was restarted\n", exp.Metadata.Name)
+			}
 
 			return nil
 		},
