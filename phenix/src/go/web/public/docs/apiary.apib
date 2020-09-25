@@ -1,0 +1,1527 @@
+FORMAT: 1A
+
+# gophenix
+
+gophenix API
+
+### /experiments
+
+#### Get all phenix experiments [GET /experiments{?screenshot}]
+
++ Parameters
+
+    + screenshot - whether or not to include VM screenshots (value is size to grab)
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "experiments": [
+                {
+                  "id": 0,
+                  "name": "",
+                  "topology": "",
+                  "start_time": "",
+                  "running": false,
+                  "vm_count": 0,
+                  "vlan_min": 0,
+                  "vlan_max": 0,
+                  "vlan_count": 0,
+                  "vlans": [
+                    {
+                      "vlan": 0,
+                      "alias": ""
+                    }
+                  ],
+                  "vms": {
+                    "vms": [
+                      {
+                        "id": 0,
+                        "name": "",
+                        "experiment": "",
+                        "host": "",
+                        "cpus": 0,
+                        "ram": 0,
+                        "disk": "",
+                        "dnb": false,
+                        "captures": [
+                          {
+                            "vm": "",
+                            "interface": 0,
+                            "filepath": ""
+                          }
+                        ],
+                        "running": "",
+                        "uptime": 0,
+                        "screenshot": ""
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+
+#### Create new phenix experiment [POST]
+
++ Request (application/json)
+
+    phenix experiment creation parameters
+
+    + Headers
+
+            Accept: application/json
+
+    + Attributes
+
+    + Body
+
+            {
+              "name": "",
+              "topology": "",
+              "vlan_min": 0,
+              "vlan_max": 0
+            }
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "id": 0,
+              "name": "",
+              "topology": "",
+              "start_time": "",
+              "running": false,
+              "vm_count": 0,
+              "vlan_min": 0,
+              "vlan_max": 0,
+              "vlan_count": 0,
+              "vlans": [
+                {
+                  "vlan": 0,
+                  "alias": ""
+                }
+              ],
+              "vms": {
+                "vms": [
+                  {
+                    "id": 0,
+                    "name": "",
+                    "experiment": "",
+                    "host": "",
+                    "cpus": 0,
+                    "ram": 0,
+                    "disk": "",
+                    "dnb": false,
+                    "captures": [
+                      {
+                        "vm": "",
+                        "interface": 0,
+                        "filepath": ""
+                      }
+                    ],
+                    "running": "",
+                    "uptime": 0,
+                    "screenshot": ""
+                  }
+                ]
+              }
+            }
+
+### /experiments/{name}
+
+#### Get existing phenix experiment [GET /experiments/{name}{?screenshot}]
+
++ Parameters
+
+    + name (required) - name of phenix experiment to get
+    
+    + screenshot - whether or not to include VM screenshots (value is size to grab)
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "id": 0,
+              "name": "",
+              "topology": "",
+              "start_time": "",
+              "running": false,
+              "vm_count": 0,
+              "vlan_min": 0,
+              "vlan_max": 0,
+              "vlan_count": 0,
+              "vlans": [
+                {
+                  "vlan": 0,
+                  "alias": ""
+                }
+              ],
+              "vms": {
+                "vms": [
+                  {
+                    "id": 0,
+                    "name": "",
+                    "experiment": "",
+                    "host": "",
+                    "cpus": 0,
+                    "ram": 0,
+                    "disk": "",
+                    "dnb": false,
+                    "captures": [
+                      {
+                        "vm": "",
+                        "interface": 0,
+                        "filepath": ""
+                      }
+                    ],
+                    "running": "",
+                    "uptime": 0,
+                    "screenshot": ""
+                  }
+                ]
+              }
+            }
+
+#### Delete existing phenix experiment [DELETE]
+
++ Parameters
+
+    + name (required) - name of phenix experiment to delete
+
++ Response 204
+
+    successful operation
+
+### /experiments/{name}/start
+
+#### Start existing phenix experiment [POST]
+
++ Parameters
+
+    + name (required) - name of phenix experiment to start
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "id": 0,
+              "name": "",
+              "topology": "",
+              "start_time": "",
+              "running": false,
+              "vm_count": 0,
+              "vlan_min": 0,
+              "vlan_max": 0,
+              "vlan_count": 0,
+              "vlans": [
+                {
+                  "vlan": 0,
+                  "alias": ""
+                }
+              ],
+              "vms": {
+                "vms": [
+                  {
+                    "id": 0,
+                    "name": "",
+                    "experiment": "",
+                    "host": "",
+                    "cpus": 0,
+                    "ram": 0,
+                    "disk": "",
+                    "dnb": false,
+                    "captures": [
+                      {
+                        "vm": "",
+                        "interface": 0,
+                        "filepath": ""
+                      }
+                    ],
+                    "running": "",
+                    "uptime": 0,
+                    "screenshot": ""
+                  }
+                ]
+              }
+            }
+
+### /experiments/{name}/stop
+
+#### Stop existing phenix experiment [POST]
+
++ Parameters
+
+    + name (required) - name of phenix experiment to stop
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "id": 0,
+              "name": "",
+              "topology": "",
+              "start_time": "",
+              "running": false,
+              "vm_count": 0,
+              "vlan_min": 0,
+              "vlan_max": 0,
+              "vlan_count": 0,
+              "vlans": [
+                {
+                  "vlan": 0,
+                  "alias": ""
+                }
+              ],
+              "vms": {
+                "vms": [
+                  {
+                    "id": 0,
+                    "name": "",
+                    "experiment": "",
+                    "host": "",
+                    "cpus": 0,
+                    "ram": 0,
+                    "disk": "",
+                    "dnb": false,
+                    "captures": [
+                      {
+                        "vm": "",
+                        "interface": 0,
+                        "filepath": ""
+                      }
+                    ],
+                    "running": "",
+                    "uptime": 0,
+                    "screenshot": ""
+                  }
+                ]
+              }
+            }
+
+### /experiments/{name}/schedule
+
+#### Get current schedule for existing experiment [GET]
+
++ Parameters
+
+    + name (required) - name of phenix experiment to get schedule for
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "schedule": [
+                {
+                  "vm": "",
+                  "host": "",
+                  "auto_assigned": false
+                }
+              ]
+            }
+
+#### Update current schedule for existing experiment [POST]
+
++ Parameters
+
+    + name (required) - name of phenix experiment to update schedule for
+
++ Request (application/json)
+
+    scheduling algorithm to use
+
+    + Headers
+
+            Accept: application/json
+
+    + Attributes
+
+    + Body
+
+            {
+              "algorithm": ""
+            }
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "schedule": [
+                {
+                  "vm": "",
+                  "host": "",
+                  "auto_assigned": false
+                }
+              ]
+            }
+
+### /experiments/{name}/captures
+
+#### Get captures for existing experiment [GET]
+
++ Parameters
+
+    + name (required) - name of phenix experiment to get captures for
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "captures": [
+                {
+                  "vm": "",
+                  "interface": 0,
+                  "filepath": ""
+                }
+              ]
+            }
+
+### /experiments/{name}/files
+
+#### Get list of files for experiment [GET]
+
++ Parameters
+
+    + name (required) - name of phenix experiment to get files for
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {}
+
+### /experiments/{name}/files/{filename}
+
+#### Download experiment file [GET]
+
++ Parameters
+
+    + name (required) - name of phenix experiment to get file from
+    
+    + filename (required) - name of file download
+
++ Request
+
+    + Headers
+
+            Accept: application/octet-stream
+
++ Response 200 (application/octet-stream)
+
+    successful operation
+
+    + Attributes
+
+### /experiments/{exp_name}/vms
+
+#### get all VMs in existing experiment [GET /experiments/{exp_name}/vms{?screenshot}]
+
++ Parameters
+
+    + exp_name (required) - name of phenix experiment to get VMs for
+    
+    + screenshot - whether or not to include VM screenshots (value is size to grab)
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "vms": [
+                {
+                  "id": 0,
+                  "name": "",
+                  "experiment": "",
+                  "host": "",
+                  "cpus": 0,
+                  "ram": 0,
+                  "disk": "",
+                  "dnb": false,
+                  "captures": [
+                    {
+                      "vm": "",
+                      "interface": 0,
+                      "filepath": ""
+                    }
+                  ],
+                  "running": "",
+                  "uptime": 0,
+                  "screenshot": ""
+                }
+              ]
+            }
+
+### /experiments/{exp_name}/vms/{vm_name}
+
+#### get given VM in existing experiment [GET /experiments/{exp_name}/vms/{vm_name}{?screenshot}]
+
++ Parameters
+
+    + exp_name (required) - name of phenix experiment to get VM from
+    
+    + vm_name (required) - name of phenix experiment VM to get
+    
+    + screenshot - whether or not to include VM screenshots (value is size to grab)
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "id": 0,
+              "name": "",
+              "experiment": "",
+              "host": "",
+              "cpus": 0,
+              "ram": 0,
+              "disk": "",
+              "dnb": false,
+              "captures": [
+                {
+                  "vm": "",
+                  "interface": 0,
+                  "filepath": ""
+                }
+              ],
+              "running": "",
+              "uptime": 0,
+              "screenshot": ""
+            }
+
+#### Update existing VM settings in existing experiment [PATCH]
+
++ Parameters
+
+    + exp_name (required) - name of phenix experiment to modify
+    
+    + vm_name (required) - name of phenix virtual machine to modify
+
++ Request (application/json)
+
+    phenix virtual machine patch parameters
+
+    + Headers
+
+            Accept: application/json
+
+    + Attributes
+
+    + Body
+
+            {
+              "host": "",
+              "cpus": 0,
+              "ram": 0,
+              "disk": "",
+              "dnb": false,
+              "interface": {
+                "index": 0,
+                "vlan": 0
+              }
+            }
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "id": 0,
+              "name": "",
+              "experiment": "",
+              "host": "",
+              "cpus": 0,
+              "ram": 0,
+              "disk": "",
+              "dnb": false,
+              "captures": [
+                {
+                  "vm": "",
+                  "interface": 0,
+                  "filepath": ""
+                }
+              ],
+              "running": "",
+              "uptime": 0,
+              "screenshot": ""
+            }
+
+#### Delete phenix experiment VM [DELETE]
+
++ Parameters
+
+    + name (required) - name of phenix experiment
+    
+    + vm_name (required) - name of phenix virtual machine to delete
+
++ Response 204
+
+    successful operation
+
+### /experiments/{exp_name}/vms/{vm_name}/start
+
+#### start VM in experiment [POST]
+
++ Parameters
+
+    + exp_name (required) - name of phenix experiment
+    
+    + vm_name (required) - name of phenix VM to start
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "id": 0,
+              "name": "",
+              "experiment": "",
+              "host": "",
+              "cpus": 0,
+              "ram": 0,
+              "disk": "",
+              "dnb": false,
+              "captures": [
+                {
+                  "vm": "",
+                  "interface": 0,
+                  "filepath": ""
+                }
+              ],
+              "running": "",
+              "uptime": 0,
+              "screenshot": ""
+            }
+
+### /experiments/{exp_name}/vms/{vm_name}/stop
+
+#### stop VM in experiment [POST]
+
++ Parameters
+
+    + exp_name (required) - name of phenix experiment
+    
+    + vm_name (required) - name of phenix VM to stop
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "id": 0,
+              "name": "",
+              "experiment": "",
+              "host": "",
+              "cpus": 0,
+              "ram": 0,
+              "disk": "",
+              "dnb": false,
+              "captures": [
+                {
+                  "vm": "",
+                  "interface": 0,
+                  "filepath": ""
+                }
+              ],
+              "running": "",
+              "uptime": 0,
+              "screenshot": ""
+            }
+
+### /experiments/{exp_name}/vms/{vm_name}/redeploy
+
+#### redeploy VM in experiment [POST]
+
++ Parameters
+
+    + exp_name (required) - name of phenix experiment
+    
+    + vm_name (required) - name of phenix VM to redeploy
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "id": 0,
+              "name": "",
+              "experiment": "",
+              "host": "",
+              "cpus": 0,
+              "ram": 0,
+              "disk": "",
+              "dnb": false,
+              "captures": [
+                {
+                  "vm": "",
+                  "interface": 0,
+                  "filepath": ""
+                }
+              ],
+              "running": "",
+              "uptime": 0,
+              "screenshot": ""
+            }
+
+### /experiments/{exp_name}/vms/{vm_name}/screenshot.png
+
+#### Get screenshot of running VM in experiment [GET /experiments/{exp_name}/vms/{vm_name}/screenshot.png{?size,base64}]
+
++ Parameters
+
+    + exp_name (required) - name of phenix experiment
+    
+    + vm_name (required) - name of phenix virtual machine to get screenshot from
+    
+    + size - size of screenshot to grab
+    
+    + base64 - whether or not to base64 encode the screenshot image
+
++ Request
+
+    + Headers
+
+            Accept: image/png
+
++ Response 200 (image/png)
+
+    successful operation
+
+    + Attributes
+
+### /experiments/{exp_name}/vms/{vm_name}/vnc/ws
+
+#### Tunnel to VNC of running VM using a WebSocket [GET]
+
++ Parameters
+
+    + exp_name (required) - name of phenix experiment
+    
+    + vm_name (required) - name of phenix virtual machine to connect to
+
++ Response 101
+
+    switching protocols
+
+### /experiments/{exp_name}/vms/{vm_name}/captures
+
+#### get phenix experiment VM packet captures [GET]
+
++ Parameters
+
+    + exp_name (required) - name of phenix experiment
+    
+    + vm_name (required) - name of phenix VM to get captures for
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "captures": [
+                {
+                  "vm": "",
+                  "interface": 0,
+                  "filepath": ""
+                }
+              ]
+            }
+
+#### start phenix experiment VM packet capture [POST]
+
++ Parameters
+
+    + exp_name (required) - name of phenix experiment
+    
+    + vm_name (required) - name of phenix VM to start capture on
+
++ Request (application/json)
+
+    phenix VM packet capture parameters
+
+    + Attributes
+
+    + Body
+
+            {
+              "interface": 0,
+              "filename": ""
+            }
+
++ Response 204
+
+    successful operation
+
+#### stop phenix experiment VM packet captures [DELETE]
+
++ Parameters
+
+    + exp_name (required) - name of phenix experiment
+    
+    + vm_name (required) - name of phenix VM to stop captures on
+
++ Response 204
+
+    successful operation
+
+### /experiments/{exp_name}/vms/{vm_name}/snapshots
+
+#### get phenix experiment VM snapshots [GET]
+
++ Parameters
+
+    + exp_name (required) - name of phenix experiment
+    
+    + vm_name (required) - name of phenix VM to get snapshots for
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {}
+
+#### create phenix experiment VM snapshot [POST]
+
++ Parameters
+
+    + exp_name (required) - name of phenix experiment
+    
+    + vm_name (required) - name of phenix VM to snapshot
+
++ Request (application/json)
+
+    phenix VM snapshot parameters
+
+    + Attributes
+
+    + Body
+
+            {
+              "filename": ""
+            }
+
++ Response 204
+
+    successful operation
+
+### /experiments/{exp_name}/vms/{vm_name}/snapshots/{snapshot}
+
+#### restore phenix experiment VM to snapshot [POST]
+
++ Parameters
+
+    + exp_name (required) - name of phenix experiment
+    
+    + vm_name (required) - name of phenix VM to restore
+    
+    + snapshot (required) - name of snapshot to restore VM to
+
++ Response 204
+
+    successful operation
+
+### /vms
+
+#### Get all running VMs [GET /vms{?screenshot}]
+
++ Parameters
+
+    + screenshot - whether or not to include VM screenshots (value is size to grab)
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "vms": [
+                {
+                  "id": 0,
+                  "name": "",
+                  "experiment": "",
+                  "host": "",
+                  "cpus": 0,
+                  "ram": 0,
+                  "disk": "",
+                  "dnb": false,
+                  "captures": [
+                    {
+                      "vm": "",
+                      "interface": 0,
+                      "filepath": ""
+                    }
+                  ],
+                  "running": "",
+                  "uptime": 0,
+                  "screenshot": ""
+                }
+              ]
+            }
+
+### /applications
+
+#### Get all available user applications [GET]
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {}
+
+### /topologies
+
+#### Get all available topologies [GET]
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {}
+
+### /disks
+
+#### Get all available disk images [GET]
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {}
+
+### /hosts
+
+#### Get all cluster hosts [GET]
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "hosts": [
+                {
+                  "name": "",
+                  "cpus": 0,
+                  "load": "",
+                  "memused": 0,
+                  "memtotal": 0,
+                  "bandwidth": "",
+                  "vms": 0,
+                  "uptime": 0,
+                  "schedulable": false
+                }
+              ]
+            }
+
+### /users
+
+#### Get all users [GET]
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "users": [
+                {
+                  "username": "",
+                  "first_name": "",
+                  "last_name": "",
+                  "role": {
+                    "name": ""
+                  }
+                }
+              ]
+            }
+
+#### Create a new user [POST]
+
++ Request (application/json)
+
+    user details
+
+    + Headers
+
+            Accept: application/json
+
+    + Attributes
+
+    + Body
+
+            {
+              "username": "",
+              "password": "",
+              "first_name": "",
+              "last_name": "",
+              "role_name": ""
+            }
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "username": "",
+              "first_name": "",
+              "last_name": "",
+              "role": {
+                "name": ""
+              }
+            }
+
+### /users/{username}
+
+#### Get a specific user [GET]
+
++ Parameters
+
+    + username (required) - username of user to get
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "username": "",
+              "first_name": "",
+              "last_name": "",
+              "role": {
+                "name": ""
+              }
+            }
+
+#### Update existing user [PATCH]
+
++ Parameters
+
+    + username (required) - username of user to modify
+
++ Request (application/json)
+
+    user paramaters
+
+    + Headers
+
+            Accept: application/json
+
+    + Attributes
+
+    + Body
+
+            {
+              "first_name": "",
+              "last_name": "",
+              "role_name": ""
+            }
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "username": "",
+              "first_name": "",
+              "last_name": "",
+              "role": {
+                "name": ""
+              }
+            }
+
+#### Delete existing user [DELETE]
+
++ Parameters
+
+    + username (required) - username of user to delete
+
++ Response 204
+
+    successful operation
+
+### /signup
+
+#### Signup as a new user [POST]
+
++ Request (application/json)
+
+    user details
+
+    + Headers
+
+            Accept: application/json
+
+    + Attributes
+
+    + Body
+
+            {
+              "username": "",
+              "password": "",
+              "first_name": "",
+              "last_name": ""
+            }
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "username": "",
+              "first_name": "",
+              "last_name": "",
+              "role": "",
+              "token": ""
+            }
+
+### /login
+
+#### Login a user [GET /login{?user,pass}]
+
++ Parameters
+
+    + user - login username
+    
+    + pass - login password
+
++ Request
+
+    + Headers
+
+            Accept: application/json
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "username": "",
+              "first_name": "",
+              "last_name": "",
+              "role": "",
+              "token": ""
+            }
+
+#### Login a user [POST]
+
++ Request (application/json)
+
+    login credentials
+
+    + Headers
+
+            Accept: application/json
+
+    + Attributes
+
+    + Body
+
+            {
+              "user": "",
+              "pass": ""
+            }
+
++ Response 200 (application/json)
+
+    successful operation
+
+    + Attributes
+
+    + Body
+
+            {
+              "username": "",
+              "first_name": "",
+              "last_name": "",
+              "role": "",
+              "token": ""
+            }
+
+### /logout
+
+#### Logout a user [GET]
+
++ Response 204
+
+    successful operation
+
+## Data Structures
+
+### Experiments
+
++ experiments (array)
+    + (Experiment)
+
+### Experiment
+
++ id (number)
++ name
++ topology
++ apps (array)
+    +
++ start_time
++ running (boolean)
++ vm_count (number)
++ vlan_min (number)
++ vlan_max (number)
++ vlan_count (number)
++ vlans (array)
+    + (object)
+        + vlan (number)
+        + alias
++ vms (VMs)
+
+### VMs
+
++ vms (array)
+    + (VM)
+
+### VM
+
++ id (number)
++ name
++ experiment
++ host
++ ipv4 (array)
+    +
++ cpus (number)
++ ram (number)
++ disk
++ dnb (boolean)
++ networks (array)
+    +
++ taps (array)
+    +
++ captures (array)
+    + (Capture)
++ running (enum)
++ uptime (number)
++ screenshot
+
+### Schedule
+
++ schedule (array)
+    + (object)
+        + vm
+        + host
+        + auto_assigned (boolean)
+
+### Captures
+
++ captures (array)
+    + (Capture)
+
+### Capture
+
++ vm
++ interface (number)
++ filepath
+
+### Snapshots
+
++ snapshots (array)
+    +
+
+### Files
+
++ files (array)
+    +
+
+### Hosts
+
++ hosts (array)
+    + (Host)
+
+### Host
+
++ name
++ cpus (number)
++ load
++ memused (number)
++ memtotal (number)
++ bandwidth
++ vms (number)
++ uptime (number)
++ schedulable (boolean)
+
+### Applications
+
++ applications (array)
+    +
+
+### Topologies
+
++ topologies (array)
+    +
+
+### Disks
+
++ disks (array)
+    +
+
+### Users
+
++ users (array)
+    + (User)
+
+### User
+
++ username
++ first_name
++ last_name
++ role (object)
+    + name
+    + resources (array)
+        +
+    + resource_names (array)
+        +
+    + verbs (array)
+        +
+
+### Credentials
+
++ username
++ first_name
++ last_name
++ role
++ token

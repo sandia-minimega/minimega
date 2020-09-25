@@ -1,0 +1,19 @@
+[Unit]
+Description=phenix Service
+After=multi-user.target
+
+[Service]
+EnvironmentFile=/etc/default/phenix
+Environment="MM_BASE=/tmp/minimega"
+Environment="PHENIX_BASE=/phenix"
+ExecStart=/usr/bin/phenix \
+  --base-dir.minimega=${MM_BASE} \
+  --base-dir.phenix=${PHENIX_BASE} \
+  --hostname-suffixes=${PHENIX_HOSTNAME_SUFFIXES} \
+  ui \
+  --jwt-signing-key=${PHENIX_UI_JWT_SIGNING_KEY}
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

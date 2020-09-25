@@ -140,7 +140,7 @@ func Start(opts ...ServerOption) error {
 		api.Use(middleware.LogRequests)
 	}
 
-	api.Use(middleware.AuthMiddleware(true, o.jwtKey))
+	api.Use(middleware.AuthMiddleware(o.jwtKey))
 
 	log.Info("Starting websockets broker")
 

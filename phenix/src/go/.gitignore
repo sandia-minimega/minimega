@@ -1,0 +1,9 @@
+*.pb.go
+
+bindata.go
+mock.go
+
+web/public/assets
+web/public/favicon.ico
+web/public/index.html
+web/public/docs/index.html

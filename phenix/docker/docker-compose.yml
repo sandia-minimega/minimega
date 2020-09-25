@@ -1,0 +1,71 @@
+version: '3.7'
+x-common: &common
+  restart: always
+  logging:
+    driver: "json-file"
+    options:
+      max-file: "5"
+      max-size: "10m"
+services:
+  phenix:
+    build:
+      context: ../
+      args:
+        PHENIX_VERSION: container
+        PHENIX_WEB_AUTH: disabled
+    command:
+    - phenix
+    - ui
+    - --hostname-suffixes=-minimega,-phenix
+    image: phenix
+    container_name: phenix
+    hostname: ${HOSTNAME}-phenix
+    privileged: true
+    <<: *common
+    networks:
+      phenix:
+    ports:
+      - 3000:3000
+    volumes:
+      - /dev:/dev
+      - /proc:/proc
+      - /sys:/sys
+      - /phenix:/phenix
+      - /tmp/minimega:/tmp/minimega
+      - /var/log/phenix:/var/log/phenix
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - minimega
+    healthcheck:
+      test: phenix version
+  minimega:
+    build:
+      context: ../../
+      dockerfile: phenix/docker/minimega/Dockerfile
+    image: minimega
+    container_name: minimega
+    hostname: ${HOSTNAME}-minimega
+    privileged: true
+    cap_add:
+      - ALL
+    <<: *common
+    networks:
+      phenix:
+        aliases:
+          - ${HOSTNAME}-minimega
+    ports:
+      - 9001:9001
+      - 11235:11235/udp
+    volumes:
+      - /phenix:/phenix
+      - /tmp/minimega:/tmp/minimega
+      - /var/log/phenix:/var/log/phenix
+      - /dev:/dev
+      - /lib/modules:/lib/modules:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /root/.ssh:/root/.ssh:ro
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: minimega -e version
+networks:
+  phenix:

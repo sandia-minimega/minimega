@@ -1,17 +1,2 @@
 .devcontainer
 .vscode
-
-*.pb.go
-
-phenix.bdb
-phenix.err
-
-mock.go
-
-bindata.go
-bindata.go
-
-web/public/assets
-web/public/favicon.ico
-web/public/index.html
-web/public/docs/index.html

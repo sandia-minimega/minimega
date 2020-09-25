@@ -554,8 +554,12 @@ func (Minimega) GetClusterHosts() (Hosts, error) {
 		}
 
 		host.Schedulable = true
+		host.Name = common.TrimHostnameSuffixes(host.Name)
+
 		cluster = append(cluster, host)
 	}
+
+	head.Name = common.TrimHostnameSuffixes(head.Name)
 
 	cluster = append(cluster, head)
 
@@ -572,17 +576,13 @@ func (Minimega) IsHeadnode(node string) bool {
 
 	headnode := hosts[0].Name
 
-	// Trim host name suffixes (like -minimega, or -gophenix) potentially added to
+	// Trim host name suffixes (like -minimega, or -phenix) potentially added to
 	// Docker containers by Docker Compose config.
-	for _, s := range strings.Split(common.HostnameSuffixes, ",") {
-		headnode = strings.TrimSuffix(headnode, s)
-	}
+	headnode = common.TrimHostnameSuffixes(headnode)
 
-	// Trim node name suffixes (like -minimega, or -gophenix) potentially added to
+	// Trim node name suffixes (like -minimega, or -phenix) potentially added to
 	// Docker containers by Docker Compose config.
-	for _, s := range strings.Split(common.HostnameSuffixes, ",") {
-		node = strings.TrimSuffix(node, s)
-	}
+	node = common.TrimHostnameSuffixes(node)
 
 	return node == headnode
 }

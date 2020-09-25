@@ -13,7 +13,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func AuthMiddleware(enabled bool, jwtKey string) mux.MiddlewareFunc {
+func AuthMiddleware(jwtKey string) mux.MiddlewareFunc {
 	tokenMiddleware := jwtmiddleware.New(
 		jwtmiddleware.Options{
 			// Setting this to true since some resource paths don't require
@@ -125,7 +125,7 @@ func AuthMiddleware(enabled bool, jwtKey string) mux.MiddlewareFunc {
 	}
 
 	if jwtKey == "" {
-		log.Debug("no JWT signing key provided -- disabling auth")
+		log.Info("no JWT signing key provided -- disabling auth")
 		return func(h http.Handler) http.Handler { return noAuthMiddleware(h) }
 	} else if strings.HasPrefix(jwtKey, "dev|") {
 		log.Debug("development JWT key provided -- enabling dev auth")
