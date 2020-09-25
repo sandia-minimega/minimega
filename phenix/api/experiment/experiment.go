@@ -97,6 +97,10 @@ func Create(opts ...CreateOption) error {
 		return fmt.Errorf("no experiment name provided")
 	}
 
+	if strings.ToLower(o.name) == "all" {
+		return fmt.Errorf("cannot use 'all' for experiment name")
+	}
+
 	if o.topology == "" {
 		return fmt.Errorf("no topology name provided")
 	}
