@@ -74,7 +74,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&minimegaBase, "base-dir.minimega", "/tmp/minimega", "base minimega directory")
 	rootCmd.PersistentFlags().StringVar(&hostnameSuffixes, "hostname-suffixes", "", "hostname suffixes to strip")
 	// rootCmd.PersistentFlags().Int("log.verbosity", 0, "log verbosity (0 - 10)")
-	rootCmd.PersistentFlags().Bool("log.error-stderr", false, "log fatal errors to STDERR")
+	rootCmd.PersistentFlags().Bool("log.error-stderr", true, "log fatal errors to STDERR")
 
 	uid, home := getCurrentUserInfo()
 

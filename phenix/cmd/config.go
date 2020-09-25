@@ -190,7 +190,7 @@ func newConfigCreateCmd() *cobra.Command {
 		Short: "Create a configuration(s)",
 		Long:  desc,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) > 0 {
+			if len(args) == 0 {
 				return fmt.Errorf("Must provide at least one configuration file")
 			}
 
