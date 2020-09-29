@@ -25,6 +25,12 @@ WORKDIR /phenix
 
 COPY --from=jsbuilder /phenix/src/js /phenix/src/js
 
+ARG INSTALL_CERT=
+RUN if [ -n "${INSTALL_CERT}" ]; then \
+  wget ${INSTALL_CERT} -e use_proxy=no \
+    -O /usr/local/share/ca-certificates/custom.crt \
+    && update-ca-certificates; fi
+
 ARG PHENIX_VERSION=
 ARG PHENIX_COMMIT=
 RUN VER=${PHENIX_VERSION} COMMIT=${PHENIX_COMMIT} make bin/phenix
