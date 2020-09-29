@@ -31,6 +31,7 @@ services:
       - /proc:/proc
       - /sys:/sys
       - /phenix:/phenix
+      - /etc/phenix:/etc/phenix
       - /tmp/minimega:/tmp/minimega
       - /var/log/phenix:/var/log/phenix
       - /etc/localtime:/etc/localtime:ro
@@ -48,6 +49,7 @@ services:
     privileged: true
     cap_add:
       - ALL
+    tty: true
     <<: *common
     networks:
       phenix:
@@ -59,7 +61,6 @@ services:
     volumes:
       - /phenix:/phenix
       - /tmp/minimega:/tmp/minimega
-      - /var/log/phenix:/var/log/phenix
       - /dev:/dev
       - /lib/modules:/lib/modules:ro
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
