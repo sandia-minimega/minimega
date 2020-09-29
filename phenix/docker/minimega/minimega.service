@@ -11,12 +11,12 @@ Environment="MM_LOGLEVEL=info"
 Environment="MM_LOGFILE=/var/log/minimega.log"
 ExecStart=/usr/bin/minimega \
   -force \
-	-nostdin \
-	-base=${MM_BASE} \
-	-filepath=${MM_FILEPATH} \
-	-degree ${MM_DEGREE} \
-	-level ${MM_LOGLEVEL} \
-	-logfile ${MM_LOGFILE}
+  -nostdin \
+  -base=${MM_BASE} \
+  -filepath=${MM_FILEPATH} \
+  -degree=${MM_DEGREE} \
+  -level=${MM_LOGLEVEL} \
+  -logfile=${MM_LOGFILE}
 Restart=always
 RestartSec=3
 ForwardToConsole=yes

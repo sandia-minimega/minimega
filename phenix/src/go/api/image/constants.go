@@ -18,22 +18,15 @@ echo "phenix" > /etc/hostname
 sed -i 's/127.0.1.1 .*/127.0.1.1 phenix/' /etc/hosts
 cat > /etc/motd <<EOF
 
-███████╗ ██████╗███████╗██████╗ ████████╗███████╗███████╗
-██╔════╝██╔════╝██╔════╝██╔══██╗╚══██╔══╝██╔══██║██╔════╝
-███████╗██║     █████╗  ██████╔╝   ██║   ██████╔╝█████╗
-╚════██║██║     ██╔══╝  ██╔═══╝    ██║   ██╔══██╗██╔══╝
-███████║╚██████╗███████╗██║        ██║   ██║  ██║███████╗
-╚══════╝ ╚═════╝╚══════╝╚═╝        ╚═╝   ╚═╝  ╚═╝╚══════╝
+██████╗ ██╗  ██╗███████╗███╗  ██╗██╗██╗  ██╗
+██╔══██╗██║  ██║██╔════╝████╗ ██║██║╚██╗██╔╝
+██████╔╝███████║█████╗  ██╔██╗██║██║ ╚███╔╝
+██╔═══╝ ██╔══██║██╔══╝  ██║╚████║██║ ██╔██╗
+██║     ██║  ██║███████╗██║ ╚███║██║██╔╝╚██╗
+╚═╝     ╚═╝  ╚═╝╚══════╝╚═╝  ╚══╝╚═╝╚═╝  ╚═╝
 
 EOF
 echo "\nBuilt with phenix image on $(date)\n\n" >> /etc/motd
-`
-
-const POSTBUILD_BRASH = `
-echo "root:SiaSd3te" | chpasswd
-adduser sceptre --UID 1001 --gecos "" --shell /usr/bin/bennu-brash --disabled-login
-echo "sceptre:sceptre" | chpasswd
-sed -i 's/$DISTRIB_DESCRIPTION/SCEPTRE 5.0 LTS/g' /etc/update-motd.d/00-header
 `
 
 const POSTBUILD_ENABLE_DHCP = `

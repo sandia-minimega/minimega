@@ -3,13 +3,11 @@ package upgrade
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"phenix/types"
 	v0 "phenix/types/version/v0"
 	v1 "phenix/types/version/v1"
 
-	"github.com/activeshadow/structs"
 	"github.com/mitchellh/mapstructure"
 )
 
@@ -20,38 +18,15 @@ func init() {
 type topology struct{}
 
 func (topology) Upgrade(version string, spec map[string]interface{}, md types.ConfigMetadata) ([]interface{}, error) {
-	// This is a fairly simple upgrade path. The only difference between v0 and v1
-	// is the lack of topology metadata in v1. Key names and such stayed the same.
-	// The idea here is to decode the spec into both v0 and v1 (v1 should ignore
-	// v0 metadata stuff) and use v0 metadata to create a v1 scenario (assuming
-	// all v0 metadata is associated w/ the SCEPTRE app).
+	// This is a dummy topology upgrader to provide an exmaple of how an upgrader
+	// might be coded up. The specs in v0 simply assume that some integer values
+	// might be represented as strings when in JSON format.
 
 	if version == "v0" {
 		var (
 			topoV0 v0.TopologySpec
 			topoV1 v1.TopologySpec
 		)
-
-		nodeTypes := []string{
-			"client",
-			"data-concentrator",
-			"elk",
-			"engineer-workstation",
-			"fep",
-			"historian",
-			"hmi",
-			"opc",
-			"provider",
-			"scada-server",
-		}
-
-		elkNodes := []string{
-			"fep",
-			"plc",
-			"provier",
-			"relay",
-			"rtu",
-		}
 
 		// Using WeakDecode here since v0 schema uses strings for some integer
 		// values.
@@ -79,87 +54,6 @@ func (topology) Upgrade(version string, spec map[string]interface{}, md types.Co
 		}
 
 		results := []interface{}{topoV1}
-
-		startupApp := v1.HostApp{Name: "startup"}
-		sceptreApp := v1.HostApp{Name: "sceptre"}
-
-		for _, node := range topoV0.Nodes {
-			if node.Metadata != nil {
-				md := structs.MapWithOptions(node.Metadata, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty())
-
-				if dc, ok := md["domain_controller"]; ok {
-					host := v1.Host{
-						Hostname: node.General.Hostname,
-						Metadata: map[string]interface{}{"domain_controller": dc},
-					}
-
-					startupApp.Hosts = append(startupApp.Hosts, host)
-
-					// Delete the domain controller metadata just in case there is SCEPTRE
-					// metadata also. This way, the domain controller metadata doesn't get
-					// included in the host metadata for the SCEPTRE app.
-					delete(md, "domain_controller")
-				}
-
-				// Metadata might be empty if v0 topology contained metadata keys not
-				// recognized by v0.Metadata struct.
-				if len(md) > 0 {
-					// Default type if no other node types defined above match.
-					md["type"] = "field-device"
-					var labels []string
-
-					for _, t := range nodeTypes {
-						if strings.Contains(node.General.Hostname, t) {
-							md["type"] = t
-							break
-						}
-					}
-
-					for _, e := range elkNodes {
-						if strings.Contains(node.General.Hostname, e) {
-							labels = append(labels, "elk")
-							break
-						}
-					}
-
-					if strings.Contains(node.General.Hostname, "ignition") {
-						labels = append(labels, "ignition")
-					}
-
-					if labels != nil {
-						md["labels"] = labels
-					}
-
-					host := v1.Host{
-						Hostname: node.General.Hostname,
-						Metadata: md,
-					}
-
-					sceptreApp.Hosts = append(sceptreApp.Hosts, host)
-				}
-			}
-		}
-
-		if len(startupApp.Hosts) > 0 || len(sceptreApp.Hosts) > 0 {
-			apps := new(v1.Apps)
-
-			if len(startupApp.Hosts) > 0 {
-				apps.Host = append(apps.Host, startupApp)
-			}
-
-			if len(sceptreApp.Hosts) > 0 {
-				apps.Host = append(apps.Host, sceptreApp)
-			}
-
-			scenario := v1.ScenarioSpec{Apps: apps}
-
-			config, _ := types.NewConfig("scenario/" + md.Name)
-			config.Version = "phenix.sandia.gov/v1"
-			config.Metadata.Annotations = map[string]string{"topology": "mosaics"}
-			config.Spec = structs.MapWithOptions(scenario, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty())
-
-			results = append(results, config)
-		}
 
 		return results, nil
 	}

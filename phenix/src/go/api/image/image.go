@@ -113,10 +113,6 @@ func SetDefaults(img *v1.Image) error {
 	addScriptToImage(img, "POSTBUILD_APT_CLEANUP", POSTBUILD_APT_CLEANUP)
 
 	switch img.Variant {
-	case "brash":
-		addScriptToImage(img, "POSTBUILD_BRASH", POSTBUILD_BRASH)
-
-		fallthrough
 	case "minbase", "mingui":
 		addScriptToImage(img, "POSTBUILD_NO_ROOT_PASSWD", POSTBUILD_NO_ROOT_PASSWD)
 		addScriptToImage(img, "POSTBUILD_PHENIX_HOSTNAME", POSTBUILD_PHENIX_HOSTNAME)

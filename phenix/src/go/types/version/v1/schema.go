@@ -10,7 +10,7 @@ components:
   schemas:
     Image:
       type: object
-      title: SCEPTRE Image
+      title: miniccc Image
       required:
       - release
       properties:
@@ -19,7 +19,7 @@ components:
           minLength: 1
     Topology:
       type: object
-      title: SCEPTRE Topology
+      title: Demo Topology
       required:
       - nodes
       properties:
@@ -185,7 +185,7 @@ components:
                     type: string
                     title: Image File Name
                     minLength: 1
-                    example: win10provider.qc2
+                    example: ubuntu.qc2
                   interface:
                     type: string
                     title: Drive Interface
@@ -321,7 +321,7 @@ components:
                     type: string
                     title: Ruleset Description
                     minLength: 1
-                    example: From ICS to the DMZ netowkr
+                    example: From Corp to the DMZ network
                   default:
                     type: string
                     title: Default Firewall Action
@@ -413,13 +413,16 @@ components:
                 type: string
                 title: Location of Source File to Inject
                 minLength: 1
-                example: ACTIVSg2000.PWB
+                example: foo.xml
               dst:
                 type: string
                 title: Destination Location to Inject File To
                 minLength: 1
-                example: sceptre/ACTIVSg2000.PWB
-                example: PowerWorld case binary data
+                example: /etc/phenix/foo.xml
+              description:
+                type: string
+                title: Description of file being injected
+                example: phenix config file
               permissions:
                 type: string
                 title: Injected file permissions (UNIX style)
@@ -439,7 +442,7 @@ components:
           type: string
           title: VLAN
           minLength: 1
-          example: SCADAPWR
+          example: EXP-1
         autostart:
           type: boolean
           title: Auto Start Interface
@@ -489,12 +492,12 @@ components:
         ruleset_out:
           type: string
           title: Outbound Ruleset
-          example: OutToICS
+          example: OutToInet
           pattern: '^[\w-]+$'
         ruleset_in:
           type: string
           title: Inbound Ruleset
-          example: InFromSCADA
+          example: InFromInet
           pattern: '^[\w-]+$'
     static_iface:
       allOf:

@@ -1,4 +1,4 @@
 #!/bin/bash
 
-sed -i -e 's/sceptre/{{ . }}/g' /etc/hosts
+sed -i -e 's/phenix/{{ . }}/g' /etc/hosts
 hostnamectl set-hostname {{ . }}

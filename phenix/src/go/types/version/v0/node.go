@@ -37,7 +37,6 @@ type Node struct {
 	Hardware   Hardware     `json:"hardware" yaml:"hardware"`
 	Network    Network      `json:"network" yaml:"network"`
 	Injections []*Injection `json:"injections" yaml:"injections"`
-	Metadata   *Metadata    `json:"metadata" yaml:"metadata"`
 }
 
 type General struct {
