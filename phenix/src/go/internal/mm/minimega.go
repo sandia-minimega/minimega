@@ -230,13 +230,7 @@ func (Minimega) GetVNCEndpoint(opts ...Option) (string, error) {
 	var endpoint string
 
 	for _, vm := range mmcli.RunTabular(cmd) {
-		host := vm["host"]
-
-		if IsHeadnode(host) {
-			host = "localhost"
-		}
-
-		endpoint = fmt.Sprintf("%s:%s", host, vm["vnc_port"])
+		endpoint = fmt.Sprintf("%s:%s", vm["host"], vm["vnc_port"])
 	}
 
 	if endpoint == "" {
