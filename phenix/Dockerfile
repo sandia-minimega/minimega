@@ -36,7 +36,7 @@ RUN wget https://github.com/glattercj/vmdb2/releases/download/v1.0/vmdb2 -P bin/
 FROM ubuntu:20.04
 
 RUN apt update \
-  && apt install -y cpio locales vmdb2 \
+  && apt install -y cpio locales nano vim vmdb2 \
   && locale-gen en_US.UTF-8 \
   && apt clean \
   && rm -rf /var/lib/apt/lists/* \
