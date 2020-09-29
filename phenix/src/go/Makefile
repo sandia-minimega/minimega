@@ -1,9 +1,8 @@
 SHELL := /bin/bash
 
-# Default hyperdark version number to the shorthand git commit hash if
-# not set at the command line.
+# Default version number to git commit hash if not set.
 VER     := $(or $(VER),$(shell git log -1 --format="%h"))
-COMMIT  := $(shell git log -1 --format="%h - %ae")
+COMMIT  := $(or $(COMMIT),$(shell git log -1 --format="%h - %ae"))
 DATE    := $(shell date -u)
 VERSION := $(VER) (commit $(COMMIT)) $(DATE)
 

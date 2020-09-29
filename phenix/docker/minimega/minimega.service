@@ -10,7 +10,7 @@ Environment="MM_DEGREE=2"
 Environment="MM_LOGLEVEL=info"
 Environment="MM_LOGFILE=/var/log/minimega.log"
 ExecStart=/usr/bin/minimega \
-        -force \
+  -force \
 	-nostdin \
 	-base=${MM_BASE} \
 	-filepath=${MM_FILEPATH} \

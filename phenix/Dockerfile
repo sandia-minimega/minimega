@@ -26,28 +26,26 @@ WORKDIR /phenix
 COPY --from=jsbuilder /phenix/src/js /phenix/src/js
 
 ARG PHENIX_VERSION=
+ARG PHENIX_COMMIT=
+RUN VER=${PHENIX_VERSION} COMMIT=${PHENIX_COMMIT} make bin/phenix
 
 RUN wget https://github.com/glattercj/vmdb2/releases/download/v1.0/vmdb2 -P bin/ \
   && chmod +x bin/vmdb2
 
-RUN VER=${PHENIX_VERSION} make bin/phenix
-
 
 FROM ubuntu:20.04
 
-RUN apt-get update && apt-get install -y \
-  cpio \
-  locales \
-  vmdb2 \
+RUN apt update \
+  && apt install -y cpio locales vmdb2 \
   && locale-gen en_US.UTF-8 \
-  && apt-get clean \
+  && apt clean \
   && rm -rf /var/lib/apt/lists/* \
   && rm -rf /var/cache/apt/archives/*
 
-ENV LANG en_US.UTF-8
+ENV LANG   en_US.UTF-8
 ENV LC_ALL en_US.UTF-8
 
-COPY --from=gobuilder /phenix/bin/vmdb2 /usr/bin/vmdb2
-COPY --from=gobuilder /phenix/bin/phenix /usr/bin/phenix
+COPY --from=gobuilder /phenix/bin/phenix /usr/local/bin/phenix
+COPY --from=gobuilder /phenix/bin/vmdb2  /usr/bin/vmdb2
 
 CMD ["phenix", "help"]
