@@ -37,13 +37,17 @@ RUN ln -s ../minimega.service \
 
 ARG MM_BASE=/tmp/minimega
 ARG MM_FILEPATH=/phenix/images
+ARG MM_PORT=11235
 ARG MM_DEGREE=20
+ARG MM_CONTEXT=phenix
 ARG MM_LOGLEVEL=debug
 ARG MM_LOGFILE=/var/log/minimega.log
 
 RUN echo "MM_BASE=${MM_BASE}" >> /etc/default/minimega \
   && echo "MM_FILEPATH=${MM_FILEPATH}" >> /etc/default/minimega \
+  && echo "MM_PORT=${MM_PORT}" >> /etc/default/minimega \
   && echo "MM_DEGREE=${MM_DEGREE}" >> /etc/default/minimega \
+  && echo "MM_CONTEXT=${MM_CONTEXT}" >> /etc/default/minimega \
   && echo "MM_LOGLEVEL=${MM_LOGLEVEL}" >> /etc/default/minimega \
   && echo "MM_LOGFILE=${MM_LOGFILE}" >> /etc/default/minimega
 

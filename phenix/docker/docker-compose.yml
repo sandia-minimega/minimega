@@ -43,6 +43,10 @@ services:
     build:
       context: ../../
       dockerfile: phenix/docker/minimega/Dockerfile
+      args:
+        MM_FILEPATH: /phenix/images
+        MM_PORT: "11235"
+        MM_CONTEXT: ${HOSTNAME}
     image: minimega
     container_name: minimega
     hostname: ${HOSTNAME}-minimega
