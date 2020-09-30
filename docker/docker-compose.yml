@@ -19,8 +19,8 @@ services:
         max-file: "5"
         max-size: "10m"
     ports:
+      - 9000:9000/udp
       - 9001:9001
-      - 11235:11235/udp
     volumes:
       - /tmp/minimega:/tmp/minimega
       - /var/log/minimega:/var/log/minimega

@@ -45,7 +45,7 @@ services:
       dockerfile: phenix/docker/minimega/Dockerfile
       args:
         MM_FILEPATH: /phenix/images
-        MM_PORT: "11235"
+        MM_PORT: "9000"
         MM_CONTEXT: ${HOSTNAME}
     image: minimega
     container_name: minimega
@@ -60,8 +60,8 @@ services:
         aliases:
           - ${HOSTNAME}-minimega
     ports:
+      - 9000:9000/udp
       - 9001:9001
-      - 11235:11235/udp
     volumes:
       - /phenix:/phenix
       - /tmp/minimega:/tmp/minimega

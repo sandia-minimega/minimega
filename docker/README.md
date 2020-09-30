@@ -19,7 +19,7 @@
 > NOTE: The additional privileges and system mounts (e.g. /dev) are required for the openvswitch process to run inside the container and to allow minimega to perform file injections.
 
   ```bash
-  $ docker run -dit --name minimega --hostname minimega --privileged --cap-add ALL -p 9001:9001 -p 11235:11235/udp -v /tmp/minimega:/tmp/minimega -v /var/log/minimega:/var/log/minimega -v /dev:/dev -v /lib/modules:/lib/modules:ro -v /sys/fs/cgroup:/sys/fs/cgroup:ro --health-cmd "minimega -e version" minimega bash -c "service openvswitch-switch start && minimega -logfile=/var/log/minimega/minimega.log"
+  $ docker run -dit --name minimega --hostname minimega --privileged --cap-add ALL -p 9000:9000/udp -p 9001:9001 -v /tmp/minimega:/tmp/minimega -v /var/log/minimega:/var/log/minimega -v /dev:/dev -v /lib/modules:/lib/modules:ro -v /sys/fs/cgroup:/sys/fs/cgroup:ro --health-cmd "minimega -e version" minimega bash -c "service openvswitch-switch start && minimega -logfile=/var/log/minimega/minimega.log"
   ```
 
 ---

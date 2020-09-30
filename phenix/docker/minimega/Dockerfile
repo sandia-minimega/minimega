@@ -37,7 +37,7 @@ RUN ln -s ../minimega.service \
 
 ARG MM_BASE=/tmp/minimega
 ARG MM_FILEPATH=/phenix/images
-ARG MM_PORT=11235
+ARG MM_PORT=9000
 ARG MM_DEGREE=20
 ARG MM_CONTEXT=phenix
 ARG MM_LOGLEVEL=debug

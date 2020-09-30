@@ -23,7 +23,6 @@ ExecStart=/usr/bin/minimega \
   -logfile=${MM_LOGFILE}
 Restart=always
 RestartSec=3
-ForwardToConsole=yes
 
 [Install]
 WantedBy=multi-user.target
