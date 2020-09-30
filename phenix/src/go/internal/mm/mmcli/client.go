@@ -46,31 +46,51 @@ func wrapErr(err error) chan *miniclient.Response {
 // ErrorResponse is used when only concerned with errors returned from a call to
 // minimega. The first error encountered will be returned.
 func ErrorResponse(responses chan *miniclient.Response) error {
+	var err error
+
 	for response := range responses {
+		if err != nil {
+			// We got our first error, so just drain the responses channel.
+			continue
+		}
+
 		for _, resp := range response.Resp {
 			if resp.Error != "" {
-				return errors.New(resp.Error)
+				err = errors.New(resp.Error)
+				break
 			}
 		}
 	}
 
-	return nil
+	return err
 }
 
 // SingleReponse is used when only a single response (or error) is expected to
 // be returned from a call to minimega.
 func SingleResponse(responses chan *miniclient.Response) (string, error) {
+	var (
+		resp string
+		err  error
+	)
+
 	for response := range responses {
+		if resp != "" || err != nil {
+			// We got our first response (or error), so just drain the responses
+			// channel.
+			continue
+		}
+
 		r := response.Resp[0]
 
 		if r.Error != "" {
-			return "", errors.New(r.Error)
+			err = errors.New(r.Error)
+			continue
 		}
 
-		return r.Response, nil
+		resp = r.Response
 	}
 
-	return "", errors.New("no responses")
+	return resp, err
 }
 
 // Run dials the minimega Unix socket and runs the given command, automatically
