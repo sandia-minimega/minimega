@@ -12,6 +12,16 @@ Docker to build phenix (assuming you have Docker installed). Simply run
 `./build-with-docker.sh` and once built, the phenix binary will be available
 at `bin/phenix`. See `./build-with-docker.sh -h` for usage details.
 
+A Docker image is also hosted on Docker Hub and can be pulled via:
+
+```
+$> docker pull activeshadow/phenix
+```
+
+Right now there's only a single `latest` tag used for the image on Docker
+Hub, and the image is updated automatically each time a commit is pushed to
+the `phenix` branch.
+
 ## Using
 
 Please see the documentation at https://activeshadow.github.io/minimega for
