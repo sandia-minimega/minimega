@@ -55,8 +55,8 @@ type General struct {
 }
 
 type Hardware struct {
-	CPU    CPU     `json:"cpu" yaml:"cpu"`
-	VCPU   int     `json:"vcpus" yaml:"vcpus"`
+	CPU    CPU     `json:"cpu" yaml:"cpu" structs:"cpu" mapstructure:"cpu"`
+	VCPU   int     `json:"vcpus" yaml:"vcpus" structs:"vcpus" mapstructure:"vcpus"`
 	Memory int     `json:"memory" yaml:"memory"`
 	OSType OSType  `json:"os_type" yaml:"os_type" mapstructure:"os_type"`
 	Drives []Drive `json:"drives" yaml:"drives"`
@@ -65,7 +65,7 @@ type Hardware struct {
 type Drive struct {
 	Image           string `json:"image" yaml:"image"`
 	Interface       string `json:"interface" yaml:"interface"`
-	CacheMode       string `json:"cache_mode" yaml:"cache_mode"`
+	CacheMode       string `json:"cache_mode" yaml:"cache_mode" structs:"cache_mode" mapstructure:"cache_mode"`
 	InjectPartition *int   `json:"inject_partition" yaml:"inject_partition" mapstructure:"inject_partition"`
 }
 
