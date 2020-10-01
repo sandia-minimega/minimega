@@ -1,4 +1,4 @@
-# phenix
+# phenix ![status](https://img.shields.io/badge/status-alpha-red.svg) ![Docker Cloud Automated build](https://img.shields.io/docker/cloud/automated/activeshadow/phenix) ![Docker Cloud Build Status](https://img.shields.io/docker/cloud/build/activeshadow/phenix)
 
 Welcome to `phenix`!
 
