@@ -1,108 +1,89 @@
 Import-Module C:\Windows\System32\UIAutomation.0.8.7B3.NET35\UIAutomation.dll
-
-Write-Output "Configuring network interfaces..."
-$wmi = gwmi win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"'
-
+echo 'Configuring network interfaces...'
+$wmi = gwmi win32_NetworkAdapterConfiguration -Filter 'ipenabled = "true"' | sort -Property Description
 {{ $length := len .Node.Network.Interfaces }}
-
 {{ range $idx, $iface := .Node.Network.Interfaces }}
-  {{ $mask := $iface.NetworkMask }}
+    {{ $mask := $iface.NetworkMask }}
 Do {
-  {{ if gt $length 1 }}
-  $status = $wmi[{{ $idx }}].EnableStatic('{{ $iface.Address }}', '{{ $mask }}')
-  {{ else }}
-  $status = $wmi.EnableStatic('{{ $iface.Address }}', '{{ $mask }}')
-  {{ end }}
-  Start-Sleep -Milliseconds 500
-} While ($status.ReturnValue -eq 2147786788)
-
-  {{ if ne $iface.Gateway "" }}
     {{ if gt $length 1 }}
-$wmi[{{ $idx }}].SetGateways('{{ $iface.Gateway }}', 1) | Out-Null
+    $status = $wmi[{{ $idx }}].EnableStatic('{{ $iface.Address }}', '{{ $mask }}')
     {{ else }}
-$wmi.SetGateways('{{ $iface.Gateway }}', 1) | Out-Null
+    $status = $wmi.EnableStatic('{{ $iface.Address }}', '{{ $mask }}')
     {{ end }}
-  {{ end }}
+    Start-Sleep -Milliseconds 500
+} While ($status.ReturnValue -eq 2147786788)
+    {{ if ne $iface.Gateway "" }}
+        {{ if gt $length 1 }}
+$wmi[{{ $idx }}].SetGateways('{{ $iface.Gateway }}', 1) | Out-Null
+        {{ else }}
+$wmi.SetGateways('{{ $iface.Gateway }}', 1) | Out-Null
+        {{ end }}
+    {{ end }}
 {{ end }}
-
 {{ if .Metadata.domain_controller }}
 $adapters = Get-NetAdapter | sort -Property ifIndex
 Set-DnsClientServerAddress -InterfaceIndex $adapters[0].ifIndex -ServerAddresses "{{ index .Metadata "domain_controller" "ip" }}"
 {{ end }}
-
-Write-Output "Done."
-
+echo 'Done.'
 $ErrorActionPreference = [System.Management.Automation.ActionPreference]::SilentlyContinue
-
-Write-Output "Checking for restart..."
-
+echo 'Checking for restart...'
 $countdown = 5
 Do {
-  Start-Sleep -s 1
-  $countDown--
-  $restart = Get-UIAWindow -Name "Microsoft Windows" | get-UIAButton -n "Restart Later"
+    Start-Sleep -s 1
+    $countDown--
+    $restart = Get-UIAWindow -Name "Microsoft Windows" | get-UIAButton -n "Restart Later"
 } Until ($restart -or ($countDown -le 0))
-
 $restart | Invoke-UIAButtonClick | Out-Null
+echo 'Ignoring restart.'
+$countdown = 5
+echo 'Checking for network location popup...'
+Do {
+    Start-Sleep -s 1
+    $countDown--
+    $cancel = Get-UIAWindow -Name "Set Network Location" | get-UIAButton -n "Cancel"
+} Until ($cancel -or ($countDown -le 0))
+$cancel | Invoke-UIAButtonClick | Out-Null
+echo 'Ignoring Set Network Location.'
+Start-Sleep -s 5
 
-Write-Output "Ignoring restart."
-Write-Output "Changing hostname."
-
-{{/* Is this Windows variable? */}}
 $host_name = hostname
-
-if ( $host_name -eq "{{ .Node.General.Hostname }}" ) {
+if (($host_name -eq "{{ .Node.General.Hostname }}") -or ("{{ .Node.General.Hostname }}" -like "*provider*")) {
 {{ if .Metadata.domain_controller }}
-  $domain = "{{ index .Metadata "domain_controller" "domain" }}"
-  $username = "{{ index .Metadata "domain_controller" "username" }}"
-  $password = "{{ index .Metadata "domain_controller" "password" }}" | ConvertTo-SecureString -AsPlainText -Force
-  $credential = New-Object System.Management.Automation.PSCredential($username,$password)
-  $sysinfo = systeminfo /fo csv | ConvertFrom-Csv
-
-  if ($sysinfo.Domain.contains($domain.ToUpper())) {
-      Write-Output "Deleting startup script..."
-      While (Test-Path C:\startup.ps1) {
-          Start-Sleep -m 500
-          Remove-Item $MyInvocation.InvocationName
-      }
-      exit
-  }
-
-  Write-Output "Joining $domain domain"
-  Add-Computer -DomainName $domain -Credential $credential
-
-  Write-Output "Adding auto logon"
-  $path = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
-
-  Set-ItemProperty -Path $path -Name DefaultUserName -Value $username
-  Set-ItemProperty -Path $path -Name DefaultPassword -Value {{ index .Metadata "domain_controller" "password" }}
-  Set-ItemProperty -Path $path -Name DefaultDomainName -Value $domain
-  Set-ItemProperty -Path $path -Name AutoAdminLogon -Value 1
+    $domain = "{{ index .Metadata "domain_controller" "domain" }}"
+    $username = "{{ index .Metadata "domain_controller" "username" }}"
+    $password = "{{ index .Metadata "domain_controller" "password" }}" | ConvertTo-SecureString -AsPlainText -Force
+    $credential = New-Object System.Management.Automation.PSCredential($username,$password)
+    $sysinfo = systeminfo /fo csv | ConvertFrom-Csv
+    if ($sysinfo.Domain.contains($domain.ToUpper())) {
+        echo 'Deleting startup script...'
+        While (Test-Path C:\startup.ps1) {
+            Start-Sleep -m 500
+            Remove-Item $MyInvocation.InvocationName
+        }
+        exit
+    }
+    echo 'Joining $domain domain'
+    Add-Computer -DomainName $domain -Credential $credential
+    echo 'Adding auto logon'
+    $path = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+    Set-ItemProperty -Path $path -Name DefaultUserName -Value $username
+    Set-ItemProperty -Path $path -Name DefaultPassword -Value {{ index .Metadata "domain_controller" "password" }}
+    Set-ItemProperty -Path $path -Name DefaultDomainName -Value $domain
+    Set-ItemProperty -Path $path -Name AutoAdminLogon -Value 1
 {{ end }}
-
-  Write-Output "Deleting hostname script..."
-  While (Test-Path C:\startup.ps1) {
-    Start-Sleep -m 500
-    Remove-Item $MyInvocation.InvocationName
-  }
+    echo 'Deleting hostname script...'
+    While (Test-Path C:\startup.ps1) {
+        Start-Sleep -m 500
+        Remove-Item $MyInvocation.InvocationName
+    }
 {{ if .Metadata.domain_controller }}
-  Write-Output "Domain joined..  Restarting..."
-  Restart-Computer
+    echo 'Domain joined..  Restarting...'
+    Restart-Computer
 {{ end }}
 } else {
-  Write-Output "Changing hostname"
-
-  $computer_info = Get-WmiObject -Class Win32_ComputerSystem
-  $computer_info.Rename("{{ .Node.General.Hostname }}")
-
-  Write-Output "Deleting configuration script..."
-
-  While (Test-Path C:\startup.ps1) {
-    Start-Sleep -m 500
-    Remove-Item $MyInvocation.InvocationName
-  }
-
-  Write-Output "Hostname changed.  Restarting..."
-
-  Restart-Computer
+    echo 'Changing hostname'
+    $computer_info = Get-WmiObject -Class Win32_ComputerSystem
+    $computer_info.Rename("{{ .Node.General.Hostname }}")
+    echo 'Hostname changed.  Restarting...'
+    Restart-Computer
 }
