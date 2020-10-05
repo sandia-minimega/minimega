@@ -14,6 +14,9 @@ var StoredVersion = map[string]string{
 	"Topology":   "v1",
 	"Scenario":   "v1",
 	"Experiment": "v1",
+	"Image":      "v1",
+	"User":       "v1",
+	"Role":       "v1",
 }
 
 // GetStoredSpecForKind looks up the current stored version for the given kind
