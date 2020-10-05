@@ -6,8 +6,8 @@ COPY ./src/js /phenix/src/js
 
 WORKDIR /phenix/src/js
 
-ARG PHENIX_WEB_AUTH
-ENV VUE_APP_AUTH ${PHENIX_WEB_AUTH:-enabled}
+ARG PHENIX_WEB_AUTH=disabled
+ENV VUE_APP_AUTH ${PHENIX_WEB_AUTH}
 
 RUN npm install \
   && npm run build
