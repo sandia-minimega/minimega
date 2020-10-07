@@ -212,7 +212,7 @@ func ApplyApps(action Action, exp *types.Experiment) error {
 			case ACTIONPRESTART:
 				err = a.PreStart(exp)
 			case ACTIONPOSTSTART:
-				err = a.PreStart(exp)
+				err = a.PostStart(exp)
 			case ACTIONCLEANUP:
 				err = a.Cleanup(exp)
 			}
