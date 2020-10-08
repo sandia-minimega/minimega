@@ -108,6 +108,11 @@ specific file is given, that file will be MIME encoded as part of the email. If
 a directory is given, then a random file from that directory will be chosen and
 sent. If no file or directory is given, no file will be sent. 
 
+*** IRC
+The clients will attempt to communicate with one another using Markov chains. By default,
+the clients will join rooms `#general` and `#random`, and their markov chains are fed with
+the 'lorem ipsump' text. Both of these parameters can be modified with user input.
+
 ** Additional client configuration options
 
 There are a number of additional client configuration options that impact all
@@ -151,11 +156,16 @@ server's status codes are RFC-compliant, but the accompanying descriptive
 text is unique to protonuke; this makes it easier to determine if you
 are connected to a protonuke SMTP server or some other server software.
 
+** IRC
+
+IRC servers simply forward client traffic where relevant and do not
+serve any specific content. The default IRC port is 6667 but can be modified by user input.
+
 * Examples
 
 Serve all protocols with default arguments and debug logging:
 
-	$ protonuke -http -https -ssh -smtp -serve -level debug
+	$ protonuke -http -https -ssh -smtp -irc -serve -level debug
 
 Serve HTTP and HTTPS with custom content - a large file in a simple index.html:
 
@@ -166,7 +176,7 @@ Serve HTTP and HTTPS with custom content - a large file in a simple index.html:
 
 Start a client on all protocols, connecting to google.com:
 
-	$ protonuke -http -https -smtp -ssh google.com
+	$ protonuke -http -https -smtp -ssh -irc google.com
 
 Start a client on HTTP, connecting to hosts in a subnet, as well as google.com,
 and go as fast as possible by setting parameters on the normal distribution:

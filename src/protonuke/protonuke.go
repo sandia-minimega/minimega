@@ -24,6 +24,11 @@ var (
 	f_https         = flag.Bool("https", false, "enable https (TLS) service")
 	f_httproot      = flag.String("httproot", "", "serve directory with http(s) instead of the builtin page generator")
 	f_httpGzip      = flag.Bool("httpgzip", false, "gzip image served in http/https pages")
+	f_irc           = flag.Bool("irc", false, "enable irc service")
+	f_ircport       = flag.String("ircport", "6667", "port to use for IRC client or server")
+	f_channels      = flag.String("channels", "#general,#random", "overwrite default IRC channels to join, seperated by commas")
+	f_messages      = flag.String("messages", "", "path to file containing IRC client messages to use")
+	f_markov        = flag.Bool("markov", true, "use markov chains")
 	f_httpCookies   = flag.Bool("httpcookies", false, "enable cookie jar in http/https clients")
 	f_httpUserAgent = flag.String("http-user-agent", "", "set a custom user-agent string")
 	f_ftp           = flag.Bool("ftp", false, "enable ftp service")
@@ -83,7 +88,8 @@ func main() {
 	}
 
 	// make sure at least one service is enabled
-	if !dns && !*f_http && !*f_https && !*f_ftp && !*f_ftps && !*f_ssh && !*f_smtp {
+
+	if !dns && !*f_http && !*f_https && !*f_irc && !*f_ftp && !*f_ftps && !*f_ssh && !*f_smtp {
 		log.Fatalln("no enabled services")
 	}
 
@@ -149,6 +155,13 @@ func main() {
 			go httpTLSServer(protocol)
 		} else {
 			go httpTLSClient(protocol)
+		}
+	}
+	if *f_irc {
+		if *f_serve {
+			go ircServer()
+		} else {
+			go ircClient()
 		}
 	}
 	if *f_ftp {

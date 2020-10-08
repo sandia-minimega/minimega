@@ -20,6 +20,7 @@ var (
 	httpTLSReportChan chan uint64
 	sshReportChan     chan uint64
 	smtpReportChan    chan uint64
+	ircReportChan     chan uint64
 
 	dnsReportHits     uint64
 	ftpReportHits     uint64
@@ -28,6 +29,7 @@ var (
 	httpTLSReportHits uint64
 	sshReportBytes    uint64
 	smtpReportMail    uint64
+	ircReportHits     uint64
 )
 
 func init() {
@@ -38,6 +40,7 @@ func init() {
 	httpTLSReportChan = make(chan uint64, 1024)
 	sshReportChan = make(chan uint64, 1024)
 	smtpReportChan = make(chan uint64, 1024)
+	ircReportChan = make(chan uint64, 1024)
 
 	go func() {
 		for {
@@ -56,6 +59,8 @@ func init() {
 				sshReportBytes += i
 			case <-smtpReportChan:
 				smtpReportMail++
+			case <-ircReportChan:
+				ircReportHits++
 			}
 		}
 	}()
@@ -71,6 +76,7 @@ func report(reportWait time.Duration) {
 	lasthttpTLSReportHits := httpTLSReportHits
 	lastsshReportBytes := sshReportBytes
 	lastsmtpReportMail := smtpReportMail
+	lastircReportHits := ircReportHits
 
 	for {
 		time.Sleep(reportWait)
@@ -84,6 +90,7 @@ func report(reportWait time.Duration) {
 		etls := httpTLSReportHits - lasthttpTLSReportHits
 		essh := sshReportBytes - lastsshReportBytes
 		esmtp := smtpReportMail - lastsmtpReportMail
+		eirc := ircReportHits - lastircReportHits
 
 		lastDnsReportHits = dnsReportHits
 		lastftpReportHits = ftpReportHits
@@ -92,6 +99,7 @@ func report(reportWait time.Duration) {
 		lasthttpTLSReportHits = httpTLSReportHits
 		lastsshReportBytes = sshReportBytes
 		lastsmtpReportMail = smtpReportMail
+		lastircReportHits = ircReportHits
 
 		log.Debugln("total elapsed time: ", elapsedTime)
 
@@ -119,6 +127,9 @@ func report(reportWait time.Duration) {
 		}
 		if *f_smtp {
 			fmt.Fprintf(w, "smtp\t%v\t%.01f mails/min\n", smtpReportMail, float64(esmtp)/elapsedTime.Minutes())
+		}
+		if *f_irc {
+			fmt.Fprintf(w, "irc\t%v\t%.01f hits/min\n", ircReportHits, float64(eirc)/elapsedTime.Minutes())
 		}
 		w.Flush()
 		fmt.Println(buf.String())
