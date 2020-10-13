@@ -14,7 +14,7 @@ setup(
     long_description=readme_content,
     license="GPLv3",
     url="https://minimega.org",
-    version="2.6",
+    version="2.7",
     py_modules=["minimega"],
     classifiers=[
         "Development Status :: 5 - Production/Stable",
