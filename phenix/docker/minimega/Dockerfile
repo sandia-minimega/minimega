@@ -25,6 +25,17 @@ RUN apt update && apt install -y \
 COPY --from=gobuilder /minimega/bin/minimega /usr/bin/minimega
 COPY --from=gobuilder /minimega/bin/miniweb  /usr/bin/miniweb
 
+# The version of miniccc used has to match exactly with the version of minimega
+# running, so let's include them in the image so we can easily grab a copy that
+# is sure to be the same version.
+COPY --from=gobuilder /minimega/bin/miniccc     /opt/minimega/bin/miniccc
+COPY --from=gobuilder /minimega/bin/miniccc.exe /opt/minimega/bin/miniccc.exe
+
+# For the sake of consistency, let's go ahead and include protonuke in the image
+# too so we can easily grab a copy if/when necessary.
+COPY --from=gobuilder /minimega/bin/protonuke     /opt/minimega/bin/protonuke
+COPY --from=gobuilder /minimega/bin/protonuke.exe /opt/minimega/bin/protonuke.exe
+
 COPY ./misc/web /opt/minimega/misc/web
 
 ADD phenix/docker/minimega/minimega.service /etc/systemd/system/minimega.service
