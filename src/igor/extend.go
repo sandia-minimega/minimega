@@ -63,8 +63,9 @@ func runExtend(cmd *Command, args []string) {
 
 	if igor.Username != "root" {
 		// Make sure the reservation doesn't exceed any limits
-		if err := igor.checkTimeLimit(len(r.Hosts), r.Remaining(igor.Now)+duration); err != nil {
-			log.Fatalln(err)
+		remainingResDuration := r.Remaining(igor.Now)
+		if err := igor.checkTimeLimit(len(r.Hosts), remainingResDuration+duration); err != nil {
+			log.Fatalln(err, " (%v + %v minutes remaining in your reservation.)", duration, remainingResDuration)
 		}
 
 		// Make sure that the user is extending a reservation that is near its
