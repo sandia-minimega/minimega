@@ -9,5 +9,5 @@ else
     echo "minimega user already exists."
 fi
 
-sudo chown -R minimega:minimega /usr/share/doc/minimega
-sudo chown -R minimega:minimega /opt/minimega
+chown -R minimega:minimega /usr/share/doc/minimega
+chown -R minimega:minimega /opt/minimega
