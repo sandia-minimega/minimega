@@ -28,7 +28,7 @@ func Start(opts ...ServerOption) error {
 		pword := creds[1]
 		rname := creds[2]
 
-		if _, err := config.Get("user/" + uname); err == nil {
+		if _, err := config.Get("user/"+uname, false); err == nil {
 			continue
 		}
 

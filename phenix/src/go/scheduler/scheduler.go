@@ -1,7 +1,7 @@
 package scheduler
 
 import (
-	v1 "phenix/types/version/v1"
+	ifaces "phenix/types/interfaces"
 	"phenix/util/shell"
 )
 
@@ -18,7 +18,7 @@ type Scheduler interface {
 	Name() string
 
 	// Schedule runs the phenix scheduler algorithm against the given experiment.
-	Schedule(*v1.ExperimentSpec) error
+	Schedule(ifaces.ExperimentSpec) error
 }
 
 func List() []string {
@@ -35,7 +35,7 @@ func List() []string {
 	return names
 }
 
-func Schedule(name string, spec *v1.ExperimentSpec) error {
+func Schedule(name string, spec ifaces.ExperimentSpec) error {
 	scheduler, ok := schedulers[name]
 	if !ok {
 		scheduler = new(userScheduler)

@@ -7,12 +7,9 @@ import (
 	"phenix/store"
 	"phenix/types"
 	"phenix/types/version"
-	"phenix/types/version/upgrade"
-	v1 "phenix/types/version/v1"
 	"phenix/util"
 	"phenix/util/editor"
 
-	"github.com/mitchellh/mapstructure"
 	"gopkg.in/yaml.v3"
 )
 
@@ -37,7 +34,7 @@ func Init() error {
 			return fmt.Errorf("unmarshaling default config %s: %w", name, err)
 		}
 
-		if _, err := Get("role/" + c.Metadata.Name); err == nil {
+		if _, err := Get("role/"+c.Metadata.Name, false); err == nil {
 			continue
 		}
 
@@ -92,7 +89,7 @@ func List(which string) (types.Configs, error) {
 // its `spec` and `status` fields casted to the given type, but instead will be
 // generic `map[string]interface{}` fields. It's up to the caller to convert
 // these fields into the appropriate types.
-func Get(name string) (*types.Config, error) {
+func Get(name string, upgrade bool) (*types.Config, error) {
 	if name == "" {
 		return nil, util.HumanizeError(fmt.Errorf("no config name provided"), "")
 	}
@@ -104,6 +101,27 @@ func Get(name string) (*types.Config, error) {
 
 	if err := store.Get(c); err != nil {
 		return nil, fmt.Errorf("getting config from store: %w", err)
+	}
+
+	if upgrade {
+		latest := version.StoredVersion[c.Kind]
+
+		if c.APIVersion() != latest {
+			upgrader := types.GetUpgrader(c.Kind + "/" + latest)
+			if upgrader != nil {
+				iface, err := upgrader.Upgrade(c.APIVersion(), c.Spec, c.Metadata)
+				if err != nil {
+					return nil, fmt.Errorf("upgrading config: %w", err)
+				}
+
+				cfg, err := types.NewConfigFromSpec(c.Metadata.Name, iface)
+				if err != nil {
+					return nil, fmt.Errorf("creating new config from spec: %w", err)
+				}
+
+				return cfg, nil
+			}
+		}
 	}
 
 	return c, nil
@@ -124,58 +142,6 @@ func Create(path string, validate bool) (*types.Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("creating new config from file: %w", err)
 	}
-
-	// *** BEGIN config upgrade process ***
-
-	// Get current version of config being stored (ie. v1)
-	sv := version.StoredVersion[c.Kind]
-
-	// Check if the specified version of this config is the stored version.
-	if c.APIVersion() != sv {
-		// Specified version of this config is not the stored version, so get
-		// upgrader for the config kind.
-		upgrader := upgrade.GetUpgrader(c.Kind + "/" + sv)
-
-		// Abort if no upgrader is registered for this config kind.
-		if upgrader == nil {
-			return nil, fmt.Errorf("config needs to be upgraded to %s but no upgrader found", sv)
-		}
-
-		// Upgrade the config using the registered upgrader.
-		specs, err := upgrader.Upgrade(c.APIVersion(), c.Spec, c.Metadata)
-		if err != nil {
-			return nil, fmt.Errorf("upgrading config to %s: %w", sv, err)
-		}
-
-		// Track config to return, since upgrader may produce multiple configs (but
-		// only one of each kind).
-		var toReturn *types.Config
-
-		for _, s := range specs {
-			cfg, err := types.NewConfigFromSpec(c.Metadata.Name, s)
-			if err != nil {
-				return nil, fmt.Errorf("creating new config: %w", err)
-			}
-
-			if validate {
-				if err := types.ValidateConfigSpec(*cfg); err != nil {
-					return nil, fmt.Errorf("validating config: %w", err)
-				}
-			}
-
-			if err := store.Create(cfg); err != nil {
-				return nil, fmt.Errorf("storing config: %w", err)
-			}
-
-			if toReturn == nil && cfg.Kind == c.Kind {
-				toReturn = cfg
-			}
-		}
-
-		return toReturn, nil
-	}
-
-	// *** END config upgrade process ***
 
 	if validate {
 		if err := types.ValidateConfigSpec(*c); err != nil {
@@ -212,7 +178,7 @@ func Create(path string, validate bool) (*types.Config, error) {
 // `editor.ErrNoChange` is returned. This can be checked using the
 // `IsConfigNotModified` function. It returns the updated config and any errors
 // encountered while editing the config.
-func Edit(name string) (*types.Config, error) {
+func Edit(name string, force bool) (*types.Config, error) {
 	if name == "" {
 		return nil, fmt.Errorf("no config name provided")
 	}
@@ -226,14 +192,13 @@ func Edit(name string) (*types.Config, error) {
 		return nil, fmt.Errorf("getting config from store: %w", err)
 	}
 
-	if c.Kind == "Experiment" {
-		var status v1.ExperimentStatus
-
-		if err := mapstructure.Decode(c.Status, &status); err != nil {
-			return nil, fmt.Errorf("decoding experiment status: %w", err)
+	if !force && c.Kind == "Experiment" {
+		exp, err := types.DecodeExperimentFromConfig(*c)
+		if err != nil {
+			return nil, fmt.Errorf("decoding experiment from config: %w", err)
 		}
 
-		if status.Running() {
+		if exp.Running() {
 			return nil, fmt.Errorf("cannot edit running experiment")
 		}
 	}
@@ -293,7 +258,7 @@ func Delete(name string) error {
 		return nil
 	}
 
-	c, err := Get(name)
+	c, err := Get(name, false)
 	if err != nil {
 		return fmt.Errorf("getting config '%s': %w", name, err)
 	}

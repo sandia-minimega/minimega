@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"phenix/internal/mm"
-	v1 "phenix/types/version/v1"
+	ifaces "phenix/types/interfaces"
 )
 
 func init() {
@@ -21,8 +21,8 @@ func (subnetCompute) Name() string {
 	return "subnet-compute"
 }
 
-func (subnetCompute) Schedule(spec *v1.ExperimentSpec) error {
-	if len(spec.Topology.Nodes) == 0 {
+func (subnetCompute) Schedule(spec ifaces.ExperimentSpec) error {
+	if len(spec.Topology().Nodes()) == 0 {
 		return fmt.Errorf("no VMs defined for experiment")
 	}
 
@@ -36,18 +36,18 @@ func (subnetCompute) Schedule(spec *v1.ExperimentSpec) error {
 
 	// Update VLAN alias map and cluster host VM count to account for VMs manually
 	// scheduled before sorting hosts by VM count below.
-	for node, host := range spec.Schedules {
+	for node, host := range spec.Schedules() {
 		if h := cluster.FindHostByName(host); h != nil {
-			if n := spec.Topology.FindNodeByName(node); n != nil {
-				if len(n.Network.Interfaces) == 0 {
-					return fmt.Errorf("node %s doesn't have any network interfaces", n.General.Hostname)
+			if n := spec.Topology().FindNodeByName(node); n != nil {
+				if len(n.Network().Interfaces()) == 0 {
+					return fmt.Errorf("node %s doesn't have any network interfaces", n.General().Hostname())
 				}
 
 				// cluster.IncrHostVMs(host, 1)
 				// cluster.IncrHostCPUCommit(host, n.Hardware.VCPU)
-				cluster.IncrHostMemCommit(host, n.Hardware.Memory)
+				cluster.IncrHostMemCommit(host, n.Hardware().Memory())
 
-				vlan := n.Network.Interfaces[0].VLAN
+				vlan := n.Network().Interfaces()[0].VLAN()
 
 				hosts := vlans[vlan]
 				hosts = append(hosts, h.Name)
@@ -58,23 +58,23 @@ func (subnetCompute) Schedule(spec *v1.ExperimentSpec) error {
 
 	cluster.SortByCommittedMem(true)
 
-	for _, node := range spec.Topology.Nodes {
-		if _, ok := spec.Schedules[node.General.Hostname]; ok {
+	for _, node := range spec.Topology().Nodes() {
+		if _, ok := spec.Schedules()[node.General().Hostname()]; ok {
 			continue
 		}
 
 		var scheduled *mm.Host
 
-		if len(node.Network.Interfaces) == 0 {
-			return fmt.Errorf("node %s doesn't have any network interfaces", node.General.Hostname)
+		if len(node.Network().Interfaces()) == 0 {
+			return fmt.Errorf("node %s doesn't have any network interfaces", node.General().Hostname())
 		}
 
-		vlan := node.Network.Interfaces[0].VLAN
+		vlan := node.Network().Interfaces()[0].VLAN()
 
 		if hosts, ok := vlans[vlan]; ok {
 			for _, name := range hosts {
 				if host := cluster.FindHostByName(name); host != nil {
-					if (host.MemCommit + node.Hardware.Memory) < host.MemTotal {
+					if (host.MemCommit + node.Hardware().Memory()) < host.MemTotal {
 						scheduled = host
 						break
 					}
@@ -92,11 +92,11 @@ func (subnetCompute) Schedule(spec *v1.ExperimentSpec) error {
 			vlans[vlan] = hosts
 		}
 
-		spec.Schedules[node.General.Hostname] = scheduled.Name
+		spec.Schedules()[node.General().Hostname()] = scheduled.Name
 
 		// cluster.IncrHostVMs(scheduled.Name, 1)
 		// cluster.IncrHostCPUCommit(scheduled.Name, node.Hardware.VCPU)
-		cluster.IncrHostMemCommit(scheduled.Name, node.Hardware.Memory)
+		cluster.IncrHostMemCommit(scheduled.Name, node.Hardware().Memory())
 
 		cluster.SortByCommittedMem(true)
 	}

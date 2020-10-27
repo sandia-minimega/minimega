@@ -8,7 +8,7 @@ import (
 
 	"phenix/internal/common"
 	"phenix/internal/mm"
-	v1 "phenix/types/version/v1"
+	ifaces "phenix/types/interfaces"
 	"phenix/util/shell"
 )
 
@@ -28,7 +28,7 @@ func (this userScheduler) Name() string {
 	return this.options.Name
 }
 
-func (this userScheduler) Schedule(spec *v1.ExperimentSpec) error {
+func (this userScheduler) Schedule(spec ifaces.ExperimentSpec) error {
 	if err := this.shellOut(spec); err != nil {
 		return fmt.Errorf("running user scheduler: %w", err)
 	}
@@ -36,7 +36,7 @@ func (this userScheduler) Schedule(spec *v1.ExperimentSpec) error {
 	return nil
 }
 
-func (this userScheduler) shellOut(spec *v1.ExperimentSpec) error {
+func (this userScheduler) shellOut(spec ifaces.ExperimentSpec) error {
 	cmdName := "phenix-scheduler-" + this.options.Name
 
 	if !shell.CommandExists(cmdName) {
@@ -49,8 +49,8 @@ func (this userScheduler) shellOut(spec *v1.ExperimentSpec) error {
 	}
 
 	exp := struct {
-		Spec  *v1.ExperimentSpec `json:"spec"`
-		Hosts mm.Hosts           `json:"hosts"`
+		Spec  ifaces.ExperimentSpec `json:"spec"`
+		Hosts mm.Hosts              `json:"hosts"`
 	}{
 		Spec:  spec,
 		Hosts: cluster,
@@ -83,7 +83,7 @@ func (this userScheduler) shellOut(spec *v1.ExperimentSpec) error {
 		return fmt.Errorf("unmarshaling experiment spec from JSON: %w", err)
 	}
 
-	spec.Schedules = exp.Spec.Schedules
+	spec.SetSchedule(exp.Spec.Schedules())
 
 	return nil
 }

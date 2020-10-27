@@ -2,7 +2,7 @@ package experiment
 
 import (
 	"phenix/internal/common"
-	v1 "phenix/types/version/v1"
+	ifaces "phenix/types/interfaces"
 )
 
 type CreateOption func(*createOptions)
@@ -71,8 +71,8 @@ type SaveOption func(*saveOptions)
 type saveOptions struct {
 	name string
 
-	spec   *v1.ExperimentSpec
-	status *v1.ExperimentStatus
+	spec   ifaces.ExperimentSpec
+	status ifaces.ExperimentStatus
 
 	saveNilSpec   bool
 	saveNilStatus bool
@@ -94,13 +94,13 @@ func SaveWithName(n string) SaveOption {
 	}
 }
 
-func SaveWithSpec(s *v1.ExperimentSpec) SaveOption {
+func SaveWithSpec(s ifaces.ExperimentSpec) SaveOption {
 	return func(o *saveOptions) {
 		o.spec = s
 	}
 }
 
-func SaveWithStatus(s *v1.ExperimentStatus) SaveOption {
+func SaveWithStatus(s ifaces.ExperimentStatus) SaveOption {
 	return func(o *saveOptions) {
 		o.status = s
 	}

@@ -11,7 +11,6 @@ import (
 
 	"phenix/internal/mm"
 	"phenix/types"
-	v1 "phenix/types/version/v1"
 
 	"github.com/olekukonko/tablewriter"
 )
@@ -41,23 +40,17 @@ func PrintTableOfExperiments(writer io.Writer, exps ...types.Experiment) {
 	for _, exp := range exps {
 		var apps []string
 
-		if exp.Spec.Scenario != nil && exp.Spec.Scenario.Apps != nil {
-			for _, app := range exp.Spec.Scenario.Apps.Experiment {
-				apps = append(apps, app.Name)
-			}
-
-			for _, app := range exp.Spec.Scenario.Apps.Host {
-				apps = append(apps, app.Name)
-			}
+		for _, app := range exp.Apps() {
+			apps = append(apps, app.Name())
 		}
 
 		table.Append([]string{
-			exp.Spec.ExperimentName,
+			exp.Spec.ExperimentName(),
 			exp.Metadata.Annotations["topology"],
 			exp.Metadata.Annotations["scenario"],
-			exp.Status.StartTime,
-			fmt.Sprintf("%d", len(exp.Spec.Topology.Nodes)),
-			fmt.Sprintf("%d", len(exp.Spec.VLANs.Aliases)),
+			exp.Status.StartTime(),
+			fmt.Sprintf("%d", len(exp.Spec.Topology().Nodes())),
+			fmt.Sprintf("%d", len(exp.Spec.VLANs().Aliases())),
 			strings.Join(apps, ", "),
 		})
 
@@ -188,7 +181,7 @@ func PrintTableOfImageConfigs(writer io.Writer, optional []string, imgs ...types
 	table.Render()
 }
 
-func PrintTableOfVLANAliases(writer io.Writer, info map[string]v1.VLANAliases) {
+func PrintTableOfVLANAliases(writer io.Writer, info map[string]map[string]int) {
 	table := tablewriter.NewWriter(writer)
 	table.SetHeader([]string{"Experiment", "VLAN Alias", "VLAN ID"})
 

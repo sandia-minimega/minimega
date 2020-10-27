@@ -3,7 +3,6 @@ package util
 import (
 	"phenix/internal/mm"
 	"phenix/types"
-	v1 "phenix/types/version/v1"
 	"phenix/web/cache"
 	"phenix/web/proto"
 	"phenix/web/rbac"
@@ -12,11 +11,11 @@ import (
 
 func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []mm.VM) *proto.Experiment {
 	pb := &proto.Experiment{
-		Name:      exp.Spec.ExperimentName,
+		Name:      exp.Spec.ExperimentName(),
 		Topology:  exp.Metadata.Annotations["topology"],
 		Scenario:  exp.Metadata.Annotations["scenario"],
-		StartTime: exp.Status.StartTime,
-		Running:   exp.Status.Running(),
+		StartTime: exp.Status.StartTime(),
+		Running:   exp.Running(),
 		Status:    string(status),
 		VmCount:   uint32(len(vms)),
 	}
@@ -26,31 +25,25 @@ func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []mm.VM
 		pb.Vms[i] = VMToProtobuf(exp.Metadata.Name, v)
 	}
 
-	if exp.Spec.Scenario != nil && exp.Spec.Scenario.Apps != nil {
-		var apps []string
+	var apps []string
 
-		for _, app := range exp.Spec.Scenario.Apps.Experiment {
-			apps = append(apps, app.Name)
-		}
-
-		for _, app := range exp.Spec.Scenario.Apps.Host {
-			apps = append(apps, app.Name)
-		}
-
-		pb.Apps = apps
+	for _, app := range exp.Apps() {
+		apps = append(apps, app.Name())
 	}
 
-	var aliases v1.VLANAliases
+	pb.Apps = apps
 
-	if exp.Status.Running() {
-		aliases = exp.Status.VLANs
+	var aliases map[string]int
+
+	if exp.Running() {
+		aliases = exp.Status.VLANs()
 
 		var (
 			min = 0
 			max = 0
 		)
 
-		for _, k := range exp.Status.VLANs {
+		for _, k := range exp.Status.VLANs() {
 			if min == 0 || k < min {
 				min = k
 			}
@@ -63,10 +56,10 @@ func ExperimentToProtobuf(exp types.Experiment, status cache.Status, vms []mm.VM
 		pb.VlanMin = uint32(min)
 		pb.VlanMax = uint32(max)
 	} else {
-		aliases = exp.Spec.VLANs.Aliases
+		aliases = exp.Spec.VLANs().Aliases()
 
-		pb.VlanMin = uint32(exp.Spec.VLANs.Min)
-		pb.VlanMax = uint32(exp.Spec.VLANs.Max)
+		pb.VlanMin = uint32(exp.Spec.VLANs().Min())
+		pb.VlanMax = uint32(exp.Spec.VLANs().Max())
 	}
 
 	if aliases != nil {
@@ -129,7 +122,7 @@ func CapturesToProtobuf(captures []mm.Capture) []*proto.Capture {
 func ExperimentScheduleToProtobuf(exp types.Experiment) *proto.ExperimentSchedule {
 	var sched []*proto.Schedule
 
-	for vm, host := range exp.Spec.Schedules {
+	for vm, host := range exp.Spec.Schedules() {
 		sched = append(sched, &proto.Schedule{Vm: vm, Host: host})
 	}
 

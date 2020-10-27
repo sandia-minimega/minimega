@@ -6,11 +6,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"phenix/api/experiment"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
+
+	"phenix/api/experiment"
 )
 
 var diskNameWithTstampRegex = regexp.MustCompile(`(.*)_\d{14}`)
@@ -44,12 +45,12 @@ func getBaseImage(expName, vmName string) (string, error) {
 		return "", fmt.Errorf("getting experiment %s: %w", expName, err)
 	}
 
-	vm := exp.Spec.Topology.FindNodeByName(vmName)
+	vm := exp.Spec.Topology().FindNodeByName(vmName)
 	if vm == nil {
 		return "", fmt.Errorf("getting vm %s for experiment %s", vmName, expName)
 	}
 
-	return vm.Hardware.Drives[0].Image, nil
+	return vm.Hardware().Drives()[0].Image(), nil
 }
 
 type copier struct {

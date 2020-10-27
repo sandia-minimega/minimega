@@ -34,7 +34,7 @@ func Count(expName string) (int, error) {
 		return 0, fmt.Errorf("getting experiment %s: %w", expName, err)
 	}
 
-	return len(exp.Spec.Topology.Nodes), nil
+	return len(exp.Spec.Topology().Nodes()), nil
 }
 
 // List collects VMs, combining topology settings with running VM details if the
@@ -55,29 +55,29 @@ func List(expName string) ([]mm.VM, error) {
 		vms     []mm.VM
 	)
 
-	if exp.Status.Running() {
+	if exp.Running() {
 		for _, vm := range mm.GetVMInfo(mm.NS(expName)) {
 			running[vm.Name] = vm
 		}
 	}
 
-	for idx, node := range exp.Spec.Topology.Nodes {
+	for idx, node := range exp.Spec.Topology().Nodes() {
 		vm := mm.VM{
 			ID:         idx,
-			Name:       node.General.Hostname,
-			Experiment: exp.Spec.ExperimentName,
-			CPUs:       node.Hardware.VCPU,
-			RAM:        node.Hardware.Memory,
-			Disk:       node.Hardware.Drives[0].Image,
+			Name:       node.General().Hostname(),
+			Experiment: exp.Spec.ExperimentName(),
+			CPUs:       node.Hardware().VCPU(),
+			RAM:        node.Hardware().Memory(),
+			Disk:       node.Hardware().Drives()[0].Image(),
 			Interfaces: make(map[string]string),
-			DoNotBoot:  *node.General.DoNotBoot,
-			OSType:     string(node.Hardware.OSType),
+			DoNotBoot:  *node.General().DoNotBoot(),
+			OSType:     string(node.Hardware().OSType()),
 		}
 
-		for _, iface := range node.Network.Interfaces {
-			vm.IPv4 = append(vm.IPv4, iface.Address)
-			vm.Networks = append(vm.Networks, iface.VLAN)
-			vm.Interfaces[iface.VLAN] = iface.Address
+		for _, iface := range node.Network().Interfaces() {
+			vm.IPv4 = append(vm.IPv4, iface.Address())
+			vm.Networks = append(vm.Networks, iface.VLAN())
+			vm.Interfaces[iface.VLAN()] = iface.Address()
 		}
 
 		if details, ok := running[vm.Name]; ok {
@@ -110,7 +110,7 @@ func List(expName string) ([]mm.VM, error) {
 				}
 			}
 		} else {
-			vm.Host = exp.Spec.Schedules[vm.Name]
+			vm.Host = exp.Spec.Schedules()[vm.Name]
 		}
 
 		vms = append(vms, vm)
@@ -139,33 +139,33 @@ func Get(expName, vmName string) (*mm.VM, error) {
 
 	var vm *mm.VM
 
-	for idx, node := range exp.Spec.Topology.Nodes {
-		if node.General.Hostname != vmName {
+	for idx, node := range exp.Spec.Topology().Nodes() {
+		if node.General().Hostname() != vmName {
 			continue
 		}
 
 		vm = &mm.VM{
 			ID:         idx,
-			Name:       node.General.Hostname,
-			Experiment: exp.Spec.ExperimentName,
-			CPUs:       node.Hardware.VCPU,
-			RAM:        node.Hardware.Memory,
-			Disk:       node.Hardware.Drives[0].Image,
+			Name:       node.General().Hostname(),
+			Experiment: exp.Spec.ExperimentName(),
+			CPUs:       node.Hardware().VCPU(),
+			RAM:        node.Hardware().Memory(),
+			Disk:       node.Hardware().Drives()[0].Image(),
 			Interfaces: make(map[string]string),
-			OSType:     string(node.Hardware.OSType),
+			OSType:     string(node.Hardware().OSType()),
 			Metadata:   make(map[string]interface{}),
 		}
 
-		for _, iface := range node.Network.Interfaces {
-			vm.IPv4 = append(vm.IPv4, iface.Address)
-			vm.Networks = append(vm.Networks, iface.VLAN)
-			vm.Interfaces[iface.VLAN] = iface.Address
+		for _, iface := range node.Network().Interfaces() {
+			vm.IPv4 = append(vm.IPv4, iface.Address())
+			vm.Networks = append(vm.Networks, iface.VLAN())
+			vm.Interfaces[iface.VLAN()] = iface.Address()
 		}
 
-		for _, app := range exp.GetHostApps() {
-			for _, h := range app.Hosts {
-				if h.Hostname == vm.Name {
-					vm.Metadata[app.Name] = h.Metadata
+		for _, app := range exp.Apps() {
+			for _, h := range app.Hosts() {
+				if h.Hostname() == vm.Name {
+					vm.Metadata[app.Name()] = h.Metadata
 				}
 			}
 		}
@@ -175,8 +175,8 @@ func Get(expName, vmName string) (*mm.VM, error) {
 		return nil, fmt.Errorf("VM %s not found in experiment %s", vmName, expName)
 	}
 
-	if !exp.Status.Running() {
-		vm.Host = exp.Spec.Schedules[vm.Name]
+	if !exp.Running() {
+		vm.Host = exp.Spec.Schedules()[vm.Name]
 		return vm, nil
 	}
 
@@ -245,32 +245,32 @@ func Update(opts ...UpdateOption) error {
 		return fmt.Errorf("unable to get experiment %s: %w", o.exp, err)
 	}
 
-	vm := exp.Spec.Topology.FindNodeByName(o.vm)
+	vm := exp.Spec.Topology().FindNodeByName(o.vm)
 	if vm == nil {
 		return fmt.Errorf("unable to find VM %s in experiment %s", o.vm, o.exp)
 	}
 
 	if o.cpu != 0 {
-		vm.Hardware.VCPU = o.cpu
+		vm.Hardware().SetVCPU(o.cpu)
 	}
 
 	if o.mem != 0 {
-		vm.Hardware.Memory = o.mem
+		vm.Hardware().SetMemory(o.mem)
 	}
 
 	if o.disk != "" {
-		vm.Hardware.Drives[0].Image = o.disk
+		vm.Hardware().Drives()[0].SetImage(o.disk)
 	}
 
 	if o.dnb != nil {
-		vm.General.DoNotBoot = o.dnb
+		vm.General().SetDoNotBoot(*o.dnb)
 	}
 
 	if o.host != nil {
 		if *o.host == "" {
-			delete(exp.Spec.Schedules, o.vm)
+			delete(exp.Spec.Schedules(), o.vm)
 		} else {
-			exp.Spec.Schedules[o.vm] = *o.host
+			exp.Spec.ScheduleNode(o.vm, *o.host)
 		}
 	}
 
@@ -355,18 +355,18 @@ func Redeploy(expName, vmName string, opts ...RedeployOption) error {
 			return fmt.Errorf("getting experiment %s: %w", expName, err)
 		}
 
-		for _, n := range exp.Spec.Topology.Nodes {
-			if n.General.Hostname != vmName {
+		for _, n := range exp.Spec.Topology().Nodes() {
+			if n.General().Hostname() != vmName {
 				continue
 			}
 
 			if o.disk == "" {
-				o.disk = n.Hardware.Drives[0].Image
-				o.part = n.Hardware.Drives[0].GetInjectPartition()
+				o.disk = n.Hardware().Drives()[0].Image()
+				o.part = *n.Hardware().Drives()[0].InjectPartition()
 			}
 
-			for _, i := range n.Injections {
-				injects = append(injects, fmt.Sprintf("%s:%s", i.Src, i.Dst))
+			for _, i := range n.Injections() {
+				injects = append(injects, fmt.Sprintf("%s:%s", i.Src(), i.Dst()))
 			}
 
 			break

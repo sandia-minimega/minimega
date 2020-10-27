@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"phenix/internal/mm"
-	v1 "phenix/types/version/v1"
+	ifaces "phenix/types/interfaces"
 )
 
 func init() {
@@ -21,8 +21,8 @@ func (isolateExperiment) Name() string {
 	return "isolate-experiment"
 }
 
-func (isolateExperiment) Schedule(spec *v1.ExperimentSpec) error {
-	if len(spec.Topology.Nodes) == 0 {
+func (isolateExperiment) Schedule(spec ifaces.ExperimentSpec) error {
+	if len(spec.Topology().Nodes()) == 0 {
 		return fmt.Errorf("no VMs defined for experiment")
 	}
 
@@ -38,16 +38,16 @@ func (isolateExperiment) Schedule(spec *v1.ExperimentSpec) error {
 
 	// get VM totals
 
-	for _, node := range spec.Topology.Nodes {
-		totalCPU += node.Hardware.VCPU
-		totalMEM += node.Hardware.Memory
+	for _, node := range spec.Topology().Nodes() {
+		totalCPU += node.Hardware().VCPU()
+		totalMEM += node.Hardware().Memory()
 	}
 
 	// if first VM is scheduled manually, put all VMs there
 
-	first := spec.Topology.Nodes[0].General.Hostname
+	first := spec.Topology().Nodes()[0].General().Hostname()
 
-	if name, ok := spec.Schedules[first]; ok {
+	if name, ok := spec.Schedules()[first]; ok {
 		if host := cluster.FindHostByName(name); host != nil {
 			if host.VMs == 0 {
 				cpuUsage := float64(totalCPU+host.CPUCommit) / float64(host.CPUs)
@@ -57,8 +57,8 @@ func (isolateExperiment) Schedule(spec *v1.ExperimentSpec) error {
 					fmt.Printf("Using host %s. It may become overloaded.", host.Name)
 				}
 
-				for _, node := range spec.Topology.Nodes {
-					spec.Schedules[node.General.Hostname] = host.Name
+				for _, node := range spec.Topology().Nodes() {
+					spec.Schedules()[node.General().Hostname()] = host.Name
 				}
 
 				return nil
@@ -79,8 +79,8 @@ func (isolateExperiment) Schedule(spec *v1.ExperimentSpec) error {
 			memUsage := float64(totalMEM+host.MemCommit) / float64(host.MemTotal)
 
 			if cpuUsage < 1 && memUsage < 1 {
-				for _, node := range spec.Topology.Nodes {
-					spec.Schedules[node.General.Hostname] = host.Name
+				for _, node := range spec.Topology().Nodes() {
+					spec.Schedules()[node.General().Hostname()] = host.Name
 				}
 
 				return nil
@@ -92,8 +92,8 @@ func (isolateExperiment) Schedule(spec *v1.ExperimentSpec) error {
 
 	for _, host := range cluster {
 		if host.VMs == 0 {
-			for _, node := range spec.Topology.Nodes {
-				spec.Schedules[node.General.Hostname] = host.Name
+			for _, node := range spec.Topology().Nodes() {
+				spec.Schedules()[node.General().Hostname()] = host.Name
 			}
 
 			return nil

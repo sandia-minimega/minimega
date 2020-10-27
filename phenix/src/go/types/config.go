@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"phenix/types/version"
 	v1 "phenix/types/version/v1"
+	v2 "phenix/types/version/v2"
 
 	"github.com/activeshadow/structs"
 	"gopkg.in/yaml.v3"
@@ -43,9 +45,14 @@ func NewConfig(name string) (*Config, error) {
 	}
 
 	kind, name := n[0], n[1]
+	kind = strings.Title(kind)
+
+	version := version.StoredVersion[kind]
+	version = API_GROUP + "/" + version
 
 	c := Config{
-		Kind: strings.Title(kind),
+		Version: version,
+		Kind:    kind,
 		Metadata: ConfigMetadata{
 			Name: name,
 		},
@@ -102,6 +109,16 @@ func NewConfigFromSpec(name string, spec interface{}) (*Config, error) {
 		}
 
 		c.Version = "phenix.sandia.gov/v1"
+		c.Spec = structs.MapWithOptions(spec, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty())
+
+		return c, nil
+	case v2.ScenarioSpec, *v2.ScenarioSpec:
+		c, err := NewConfig("scenario/" + name)
+		if err != nil {
+			return nil, fmt.Errorf("creating new v2 scenario config: %w", err)
+		}
+
+		c.Version = "phenix.sandia.gov/v2"
 		c.Spec = structs.MapWithOptions(spec, structs.DefaultCase(structs.CASE_SNAKE), structs.DefaultOmitEmpty())
 
 		return c, nil

@@ -15,10 +15,9 @@ import (
 	"phenix/store"
 	"phenix/tmpl"
 	"phenix/types"
-	v1 "phenix/types/version/v1"
+	"phenix/types/version"
 
 	"github.com/activeshadow/structs"
-	"github.com/mitchellh/mapstructure"
 )
 
 // List collects experiments, each in a struct that references the latest
@@ -33,21 +32,12 @@ func List() ([]types.Experiment, error) {
 	var experiments []types.Experiment
 
 	for _, c := range configs {
-		spec := new(v1.ExperimentSpec)
-
-		if err := mapstructure.Decode(c.Spec, spec); err != nil {
-			return nil, fmt.Errorf("decoding experiment spec: %w", err)
+		exp, err := types.DecodeExperimentFromConfig(c)
+		if err != nil {
+			return nil, fmt.Errorf("decoding experiment from config: %w", err)
 		}
 
-		status := new(v1.ExperimentStatus)
-
-		if err := mapstructure.Decode(c.Status, status); err != nil {
-			return nil, fmt.Errorf("decoding experiment status: %w", err)
-		}
-
-		exp := types.Experiment{Metadata: c.Metadata, Spec: spec, Status: status}
-
-		experiments = append(experiments, exp)
+		experiments = append(experiments, *exp)
 	}
 
 	return experiments, nil
@@ -71,19 +61,10 @@ func Get(name string) (*types.Experiment, error) {
 		return nil, fmt.Errorf("getting experiment %s from store: %w", name, err)
 	}
 
-	spec := new(v1.ExperimentSpec)
-
-	if err := mapstructure.Decode(c.Spec, spec); err != nil {
-		return nil, fmt.Errorf("decoding experiment spec: %w", err)
+	exp, err := types.DecodeExperimentFromConfig(*c)
+	if err != nil {
+		return nil, fmt.Errorf("decoding experiment from config: %w", err)
 	}
-
-	status := new(v1.ExperimentStatus)
-
-	if err := mapstructure.Decode(c.Status, status); err != nil {
-		return nil, fmt.Errorf("decoding experiment status: %w", err)
-	}
-
-	exp := &types.Experiment{Metadata: c.Metadata, Spec: spec, Status: status}
 
 	return exp, nil
 }
@@ -109,10 +90,21 @@ func Create(ctx context.Context, opts ...CreateOption) error {
 		return fmt.Errorf("no topology name provided")
 	}
 
-	topo, _ := types.NewConfig("topology/" + o.topology)
+	var (
+		kind       = "Experiment"
+		apiVersion = version.StoredVersion[kind]
+	)
 
-	if err := store.Get(topo); err != nil {
+	topoC, _ := types.NewConfig("topology/" + o.topology)
+
+	if err := store.Get(topoC); err != nil {
 		return fmt.Errorf("topology doesn't exist")
+	}
+
+	// This will upgrade the toplogy to the latest known version if needed.
+	topo, err := types.DecodeTopologyFromConfig(*topoC)
+	if err != nil {
+		return fmt.Errorf("decoding topology from config: %w", err)
 	}
 
 	meta := types.ConfigMetadata{
@@ -122,29 +114,20 @@ func Create(ctx context.Context, opts ...CreateOption) error {
 		},
 	}
 
-	vlans := v1.VLANSpec{
-		Aliases: make(v1.VLANAliases),
-		Min:     o.vlanMin,
-		Max:     o.vlanMax,
-	}
-
 	specMap := map[string]interface{}{
 		"experimentName": o.name,
 		"baseDir":        o.baseDir,
-		"topology":       topo.Spec,
-		"vlans":          &vlans,
+		"topology":       topo,
 	}
 
-	var scenario *types.Config
-
 	if o.scenario != "" {
-		scenario, _ = types.NewConfig("scenario/" + o.scenario)
+		scenarioC, _ := types.NewConfig("scenario/" + o.scenario)
 
-		if err := store.Get(scenario); err != nil {
+		if err := store.Get(scenarioC); err != nil {
 			return fmt.Errorf("scenario doesn't exist")
 		}
 
-		topo, ok := scenario.Metadata.Annotations["topology"]
+		topo, ok := scenarioC.Metadata.Annotations["topology"]
 		if !ok {
 			return fmt.Errorf("topology annotation missing from scenario")
 		}
@@ -153,42 +136,41 @@ func Create(ctx context.Context, opts ...CreateOption) error {
 			return fmt.Errorf("experiment/scenario topology mismatch")
 		}
 
+		// This will upgrade the scenario to the latest known version if needed.
+		scenario, err := types.DecodeScenarioFromConfig(*scenarioC)
+		if err != nil {
+			return fmt.Errorf("decoding scenario from config: %w", err)
+		}
+
 		meta.Annotations["scenario"] = o.scenario
-		specMap["scenario"] = scenario.Spec
+		specMap["scenario"] = scenario
 	}
 
 	c := &types.Config{
-		Version:  "phenix.sandia.gov/v1",
-		Kind:     "Experiment",
+		Version:  types.API_GROUP + "/" + apiVersion,
+		Kind:     kind,
 		Metadata: meta,
 		Spec:     specMap,
 	}
 
-	var spec v1.ExperimentSpec
-
-	if err := mapstructure.Decode(c.Spec, &spec); err != nil {
-		return fmt.Errorf("decoding experiment spec: %w", err)
+	exp, err := types.DecodeExperimentFromConfig(*c)
+	if err != nil {
+		return fmt.Errorf("decoding experiment from config: %w", err)
 	}
 
-	spec.SetDefaults()
+	exp.Spec.SetVLANRange(o.vlanMin, o.vlanMax, false)
 
-	if err := spec.VerifyScenario(ctx); err != nil {
+	exp.Spec.SetDefaults()
+
+	if err := exp.Spec.VerifyScenario(ctx); err != nil {
 		return fmt.Errorf("verifying experiment scenario: %w", err)
 	}
 
-	exp := types.Experiment{Metadata: c.Metadata, Spec: &spec}
-
-	if err := app.ApplyApps(app.ACTIONCONFIG, &exp); err != nil {
+	if err := app.ApplyApps(app.ACTIONCONFIG, exp); err != nil {
 		return fmt.Errorf("applying apps to experiment: %w", err)
 	}
 
 	c.Spec = structs.MapDefaultCase(exp.Spec, structs.CASESNAKE)
-
-	/*
-		if err := create(ctx, c); err != nil {
-			return fmt.Errorf("creating experiment config: %w", err)
-		}
-	*/
 
 	if err := types.ValidateConfigSpec(*c); err != nil {
 		return fmt.Errorf("validating experiment config: %w", err)
@@ -200,32 +182,6 @@ func Create(ctx context.Context, opts ...CreateOption) error {
 
 	return nil
 }
-
-/*
-func create(ctx.Context, c *types.Config) error {
-	var spec v1.ExperimentSpec
-
-	if err := mapstructure.Decode(c.Spec, &spec); err != nil {
-		return fmt.Errorf("decoding experiment spec: %w", err)
-	}
-
-	spec.SetDefaults()
-
-	if err := spec.VerifyScenario(ctx); err != nil {
-		return fmt.Errorf("verifying experiment scenario: %w", err)
-	}
-
-	exp := types.Experiment{Metadata: c.Metadata, Spec: &spec}
-
-	if err := app.ApplyApps(app.ACTIONCONFIG, &exp); err != nil {
-		return fmt.Errorf("applying apps to experiment: %w", err)
-	}
-
-	c.Spec = structs.MapDefaultCase(exp.Spec, structs.CASESNAKE)
-
-	return nil
-}
-*/
 
 // Schedule applies the given scheduling algorithm to the experiment with the
 // given name. It returns any errors encountered while scheduling the
@@ -239,27 +195,20 @@ func Schedule(opts ...ScheduleOption) error {
 		return fmt.Errorf("getting experiment %s from store: %w", o.name, err)
 	}
 
-	status := new(v1.ExperimentStatus)
-
-	if err := mapstructure.Decode(c.Status, status); err != nil {
-		return fmt.Errorf("decoding experiment status: %w", err)
+	exp, err := types.DecodeExperimentFromConfig(*c)
+	if err != nil {
+		return fmt.Errorf("decoding experiment from config: %w", err)
 	}
 
-	if status.StartTime != "" {
-		return fmt.Errorf("experiment already running (started at: %s)", status.StartTime)
+	if exp.Running() {
+		return fmt.Errorf("experiment already running (started at: %s)", exp.Status.StartTime())
 	}
 
-	exp := new(v1.ExperimentSpec)
-
-	if err := mapstructure.Decode(c.Spec, exp); err != nil {
-		return fmt.Errorf("decoding experiment spec: %w", err)
-	}
-
-	if err := scheduler.Schedule(o.algorithm, exp); err != nil {
+	if err := scheduler.Schedule(o.algorithm, exp.Spec); err != nil {
 		return fmt.Errorf("running scheduler algorithm: %w", err)
 	}
 
-	c.Spec = structs.MapDefaultCase(exp, structs.CASESNAKE)
+	c.Spec = structs.MapDefaultCase(exp.Spec, structs.CASESNAKE)
 
 	if err := store.Update(c); err != nil {
 		return fmt.Errorf("updating experiment config: %w", err)
@@ -279,78 +228,71 @@ func Start(opts ...StartOption) error {
 		return fmt.Errorf("getting experiment %s from store: %w", o.name, err)
 	}
 
-	var status v1.ExperimentStatus
-
-	if err := mapstructure.Decode(c.Status, &status); err != nil {
-		return fmt.Errorf("decoding experiment status: %w", err)
+	exp, err := types.DecodeExperimentFromConfig(*c)
+	if err != nil {
+		return fmt.Errorf("decoding experiment from config: %w", err)
 	}
 
-	if status.StartTime != "" && !strings.HasSuffix(status.StartTime, "-DRYRUN") {
-		return fmt.Errorf("experiment already running (started at: %s)", status.StartTime)
-	}
-
-	var spec v1.ExperimentSpec
-
-	if err := mapstructure.Decode(c.Spec, &spec); err != nil {
-		return fmt.Errorf("decoding experiment spec: %w", err)
+	if exp.Running() {
+		if !strings.HasSuffix(exp.Status.StartTime(), "-DRYRUN") {
+			return fmt.Errorf("experiment already running (started at: %s)", exp.Status.StartTime())
+		}
 	}
 
 	if o.vlanMin != 0 {
-		spec.VLANs.Min = o.vlanMin
+		exp.Spec.VLANs().SetMin(o.vlanMin)
 	}
 
 	if o.vlanMax != 0 {
-		spec.VLANs.Max = o.vlanMax
+		exp.Spec.VLANs().SetMax(o.vlanMax)
 	}
 
-	exp := types.Experiment{Metadata: c.Metadata, Spec: &spec, Status: &status}
-
-	if err := app.ApplyApps(app.ACTIONPRESTART, &exp); err != nil {
+	if err := app.ApplyApps(app.ACTIONPRESTART, exp); err != nil {
 		return fmt.Errorf("applying apps to experiment: %w", err)
 	}
 
-	filename := fmt.Sprintf("%s/mm_files/%s.mm", exp.Spec.BaseDir, exp.Spec.ExperimentName)
+	filename := fmt.Sprintf("%s/mm_files/%s.mm", exp.Spec.BaseDir(), exp.Spec.ExperimentName())
 
 	if err := tmpl.CreateFileFromTemplate("minimega_script.tmpl", exp.Spec, filename); err != nil {
 		return fmt.Errorf("generating minimega script: %w", err)
 	}
 
 	if o.dryrun {
-		status.VLANs = spec.VLANs.Aliases
+		exp.Status.SetVLANs(exp.Spec.VLANs().Aliases())
 	} else {
 		if err := mm.ReadScriptFromFile(filename); err != nil {
-			mm.ClearNamespace(exp.Spec.ExperimentName)
+			mm.ClearNamespace(exp.Spec.ExperimentName())
 			return fmt.Errorf("reading minimega script: %w", err)
 		}
 
-		if err := mm.LaunchVMs(exp.Spec.ExperimentName); err != nil {
-			mm.ClearNamespace(exp.Spec.ExperimentName)
+		if err := mm.LaunchVMs(exp.Spec.ExperimentName()); err != nil {
+			mm.ClearNamespace(exp.Spec.ExperimentName())
 			return fmt.Errorf("launching experiment VMs: %w", err)
 		}
 
-		schedule := make(v1.Schedule)
+		schedule := make(map[string]string)
 
-		for _, vm := range mm.GetVMInfo(mm.NS(exp.Spec.ExperimentName)) {
+		for _, vm := range mm.GetVMInfo(mm.NS(exp.Spec.ExperimentName())) {
 			schedule[vm.Name] = vm.Host
 		}
 
-		status.Schedules = schedule
+		exp.Status.SetSchedule(schedule)
 
-		vlans, err := mm.GetVLANs(mm.NS(exp.Spec.ExperimentName))
+		vlans, err := mm.GetVLANs(mm.NS(exp.Spec.ExperimentName()))
 		if err != nil {
 			return fmt.Errorf("processing experiment VLANs: %w", err)
 		}
 
-		status.VLANs = vlans
+		exp.Status.SetVLANs(vlans)
 	}
 
 	if o.dryrun {
-		status.StartTime = time.Now().Format(time.RFC3339) + "-DRYRUN"
+		exp.Status.SetStartTime(time.Now().Format(time.RFC3339) + "-DRYRUN")
 	} else {
-		status.StartTime = time.Now().Format(time.RFC3339)
+		exp.Status.SetStartTime(time.Now().Format(time.RFC3339))
 	}
 
-	if err := app.ApplyApps(app.ACTIONPOSTSTART, &exp); err != nil {
+	if err := app.ApplyApps(app.ACTIONPOSTSTART, exp); err != nil {
 		return fmt.Errorf("applying apps to experiment: %w", err)
 	}
 
@@ -373,37 +315,28 @@ func Stop(name string) error {
 		return fmt.Errorf("getting experiment %s from store: %w", name, err)
 	}
 
-	var status v1.ExperimentStatus
-
-	if err := mapstructure.Decode(c.Status, &status); err != nil {
-		return fmt.Errorf("decoding experiment spec: %w", err)
+	exp, err := types.DecodeExperimentFromConfig(*c)
+	if err != nil {
+		return fmt.Errorf("decoding experiment from config: %w", err)
 	}
 
-	if status.StartTime == "" {
+	if !exp.Running() {
 		return fmt.Errorf("experiment isn't running")
 	}
 
-	dryrun := strings.HasSuffix(status.StartTime, "-DRYRUN")
+	dryrun := strings.HasSuffix(exp.Status.StartTime(), "-DRYRUN")
 
-	var spec v1.ExperimentSpec
-
-	if err := mapstructure.Decode(c.Spec, &spec); err != nil {
-		return fmt.Errorf("decoding experiment spec: %w", err)
-	}
-
-	exp := types.Experiment{Metadata: c.Metadata, Spec: &spec, Status: &status}
-
-	if err := app.ApplyApps(app.ACTIONCLEANUP, &exp); err != nil {
+	if err := app.ApplyApps(app.ACTIONCLEANUP, exp); err != nil {
 		return fmt.Errorf("applying apps to experiment: %w", err)
 	}
 
 	if !dryrun {
-		if err := mm.ClearNamespace(exp.Spec.ExperimentName); err != nil {
+		if err := mm.ClearNamespace(exp.Spec.ExperimentName()); err != nil {
 			return fmt.Errorf("killing experiment VMs: %w", err)
 		}
 	}
 
-	exp.Status.StartTime = ""
+	exp.Status.SetStartTime("")
 
 	c.Spec = structs.MapDefaultCase(exp.Spec, structs.CASESNAKE)
 	c.Status = structs.MapDefaultCase(exp.Status, structs.CASESNAKE)
@@ -422,13 +355,12 @@ func Running(name string) bool {
 		return false
 	}
 
-	var status v1.ExperimentStatus
-
-	if err := mapstructure.Decode(c.Status, &status); err != nil {
+	exp, err := types.DecodeExperimentFromConfig(*c)
+	if err != nil {
 		return false
 	}
 
-	return status.Running()
+	return exp.Running()
 }
 
 func Save(opts ...SaveOption) error {

@@ -98,7 +98,7 @@ func GetUsers() ([]*User, error) {
 }
 
 func GetUser(uname string) (*User, error) {
-	c, err := config.Get("user/" + uname)
+	c, err := config.Get("user/"+uname, false)
 	if err != nil {
 		return nil, fmt.Errorf("getting user config: %w", err)
 	}

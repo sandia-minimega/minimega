@@ -7,7 +7,7 @@ import (
 
 	"phenix/tmpl"
 	"phenix/types"
-	v1 "phenix/types/version/v1"
+	ifaces "phenix/types/interfaces"
 )
 
 type Serial struct{}
@@ -22,18 +22,18 @@ func (Serial) Name() string {
 
 func (Serial) Configure(exp *types.Experiment) error {
 	// loop through nodes
-	for _, node := range exp.Spec.Topology.Nodes {
+	for _, node := range exp.Spec.Topology().Nodes() {
 		// We only care about configuring serial interfaces on Linux VMs.
 		// TODO: handle rhel and centos OS types.
-		if node.Hardware.OSType != v1.OSType_Linux {
+		if node.Hardware().OSType() != "linux" {
 			continue
 		}
 
 		var serial bool
 
 		// Loop through interface type to see if any of the interfaces are serial.
-		for _, iface := range node.Network.Interfaces {
-			if iface.Type == "serial" {
+		for _, iface := range node.Network().Interfaces() {
+			if iface.Type() == "serial" {
 				serial = true
 				break
 			}
@@ -41,28 +41,21 @@ func (Serial) Configure(exp *types.Experiment) error {
 
 		if serial {
 			// update injections to include serial type (src and dst)
-			serialFile := exp.Spec.BaseDir + "/startup/" + node.General.Hostname + "-serial.bash"
+			serialFile := exp.Spec.BaseDir() + "/startup/" + node.General().Hostname() + "-serial.bash"
 
-			a := &v1.Injection{
-				Src:         serialFile,
-				Dst:         "/etc/phenix/serial-startup.bash",
-				Permissions:	"0755",
-				Description: "",
-			}
+			node.AddInject(serialFile, "/etc/phenix/serial-startup.bash", "0755", "")
 
-			b := &v1.Injection{
-				Src:         exp.Spec.BaseDir + "/startup/serial-startup.service",
-				Dst:         "/etc/systemd/system/serial-startup.service",
-				Description: "",
-			}
+			node.AddInject(
+				exp.Spec.BaseDir()+"/startup/serial-startup.service",
+				"/etc/systemd/system/serial-startup.service",
+				"", "",
+			)
 
-			c := &v1.Injection{
-				Src:         exp.Spec.BaseDir + "/startup/symlinks/serial-startup.service",
-				Dst:         "/etc/systemd/system/multi-user.target.wants/serial-startup.service",
-				Description: "",
-			}
-
-			node.Injections = append(node.Injections, a, b, c)
+			node.AddInject(
+				exp.Spec.BaseDir()+"/startup/symlinks/serial-startup.service",
+				"/etc/systemd/system/multi-user.target.wants/serial-startup.service",
+				"", "",
+			)
 		}
 	}
 
@@ -71,30 +64,30 @@ func (Serial) Configure(exp *types.Experiment) error {
 
 func (Serial) PreStart(exp *types.Experiment) error {
 	// loop through nodes
-	for _, node := range exp.Spec.Topology.Nodes {
+	for _, node := range exp.Spec.Topology().Nodes() {
 		// We only care about configuring serial interfaces on Linux VMs.
 		// TODO: handle rhel and centos OS types.
-		if node.Hardware.OSType != v1.OSType_Linux {
+		if node.Hardware().OSType() != "linux" {
 			continue
 		}
 
-		var serial []v1.Interface
+		var serial []ifaces.NodeNetworkInterface
 
 		// Loop through interface type to see if any of the interfaces are serial.
-		for _, iface := range node.Network.Interfaces {
-			if iface.Type == "serial" {
+		for _, iface := range node.Network().Interfaces() {
+			if iface.Type() == "serial" {
 				serial = append(serial, iface)
 			}
 		}
 
 		if serial != nil {
-			startupDir := exp.Spec.BaseDir + "/startup"
+			startupDir := exp.Spec.BaseDir() + "/startup"
 
 			if err := os.MkdirAll(startupDir, 0755); err != nil {
 				return fmt.Errorf("creating experiment startup directory path: %w", err)
 			}
 
-			serialFile := startupDir + "/" + node.General.Hostname + "-serial.bash"
+			serialFile := startupDir + "/" + node.General().Hostname() + "-serial.bash"
 
 			if err := tmpl.CreateFileFromTemplate("serial_startup.tmpl", serial, serialFile); err != nil {
 				return fmt.Errorf("generating serial script: %w", err)

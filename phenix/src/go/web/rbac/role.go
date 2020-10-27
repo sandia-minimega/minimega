@@ -32,7 +32,7 @@ func RoleFromConfig(name string) (*Role, error) {
 		name = rname
 	}
 
-	c, err := config.Get("role/" + name)
+	c, err := config.Get("role/"+name, false)
 	if err != nil {
 		return nil, fmt.Errorf("getting role from store: %w", err)
 	}

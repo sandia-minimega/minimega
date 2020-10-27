@@ -130,7 +130,9 @@ func newConfigGetCmd() *cobra.Command {
 		Example: example,
 		Args:    configKindArgsValidator(false, false),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			c, err := config.Get(args[0])
+			upgraded := MustGetBool(cmd.Flags(), "show-upgraded")
+
+			c, err := config.Get(args[0], upgraded)
 			if err != nil {
 				err := util.HumanizeError(err, "Unable to get the "+args[0]+" configuration")
 				return err.Humanized()
@@ -175,6 +177,7 @@ func newConfigGetCmd() *cobra.Command {
 
 	cmd.Flags().StringP("output", "o", "yaml", "Configuration output format ('yaml' or 'json')")
 	cmd.Flags().BoolP("pretty", "p", false, "Pretty print the JSON output")
+	cmd.Flags().BoolP("show-upgraded", "u", false, "Show upgraded version of config (if not already latest version)")
 
 	return cmd
 }
@@ -228,7 +231,9 @@ func newConfigEditCmd() *cobra.Command {
 		Long:  desc,
 		Args:  configKindArgsValidator(false, false),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := config.Edit(args[0])
+			force := MustGetBool(cmd.Flags(), "force")
+
+			_, err := config.Edit(args[0], force)
 			if err != nil {
 				if config.IsConfigNotModified(err) {
 					fmt.Printf("The %s configuration was not updated\n", args[0])
@@ -244,6 +249,8 @@ func newConfigEditCmd() *cobra.Command {
 			return nil
 		},
 	}
+
+	cmd.Flags().Bool("force", false, "override checks (only applies to configs for running experiments)")
 
 	return cmd
 }

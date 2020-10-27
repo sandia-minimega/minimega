@@ -225,7 +225,7 @@ func newExperimentDeleteCmd() *cobra.Command {
 			}
 
 			for _, exp := range experiments {
-				if exp.Status.Running() {
+				if exp.Running() {
 					fmt.Printf("Not deleting running experiment %s\n", exp.Metadata.Name)
 					continue
 				}
@@ -315,7 +315,7 @@ func newExperimentStartCmd() *cobra.Command {
 			}
 
 			for _, exp := range experiments {
-				if exp.Status.Running() {
+				if exp.Running() {
 					fmt.Printf("Not starting already running experiment %s\n", exp.Metadata.Name)
 					continue
 				}
@@ -386,7 +386,7 @@ func newExperimentStopCmd() *cobra.Command {
 			}
 
 			for _, exp := range experiments {
-				if !exp.Status.Running() {
+				if !exp.Running() {
 					fmt.Printf("Not stopping already stopped experiment %s\n", exp.Metadata.Name)
 					continue
 				}
@@ -444,7 +444,7 @@ func newExperimentRestartCmd() *cobra.Command {
 			}
 
 			for _, exp := range experiments {
-				if !exp.Status.Running() {
+				if !exp.Running() {
 					fmt.Printf("Not restarting stopped experiment %s\n", exp.Metadata.Name)
 					continue
 				}

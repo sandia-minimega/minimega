@@ -5,9 +5,6 @@ import (
 
 	"phenix/store"
 	"phenix/types"
-	v1 "phenix/types/version/v1"
-
-	"github.com/mitchellh/mapstructure"
 )
 
 // AppList returns a slice of unique app names that are used in the given
@@ -23,24 +20,15 @@ func AppList(name string) ([]string, error) {
 		return nil, fmt.Errorf("getting scenario %s from store: %w", name, err)
 	}
 
-	spec := new(v1.ScenarioSpec)
-
-	if err := mapstructure.Decode(c.Spec, spec); err != nil {
-		return nil, fmt.Errorf("decoding scenario spec: %w", err)
+	spec, err := types.DecodeScenarioFromConfig(*c)
+	if err != nil {
+		return nil, fmt.Errorf("decoding scenario from config: %w", err)
 	}
 
 	var apps []string
 
-	if spec.Apps == nil {
-		return nil, nil
-	}
-
-	for _, e := range spec.Apps.Experiment {
-		apps = append(apps, e.Name)
-	}
-
-	for _, h := range spec.Apps.Host {
-		apps = append(apps, h.Name)
+	for _, app := range spec.Apps() {
+		apps = append(apps, app.Name())
 	}
 
 	return apps, nil

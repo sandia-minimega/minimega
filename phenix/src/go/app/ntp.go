@@ -7,7 +7,6 @@ import (
 
 	"phenix/tmpl"
 	"phenix/types"
-	v1 "phenix/types/version/v1"
 )
 
 type NTP struct{}
@@ -21,44 +20,25 @@ func (NTP) Name() string {
 }
 
 func (this *NTP) Configure(exp *types.Experiment) error {
-	ntpServers := exp.Spec.Topology.FindNodesWithLabels("ntp-server")
+	ntpServers := exp.Spec.Topology().FindNodesWithLabels("ntp-server")
 
 	if len(ntpServers) != 0 {
 		// Just take first server if more than one are labeled.
 		node := ntpServers[0]
 
-		ntpDir := exp.Spec.BaseDir + "/ntp"
-		ntpFile := ntpDir + "/" + node.General.Hostname + "_ntp"
+		ntpDir := exp.Spec.BaseDir() + "/ntp"
+		ntpFile := ntpDir + "/" + node.General().Hostname() + "_ntp"
 
 		if err := os.MkdirAll(ntpDir, 0755); err != nil {
 			return fmt.Errorf("creating experiment ntp directory path: %w", err)
 		}
 
-		if node.Type == "Router" {
-			a := &v1.Injection{
-				Src:         ntpFile,
-				Dst:         "/opt/vyatta/etc/ntp.conf",
-				Description: "",
-			}
-
-			node.Injections = append(node.Injections, a)
-		} else if node.Hardware.OSType == v1.OSType_Linux {
-			a := &v1.Injection{
-				Src:         ntpFile,
-				Dst:         "/etc/ntp.conf",
-				Description: "",
-			}
-
-			node.Injections = append(node.Injections, a)
-		} else if node.Hardware.OSType == v1.OSType_Windows {
-			a := &v1.Injection{
-				Src:         ntpFile,
-				Dst:         "ntp.ps1",
-				Permissions:	"0755",
-				Description: "",
-			}
-
-			node.Injections = append(node.Injections, a)
+		if node.Type() == "Router" {
+			node.AddInject(ntpFile, "/opt/vyatta/etc/ntp.conf", "", "")
+		} else if node.Hardware().OSType() == "linux" {
+			node.AddInject(ntpFile, "/etc/ntp.conf", "", "")
+		} else if node.Hardware().OSType() == "windows" {
+			node.AddInject(ntpFile, "ntp.ps1", "0755", "")
 		}
 	}
 
@@ -66,7 +46,7 @@ func (this *NTP) Configure(exp *types.Experiment) error {
 }
 
 func (this NTP) PreStart(exp *types.Experiment) error {
-	ntpServers := exp.Spec.Topology.FindNodesWithLabels("ntp-server")
+	ntpServers := exp.Spec.Topology().FindNodesWithLabels("ntp-server")
 
 	if len(ntpServers) != 0 {
 		// Just take first server if more than one are labeled.
@@ -74,25 +54,25 @@ func (this NTP) PreStart(exp *types.Experiment) error {
 
 		var ntpAddr string
 
-		for _, iface := range node.Network.Interfaces {
-			if strings.EqualFold(iface.VLAN, "mgmt") {
-				ntpAddr = iface.Address
+		for _, iface := range node.Network().Interfaces() {
+			if strings.EqualFold(iface.VLAN(), "mgmt") {
+				ntpAddr = iface.Address()
 				break
 			}
 		}
 
-		ntpDir := exp.Spec.BaseDir + "/ntp"
-		ntpFile := ntpDir + "/" + node.General.Hostname + "_ntp"
+		ntpDir := exp.Spec.BaseDir() + "/ntp"
+		ntpFile := ntpDir + "/" + node.General().Hostname() + "_ntp"
 
-		if node.Type == "Router" {
+		if node.Type() == "Router" {
 			if err := tmpl.CreateFileFromTemplate("ntp_linux.tmpl", ntpAddr, ntpFile); err != nil {
 				return fmt.Errorf("generating ntp script: %w", err)
 			}
-		} else if node.Hardware.OSType == v1.OSType_Linux {
+		} else if node.Hardware().OSType() == "linux" {
 			if err := tmpl.CreateFileFromTemplate("ntp_linux.tmpl", ntpAddr, ntpFile); err != nil {
 				return fmt.Errorf("generating ntp script: %w", err)
 			}
-		} else if node.Hardware.OSType == v1.OSType_Windows {
+		} else if node.Hardware().OSType() == "windows" {
 			if err := tmpl.CreateFileFromTemplate("ntp_windows.tmpl", ntpAddr, ntpFile); err != nil {
 				return fmt.Errorf("generating ntp script: %w", err)
 			}

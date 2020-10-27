@@ -4,17 +4,16 @@ import (
 	"fmt"
 	"phenix/api/experiment"
 	"phenix/types"
-	v1 "phenix/types/version/v1"
 )
 
 // Aliases collects VLAN alias details for all experiments or a given experiment.
 // It returns a map of VLAN aliases mapped to experiments and any errors
 // encountered while gathering them.
-func Aliases(opts ...Option) (map[string]v1.VLANAliases, error) {
+func Aliases(opts ...Option) (map[string]map[string]int, error) {
 	var (
 		o    = newOptions(opts...)
 		exps []types.Experiment
-		info = make(map[string]v1.VLANAliases)
+		info = make(map[string]map[string]int)
 	)
 
 	if o.exp == "" {
@@ -34,10 +33,10 @@ func Aliases(opts ...Option) (map[string]v1.VLANAliases, error) {
 	}
 
 	for _, exp := range exps {
-		if exp.Status.StartTime != "" {
-			info[exp.Metadata.Name] = exp.Status.VLANs
+		if exp.Running() {
+			info[exp.Metadata.Name] = exp.Status.VLANs()
 		} else {
-			info[exp.Metadata.Name] = exp.Spec.VLANs.Aliases
+			info[exp.Metadata.Name] = exp.Spec.VLANs().Aliases()
 		}
 	}
 
@@ -65,20 +64,9 @@ func SetAlias(opts ...Option) error {
 		return fmt.Errorf("getting experiment %s: %w", o.exp, err)
 	}
 
-	_, ok := exp.Spec.VLANs.Aliases[o.alias]
-	if ok && !o.force {
-		return fmt.Errorf("VLAN alias %s already exists for experiment %s", o.alias, o.exp)
+	if err := exp.Spec.SetVLANAlias(o.alias, o.id, o.force); err != nil {
+		return fmt.Errorf("setting VLAN alias for experiment %s: %w", o.exp, err)
 	}
-
-	if exp.Spec.VLANs.Min != 0 && o.id < exp.Spec.VLANs.Min {
-		return fmt.Errorf("VLAN ID %d is less than experiment min VLAN ID of %d", o.id, exp.Spec.VLANs.Min)
-	}
-
-	if exp.Spec.VLANs.Max != 0 && o.id > exp.Spec.VLANs.Max {
-		return fmt.Errorf("VLAN ID %d is greater than experiment max VLAN ID of %d", o.id, exp.Spec.VLANs.Max)
-	}
-
-	exp.Spec.VLANs.Aliases[o.alias] = o.id
 
 	if err := experiment.Save(experiment.SaveWithName(o.exp), experiment.SaveWithSpec(exp.Spec)); err != nil {
 		return fmt.Errorf("saving updated spec for experiment %s: %w", o.exp, err)
@@ -114,13 +102,13 @@ func Ranges(opts ...Option) (map[string][2]int, error) {
 	}
 
 	for _, exp := range exps {
-		if exp.Status.Running() {
+		if exp.Running() {
 			var (
 				min = 0
 				max = 0
 			)
 
-			for _, k := range exp.Status.VLANs {
+			for _, k := range exp.Status.VLANs() {
 				if min == 0 || k < min {
 					min = k
 				}
@@ -132,7 +120,7 @@ func Ranges(opts ...Option) (map[string][2]int, error) {
 
 			info[exp.Metadata.Name] = [2]int{min, max}
 		} else {
-			info[exp.Metadata.Name] = [2]int{exp.Spec.VLANs.Min, exp.Spec.VLANs.Max}
+			info[exp.Metadata.Name] = [2]int{exp.Spec.VLANs().Min(), exp.Spec.VLANs().Max()}
 		}
 	}
 
@@ -165,25 +153,9 @@ func SetRange(opts ...Option) error {
 		return fmt.Errorf("getting experiment %s: %w", o.exp, err)
 	}
 
-	min := exp.Spec.VLANs.Min
-	max := exp.Spec.VLANs.Max
-
-	if min != 0 && max != 0 && !o.force {
-		return fmt.Errorf("VLAN range %d-%d already exists for experiment %s", min, max, o.exp)
+	if err := exp.Spec.SetVLANRange(o.min, o.max, o.force); err != nil {
+		return fmt.Errorf("setting VLAN range for experiment %s: %w", o.exp, err)
 	}
-
-	for k, v := range exp.Spec.VLANs.Aliases {
-		if o.min != 0 && v < o.min {
-			return fmt.Errorf("topology VLAN %s (VLAN ID %d) is less than proposed experiment min VLAN ID of %d", k, v, o.min)
-		}
-
-		if o.max != 0 && v > o.max {
-			return fmt.Errorf("topology VLAN %s (VLAN ID %d) is greater than proposed experiment min VLAN ID of %d", k, v, o.max)
-		}
-	}
-
-	exp.Spec.VLANs.Min = o.min
-	exp.Spec.VLANs.Max = o.max
 
 	if err := experiment.Save(experiment.SaveWithName(o.exp), experiment.SaveWithSpec(exp.Spec)); err != nil {
 		return fmt.Errorf("saving updated spec for experiment %s: %w", o.exp, err)

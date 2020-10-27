@@ -152,14 +152,14 @@ func ApplyApps(action Action, exp *types.Experiment) error {
 		}
 	}
 
-	if exp.Spec.Scenario != nil && exp.Spec.Scenario.Apps != nil {
-		for _, e := range exp.Spec.Scenario.Apps.Experiment {
+	if exp.Spec.Scenario != nil {
+		for _, app := range exp.Spec.Scenario().Apps() {
 			// Don't apply default apps again if configured via the Scenario.
-			if _, ok := defaultApps[e.Name]; ok {
+			if _, ok := defaultApps[app.Name()]; ok {
 				continue
 			}
 
-			a := GetApp(e.Name)
+			a := GetApp(app.Name())
 
 			switch action {
 			case ACTIONCONFIG:
@@ -195,51 +195,6 @@ func ApplyApps(action Action, exp *types.Experiment) error {
 				}
 
 				return fmt.Errorf("applying experiment app %s for action %s: %w", a.Name(), action, err)
-			}
-		}
-
-		for _, h := range exp.Spec.Scenario.Apps.Host {
-			// Don't apply default apps again if configured via the Scenario.
-			if _, ok := defaultApps[h.Name]; ok {
-				continue
-			}
-
-			a := GetApp(h.Name)
-
-			switch action {
-			case ACTIONCONFIG:
-				err = a.Configure(exp)
-			case ACTIONPRESTART:
-				err = a.PreStart(exp)
-			case ACTIONPOSTSTART:
-				err = a.PostStart(exp)
-			case ACTIONCLEANUP:
-				err = a.Cleanup(exp)
-			}
-
-			var (
-				status  = "✓"
-				printer = color.New(color.FgGreen)
-			)
-
-			if err != nil {
-				if errors.Is(err, ErrUserAppNotFound) {
-					status = "?"
-					printer = color.New(color.FgYellow)
-				} else {
-					status = "✗"
-					printer = color.New(color.FgRed)
-				}
-			}
-
-			printer.Printf("[%s] '%s' host app (%s)\n", status, a.Name(), action)
-
-			if err != nil {
-				if errors.Is(err, ErrUserAppNotFound) {
-					continue
-				}
-
-				return fmt.Errorf("applying host app %s for action %s: %w", a.Name(), action, err)
 			}
 		}
 	}
