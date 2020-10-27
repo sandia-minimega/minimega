@@ -8,6 +8,7 @@ import (
 
 	"phenix/api/config"
 	"phenix/util"
+	"phenix/util/printer"
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -98,7 +99,7 @@ func newConfigListCmd() *cobra.Command {
 			if len(configs) == 0 {
 				fmt.Println("There are no configurations available")
 			} else {
-				util.PrintTableOfConfigs(os.Stdout, configs)
+				printer.PrintTableOfConfigs(os.Stdout, configs)
 			}
 
 			fmt.Println()

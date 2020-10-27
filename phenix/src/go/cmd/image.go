@@ -9,6 +9,7 @@ import (
 	"phenix/api/image"
 	v1 "phenix/types/version/v1"
 	"phenix/util"
+	"phenix/util/printer"
 
 	"github.com/spf13/cobra"
 )
@@ -53,7 +54,7 @@ func newImageListCmd() *cobra.Command {
 			if len(imgs) == 0 {
 				fmt.Println("\nThere are no image configurations available\n")
 			} else {
-				util.PrintTableOfImageConfigs(os.Stdout, optional, imgs...)
+				printer.PrintTableOfImageConfigs(os.Stdout, optional, imgs...)
 			}
 
 			return nil

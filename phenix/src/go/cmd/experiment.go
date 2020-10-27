@@ -1,17 +1,21 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+
 	"phenix/api/config"
 	"phenix/api/experiment"
 	"phenix/app"
 	"phenix/scheduler"
 	"phenix/types"
 	"phenix/util"
-	"strings"
+	"phenix/util/printer"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -42,7 +46,7 @@ func newExperimentListCmd() *cobra.Command {
 			if len(exps) == 0 {
 				fmt.Println("\nThere are no experiments available\n")
 			} else {
-				util.PrintTableOfExperiments(os.Stdout, exps...)
+				printer.PrintTableOfExperiments(os.Stdout, exps...)
 			}
 
 			return nil
@@ -153,9 +157,19 @@ func newExperimentCreateCmd() *cobra.Command {
 				experiment.CreateWithVLANMax(MustGetInt(cmd.Flags(), "vlan-max")),
 			}
 
-			if err := experiment.Create(opts...); err != nil {
+			ctx := context.Background()
+
+			if err := experiment.Create(ctx, opts...); err != nil {
 				err := util.HumanizeError(err, "Unable to create the "+args[0]+" experiment")
 				return err.Humanized()
+			}
+
+			if warns := util.Warnings(ctx); warns != nil {
+				printer := color.New(color.FgYellow)
+
+				for _, warn := range warns {
+					printer.Printf("[WARNING] %v\n", warn)
+				}
 			}
 
 			fmt.Printf("The %s experiment was created\n", args[0])

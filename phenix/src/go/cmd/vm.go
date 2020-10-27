@@ -7,6 +7,7 @@ import (
 
 	"phenix/api/vm"
 	"phenix/util"
+	"phenix/util/printer"
 
 	"github.com/spf13/cobra"
 )
@@ -46,7 +47,7 @@ func newVMInfoCmd() *cobra.Command {
 					return err.Humanized()
 				}
 
-				util.PrintTableOfVMs(os.Stdout, vms...)
+				printer.PrintTableOfVMs(os.Stdout, vms...)
 			case 2:
 				vm, err := vm.Get(args[0], args[1])
 				if err != nil {
@@ -54,7 +55,7 @@ func newVMInfoCmd() *cobra.Command {
 					return err.Humanized()
 				}
 
-				util.PrintTableOfVMs(os.Stdout, *vm)
+				printer.PrintTableOfVMs(os.Stdout, *vm)
 			default:
 				return fmt.Errorf("Invalid argument")
 			}

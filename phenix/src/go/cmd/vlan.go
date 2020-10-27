@@ -7,6 +7,7 @@ import (
 
 	"phenix/api/vlan"
 	"phenix/util"
+	"phenix/util/printer"
 
 	"github.com/spf13/cobra"
 )
@@ -36,7 +37,7 @@ func newVlanAliasCmd() *cobra.Command {
 					return err.Humanized()
 				}
 
-				util.PrintTableOfVLANAliases(os.Stdout, info)
+				printer.PrintTableOfVLANAliases(os.Stdout, info)
 			case 1:
 				exp := args[0]
 
@@ -46,7 +47,7 @@ func newVlanAliasCmd() *cobra.Command {
 					return err.Humanized()
 				}
 
-				util.PrintTableOfVLANAliases(os.Stdout, info)
+				printer.PrintTableOfVLANAliases(os.Stdout, info)
 			case 3:
 				var (
 					exp   = args[0]
@@ -92,7 +93,7 @@ func newVlanRangeCmd() *cobra.Command {
 					return err.Humanized()
 				}
 
-				util.PrintTableOfVLANRanges(os.Stdout, info)
+				printer.PrintTableOfVLANRanges(os.Stdout, info)
 			case 1:
 				exp := args[0]
 
@@ -102,7 +103,7 @@ func newVlanRangeCmd() *cobra.Command {
 					return err.Humanized()
 				}
 
-				util.PrintTableOfVLANRanges(os.Stdout, info)
+				printer.PrintTableOfVLANRanges(os.Stdout, info)
 			case 3:
 				var (
 					exp   = args[0]

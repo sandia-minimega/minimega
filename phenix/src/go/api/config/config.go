@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"phenix/api/experiment"
 	"phenix/store"
 	"phenix/types"
 	"phenix/types/version"
@@ -164,13 +163,6 @@ func Create(path string, validate bool) (*types.Config, error) {
 	}
 
 	// *** END config upgrade process ***
-
-	// TODO: consider using config hooks (once merged in) to handle this.
-	if c.Kind == "Experiment" {
-		if err := experiment.CreateFromConfig(c); err != nil {
-			return nil, fmt.Errorf("creating experiment config spec: %w", err)
-		}
-	}
 
 	if validate {
 		if err := types.ValidateConfigSpec(*c); err != nil {

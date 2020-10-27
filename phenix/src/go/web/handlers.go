@@ -22,6 +22,7 @@ import (
 	"phenix/app"
 	"phenix/internal/mm"
 	"phenix/types"
+	putil "phenix/util"
 	"phenix/web/broker"
 	"phenix/web/cache"
 	"phenix/web/proto"
@@ -170,10 +171,16 @@ func CreateExperiment(w http.ResponseWriter, r *http.Request) {
 		experiment.CreateWithVLANMax(int(req.VlanMax)),
 	}
 
-	if err := experiment.Create(opts...); err != nil {
+	if err := experiment.Create(ctx, opts...); err != nil {
 		log.Error("creating experiment %s - %v", req.Name, err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
+	}
+
+	if warns := putil.Warnings(ctx); warns != nil {
+		for _, warn := range warns {
+			log.Warn("%v", warn)
+		}
 	}
 
 	exp, err := experiment.Get(req.Name)

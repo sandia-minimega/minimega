@@ -1,6 +1,7 @@
 package experiment
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"strings"
@@ -93,7 +94,7 @@ func Get(name string) (*types.Experiment, error) {
 // which case the default value of `/phenix/experiments/{name}` is used for the
 // experiment base directory. It returns any errors encountered while creating
 // the experiment.
-func Create(opts ...CreateOption) error {
+func Create(ctx context.Context, opts ...CreateOption) error {
 	o := newCreateOptions(opts...)
 
 	if o.name == "" {
@@ -127,7 +128,7 @@ func Create(opts ...CreateOption) error {
 		Max:     o.vlanMax,
 	}
 
-	spec := map[string]interface{}{
+	specMap := map[string]interface{}{
 		"experimentName": o.name,
 		"baseDir":        o.baseDir,
 		"topology":       topo.Spec,
@@ -153,19 +154,41 @@ func Create(opts ...CreateOption) error {
 		}
 
 		meta.Annotations["scenario"] = o.scenario
-		spec["scenario"] = scenario.Spec
+		specMap["scenario"] = scenario.Spec
 	}
 
 	c := &types.Config{
 		Version:  "phenix.sandia.gov/v1",
 		Kind:     "Experiment",
 		Metadata: meta,
-		Spec:     spec,
+		Spec:     specMap,
 	}
 
-	if err := create(c); err != nil {
-		return fmt.Errorf("creating experiment config: %w", err)
+	var spec v1.ExperimentSpec
+
+	if err := mapstructure.Decode(c.Spec, &spec); err != nil {
+		return fmt.Errorf("decoding experiment spec: %w", err)
 	}
+
+	spec.SetDefaults()
+
+	if err := spec.VerifyScenario(ctx); err != nil {
+		return fmt.Errorf("verifying experiment scenario: %w", err)
+	}
+
+	exp := types.Experiment{Metadata: c.Metadata, Spec: &spec}
+
+	if err := app.ApplyApps(app.ACTIONCONFIG, &exp); err != nil {
+		return fmt.Errorf("applying apps to experiment: %w", err)
+	}
+
+	c.Spec = structs.MapDefaultCase(exp.Spec, structs.CASESNAKE)
+
+	/*
+		if err := create(ctx, c); err != nil {
+			return fmt.Errorf("creating experiment config: %w", err)
+		}
+	*/
 
 	if err := types.ValidateConfigSpec(*c); err != nil {
 		return fmt.Errorf("validating experiment config: %w", err)
@@ -178,58 +201,8 @@ func Create(opts ...CreateOption) error {
 	return nil
 }
 
-// CreateFromConfig uses the provided config argument to create a new
-// experiment. The provided config must be of kind `Experiment`, and must
-// contain an annotation in its metadata identifying the topology to use for the
-// experiment. A scenario annotation may also be provided, but is not required.
-// It returns any errors encountered while creating the experiment.
-func CreateFromConfig(c *types.Config) error {
-	topoName, ok := c.Metadata.Annotations["topology"]
-	if !ok {
-		return fmt.Errorf("topology annotation missing from experiment")
-	}
-
-	scenarioName := c.Metadata.Annotations["scenario"]
-
-	topo, _ := types.NewConfig("topology/" + topoName)
-
-	if err := store.Get(topo); err != nil {
-		return fmt.Errorf("topology doesn't exist")
-	}
-
-	if c.Spec == nil {
-		c.Spec = make(map[string]interface{})
-	}
-
-	if _, ok := c.Spec["experimentName"]; !ok {
-		c.Spec["experimentName"] = c.Metadata.Name
-	}
-
-	c.Spec["topology"] = topo.Spec
-
-	if scenarioName != "" {
-		scenario, _ := types.NewConfig("scenario/" + scenarioName)
-
-		if err := store.Get(scenario); err != nil {
-			return fmt.Errorf("scenario doesn't exist")
-		}
-
-		topo, ok := scenario.Metadata.Annotations["topology"]
-		if !ok {
-			return fmt.Errorf("topology annotation missing from scenario")
-		}
-
-		if topo != topoName {
-			return fmt.Errorf("experiment/scenario topology mismatch")
-		}
-
-		c.Spec["scenario"] = scenario.Spec
-	}
-
-	return create(c)
-}
-
-func create(c *types.Config) error {
+/*
+func create(ctx.Context, c *types.Config) error {
 	var spec v1.ExperimentSpec
 
 	if err := mapstructure.Decode(c.Spec, &spec); err != nil {
@@ -238,7 +211,7 @@ func create(c *types.Config) error {
 
 	spec.SetDefaults()
 
-	if err := spec.VerifyScenario(); err != nil {
+	if err := spec.VerifyScenario(ctx); err != nil {
 		return fmt.Errorf("verifying experiment scenario: %w", err)
 	}
 
@@ -252,6 +225,7 @@ func create(c *types.Config) error {
 
 	return nil
 }
+*/
 
 // Schedule applies the given scheduling algorithm to the experiment with the
 // given name. It returns any errors encountered while scheduling the

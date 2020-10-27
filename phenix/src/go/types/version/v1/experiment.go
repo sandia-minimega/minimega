@@ -1,10 +1,13 @@
 package v1
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+
 	"phenix/internal/common"
+	"phenix/util"
 )
 
 type Schedule map[string]string
@@ -81,10 +84,12 @@ func (this VLANSpec) Validate() error {
 	return nil
 }
 
-func (this ExperimentSpec) VerifyScenario() error {
+func (this ExperimentSpec) VerifyScenario(ctx context.Context) error {
 	if this.Scenario == nil {
 		return nil
 	}
+
+	var warnings []error
 
 	hosts := make(map[string]struct{})
 
@@ -95,9 +100,13 @@ func (this ExperimentSpec) VerifyScenario() error {
 	for _, app := range this.Scenario.Apps.Host {
 		for _, host := range app.Hosts {
 			if _, ok := hosts[host.Hostname]; !ok {
-				return fmt.Errorf("host %s in app %s not in topology", host.Hostname, app.Name)
+				warnings = append(warnings, fmt.Errorf("host %s in app %s not in topology", host.Hostname, app.Name))
 			}
 		}
+	}
+
+	if len(warnings) > 0 {
+		util.AddWarnings(ctx, warnings)
 	}
 
 	return nil
