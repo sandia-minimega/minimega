@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"phenix/internal/common"
 	"phenix/scheduler"
@@ -14,7 +15,7 @@ import (
 )
 
 const (
-	EXIT_SCHEDULE int = 300
+	EXIT_SCHEDULE int = 101
 )
 
 var ErrUserAppNotFound = errors.New("user app not found")
@@ -104,7 +105,7 @@ func (this UserApp) shellOut(action Action, exp *types.Experiment) error {
 		if errors.As(err, &exitErr) {
 			switch exitErr.ExitCode() {
 			case EXIT_SCHEDULE:
-				sched := string(stdOut)
+				sched := strings.TrimSpace(string(stdOut))
 
 				if err := scheduler.Schedule(sched, exp.Spec); err != nil {
 					return fmt.Errorf("scheduling experiment with %s: %w", sched, err)
