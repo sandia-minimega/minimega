@@ -719,10 +719,12 @@ func CommitToDisk(expName, vmName, out string, cb func(float64)) (string, error)
 		snap = "/tmp/minimega/" + status[0]["id"] + "/disk-0.qcow2"
 		node = status[0]["host"]
 	)
-
-	base = common.PhenixBase + "/images/" + base
-	out = common.PhenixBase + "/images/" + out
-
+	if(!filepath.IsAbs(base)) {
+		base = common.PhenixBase + "/images/" + base
+	}
+	if(!filepath.IsAbs(out)) {
+		out = common.PhenixBase + "/images/" + out
+	}
 	wait, ctx := errgroup.WithContext(context.Background())
 
 	// Make copy of base image locally on headnode. Using a context here will help
