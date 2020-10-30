@@ -56,9 +56,13 @@ func (shell) ExecCommand(ctx context.Context, opts ...Option) ([]byte, []byte, e
 	}
 
 	cmd := exec.CommandContext(ctx, o.cmd, o.args...)
+
 	cmd.Stdin = stdIn
 	cmd.Stdout = &stdOut
 	cmd.Stderr = &stdErr
+
+	cmd.Env = os.Environ()
+	cmd.Env = append(cmd.Env, o.env...)
 
 	err := cmd.Run()
 
