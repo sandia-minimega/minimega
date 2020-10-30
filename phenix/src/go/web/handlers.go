@@ -2024,7 +2024,7 @@ func GetClusterHosts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hosts, err := mm.GetClusterHosts()
+	hosts, err := mm.GetClusterHosts(false)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

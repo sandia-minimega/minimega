@@ -25,7 +25,7 @@ func (roundRobin) Schedule(spec *v1.ExperimentSpec) error {
 		return fmt.Errorf("no VMs defined for experiment")
 	}
 
-	cluster, err := mm.GetClusterHosts()
+	cluster, err := mm.GetClusterHosts(true)
 	if err != nil {
 		return fmt.Errorf("getting cluster hosts: %w", err)
 	}

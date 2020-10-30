@@ -72,8 +72,8 @@ func GetVMCaptures(opts ...Option) []Capture {
 	return DefaultMM.GetVMCaptures(opts...)
 }
 
-func GetClusterHosts() (Hosts, error) {
-	return DefaultMM.GetClusterHosts()
+func GetClusterHosts(schedOnly bool) (Hosts, error) {
+	return DefaultMM.GetClusterHosts(schedOnly)
 }
 
 func IsHeadnode(node string) bool {

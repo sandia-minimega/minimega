@@ -26,7 +26,7 @@ type MM interface {
 	GetExperimentCaptures(...Option) []Capture
 	GetVMCaptures(...Option) []Capture
 
-	GetClusterHosts() (Hosts, error)
+	GetClusterHosts(bool) (Hosts, error)
 	IsHeadnode(string) bool
 	GetVLANs(...Option) (map[string]int, error)
 }

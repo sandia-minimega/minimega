@@ -512,7 +512,7 @@ func (this Minimega) GetVMCaptures(opts ...Option) []Capture {
 	return keep
 }
 
-func (Minimega) GetClusterHosts() (Hosts, error) {
+func (Minimega) GetClusterHosts(schedOnly bool) (Hosts, error) {
 	// Get headnode details
 	hosts, err := processNamespaceHosts("minimega")
 	if err != nil {
@@ -547,10 +547,14 @@ func (Minimega) GetClusterHosts() (Hosts, error) {
 			continue
 		}
 
-		host.Schedulable = true
 		host.Name = common.TrimHostnameSuffixes(host.Name)
+		host.Schedulable = true
 
 		cluster = append(cluster, host)
+	}
+
+	if schedOnly && !head.Schedulable {
+		return cluster, nil
 	}
 
 	head.Name = common.TrimHostnameSuffixes(head.Name)

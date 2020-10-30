@@ -43,7 +43,7 @@ func (this userScheduler) shellOut(spec *v1.ExperimentSpec) error {
 		return fmt.Errorf("external user scheduler %s does not exist in your path: %w", cmdName, ErrUserSchedulerNotFound)
 	}
 
-	cluster, err := mm.GetClusterHosts()
+	cluster, err := mm.GetClusterHosts(true)
 	if err != nil {
 		return fmt.Errorf("getting cluster hosts: %w", err)
 	}
