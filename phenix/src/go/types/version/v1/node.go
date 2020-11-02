@@ -49,7 +49,12 @@ func (this Node) Injections() []ifaces.NodeInjection {
 }
 
 func (this *Node) AddInject(src, dst, perms, desc string) {
-
+	this.InjectionsF = append(this.InjectionsF, &Injection{
+		SrcF:         src,
+		DstF:         dst,
+		PermissionsF: perms,
+		DescriptionF: desc,
+	})
 }
 
 func (this *Node) SetInjections(injections []ifaces.NodeInjection) {
