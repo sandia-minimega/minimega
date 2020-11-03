@@ -2,6 +2,8 @@ package image
 
 import (
 	"bufio"
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -15,6 +17,7 @@ import (
 	"phenix/tmpl"
 	"phenix/types"
 	v1 "phenix/types/version/v1"
+	"phenix/util"
 	"phenix/util/shell"
 
 	"github.com/activeshadow/structs"
@@ -25,6 +28,11 @@ const (
 	V_VERBOSE   int = 1
 	V_VVERBOSE  int = 2
 	V_VVVERBOSE int = 4
+)
+
+var (
+	ErrMinicccNotFound   = fmt.Errorf("miniccc executable not found")
+	ErrProtonukeNotFound = fmt.Errorf("protonuke executable not found")
 )
 
 // SetDefaults will set default settings to image values if none are set by the
@@ -219,7 +227,7 @@ func CreateFromConfig(name, saveas string, overlays, packages, scripts []string)
 // application is in the `$PATH`. Any errors encountered will be returned during
 // the process of getting an existing image configuration, decoding it,
 // generating the `vmdb` verbosconfiguration file, or executing the `vmdb` command.
-func Build(name string, verbosity int, cache bool, dryrun bool, output string) error {
+func Build(ctx context.Context, name string, verbosity int, cache bool, dryrun bool, output string) error {
 	c, _ := types.NewConfig("image/" + name)
 
 	if err := store.Get(c); err != nil {
@@ -241,6 +249,26 @@ func Build(name string, verbosity int, cache bool, dryrun bool, output string) e
 	// The Kali package repos use `kali-rolling` as the release name.
 	if img.Release == "kali" {
 		img.Release = "kali-rolling"
+	}
+
+	if img.IncludeMiniccc != "" {
+		if err := addMinicccToImage(&img, name); err != nil {
+			if errors.Is(err, ErrMinicccNotFound) {
+				util.AddWarnings(ctx, err)
+			} else {
+				return fmt.Errorf("adding miniccc to image: %w", err)
+			}
+		}
+	}
+
+	if img.IncludeProtonuke != "" {
+		if err := addProtonukeToImage(&img, name); err != nil {
+			if errors.Is(err, ErrProtonukeNotFound) {
+				util.AddWarnings(ctx, err)
+			} else {
+				return fmt.Errorf("adding protonuke to image: %w", err)
+			}
+		}
 	}
 
 	filename := output + "/" + name + ".vmdb"
@@ -540,6 +568,82 @@ func addScriptToImage(img *v1.Image, name, script string) error {
 
 	img.Scripts[name] = script
 	img.ScriptOrder = append(img.ScriptOrder, name)
+
+	return nil
+}
+
+func addMinicccToImage(img *v1.Image, name string) error {
+	pattern := fmt.Sprintf("%s-miniccc-overlay", name)
+
+	dir, err := ioutil.TempDir("", pattern)
+	if err != nil {
+		return fmt.Errorf("creating temp directory for miniccc overlay: %w", err)
+	}
+
+	defer os.RemoveAll(dir)
+
+	binPath := fmt.Sprintf("%s/usr/local/bin", dir)
+	if err := os.MkdirAll(binPath, 0755); err != nil {
+		return fmt.Errorf("creating directory structure for miniccc overlay: %w", err)
+	}
+
+	src, err := os.Open("/usr/local/share/minimega/bin/miniccc")
+	if err != nil {
+		return ErrMinicccNotFound
+	}
+
+	defer src.Close()
+
+	dst, err := os.OpenFile(binPath+"/miniccc", os.O_WRONLY|os.O_CREATE, 0755)
+	if err != nil {
+		return fmt.Errorf("opening miniccc destination file: %w", err)
+	}
+
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		return fmt.Errorf("copying miniccc file to overlay: %w", err)
+	}
+
+	img.Overlays = append(img.Overlays, dir)
+
+	return nil
+}
+
+func addProtonukeToImage(img *v1.Image, name string) error {
+	pattern := fmt.Sprintf("%s-protonuke-overlay", name)
+
+	dir, err := ioutil.TempDir("", pattern)
+	if err != nil {
+		return fmt.Errorf("creating temp directory for protonuke overlay: %w", err)
+	}
+
+	defer os.RemoveAll(dir)
+
+	binPath := fmt.Sprintf("%s/usr/local/bin", dir)
+	if err := os.MkdirAll(binPath, 0755); err != nil {
+		return fmt.Errorf("creating directory structure for protonuke overlay: %w", err)
+	}
+
+	src, err := os.Open("/usr/local/share/minimega/bin/protonuke")
+	if err != nil {
+		return ErrProtonukeNotFound
+	}
+
+	defer src.Close()
+
+	dst, err := os.OpenFile(binPath+"/protonuke", os.O_WRONLY|os.O_CREATE, 0755)
+	if err != nil {
+		return fmt.Errorf("opening protonuke destination file: %w", err)
+	}
+
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		return fmt.Errorf("copying protonuke file to overlay: %w", err)
+	}
+
+	img.Overlays = append(img.Overlays, dir)
 
 	return nil
 }

@@ -1,2 +1,5 @@
 .devcontainer
 .vscode
+
+docker/minimega-bin/miniccc
+docker/minimega-bin/protonuke

@@ -6,6 +6,11 @@ x-common: &common
     options:
       max-file: "5"
       max-size: "10m"
+x-minimega-bin-volume:
+  &minimega-bin-volume
+  type: bind
+  source: ./minimega-bin
+  target: /usr/local/share/minimega/bin
 services:
   phenix:
     build:
@@ -35,6 +40,7 @@ services:
       - /tmp/minimega:/tmp/minimega
       - /var/log/phenix:/var/log/phenix
       - /etc/localtime:/etc/localtime:ro
+      - *minimega-bin-volume
     depends_on:
       - minimega
     healthcheck:
@@ -70,6 +76,7 @@ services:
       - /sys/fs/cgroup:/sys/fs/cgroup:ro
       - /root/.ssh:/root/.ssh:ro
       - /etc/localtime:/etc/localtime:ro
+      - *minimega-bin-volume
     healthcheck:
       test: minimega -e version
 networks:

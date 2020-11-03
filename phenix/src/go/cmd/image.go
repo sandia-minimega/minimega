@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"phenix/util"
 	"phenix/util/printer"
 
+	"github.com/fatih/color"
 	"github.com/spf13/cobra"
 )
 
@@ -77,7 +79,17 @@ func newImageCreateCmd() *cobra.Command {
 	When specifying the --size option, the following units can be used:
 	
 	M - Megabytes
-	G - Gigabytes`
+	G - Gigabytes
+	
+	When specifying the --include-miniccc or --include-protonuke options,
+	the directory to install the miniccc and/or protonuke executable into
+	should be provided. For example:
+	
+	--include-miniccc=/usr/local/bin
+	
+	When building the image, the build subcommand will look for the miniccc
+	and/or protonuke executable in /usr/local/share/minimega/bin on the host
+	building the image.`
 
 	example := `
   phenix image create <image name>
@@ -108,6 +120,8 @@ func newImageCreateCmd() *cobra.Command {
 			img.Compress = MustGetBool(cmd.Flags(), "compress")
 			img.Ramdisk = MustGetBool(cmd.Flags(), "ramdisk")
 			img.DebAppend = MustGetString(cmd.Flags(), "debootstrap-append")
+			img.IncludeMiniccc = MustGetString(cmd.Flags(), "include-miniccc")
+			img.IncludeProtonuke = MustGetString(cmd.Flags(), "include-protonuke")
 
 			if overlays := MustGetString(cmd.Flags(), "overlays"); overlays != "" {
 				img.Overlays = strings.Split(overlays, ",")
@@ -148,6 +162,8 @@ func newImageCreateCmd() *cobra.Command {
 	cmd.Flags().StringP("packages", "P", "", "List of packages to include in addition to those provided by variant (separated by comma)")
 	cmd.Flags().StringP("scripts", "T", "", "List of scripts to include in addition to the defaults (include full path; separated by comma)")
 	cmd.Flags().StringP("debootstrap-append", "d", "", `Additional arguments to debootstrap "(default: --components=main,restricted,universe,multiverse)"`)
+	cmd.Flags().String("include-miniccc", "", `Include the miniccc executable in the directory provided`)
+	cmd.Flags().String("include-protonuke", "", `Include the protonuke executable in the directory provided`)
 
 	return cmd
 }
@@ -257,9 +273,19 @@ func newImageBuildCmd() *cobra.Command {
 				verbosity = verbosity | image.V_VVVERBOSE
 			}
 
-			if err := image.Build(name, verbosity, cache, dryrun, output); err != nil {
+			ctx := context.Background()
+
+			if err := image.Build(ctx, name, verbosity, cache, dryrun, output); err != nil {
 				err := util.HumanizeError(err, "Unable to build the "+name+" image")
 				return err.Humanized()
+			}
+
+			if warns := util.Warnings(ctx); warns != nil {
+				printer := color.New(color.FgYellow)
+
+				for _, warn := range warns {
+					printer.Printf("[WARNING] %v\n", warn)
+				}
 			}
 
 			fmt.Printf("The %s image was successfully built\n", name)

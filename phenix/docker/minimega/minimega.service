@@ -11,6 +11,8 @@ Environment="MM_DEGREE=2"
 Environment="MM_CONTEXT=minimega"
 Environment="MM_LOGLEVEL=info"
 Environment="MM_LOGFILE=/var/log/minimega.log"
+ExecStartPre=-/bin/cp /opt/minimega/bin/miniccc /usr/local/share/minimega/bin/miniccc
+ExecStartPre=-/bin/cp /opt/minimega/bin/protonuke /usr/local/share/minimega/bin/protonuke
 ExecStart=/usr/bin/minimega \
   -force \
   -nostdin \

@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"phenix/store"
 	"phenix/types"
@@ -34,7 +35,11 @@ func Init() error {
 			return fmt.Errorf("unmarshaling default config %s: %w", name, err)
 		}
 
-		if _, err := Get("role/"+c.Metadata.Name, false); err == nil {
+		name := strings.ToLower(c.Kind) + "/" + c.Metadata.Name
+
+		// Don't attempt to create this default config again if it already exists in
+		// the store.
+		if _, err := Get(name, false); err == nil {
 			continue
 		}
 

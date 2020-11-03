@@ -28,6 +28,9 @@ type Image struct {
 	Scripts     map[string]string `json:"scripts" yaml:"scripts"`
 	ScriptOrder []string          `json:"script_order" yaml:"script_order" structs:"script_order" mapstructure:"script_order"`
 
+	IncludeMiniccc   string `json:"include_miniccc" yaml:"include_miniccc" structs:"include_miniccc" mapstructure:"include_miniccc"`
+	IncludeProtonuke string `json:"include_protonuke" yaml:"include_protonuke" structs:"include_protonuke" mapstructure:"include_protonuke"`
+
 	Cache       bool     `json:"-" yaml:"-" structs:"-" mapstructure:"-"`
 	ScriptPaths []string `json:"-" yaml:"-" structs:"-" mapstructure:"-"`
 	VerboseLogs bool     `json:"-" yaml:"-" structs:"-" mapstructure:"-"`

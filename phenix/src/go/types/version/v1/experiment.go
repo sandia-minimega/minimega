@@ -204,7 +204,7 @@ func (this ExperimentSpec) VerifyScenario(ctx context.Context) error {
 	}
 
 	if len(warnings) > 0 {
-		util.AddWarnings(ctx, warnings)
+		util.AddWarnings(ctx, warnings...)
 	}
 
 	return nil
