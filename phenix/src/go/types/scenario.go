@@ -3,6 +3,7 @@ package types
 import (
 	"fmt"
 
+	"phenix/store"
 	ifaces "phenix/types/interfaces"
 	"phenix/types/version"
 	v1 "phenix/types/version/v1"
@@ -24,7 +25,7 @@ func init() {
 	_ = spec.(ifaces.ScenarioAppHost)
 }
 
-func DecodeScenarioFromConfig(c Config) (ifaces.ScenarioSpec, error) {
+func DecodeScenarioFromConfig(c store.Config) (ifaces.ScenarioSpec, error) {
 	var (
 		iface         interface{}
 		latestVersion = version.StoredVersion[c.Kind]
@@ -67,7 +68,7 @@ func DecodeScenarioFromConfig(c Config) (ifaces.ScenarioSpec, error) {
 
 type scenario struct{}
 
-func (scenario) Upgrade(version string, spec map[string]interface{}, md ConfigMetadata) (interface{}, error) {
+func (scenario) Upgrade(version string, spec map[string]interface{}, md store.ConfigMetadata) (interface{}, error) {
 	// This is a dummy topology upgrader to provide an exmaple of how an upgrader
 	// might be coded up. The specs in v0 simply assume that some integer values
 	// might be represented as strings when in JSON format.

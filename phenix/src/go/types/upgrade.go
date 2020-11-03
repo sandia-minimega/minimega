@@ -2,10 +2,12 @@ package types
 
 import (
 	"strings"
+
+	"phenix/store"
 )
 
 type Upgrader interface {
-	Upgrade(oldVersion string, spec map[string]interface{}, md ConfigMetadata) (interface{}, error)
+	Upgrade(oldVersion string, spec map[string]interface{}, md store.ConfigMetadata) (interface{}, error)
 }
 
 // Key should be in the form of `kind/version` -- ie. Topology/v1

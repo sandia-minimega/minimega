@@ -7,8 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"phenix/types"
-
 	"go.etcd.io/bbolt"
 )
 
@@ -63,11 +61,11 @@ func (this *BoltDB) Close() error {
 	return this.db.Close()
 }
 
-func (this *BoltDB) List(kinds ...string) (types.Configs, error) {
+func (this *BoltDB) List(kinds ...string) (Configs, error) {
 	this.open()
 	defer this.Close()
 
-	var configs types.Configs
+	var configs Configs
 
 	for _, kind := range kinds {
 		if err := this.ensureBucket(kind); err != nil {
@@ -78,7 +76,7 @@ func (this *BoltDB) List(kinds ...string) (types.Configs, error) {
 			b := tx.Bucket([]byte(kind))
 
 			err := b.ForEach(func(_, v []byte) error {
-				var c types.Config
+				var c Config
 
 				if err := json.Unmarshal(v, &c); err != nil {
 					return fmt.Errorf("unmarshaling config JSON: %w", err)
@@ -104,7 +102,7 @@ func (this *BoltDB) List(kinds ...string) (types.Configs, error) {
 	return configs, nil
 }
 
-func (this *BoltDB) Get(c *types.Config) error {
+func (this *BoltDB) Get(c *Config) error {
 	this.open()
 	defer this.Close()
 
@@ -120,7 +118,7 @@ func (this *BoltDB) Get(c *types.Config) error {
 	return nil
 }
 
-func (this *BoltDB) Create(c *types.Config) error {
+func (this *BoltDB) Create(c *Config) error {
 	this.open()
 	defer this.Close()
 
@@ -145,7 +143,7 @@ func (this *BoltDB) Create(c *types.Config) error {
 	return nil
 }
 
-func (this *BoltDB) Update(c *types.Config) error {
+func (this *BoltDB) Update(c *Config) error {
 	this.open()
 	defer this.Close()
 
@@ -167,11 +165,11 @@ func (this *BoltDB) Update(c *types.Config) error {
 	return nil
 }
 
-func (this *BoltDB) Patch(*types.Config, map[string]interface{}) error {
+func (this *BoltDB) Patch(*Config, map[string]interface{}) error {
 	return fmt.Errorf("BoltDB.Patch not implemented")
 }
 
-func (this *BoltDB) Delete(c *types.Config) error {
+func (this *BoltDB) Delete(c *Config) error {
 	this.open()
 	defer this.Close()
 

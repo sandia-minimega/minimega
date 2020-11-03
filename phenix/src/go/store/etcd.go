@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"phenix/types"
 	"strings"
 	"time"
 
@@ -52,8 +51,8 @@ func (this Etcd) Close() error {
 	return this.cli.Close()
 }
 
-func (this Etcd) List(kinds ...string) (types.Configs, error) {
-	var configs types.Configs
+func (this Etcd) List(kinds ...string) (Configs, error) {
+	var configs Configs
 
 	for _, kind := range kinds {
 		kind = strings.ToLower(kind)
@@ -64,7 +63,7 @@ func (this Etcd) List(kinds ...string) (types.Configs, error) {
 		}
 
 		for _, e := range resp.Kvs {
-			var c types.Config
+			var c Config
 
 			if err := json.Unmarshal(e.Value, &c); err != nil {
 				return nil, fmt.Errorf("unmarshaling config JSON: %w", err)
@@ -77,7 +76,7 @@ func (this Etcd) List(kinds ...string) (types.Configs, error) {
 	return configs, nil
 }
 
-func (this Etcd) Get(c *types.Config) error {
+func (this Etcd) Get(c *Config) error {
 	key := fmt.Sprintf("%s/%s", strings.ToLower(c.Kind), c.Metadata.Name)
 
 	resp, err := this.cli.Get(context.Background(), key)
@@ -98,7 +97,7 @@ func (this Etcd) Get(c *types.Config) error {
 	return nil
 }
 
-func (this Etcd) Create(c *types.Config) error {
+func (this Etcd) Create(c *Config) error {
 	key := fmt.Sprintf("%s/%s", strings.ToLower(c.Kind), c.Metadata.Name)
 
 	if resp, _ := this.cli.Get(context.Background(), key); resp.Count != 0 {
@@ -122,7 +121,7 @@ func (this Etcd) Create(c *types.Config) error {
 	return nil
 }
 
-func (this Etcd) Update(c *types.Config) error {
+func (this Etcd) Update(c *Config) error {
 	key := fmt.Sprintf("%s/%s", strings.ToLower(c.Kind), c.Metadata.Name)
 
 	if resp, _ := this.cli.Get(context.Background(), key); resp.Count == 0 {
@@ -145,11 +144,11 @@ func (this Etcd) Update(c *types.Config) error {
 	return nil
 }
 
-func (this Etcd) Patch(c *types.Config, u map[string]interface{}) error {
+func (this Etcd) Patch(c *Config, u map[string]interface{}) error {
 	return fmt.Errorf("not implemented")
 }
 
-func (this Etcd) Delete(c *types.Config) error {
+func (this Etcd) Delete(c *Config) error {
 	key := fmt.Sprintf("%s/%s", strings.ToLower(c.Kind), c.Metadata.Name)
 
 	if _, err := this.cli.Delete(context.Background(), key); err != nil {

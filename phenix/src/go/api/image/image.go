@@ -153,10 +153,10 @@ func Create(name string, img *v1.Image) error {
 		return fmt.Errorf("setting image defaults: %w", err)
 	}
 
-	c := types.Config{
+	c := store.Config{
 		Version:  "phenix.sandia.gov/v1",
 		Kind:     "Image",
-		Metadata: types.ConfigMetadata{Name: name},
+		Metadata: store.ConfigMetadata{Name: name},
 		Spec:     structs.MapDefaultCase(img, structs.CASESNAKE),
 	}
 
@@ -173,7 +173,7 @@ func Create(name string, img *v1.Image) error {
 // passed when creating a new image configuration, retrieving the exisitng image
 // configuration file, or storing the new image configuration file in the store.
 func CreateFromConfig(name, saveas string, overlays, packages, scripts []string) error {
-	c, err := types.NewConfig("image/" + name)
+	c, err := store.NewConfig("image/" + name)
 	if err != nil {
 		return fmt.Errorf("creating new image config for %s: %w", name, err)
 	}
@@ -228,7 +228,7 @@ func CreateFromConfig(name, saveas string, overlays, packages, scripts []string)
 // the process of getting an existing image configuration, decoding it,
 // generating the `vmdb` verbosconfiguration file, or executing the `vmdb` command.
 func Build(ctx context.Context, name string, verbosity int, cache bool, dryrun bool, output string) error {
-	c, _ := types.NewConfig("image/" + name)
+	c, _ := store.NewConfig("image/" + name)
 
 	if err := store.Get(c); err != nil {
 		return fmt.Errorf("getting image config %s from store: %w", name, err)
@@ -362,7 +362,7 @@ func List() ([]types.Image, error) {
 // of creating a new image configuration, decoding it, or updating it in the
 // store.
 func Update(name string) error {
-	c, err := types.NewConfig("image/" + name)
+	c, err := store.NewConfig("image/" + name)
 	if err != nil {
 		return fmt.Errorf("creating new image config for %s: %w", name, err)
 	}
@@ -405,7 +405,7 @@ func Update(name string) error {
 // return any errors encountered during the process of creating a new image
 // configuration, decoding it, or updating it in the store.
 func Append(name string, overlays, packages, scripts []string) error {
-	c, err := types.NewConfig("image/" + name)
+	c, err := store.NewConfig("image/" + name)
 	if err != nil {
 		return fmt.Errorf("creating new image config for %s: %w", name, err)
 	}
@@ -450,7 +450,7 @@ func Append(name string, overlays, packages, scripts []string) error {
 // encountered during the process of creating a new image configuration,
 // decoding it, or updating it in the store.
 func Remove(name string, overlays, packages, scripts []string) error {
-	c, err := types.NewConfig("image/" + name)
+	c, err := store.NewConfig("image/" + name)
 	if err != nil {
 		return fmt.Errorf("creating new image config for %s: %w", name, err)
 	}

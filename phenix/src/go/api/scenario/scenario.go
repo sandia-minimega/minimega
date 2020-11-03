@@ -14,7 +14,7 @@ func AppList(name string) ([]string, error) {
 		return nil, fmt.Errorf("no scenario name provided")
 	}
 
-	c, _ := types.NewConfig("scenario/" + name)
+	c, _ := store.NewConfig("scenario/" + name)
 
 	if err := store.Get(c); err != nil {
 		return nil, fmt.Errorf("getting scenario %s from store: %w", name, err)

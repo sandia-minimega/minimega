@@ -6,7 +6,6 @@ import (
 
 	"phenix/api/config"
 	"phenix/store"
-	"phenix/types"
 	v1 "phenix/types/version/v1"
 
 	"github.com/activeshadow/structs"
@@ -49,7 +48,7 @@ var ErrPasswordInvalid = fmt.Errorf("password invalid")
 type User struct {
 	Spec *v1.UserSpec
 
-	config *types.Config
+	config *store.Config
 }
 
 func NewUser(u, p string) *User {
@@ -63,10 +62,10 @@ func NewUser(u, p string) *User {
 		Password: string(hashed),
 	}
 
-	c := &types.Config{
+	c := &store.Config{
 		Version:  "phenix.sandia.gov/v1",
 		Kind:     "User",
-		Metadata: types.ConfigMetadata{Name: u},
+		Metadata: store.ConfigMetadata{Name: u},
 		Spec:     structs.MapDefaultCase(spec, structs.CASESNAKE),
 	}
 

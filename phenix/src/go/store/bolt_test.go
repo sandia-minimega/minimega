@@ -5,8 +5,6 @@ import (
 	"os"
 	"testing"
 
-	"phenix/types"
-
 	"gopkg.in/yaml.v3"
 )
 
@@ -57,7 +55,7 @@ func TestConfigCreate(t *testing.T) {
 		t.FailNow()
 	}
 
-	var c types.Config
+	var c Config
 
 	if err := yaml.Unmarshal([]byte(topology), &c); err != nil {
 		t.Log(err)
@@ -86,7 +84,7 @@ func TestConfigCreateAndGet(t *testing.T) {
 		t.FailNow()
 	}
 
-	var c types.Config
+	var c Config
 
 	if err := yaml.Unmarshal([]byte(topology), &c); err != nil {
 		t.Log(err)
@@ -98,9 +96,9 @@ func TestConfigCreateAndGet(t *testing.T) {
 		t.FailNow()
 	}
 
-	c = types.Config{
+	c = Config{
 		Kind: "Topology",
-		Metadata: types.ConfigMetadata{
+		Metadata: ConfigMetadata{
 			Name: "foobar",
 		},
 	}
@@ -127,7 +125,7 @@ func TestConfigDelete(t *testing.T) {
 		t.FailNow()
 	}
 
-	c, _ := types.NewConfig("topology/foobar")
+	c, _ := NewConfig("topology/foobar")
 
 	if err := b.Delete(c); err != nil {
 		t.Log(err)

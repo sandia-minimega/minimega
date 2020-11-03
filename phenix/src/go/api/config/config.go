@@ -18,7 +18,7 @@ import (
 // of a config. The passed config can be updated by the hook functions as
 // necessary, and an error can be returned if the lifecycle stage should be
 // halted.
-type ConfigHook func(string, *types.Config) error
+type ConfigHook func(string, *store.Config) error
 
 var hooks = make(map[string][]ConfigHook)
 
@@ -29,7 +29,7 @@ func RegisterConfigHook(kind string, hook ConfigHook) {
 
 func Init() error {
 	for _, name := range AssetNames() {
-		var c types.Config
+		var c store.Config
 
 		if err := yaml.Unmarshal(MustAsset(name), &c); err != nil {
 			return fmt.Errorf("unmarshaling default config %s: %w", name, err)
@@ -55,9 +55,9 @@ func Init() error {
 // no config type is specified, or `all` is specified, then all the known
 // configs will be collected. It returns a slice of configs and any errors
 // encountered while getting the configs from the store.
-func List(which string) (types.Configs, error) {
+func List(which string) (store.Configs, error) {
 	var (
-		configs types.Configs
+		configs store.Configs
 		err     error
 	)
 
@@ -94,12 +94,12 @@ func List(which string) (types.Configs, error) {
 // its `spec` and `status` fields casted to the given type, but instead will be
 // generic `map[string]interface{}` fields. It's up to the caller to convert
 // these fields into the appropriate types.
-func Get(name string, upgrade bool) (*types.Config, error) {
+func Get(name string, upgrade bool) (*store.Config, error) {
 	if name == "" {
 		return nil, util.HumanizeError(fmt.Errorf("no config name provided"), "")
 	}
 
-	c, err := types.NewConfig(name)
+	c, err := store.NewConfig(name)
 	if err != nil {
 		return nil, err
 	}
@@ -138,12 +138,12 @@ func Get(name string, upgrade bool) (*types.Config, error) {
 // additional validations are done to ensure the annotated topology (required)
 // and scenario (optional) exist. It returns a pointer to the resulting config
 // struct and eny errors encountered while creating the config.
-func Create(path string, validate bool) (*types.Config, error) {
+func Create(path string, validate bool) (*store.Config, error) {
 	if path == "" {
 		return nil, fmt.Errorf("no config file provided")
 	}
 
-	c, err := types.NewConfigFromFile(path)
+	c, err := store.NewConfigFromFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("creating new config from file: %w", err)
 	}
@@ -183,12 +183,12 @@ func Create(path string, validate bool) (*types.Config, error) {
 // `editor.ErrNoChange` is returned. This can be checked using the
 // `IsConfigNotModified` function. It returns the updated config and any errors
 // encountered while editing the config.
-func Edit(name string, force bool) (*types.Config, error) {
+func Edit(name string, force bool) (*store.Config, error) {
 	if name == "" {
 		return nil, fmt.Errorf("no config name provided")
 	}
 
-	c, err := types.NewConfig(name)
+	c, err := store.NewConfig(name)
 	if err != nil {
 		return nil, err
 	}
@@ -271,7 +271,7 @@ func Delete(name string) error {
 	return delete(c)
 }
 
-func delete(c *types.Config) error {
+func delete(c *store.Config) error {
 	if err := store.Delete(c); err != nil {
 		return fmt.Errorf("deleting config in store: %w", err)
 	}

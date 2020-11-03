@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"phenix/internal/mm"
+	"phenix/store"
 	"phenix/types"
 
 	"github.com/olekukonko/tablewriter"
@@ -17,7 +18,7 @@ import (
 
 // PrintTableOfConfigs writes the given configs to the given writer as an ASCII
 // table. The table headers are set to Kind, Version, Name, and Created.
-func PrintTableOfConfigs(writer io.Writer, configs types.Configs) {
+func PrintTableOfConfigs(writer io.Writer, configs store.Configs) {
 	table := tablewriter.NewWriter(writer)
 
 	table.SetHeader([]string{"Kind", "Version", "Name", "Created"})

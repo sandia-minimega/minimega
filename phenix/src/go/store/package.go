@@ -3,7 +3,6 @@ package store
 import (
 	"fmt"
 	"net/url"
-	"phenix/types"
 )
 
 var DefaultStore Store = NewBoltDB()
@@ -32,26 +31,26 @@ func Close() error {
 	return DefaultStore.Close()
 }
 
-func List(kinds ...string) (types.Configs, error) {
+func List(kinds ...string) (Configs, error) {
 	return DefaultStore.List(kinds...)
 }
 
-func Get(config *types.Config) error {
+func Get(config *Config) error {
 	return DefaultStore.Get(config)
 }
 
-func Create(config *types.Config) error {
+func Create(config *Config) error {
 	return DefaultStore.Create(config)
 }
 
-func Update(config *types.Config) error {
+func Update(config *Config) error {
 	return DefaultStore.Update(config)
 }
 
-func Patch(config *types.Config, data map[string]interface{}) error {
+func Patch(config *Config, data map[string]interface{}) error {
 	return DefaultStore.Patch(config, data)
 }
 
-func Delete(config *types.Config) error {
+func Delete(config *Config) error {
 	return DefaultStore.Delete(config)
 }

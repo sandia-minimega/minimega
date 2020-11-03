@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"phenix/store"
 	ifaces "phenix/types/interfaces"
 	"phenix/types/version"
 	v0 "phenix/types/version/v0"
@@ -12,7 +13,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-func DecodeTopologyFromConfig(c Config) (ifaces.TopologySpec, error) {
+func DecodeTopologyFromConfig(c store.Config) (ifaces.TopologySpec, error) {
 	var (
 		iface         interface{}
 		latestVersion = version.StoredVersion[c.Kind]
@@ -55,15 +56,15 @@ func DecodeTopologyFromConfig(c Config) (ifaces.TopologySpec, error) {
 
 type topology struct{}
 
-func (topology) Upgrade(version string, spec map[string]interface{}, md ConfigMetadata) (interface{}, error) {
+func (topology) Upgrade(version string, spec map[string]interface{}, md store.ConfigMetadata) (interface{}, error) {
 	// This is a dummy topology upgrader to provide an exmaple of how an upgrader
 	// might be coded up. The specs in v0 simply assume that some integer values
 	// might be represented as strings when in JSON format.
 
 	if version == "v0" {
 		var (
-			topoV0 v0.TopologySpec
-			topoV1 v1.TopologySpec
+			topoV0 *v0.TopologySpec
+			topoV1 *v1.TopologySpec
 		)
 
 		// Using WeakDecode here since v0 schema uses strings for some integer

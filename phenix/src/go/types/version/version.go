@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	v0 "phenix/types/version/v0"
 	v1 "phenix/types/version/v1"
 	v2 "phenix/types/version/v2"
 
@@ -37,6 +38,8 @@ func GetVersionedSpecForKind(kind, version string) (interface{}, error) {
 	switch kind {
 	case "Topology":
 		switch version {
+		case "v0":
+			return new(v0.TopologySpec), nil
 		case "v1":
 			return new(v1.TopologySpec), nil
 		default:
@@ -85,6 +88,13 @@ func GetVersionedValidatorForKind(kind, version string) (*openapi3.Schema, error
 	var s *openapi3.Swagger
 
 	switch version {
+	case "v0":
+		var err error
+
+		s, err = openapi3.NewSwaggerLoader().LoadSwaggerFromData(v0.OpenAPI)
+		if err != nil {
+			return nil, fmt.Errorf("loading OpenAPI schema for version %s: %w", version, err)
+		}
 	case "v1":
 		var err error
 

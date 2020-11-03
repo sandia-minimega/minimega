@@ -4,15 +4,16 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"phenix/store"
 	"phenix/types/version"
 )
 
 // ValidateConfigSpec validates the spec in the given config using the
 // appropriate `openapi3.Schema` validator. Any validation errors encountered
 // are returned.
-func ValidateConfigSpec(c Config) error {
-	if g := c.APIGroup(); g != API_GROUP {
-		return fmt.Errorf("invalid API group %s: expected %s", g, API_GROUP)
+func ValidateConfigSpec(c store.Config) error {
+	if g := c.APIGroup(); g != store.API_GROUP {
+		return fmt.Errorf("invalid API group %s: expected %s", g, store.API_GROUP)
 	}
 
 	v, err := version.GetVersionedValidatorForKind(c.Kind, c.APIVersion())

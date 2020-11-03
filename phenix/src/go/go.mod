@@ -19,7 +19,6 @@ require (
 	github.com/gorilla/mux v1.7.4
 	github.com/gorilla/websocket v1.4.2
 	github.com/hpcloud/tail v1.0.0
-	github.com/mitchellh/go-homedir v1.1.0
 	github.com/mitchellh/mapstructure v1.2.2
 	github.com/olekukonko/tablewriter v0.0.4
 	github.com/patrickmn/go-cache v2.1.0+incompatible
@@ -34,11 +33,10 @@ require (
 	golang.org/x/net v0.0.0-20200822124328-c89045814202
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	golang.org/x/sys v0.0.0-20200826173525-f9321e4c35a6 // indirect
-	golang.org/x/text v0.3.3 // indirect
 	golang.org/x/tools v0.0.0-20200806022845-90696ccdc692 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/protobuf v1.25.0
 	gopkg.in/fsnotify.v1 v1.4.7 // indirect
 	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20200313102051-9f266ea9e77c
+	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
 )
