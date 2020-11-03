@@ -580,8 +580,6 @@ func addMinicccToImage(img *v1.Image, name string) error {
 		return fmt.Errorf("creating temp directory for miniccc overlay: %w", err)
 	}
 
-	defer os.RemoveAll(dir)
-
 	binPath := fmt.Sprintf("%s/usr/local/bin", dir)
 	if err := os.MkdirAll(binPath, 0755); err != nil {
 		return fmt.Errorf("creating directory structure for miniccc overlay: %w", err)
@@ -617,8 +615,6 @@ func addProtonukeToImage(img *v1.Image, name string) error {
 	if err != nil {
 		return fmt.Errorf("creating temp directory for protonuke overlay: %w", err)
 	}
-
-	defer os.RemoveAll(dir)
 
 	binPath := fmt.Sprintf("%s/usr/local/bin", dir)
 	if err := os.MkdirAll(binPath, 0755); err != nil {

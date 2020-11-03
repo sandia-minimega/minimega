@@ -110,7 +110,7 @@ spec:
       [Service]
       EnvironmentFile=/etc/default/protonuke
       ExecStartPre=/usr/local/bin/wup ens1
-      ExecStart=/usr/local/bin/protonuke $PROTONUKE_ARGS
+      ExecStart=/usr/local/bin/protonuke \$PROTONUKE_ARGS
       [Install]
       WantedBy=multi-user.target
       EOF
