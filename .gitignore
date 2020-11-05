@@ -6,8 +6,10 @@ src/version/version.go
 *.pyc
 __pycache__
 venv/
-/minimega.py
 doc/content/articles/api.article
 doc/content/articles/minirouter_api.article
+lib/dist
+lib/MANIFEST
+lib/minimega.py
 tests/*.got
 tests/*/*.got
