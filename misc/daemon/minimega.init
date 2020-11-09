@@ -38,39 +38,27 @@ install() {
     echo "Cannot find configuration at $REPLY/minimega.conf"
     return 1
   fi
+  source "$REPLY/minimega.conf" 2> /dev/null # don't display "no file or directory" error message
   # create minimega directories
-  mkdir -p /var/log/minimega/
+  log_dir=$(dirname $MM_LOG_FILE)
+  mkdir -p $log_dir
   mkdir -p /etc/minimega/saved_vms/
-  # create sumlinks to 'install' the init script
+  # create some links to 'install' the init script
   ln -s $REPLY/minimega.init /etc/init.d/minimega
   ln -s $REPLY/minimega.conf /etc/minimega/minimega.conf
-  update-rc.d minimega defaults # make 'start' run on boot
+  systemctl enable minimega # make 'start' run on boot
   return 0
 }
 
 uninstall() {
   unlink /etc/init.d/minimega
   unlink /etc/minimega/minimega.conf
-  update-rc.d minimega remove
-  echo "Uninstallation complete. You may wish to remove /etc/minimega/ and /var/log/minimega/"
+  systemctl disable minimega
+  log_dir=$(dirname $MM_LOG_FILE)
+  echo "Uninstallation complete. The config directory (/etc/minimega) and log directory ($log_dir) were not removed."
 }
 
 update() {
-  # update minimega
-  #read -p "Updating will wipe out $MINIMEGA_DIR. Are you sure you want to continue?[y/N] " -n 1 -r
-  #echo ""
-  #if [[ $REPLY =~ ^[Yy]$ ]]; then
-  #  # dev code here
-  #  wget moustache.ca.sandia.gov/mega/latest.tar.bz2 -P /tmp/ >>/dev/null 2>&1
-  #  if [ "$?" != "0" ]; then
-  #    echo "Failed to download latest minimega build"
-  #    return 1
-  #  fi
-  #  tar xjf /tmp/latest.tar.bz2 -C /tmp >>/dev/null 2>&1
-  #  rm /tmp/latest.tar.bz2 >>/dev/null 2>&1
-  #  rm -rf /mega >>/dev/null 2>&1
-  #  mv /tmp/mega-[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/ /mega >>/dev/null 2>&1
-  #fi
   return 0
 }
 
@@ -81,6 +69,7 @@ start() {
     echo "minimega already running as pid $old_pid"
     return 1
   fi
+  ulimit -n 1024000 -u 4096000
   mkdir -p $MM_RUN_PATH
   pushd $MINIMEGA_DIR &>/dev/null
   $MINIMEGA_DIR/bin/minimega -base=$MM_RUN_PATH -filepath=$MM_FILEPATH -degree=$MM_MESH_DEGREE -nostdin=$MM_DAEMON -context=$MM_CONTEXT -port=$MM_PORT -level=$MM_LOG_LEVEL -logfile=$MM_LOG_FILE ${@:1} &> /dev/null &
@@ -91,6 +80,10 @@ start() {
     echo "minimega did not start"
     return 1
   fi
+  # set minimega group permissions
+  chgrp -R minimega $MM_RUN_PATH
+  chmod -R g=u $MM_RUN_PATH
+  chmod g+s $MM_RUN_PATH ${MM_RUN_PATH}/minimega
   echo "minimega started as process `cat $MM_RUN_PATH/minimega.pid`"
   return 0
 }

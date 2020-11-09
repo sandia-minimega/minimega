@@ -1,0 +1,13 @@
+#! /bin/sh
+
+set -e
+
+if ! id -u minimega >/dev/null 2>&1; then
+    echo "Adding minimega user."
+    useradd --system --no-create-home --home-dir /run/minimega minimega
+else
+    echo "minimega user already exists."
+fi
+
+chown -R minimega:minimega /usr/share/doc/minimega
+chown -R minimega:minimega /opt/minimega
