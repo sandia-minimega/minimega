@@ -24,6 +24,8 @@ import (
 	"version"
 )
 
+const PART_SIZE = 1024 * 100
+
 type Server struct {
 	// UseVMs controls whether ron uses VM callbacks or not (see ron.VM)
 	UseVMs bool
@@ -735,9 +737,18 @@ func (s *Server) clientHandler(c *client) {
 			case MESSAGE_TUNNEL:
 				_, err = remote.Write(m.Tunnel)
 			case MESSAGE_FILE:
-				m2 := s.readFile(m.Filename)
-				m2.UUID = m.UUID
-				err = c.sendMessage(m2)
+				if m.Error != "" {
+					log.Error("file error from %v: %v", c.UUID, m.Error)
+					continue
+				}
+				if m.File.Data == nil && m.File.Offset == 0 {
+					// client requested file
+					err = s.sendFile(c, m.File.Name)
+				} else {
+					// client sent file
+					fpath := filepath.Join(s.responsePath(&m.File.ID), c.UUID, m.File.Name)
+					err = m.File.Recv(fpath)
+				}
 			case MESSAGE_CLIENT:
 				if c.mangled {
 					m.Client.UUID = unmangle(m.Client.UUID)
@@ -838,13 +849,24 @@ func (s *Server) NewFilesSendCommand(files []string) (*Command, error) {
 		} else {
 			// if the file is relative, look in the subpath first and then in
 			// the global directory
-			for _, subpath := range []string{s.subpath, ""} {
-				f := filepath.Join(s.path, subpath, f)
+			dir := filepath.Join(s.path, s.subpath)
 
-				send, err = filepath.Glob(f)
-				if len(send) > 0 {
-					break
+			send, err = filepath.Glob(filepath.Join(dir, f))
+			if err != nil || len(send) == 0 {
+				dir = s.path
+				send, err = filepath.Glob(filepath.Join(dir, f))
+			}
+
+			// make all files relative, won't do anything if there was an error
+			for i, v := range send {
+				v2, err := filepath.Rel(dir, v)
+				if err != nil {
+					return nil, err
 				}
+
+				log.Info("send %v, rel: %v", v, v2)
+
+				send[i] = v2
 			}
 		}
 
@@ -852,68 +874,27 @@ func (s *Server) NewFilesSendCommand(files []string) (*Command, error) {
 			return nil, fmt.Errorf("no such file: %v", f)
 		}
 
-		for _, f := range send {
-			fi, err := os.Stat(f)
-			if err != nil {
-				return nil, err
-			}
-			// remove prefix
-			f, err = filepath.Rel(s.path, f)
-			if err != nil {
-				return nil, err
-			}
-
-			perm := fi.Mode() & os.ModePerm
-			cmd.FilesSend = append(cmd.FilesSend, &File{
-				Name: f,
-				Perm: perm,
-			})
-		}
+		cmd.FilesSend = send
 	}
 
 	return cmd, nil
-
 }
 
-// readFile reads the file by name and returns a message that can be sent back
-// to the client.
-func (s *Server) readFile(f string) *Message {
-	log.Debug("readFile: %v", f)
+// sendFile reads the file and sends it in multiple chunks to the client.
+func (s *Server) sendFile(c *client, filename string) error {
+	log.Debug("sendFile: %v to %v", filename, c.UUID)
 
-	var m *Message
-
-	// try to read the file from the subpath first and then without the
-	// subpath.
-	for _, subpath := range []string{s.subpath, ""} {
-		filename := filepath.Join(s.path, subpath, f)
-		m = &Message{
-			Type:     MESSAGE_FILE,
-			Filename: f,
-		}
-
-		info, err := os.Stat(filename)
-		if err != nil {
-			m.Error = fmt.Sprintf("file %v does not exist", filename)
-		} else if info.IsDir() {
-			m.Error = fmt.Sprintf("file %v is a directory", filename)
-		} else {
-			// read the file
-			m.File, err = ioutil.ReadFile(filename)
-			if err != nil {
-				m.Error = fmt.Sprintf("file %v: %v", filename, err)
-			}
-		}
-
-		if m.Error == "" {
-			break
-		}
+	// try to send version from subpath first
+	dir := filepath.Join(s.path, s.subpath)
+	fpath := filepath.Join(dir, filename)
+	if _, err := os.Stat(fpath); err == nil {
+		// found file in subpath
+		return SendFile(dir, fpath, 0, PART_SIZE, c.sendMessage)
 	}
 
-	if m.Error != "" {
-		log.Errorln(m.Error)
-	}
-
-	return m
+	dir = s.path
+	fpath = filepath.Join(dir, filename)
+	return SendFile(dir, fpath, 0, PART_SIZE, c.sendMessage)
 }
 
 // route an outgoing message to one or all clients, according to UUID
@@ -1051,23 +1032,6 @@ func (s *Server) responseHandler() {
 				err := ioutil.WriteFile(filepath.Join(path, "stderr"), []byte(v.Stderr), os.FileMode(0660))
 				if err != nil {
 					log.Error("could not record stderr %v for %v: %v", v.ID, cin.UUID, err)
-				}
-			}
-
-			// write out files if they exist
-			for _, f := range v.Files {
-				fpath := filepath.Join(path, f.Name)
-				log.Debug("writing file %v", fpath)
-				dir := filepath.Dir(fpath)
-				err := os.MkdirAll(dir, os.FileMode(0770))
-				if err != nil {
-					log.Errorln(err)
-					continue
-				}
-				err = ioutil.WriteFile(fpath, f.Data, f.Perm)
-				if err != nil {
-					log.Errorln(err)
-					continue
 				}
 			}
 		}

@@ -55,7 +55,12 @@ slot.
 
 The -a flag indicates that the reservation should take place on or after the
 specified time, given in the format "2017-Jan-2-15:04". Especially useful in
-conjunction with the -s flag.`,
+conjunction with the -s flag.
+
+The -vlan flag specifies the name of an existing reservation or a VLAN number.
+If a reservation name is provided, the VLAN of the new reservation is set to
+the same VLAN as the specified reservation. If a VLAN number is provided, the
+new reservation is set to use the specified VLAN.`,
 }
 
 var subR string       // -r flag
@@ -69,6 +74,7 @@ var subA string       // -a
 var subW string       // -w
 var subG string       // -g
 var subProfile string // -profile
+var subVlan string    // -vlan
 
 func init() {
 	// break init cycle
@@ -85,6 +91,7 @@ func init() {
 	cmdSub.Flag.StringVar(&subW, "w", "", "")
 	cmdSub.Flag.StringVar(&subG, "g", "", "")
 	cmdSub.Flag.StringVar(&subProfile, "profile", "", "")
+	cmdSub.Flag.StringVar(&subVlan, "vlan", "", "")
 }
 
 func runSub(cmd *Command, args []string) {
@@ -136,6 +143,16 @@ func runSub(cmd *Command, args []string) {
 		if !cobblerProfiles[subProfile] {
 			log.Fatal("Cobbler profile does not exist: %v", subProfile)
 		}
+	}
+
+	// Check VLAN Availablility
+	if subVlan != "" {
+		vlan, err := parseVLAN(subVlan)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		r.Vlan = vlan
 	}
 
 	// Make sure there's not already a reservation with this name

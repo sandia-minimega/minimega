@@ -276,3 +276,29 @@ func subrange(s string) ([]string, error) {
 
 	return nodes, nil
 }
+
+func (r *Range) RangeToInts(names []string) []int {
+	var nums []int
+
+	// Remove the prefix from every name and put into an array of ints
+	for _, s := range names {
+		if !strings.HasPrefix(s, r.Prefix) {
+			return []int{}
+		}
+
+		if i, err := strconv.Atoi(strings.TrimPrefix(s, r.Prefix)); err == nil {
+			nums = append(nums, i)
+		} else {
+			return []int{}
+		}
+	}
+
+	if len(nums) == 0 {
+		return []int{}
+	}
+
+	// Sort the numbers
+	sort.Ints(nums)
+
+	return nums
+}

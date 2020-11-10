@@ -8,6 +8,7 @@ import (
 	"fmt"
 	log "minilog"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -28,7 +29,7 @@ func processWrapper(args ...string) (string, error) {
 	start := time.Now()
 	out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
 	stop := time.Now()
-	log.Debug("cmd %v completed in %v", args[0], stop.Sub(start))
+	log.Debug("cmd \"%v\" completed in %v, output below:\n %v", strings.Join(args, " "), stop.Sub(start), string(out))
 
 	return string(out), err
 }

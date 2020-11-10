@@ -14,13 +14,11 @@ DST=$SCRIPT_DIR/minimega/opt/minimega
 mkdir -p $DST
 cp -r $MM/bin $DST/
 cp -r $MM/doc $DST/
+cp -r $MM/lib $DST/
 mkdir -p $DST/misc
 cp -r $MM/misc/daemon $DST/misc/
 cp -r $MM/misc/vmbetter_configs $DST/misc/
 cp -r $MM/misc/web $DST/misc/
-
-mkdir -p $DST/lib
-cp minimega.py $DST/lib/
 
 DOCS=$SCRIPT_DIR/minimega/usr/share/doc/minimega
 mkdir -p $DOCS

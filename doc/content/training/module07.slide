@@ -1,0 +1,195 @@
+Command and control
+How to use miniccc - minimega's command and control solution
+
+The minimega miniclass series
+Sandia National Laboratories
+http://minimega.org/
+
+* Overview
+
+In addition to orchestrating VMs, minimega includes a command and control (cc or c2) layer for VMs. The c2 layer allows users to:
+
+- Configure VM post-boot
+- Execute/Background programs
+- Push/pull files
+
+The cc API in minimega provides a mechanism to programmatically execute programs and send and receive files to VMs launched by minimega. 
+
+In addition, the cc API allows creating TCP tunnels (as well as reverse tunnels) from the host machine to/from any VM.
+
+* miniccc - the cc agent
+
+The cc API reles on having an agent run on the VM called miniccc.
+minicc supports two modes of communication with VMs:
+
+- Virtio-serial (KVM), or UNIX domain socket (containers)
+-- simple i/o layer, similar to a UNIX pipe between the host and VM.
+-- both host and VM must have virtio-serial support
+
+- TCP
+-- The VMs must be able to communicate directly with the host they are launched on.
+-- See [[module05.slide][module 05]] on creating a tap to the host for one possible route for this.
+
+Most experiments communicate via the serial interface to avoid introducing orchestration traffic to the experiment network.
+
+* Starting miniccc
+
+The miniccc client uses several command line switches to control how to connect to minimega, as well as where to store files received for the client.
+
+To use virtio-serial, use the -serial flag, with the path to the virtio-serial file. 
+
+  miniccc -serial /dev/virtio-ports/cc
+
+NOTE: In linux, the default virtio-serial cc port is /dev/virtio-ports/cc. In Windows, the path is \\.\Global\cc.
+
+To connect over TCP, provide the -parent flag with the host/ip of host running minimega.
+
+  miniccc -parent 10.0.0.1
+
+By default, miniccc will create the directory /tmp/miniccc to store state and files in. Files sent to the client will be stored in /tmp/miniccc/files. You can change this directory with the -base flag.
+
+* cc clients API
+
+Executed by itself, `cc` give you a count of connected clients:
+
+.mega module07_content/cc01.mm
+
+`cc`clients` can be used to see more information about those clients:
+
+.mega module07_content/cc02.mm
+
+Clients report their UUID, hostname, OS, architecture, IP and MAC addresses to minimega. This information is updated periodically, so if an IP changes, minimega will see the change. 
+
+Client information is stored by UUID in minimega. When a client responds to a command, the response is logged by minimega in a subdirectory named after the UUID for that client. We'll discuss responses later.
+
+* cc exec API
+
+The simplest way to run commands is with the `cc`exec` API.
+
+Note: You may need to wrap your command in quotes or escape special characters.
+
+.mega module07_content/cc03.mm
+
+* Asynchronous communication
+
+minimega's c2 layer is asynchronous so you will have to wait a few seconds for the following actions to occur:
+
+- minimega pushes commands to miniccc
+- miniccc runs the command and stores the response
+- miniccc reports the results during the next heartbeat
+
+* Pitfall: cc commands
+
+There are two things to note at this point: 
+
+- First, commands don't go away until you delete them with `cc`delete` command. 
+
+-- This means that if you were to reset a VM or start new VMs, they would all see and execute these commands. 
+
+- Second, the response from the client isn't printed to screen. 
+
+-- Instead, responses are logged in a special directory structure in minimega's base path.
+-- You can browse to the responses yourself, or use the `cc`responses` command to view responses from clients.
+
+More on both of these API commands later.
+
+* cc commands API
+
+You can inspect current in-flight commands with `cc`command`, which shows the contents of the command, any applied filters (more on that later), and how many clients have responded.
+
+For now, we will focus on the command and responses columns.
+
+Once we have responses, we can check them with `cc`responses`:
+
+.mega module07_content/cc04.mm
+
+When the client responds to a cc exec command, standard out and error are stored in the files stdout and stderr respectively.
+
+* Pitfall: cc exec API
+
+Many users will try to run long-running commands via `cc`exec`. Unfortunately,
+miniccc will wait until the process exits before proceeding -- causing it to
+hang.
+
+Instead, long-running commands should be started with `cc`background`.
+
+miniccc reports running processes back to minimega which can be viewed with `cc`process`list`.
+
+minimega can even kill these processes.
+
+.mega module07_content/cc05.mm
+
+* cc filter API
+
+So far, all the commands that we have looked at would have run on every VM
+connected to minimega. Most of time, we only want to run commands on a subset
+of VMs. This is accomplished with the `cc`filter` API:
+
+.mega module07_content/cc06.mm
+
+There are many ways to filter VMs:
+
+- IP address/CIDR
+- Operating system
+- Tags
+
+Filters remain in affect until replaced or cleared.
+
+* File I/O - sending
+
+In addition to running commands, the c2 layer can send and receive files.
+
+In order to send files to a client, the files must be rooted in the files subdirectory in the minimega base directory. By default minimega uses /tmp/minimega/files.
+
+.mega module07_content/cc07.mm
+
+Files will be transfered in the next heartbeat, and will appear in the files subdirectory in the client's base directory. By default, this is /tmp/miniccc/files.
+
+* File I/O - receiving
+
+Receiving files is just like sending files, except that you can specify any path on the client to receive files from.
+
+Globs (wildcards) work with receiving files too, so you can receive entire directories of files.
+
+Clients will fetch the files from minimega before moving on to any other commands.
+
+.mega module07_content/cc08.mm
+
+* Mounting filesystems
+
+Another way to interact with VMs is by mounting their filesystems on the host
+using the `cc`mount` API. Users can then read, write, create, and delete files in /mnt/foo.
+
+cc mount is fully integrated with namespaces -- you may mount a VM's filesystem  to the head node, regardless of which host is actually running the VM.
+
+To list existing mounts, run it with no arguments. You can unmount a specific VM or mount by path. Without an argument, `clear`cc`mount` clears all mounts. (This also occurs when you call `clear`cc`.)
+
+.mega module07_content/cc09.mm
+
+* Tunneling
+
+Create forward and reverse TCP tunnels over the cc connection, including over virtio-serial connections. To create a forward tunnel, that is, a listening port on the minimega host that is tunneled to a destination host and port from the perspective of the client, use `cc`tunnel`. When creating a forward tunnel the UUID of the client must be specified. The destination host can be localhost or any other host reachable from the client.
+
+Similarly, a reverse tunnel, a listening port on the client tunneled to a host and port reachable from the minimega host, can be created by using `cc`rtunnel`. Reverse tunnels do not require a UUID to be specified, and instead use the current client filter to restrict which clients create the tunnel. That means you can tunnel a port for every client to a resource outside of the experiment.
+
+For example, to tunnel local port 4444 on each client to a web server reachable from the minimega host: 
+
+.mega module07_content/cc10.mm
+
+* Other Commands
+
+`cc`delete` to delete commands and responses
+
+You may adjust the log level of clients at runtime from minimega:
+
+.mega module07_content/cc10.mm
+
+The miniccc client can add tags to the info for the VM the client is running on.
+This enables third party tools to upstream information about a VM to minimega via miniccc.
+Tags are key/value pairs, and are added simply by using the -tag switch on a running miniccc instance.
+
+    ./miniccc -tag foo bar
+
+* Next up…
+
+[[module08.slide][Module 08: Background traffic]]

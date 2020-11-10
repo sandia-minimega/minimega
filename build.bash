@@ -61,4 +61,17 @@ for i in "protonuke" "miniccc"; do
 done
 echo
 
+# Build Python bindings
+bin/pyapigen -out lib/minimega.py bin/minimega
+
+# If python is installed, build a source distribution for the
+# minimega Python bindings.
+if [ -x "$(command -v python)" ]; then
+    cp README lib/
+    pushd lib
+    python setup.py --quiet sdist
+    popd
+    rm lib/README
+fi
+
 unset GOOS

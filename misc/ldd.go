@@ -24,7 +24,7 @@ func main() {
 	for s.Scan() {
 		f := strings.Fields(s.Text())
 		var l string
-		if len(f) == 2 {
+		if len(f) == 2 || len(f) == 3 {
 			l = f[0]
 			if filepath.Dir(l) == "." {
 				continue

@@ -1,0 +1,32 @@
+Publications
+
+The minimega authors
+28 Aug 2019
+
+* Publications
+
+List of publications by the minimega team, sorted by year in Chicago citation
+format. In the future, we may create a separate page for works that use
+minimega.
+
+* Papers
+
+Crussell, Jonathan, Thomas M. Kroeger, David Kavaler, Aaron Brown, and Cynthia Phillips. [[https://www.usenix.org/conference/cset19/presentation/crussell]["Lessons Learned from 10k Experiments to Compare Virtual and Physical Testbeds."]] In 12th USENIX Workshop on Cyber Security Experimentation and Test (CSET 19). 2019.
+
+Crussell, Jonathan, Thomas M. Kroeger, Aaron Brown, and Cynthia Phillips. [[https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=8685630]["Virtually the Same: Comparing Physical and Virtual Testbeds."]] In 2019 International Conference on Computing, Networking and Communications (ICNC), pp. 847-853. IEEE, 2019.
+
+Raybourn, Elaine M., Michael Kunz, David Fritz, and Vince Urias. [[https://link.springer.com/chapter/10.1007/978-3-319-98935-8_5]["A Zero-Entry Cyber Range Environment for Future Learning Ecosystems."]] In Cyber-Physical Systems Security, pp. 93-109. Springer, Cham, 2018.
+
+Bierma, Michael, Eric Gustafson, Jeremy Erickson, David Fritz, and Yung Ryn Choe. [[https://arxiv.org/pdf/1410.7751.pdf]["Andlantis: Large-scale Android dynamic analysis."]] In Workshop on Mobile Security Technologies (MOST). 2014.
+
+* Talks
+
+Fritz, David Jakob. [[/presentations/gt_2018.slide][I made the very model but the model was too general.]] No. SAND2018-3927PE. Sandia National Lab.(SNL-NM), Albuquerque, NM (United States), 2018.
+
+Fritz, David Jakob. [[https://www.osti.gov/servlets/purl/1468319][Emulytics and IoT at Sandia National Laboratories.]] No. SAND2017-9164C. Sandia National Lab.(SNL-NM), Albuquerque, NM (United States), 2017.
+
+Fritz, David Jakob. [[/presentations/miniplumber.slide][Introducing miniplumber.]] No. SAND2017-1449PE. Sandia National Lab.(SNL-NM), Albuquerque, NM (United States), 2017.
+
+Floren, John Frank. [[/presentations/scale.slide][Scaling techniques for cyber emulation.]] No. SAND2017-8709C. Sandia National Lab.(SNL-NM), Albuquerque, NM (United States), 2017.
+
+Crussell, Jonathan, Thomas M. Kroeger, Aaron Brown, and Cynthia A. Phillips. [[https://www.osti.gov/servlets/purl/1467789][Virtually the Same? The Empirical Differences Between Physical and Virtual Networks.]] No. SAND2017-8992C. Sandia National Lab.(SNL-NM), Albuquerque, NM (United States), 2017.

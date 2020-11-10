@@ -55,18 +55,18 @@ func createTap(name string) error {
 }
 
 // createVeth creates a veth of the specified name using the `ip` command.
-func createVeth(name, netnsname string) error {
-	log.Debug("creating veth: %v %v", name, netnsname)
+func createVeth(tap, name, netnsname string) error {
+	log.Debug("creating veth: %v on %v in netns %v", name, tap, netnsname)
 
 	args := []string{
 		"ip",
 		"link",
 		"add",
-		name,
+		tap,
 		"type",
 		"veth",
 		"peer",
-		"mega", // does the namespace ignore this?
+		name,
 		"netns",
 		netnsname,
 	}

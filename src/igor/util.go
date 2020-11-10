@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/template"
 	"unicode"
@@ -160,7 +161,7 @@ func getUser() (*user.User, error) {
 func emitReservationLog(action string, res *Reservation) {
 	format := "2006-Jan-2-15:04"
 	unsplit := igor.unsplitRange(res.Hosts)
-	log.Info("%s	user=%v	resname=%v	id=%v	nodes=%v	start=%v	end=%v	duration=%v\n", action, res.Owner, res.Name, res.ID, unsplit, res.Start.Format(format), res.End.Format(format), res.Duration)
+	log.Info("%s	user=%v	resname=%v	id=%v	nodes=%v	kernel=%s	kernelArgs=%s	initrd=%s	vlan=%d	group=%s	groupID=%s	cobblerProfile=%s	start=%v	end=%v	duration=%v\n", action, res.Owner, res.Name, res.ID, unsplit, res.Kernel, res.KernelArgs, res.Initrd, res.Vlan, res.Group, res.GroupID, res.CobblerProfile, res.Start.Format(format), res.End.Format(format), res.Duration)
 }
 
 // install src into dir, using the hash as the file name. Returns the hash or
@@ -207,4 +208,55 @@ func install(src, dir, suffix string) (string, error) {
 	}
 
 	return fname, nil
+}
+
+func parseVLAN(vlan string) (int, error) {
+	// Check if it's a reservation name
+	if res := igor.Find(vlan); res != nil {
+		if !res.IsWritable(igor.User) {
+			// It's a reservation name, but we can't write to it
+			return -1, fmt.Errorf("Cannot set VLAN. Must have write access to specified reservation: %s", vlan)
+		} else {
+			// It's a reservation name, and we can write to it. All good.
+			return res.Vlan, nil
+		}
+	}
+
+	// See if it's a VLAN ID
+	vlanID64, err := strconv.ParseInt(vlan, 10, 64)
+	vlanID := int(vlanID64)
+	if err != nil {
+		// It wasn't an int, either.
+		return -1, fmt.Errorf("Expected VLAN to be reservation name or VLAN ID: %s", vlan)
+
+	}
+
+	// Yep, it's is an int
+	if vlanID < igor.VLANMin || vlanID > igor.VLANMax {
+		// VLAN number isn't in the permitted range
+		return -1, fmt.Errorf("VLAN number outside permitted range: %s", vlan)
+	}
+
+	// See who's already using that VLAN ID
+	rs := igor.UsingVLAN(vlanID)
+
+	if len(rs) == 0 {
+		// No one's using it. Everyone is clear to use it.
+		return vlanID, nil
+	}
+
+	// Reservation(s) exist that use this VLAN
+	canWrite := false
+	for _, r := range rs {
+		if r.IsWritable(igor.User) {
+			canWrite = true
+			break
+		}
+	}
+	if !canWrite {
+		return -1, fmt.Errorf("Cannot set VLAN. Must have write access to at least one reservation using it: %s", vlan)
+
+	}
+
+	return vlanID, nil
 }

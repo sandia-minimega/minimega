@@ -22,3 +22,11 @@ vm flush
 vm kill all
 vm flush
 .columns name,state vm info
+vm launch kvm foo[0-2]
+.columns name,state vm info
+vm kill foo0
+vm flush foo0
+.columns name,state vm info
+vm kill all
+vm flush all
+.columns name,state vm info

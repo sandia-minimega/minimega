@@ -9,8 +9,7 @@ Copyright (2017) Sandia Corporation.
 Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 the U.S. Government retains certain rights in this software.
 
-Devin Cook <devcook@sandia.gov>
-Jon Crussell <jcrusse@sandia.gov>
+minimega dev team <minimega-dev@sandia.gov>
 
 minimega bindings for Python
 

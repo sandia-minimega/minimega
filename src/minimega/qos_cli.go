@@ -39,9 +39,9 @@ the mega_tap interface on the host) is not policed to the desired rate.
 Examples:
 
 	Randomly drop packets on the 0th interface for vms foo0, 1, and 2 with
-	probably 0.25%
+	probability 25%
 
-	qos add foo[0-2] 0 loss 0.25
+	qos add foo[0-2] 0 loss 25
 
 	Add a 100ms delay to every packet on the 0th interface for vm foo and bar
 
@@ -49,7 +49,15 @@ Examples:
 
 	Rate limit the 0th interface on all vms in the active namespace to 1mbit/s
 
-	qos add all 0 rate 1 mbit`,
+	qos add all 0 rate 1 mbit
+
+To clear active qos settings, use:
+
+	clear qos <vm> <interface|all>
+
+Example:
+
+	clear qos foo all`,
 		Patterns: []string{
 			"qos <add,> <vm target> <interface> <loss,> <percent>",
 			"qos <add,> <vm target> <interface> <delay,> <duration>",

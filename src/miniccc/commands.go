@@ -45,7 +45,7 @@ func processCommand(cmd *ron.Command) {
 	}
 
 	if len(cmd.FilesRecv) != 0 {
-		resp.Files = readFiles(cmd.FilesRecv)
+		sendFiles(cmd.ID, cmd.FilesRecv)
 	}
 
 	appendResponse(resp)

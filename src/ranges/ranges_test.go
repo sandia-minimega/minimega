@@ -10,6 +10,14 @@ import (
 	"testing"
 )
 
+func shuffle(vals []string) {
+	r := rand.New(rand.NewSource(0))
+	for i := len(vals) - 1; i > 0; i-- {
+		j := r.Intn(i + 1)
+		vals[i], vals[j] = vals[j], vals[i]
+	}
+}
+
 func TestSplitRangeless(t *testing.T) {
 	r, _ := NewRange("kn", 1, 520)
 
@@ -172,13 +180,29 @@ func TestUnsplitListSuffix(t *testing.T) {
 		hosts = append(hosts, fmt.Sprintf("foo%d.car", i))
 	}
 
-	r := rand.New(rand.NewSource(0))
-	for i := len(hosts) - 1; i > 0; i-- {
-		j := r.Intn(i + 1)
-		hosts[i], hosts[j] = hosts[j], hosts[i]
-	}
+	shuffle(hosts)
 
 	want := "foo2.bar[1-2,5],foo[3-4].bar[1-2],foo[0-1].bar[1-3,5],foo[0-4].car"
+	got := UnsplitList(hosts)
+
+	if want != got {
+		t.Errorf("got: `%v`, want `%v`", got, want)
+	}
+}
+
+func TestUnsplitListSuffix2(t *testing.T) {
+	hosts := []string{
+		"foo1.10g",
+		"foo2.10g",
+		"foo3.100g",
+		"foo4.100g",
+		"foo5.1000g",
+		"foo6.1000g",
+	}
+
+	shuffle(hosts)
+
+	want := "foo[5-6].1000g,foo[3-4].100g,foo[1-2].10g"
 	got := UnsplitList(hosts)
 
 	if want != got {

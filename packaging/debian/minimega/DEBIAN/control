@@ -1,5 +1,5 @@
 Package: minimega
-Version: 2.5-1+master
+Version: 2.6-1
 Section: utils
 Priority: extra
 Architecture: amd64

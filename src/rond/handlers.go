@@ -190,16 +190,7 @@ Send one or more files. Supports globs such as:
 					return fmt.Errorf("unable to determine relative path to %v: %v", f, err)
 				}
 
-				fi, err := os.Stat(f)
-				if err != nil {
-					return err
-				}
-
-				perm := fi.Mode() & os.ModePerm
-				cmd.FilesSend = append(cmd.FilesSend, &ron.File{
-					Name: file,
-					Perm: perm,
-				})
+				cmd.FilesSend = append(cmd.FilesSend, file)
 			}
 
 			rond.NewCommand(cmd)
@@ -215,9 +206,7 @@ Send one or more files. Supports globs such as:
 			cmd := &ron.Command{
 				Filter: filter,
 			}
-			cmd.FilesRecv = append(cmd.FilesRecv, &ron.File{
-				Name: c.StringArgs["file"],
-			})
+			cmd.FilesRecv = append(cmd.FilesRecv, c.StringArgs["file"])
 
 			rond.NewCommand(cmd)
 

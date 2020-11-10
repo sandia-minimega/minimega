@@ -113,7 +113,7 @@ func (t *Tap) qosTbf() error {
 	}
 
 	// compute minimum burst by dividing rate by HZ, convert to kbit
-	burst := strconv.FormatInt(rate/clkTck/1000, 10) + "kbit"
+	burst := strconv.FormatFloat(float64(rate)/float64(clkTck)/1000.0, 'f', 3, 64) + "kbit"
 
 	log.Debug("computed burst for rate %v (%v): %v", t.qos.Rate, rate, burst)
 

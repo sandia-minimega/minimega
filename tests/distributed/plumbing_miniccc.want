@@ -46,6 +46,6 @@ mm2  | bar
 1000 pipe.out
 
 ## pipe
-name    | mode | readers | writers | count | via | previous
-foopipe | all  | 0       | 0       | 1000  |     | 1000
-foopipe | all  | 1       | 0       | 1000  |     | 1000
+name                 | mode | readers | writers | count | via | previous
+distributed//foopipe | all  | 0       | 0       | 1000  |     | 1000
+distributed//foopipe | all  | 1       | 0       | 1000  |     | 1000

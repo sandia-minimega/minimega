@@ -15,5 +15,3 @@ bin/apigen -bin bin/minirouter \
             -template doc/content_templates/minirouter_api.template \
             -sections . \
             > doc/content/articles/minirouter_api.article
-
-bin/pyapigen bin/minimega

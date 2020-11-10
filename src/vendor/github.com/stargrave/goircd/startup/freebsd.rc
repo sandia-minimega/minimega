@@ -1,0 +1,17 @@
+#!/bin/sh
+#
+
+# PROVIDE: goircd
+# REQUIRE: DAEMON
+
+. /etc/rc.subr
+
+name="goircd"
+rcvar=goircd_enable
+command="/home/goircd/goircd"
+command_args="-hostname irc.example.com >> /var/log/goircd.log 2>&1 &"
+goircd_user="goircd"
+goircd_group="goircd"
+
+load_rc_config $name
+run_rc_command "$1"

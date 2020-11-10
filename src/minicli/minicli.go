@@ -10,6 +10,7 @@ import (
 	log "minilog"
 	"strings"
 	"sync"
+	"unicode"
 )
 
 // Output modes
@@ -214,8 +215,6 @@ func Compile(input string) (*Command, error) {
 		return nil, nil
 	}
 
-	input = expandAliases(input)
-
 	in, err := lexInput(input)
 	if err != nil {
 		return nil, err
@@ -242,15 +241,24 @@ func Compilef(format string, args ...interface{}) (*Command, error) {
 	return Compile(fmt.Sprintf(format, args...))
 }
 
-// expandAliases finds the first alias match in input and replaces it with it's expansion.
-func expandAliases(input string) string {
+// ExpandAliases finds the first alias match in input and replaces it with it's
+// expansion.
+func ExpandAliases(input string) string {
 	aliasesLock.Lock()
 	defer aliasesLock.Unlock()
 
+	// find the first word in the input
+	i := strings.IndexFunc(input, unicode.IsSpace)
+	car, cdr := input, ""
+	if i > 0 {
+		car, cdr = input[:i], input[i:]
+	}
+
 	for k, v := range aliases {
-		if strings.HasPrefix(input, k) {
+		if k == car {
 			log.Info("expanding %v -> %v", k, v)
-			return strings.Replace(input, k, v, 1)
+
+			return v + cdr
 		}
 	}
 

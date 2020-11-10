@@ -1,0 +1,201 @@
+Experimental network
+How to leverage minimega's tools for augmenting your network topology
+
+The minimega miniclass series
+Sandia National Laboratories
+http://minimega.org/
+
+* VM Network for experiments
+
+In [[module05.slide][module 05]] we looked at how to configure network information like VLANs for your VMs. We recommend reviewing that module before working through this one.
+
+In this module, we'll look at:
+
+- configuring an experiment network
+- building the topology
+- the minimega tools to accomplish this.
+
+The first step is assigning IPs to your VMs, and there are numerous ways we can do that.
+
+Of course, you can always manually specify the IPs for each and every VM, but that would quickly become impractical.
+
+Fortunately, minimega offers several options for automating this process.
+
+* Automated IP assignment - DHCP with DNSMASQ
+
+DHCP is a quick way of assigning IPs to your VMs. The minimega toolset includes DNSMASQ which can serve as a DHCP server for your experimental network. Let's look at how we can set that up.
+
+DNSMASQ will run on the same host as the VMs, not on a VM itself. Thus, we need a way to allow the host to access the experiment network, and we can do that using a tap:
+
+    tap create 100 ip 10.0.0.1/24
+
+Let's unpack that command a bit:
+
+- 'tap create' invokes the tap api in minimega to create a new tap
+- '100' is the vlan we specify - as always this can be any value between 1-4096
+-- the specified vlan must match the vlan of the VMs you are serving IPs to!
+- 'ip 10.0.0.1/24' allows us to specify the ip address we want to assign the tap, which we will need for DNSMASQ
+
+* 
+We covered taps in the previous module. Head back to [[module05.slide][Module 05]] if you need a review.
+
+In addition to creating the tap, we also need to define an environment to network together.
+To reiterate, be sure to have the VMs exist on the same VLAN as the tap, to ensure communication with DHCP.
+
+    vm config net 100
+    vm config disk foo.qc2
+    vm launch kvm foo[1-10]
+
+With the tap in place and the VMs defined and launched, let's launch DNSMASQ
+
+    dnsmasq start 10.0.0.1 10.0.0.2 10.0.0.254
+
+This command tells DNSMASQ to listen on 10.0.0.1, distributing IPs in range 10.0.0.2 through 10.0.0.254
+
+* Putting it all together
+
+From start to finish, here are the commands needed to accomplish automating the assignment of IPs using DNSMASQ as a DHCP server running on the host.
+
+.mega module06_content/dnsmasq.mm
+
+* Taking it Further
+
+You can run multiple DHCP servers on multiple VLANs.
+
+    tap create 100 ip 10.0.0.1/24
+    tap create 200 ip 20.0.0.1/24
+    dnsmasq start 10.0.0.1 10.0.0.2 10.0.0.254
+    dnsmasq start 20.0.0.1 20.0.0.2 20.0.0.254
+
+Print all running DNSMASQ DHCP servers with the command by itself:
+
+    minimega$ dnsmasq
+    host   | ID | Listening Address | Min      | Max        | Path                            | PID
+    ubuntu | 1  | 20.0.0.1          | 20.0.0.2 | 20.0.0.254 | /tmp/minimega/dnsmasq_264204396 | 3610
+
+Stop with the kill command
+
+    minimega$ dnsmasq kill 1
+    ubuntu | 0  | 10.0.0.1          | 10.0.0.2 | 10.0.0.254 | /tmp/minimega/dnsmasq_826235649 | 3216
+
+* other commands
+
+- Starting dnsmasq with a configuration file
+- Set up a static IP allocation for a VM with a specified MAC address
+- Add a DNS entry resolving a domain to an ip
+- Add a DHCP option
+
+See [[/articles/api.article][the minimega API]] for more details on dnsmasq, or help in minimega:
+
+    minimega$ help dnsmasq
+
+
+* minirouter
+
+minirouter is a simple tool, run in a VM, that orchestrates various router functions such as DHCP, DNS, IPv4/IPv6 assignments, and, of course, routing. The minirouter tool is interfaced by minimega's router API and the minimega distribution provides a prebuilt minirouter container image.
+
+minirouter currently supports several protocols and capabilities including DHCP, DNS, router advertisements, OSPF, and static routes. It can route in excess of 40 gigabits per second when running as a container. 
+
+minirouter can run on bare metal, as a container, or a KVM image.
+
+vmbetter can be used to create and deploy a minirouter image (kernel/initrd pair or container filesystem). For more information on using vmbetter, see [[module02_5.slide][module 2.5: Better vmbetter]]
+
+* Running minirouter without an image
+
+minirouter is simply a Linux binary that can run on any Linux system. You do not specifically need to build an image to run it, although it is more convenient.
+
+To use minirouter, you must have the miniccc agent running, and minirouter must be able to access the miniccc tool and files directory (see minirouter -h for default paths).
+
+minirouter uses iptool, dnsmasq, dhclient, and bird, all of which must be installed but not already running. minirouter must run as root.
+
+Beyond these few requirements, minirouter should run on most linux systems. 
+
+* 
+
+In this module, we will use minirouter to act as DHCP to assign IPs and also to assign static IPs to VMs.
+
+VMs running the minirouter tool must have miniccc running as well (this is already configured in the prebuilt minirouter image).
+
+for more information on miniccc, minimega's command and control tool, see [[module07.slide][module 07]]
+
+* Starting minirouter
+
+The router API requires a VM name or ID when configuring a router. For example, to set a static IP on a running minirouter VM named 'foo':
+
+.mega module06_content/router01.mm
+
+While the first command above sets the configuration for the router image, the second line actually commits the configuration by sending commands to minirouter over the command and control layer in minimega. Multiple configuration commands can be issued and then later committed with a single commit command.
+
+* Interfaces
+
+Routers often have statically assigned IP addresses and minirouter supports both IPv4 and IPv6 address specification using the interface API. For example, to add the IP 10.0.0.1/24 to the second interface on a minirouter VM:
+
+.mega module06_content/router02.mm
+
+Multiple addresses can be added to the same interface as well:
+
+.mega module06_content/router03.mm
+
+* DHCP with minirouter
+
+minirouter supports DHCP assignment of connected clients and supports both IP range and static IP assignment. minirouter also supports several DHCP options such as setting the default gateway and nameserver.
+
+For example, to serve the IP range 10.0.0.2 - 10.0.0.254 on a 10.0.0.0/24 network, specify the network prefix and DHCP range:
+
+.mega module06_content/router04.mm
+
+All of these DHCP options can be used together in a single DHCP specification, and multiple DHCP servers can be specified on a single minirouter instance (for serving DHCP on multiple interfaces/networks).
+
+* minirouter - other features
+
+- IPv6 Router Advertisements
+minirouter supports IPv6 router advertisements using the Neighbor Discovery Protocol to enable SLAAC addressing. To enable route advertisements simply provide the subnet. Only the subnet prefix is required as SLAAC addressing requires a /64 and is implied.
+
+.mega module06_content/router05.mm
+
+- DNS
+minirouter provides a simple mechanism to add A or AAAA records for any host/IP (including IPv6) pair. Simply specify the host and IP address of the record:
+
+.mega module06_content/router06.mm
+
+* Routing
+
+minirouter uses the bird routing daemon to provide routing using a variety of protocols. Currently, minirouter only supports static and OSPF routes. Support for BGP and others are planned.
+
+Bird is a lightweight routing daemon that scales well. In our tests we were able to scale minirouter with bird to at least 40 gigabit
+
+* Routing - Static Routes
+
+minirouter makes possible adding IPv4 or IPv6 static routes by simply specifying the destination network and net-hop IP. For example, to add a static IPv4 route for the 1.2.3.0/24 network via 1.2.3.254:
+
+.mega module06_content/router07.mm
+
+* Routing - OSPF
+
+minirouter provides basic support for OSPF and OSPFv3 (IPv6 enabled OSPF) by specifying the OSPF area and interface to include in the area. OSPF generally supports specifying networks and many other options, which minirouter may add in the future. For now, specifying an interface (and all of the networks on that interface) is provided. Both OSPF and OSPFv3 are enabled by minirouter.
+
+Interfaces are identified by the index in which they were added by the vm config net API. For example, to add the first and third network of the router VM to area 0 in an OSPF route:
+
+.mega module06_content/router08.mm
+
+* Connecting to the internet
+
+It is sometimes useful to connect the experiment network to the Internet to install software or access external resources. [[/articles/nat.article][This article]] describes the simple case of connecting a single VM to the Internet. With minor changes, this technique can also be used to connect an entire experiment to the Internet if the single VM acts as a router.
+
+The VM must be configured with at least one network interface.
+
+To connect this interface to the Internet, we setup a NAT on the host machine by creating a tap. Also, we need to enable IP forwarding on the host machine. And finally, configuring iptables to enable the NAT on the host machine. You may also need to configure DNS on the VM.
+
+* 
+
+.mega module06_content/nat.mm
+
+* Troubleshooting
+
+When setting up an experiment, numerous issues can prevent VMs from being able to connect to one another.
+
+For more information on network troubleshooting, visit the [[http://minimega.org/articles/troubleshooting.article][network troubleshooting article]] at [[http://minimega.org/][minimega.org]]
+
+* Next up…
+
+[[module07.slide][Module 07: Command and control]]

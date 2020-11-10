@@ -10,7 +10,6 @@ import (
 	"io"
 	log "minilog"
 	"net"
-	"sort"
 	"strings"
 
 	"github.com/google/gopacket/macs"
@@ -124,18 +123,8 @@ func ParseNetConfig(spec string, nics map[string]bool) (*NetConfig, error) {
 		b = DefaultBridge
 	}
 
-	if d == "" && isDriver(DefaultKVMDriver) {
+	if d == "" {
 		d = DefaultKVMDriver
-	} else if d == "" {
-		// use alphabetically first driver
-		vals := []string{}
-		for k := range nics {
-			vals = append(vals, k)
-		}
-		sort.Strings(vals)
-		d = vals[0]
-
-		log.Info("default driver `%v` is not available, using `%v` instead", DefaultKVMDriver, d)
 	}
 
 	return &NetConfig{

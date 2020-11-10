@@ -14,10 +14,13 @@ import (
 
 var empty time.Time
 
+// We set a specific time for 'now' instead of using 'time.Now()' to avoid issues with DST
+var now time.Time = time.Date(2020, time.January, 01, 0, 0, 0, 0, time.UTC)
+
 func TestCalculateStats(t *testing.T) {
-	start := time.Now().AddDate(0, 0, -5)
+	start := now.AddDate(0, 0, -5)
 	window := start.Add((time.Nanosecond * -5))
-	igor.Now = time.Now()
+	igor.Now = now
 	globalStats, counter := genResall(start, window, false)
 	statsV = true
 	globalStats.calculateStats(window)
@@ -39,9 +42,9 @@ func TestCalculateStats(t *testing.T) {
 }
 
 func TestPrintStats(t *testing.T) {
-	start := time.Now().AddDate(0, 0, -5)
+	start := now.AddDate(0, 0, -5)
 	window := start.Add((time.Nanosecond * -5))
-	igor.Now = time.Now()
+	igor.Now = now
 	globalStats, _ := genResall(start, window, false)
 	globalStats.calculateStats(window)
 	test := printStats(globalStats)
@@ -81,12 +84,12 @@ func genResall(start time.Time, window time.Time, log bool) (*Stats, time.Durati
 	counter += (start.Add(time.Hour * 24 * 4).Sub(start)) * time.Duration(nodecount)
 	//test reservation start and with no end during window
 	globalStats.Reservations["userB"] = []*ResData{genRes("userB", start, start.Add(time.Hour*24*6), empty, 2, nodecount+1, 0, log)}
-	counter += time.Now().Sub(window) * time.Duration(nodecount+1)
+	counter += now.Sub(window) * time.Duration(nodecount+1)
 	//test reservation with start and end before window
 	globalStats.Reservations["userC"] = []*ResData{genRes("userC", start.Add(time.Hour*24*-5), start.Add(time.Hour*24*1), start.Add(time.Hour*24*-4), 3, nodecount+2, 0, log)}
 	//test reservation with start and no end during window differnet num of extends
 	globalStats.Reservations["userD"] = []*ResData{genRes("userD", start, start.Add(time.Hour*24*10), empty, 4, nodecount+3, 3, log)}
-	counter += time.Now().Sub(window) * time.Duration(nodecount+3)
+	counter += now.Sub(window) * time.Duration(nodecount+3)
 	//test reservation with start before window and end during window differnet num of extends
 	globalStats.Reservations["userE"] = []*ResData{genRes("userE", start.Add(time.Hour*24*-1), start.Add(time.Hour*24*6), start.Add(time.Hour*24*4), 5, nodecount+4, 2, log)}
 	counter += (start.Add(time.Hour * 24 * 4).Sub(window)) * time.Duration(nodecount+4)
@@ -121,9 +124,9 @@ func testout(test string) (bool, string) {
 func TestReadLog(t *testing.T) {
 	initlog()
 	statsV = true
-	start := time.Now().AddDate(0, 0, -5)
+	start := now.AddDate(0, 0, -5)
 	window := start.Add((time.Nanosecond * -5))
-	igor.Now = time.Now()
+	igor.Now = now
 	globalStats, _ := genResall(start, window, true)
 	globalStats.readLog()
 	control := []string{"userA:1", "userB:2", "userC:3", "userD:4", "userE:5"}

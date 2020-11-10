@@ -1346,19 +1346,6 @@ func validMachine(vmConfig VMConfig, machine string) error {
 	return nil
 }
 
-func validNIC(vmConfig VMConfig, nic string) error {
-	nics, err := qemu.NICs(vmConfig.QemuPath, vmConfig.Machine)
-	if err != nil {
-		return err
-	}
-
-	if !nics[nic] {
-		return fmt.Errorf("invalid QEMU nic: `%v`, see help", nic)
-	}
-
-	return nil
-}
-
 func qemuSuggest(vals map[string]bool, prefix string) []string {
 	var res []string
 

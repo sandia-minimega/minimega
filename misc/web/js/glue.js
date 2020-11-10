@@ -576,7 +576,7 @@ function updateScreenshotTable(vmsData) {
                 { "title": "Model", "data": "model", "searchable": false },
                 { "title": "VM", "data": "vm", "visible": false, "searchable": false },
             ],
-            "createdRow": loadOrRestoreImage,
+            "rowCallback": loadOrRestoreImage,
             "stateSave": true,
             "stateDuration": 0
         });

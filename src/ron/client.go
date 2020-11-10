@@ -36,9 +36,6 @@ type Client struct {
 	// Responses for commands processed since the last heartbeat
 	Responses []*Response
 
-	// Files requested by the server since the last heartbeat
-	Files []*File
-
 	// LastCommandID is the last command ID that the client processed.
 	LastCommandID int
 }

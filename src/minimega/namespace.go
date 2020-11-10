@@ -17,6 +17,7 @@ import (
 	"runtime"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -208,7 +209,7 @@ func (n *Namespace) Destroy() error {
 
 	// Kill and flush all the VMs
 	n.Kill(Wildcard)
-	n.Flush(n.ccServer)
+	n.FlushAll(n.ccServer)
 
 	// Stop ron server
 	n.ccServer.Destroy()
@@ -619,7 +620,12 @@ func (n *Namespace) processVMDisks(vals []string) error {
 func (n *Namespace) parseVMNets(vals []string) ([]NetConfig, error) {
 	// get valid NIC drivers for current qemu/machine
 	nics, err := qemu.NICs(n.vmConfig.QemuPath, n.vmConfig.Machine)
-	if err != nil {
+
+	// warn on not finding kvm because we may just be using containers,
+	// otherwise throw a regular error
+	if err != nil && strings.Contains(err.Error(), "executable file not found in $PATH") {
+		log.Warnln(err)
+	} else if err != nil {
 		return nil, err
 	}
 

@@ -1,0 +1,78 @@
+minimega command and control
+
+David Fritz
+July 2019
+
+* Overview
+
+Command and control with minimega
+
+- First class feature in minimega via the `cc` API
+- Works on Windows, Linux, FreeBSD guests
+- TCP or virtio-serial connection
+- Scales
+- File I/O
+- Process control
+- TCP tunnelling (including reverse tunnels)
+- Guest filesystem mounts (including NTFS with read/write)
+- Cluster-wide STDIO redirection (including _into_ other VMs)
+
+* Overview
+
+.image cc_content/miniccc.png 550 _
+
+* Experimentation
+
+An experiment is (from the perspective of the operator)
+
+- minimega
+-- Topology definition
+-- Endpoint descriptions
+-- Services (OSPF, BGP, ...)
+-- Data capture
+- cc
+-- Endpoint behavior (process control, ...)
+-- Endpoint data capture (file i/o, ...)
+-- Backchannel communication
+-- Connecting non-IT ephemera
+
+* Feature walkthrough 
+
+* Commands, File I/O
+
+The `cc` API provides a complete file and process control framework
+
+- Send and receive files
+- Execute/background commands
+- Filter on *any* field
+- Read/group responses
+- Track/kill processes
+
+* Commands, File I/O
+
+.mega cc_content/process.mm 500
+
+* TCP tunnels
+
+Support for forward and reverse TCP tunnels (ie `ssh -L` and `ssh -R` style tunnels).
+
+.mega cc_content/tunnels.mm
+
+* Remote mountpoints
+
+Support for guest filesystem mounts - *including*read/write*support*with*windows*guests*.
+
+.mega cc_content/mounts.mm
+
+* Standard I/O Redirection
+
+Support for standard I/O redirection _anywhere_, including inside other guests.
+
+.mega cc_content/plumber.mm
+
+* Summary
+
+The `cc` API provides a first class command and control layer for minimega experiments.
+
+.image cc_content/miniccc.png 500 _
+
