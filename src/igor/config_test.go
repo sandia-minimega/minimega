@@ -23,19 +23,17 @@ func TestCheckTimeLimit(t *testing.T) {
 		t.Errorf("err != nil: %v", err)
 	}
 
-	c.TimeLimit = 100
-	if err := c.checkTimeLimit(10, 10*time.Minute); err != nil {
-		t.Errorf("err != nil: %v", err)
-	}
-
-	c.TimeLimit = 10
 	if err := c.checkTimeLimit(10, 10*time.Minute); err == nil {
 		t.Errorf("err == nil: %v", err)
 	}
 
-	c.TimeLimit = 10
 	if err := c.checkTimeLimit(100, 10*time.Minute); err == nil {
 		t.Errorf("err == nil: %v", err)
+	}
+
+	c.TimeLimit = 100
+	if err := c.checkTimeLimit(10, 10*time.Minute); err != nil {
+		t.Errorf("err != nil: %v", err)
 	}
 }
 
