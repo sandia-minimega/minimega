@@ -213,6 +213,12 @@ type KvmVM struct {
 
 	vncShim net.Listener // shim for VNC connections
 	VNCPort int
+
+	// Channel to track virtual serial port open status per async QMP events
+	// received over the `qmp.Conn` above. Will push `true` into the channel if
+	// the virtual serial port was opened client-side, and `false` if it was
+	// closed client-side. Used to handle miniccc restarts in the client.
+	vSerPortOpenEvent chan bool
 }
 
 // Ensure that KvmVM implements the VM interface
@@ -241,6 +247,7 @@ func NewKVM(name, namespace string, config VMConfig) (*KvmVM, error) {
 	vm.KVMConfig = config.KVMConfig.Copy() // deep-copy configured fields
 
 	vm.hotplug = make(map[int]vmHotplug)
+	vm.vSerPortOpenEvent = make(chan bool)
 
 	return vm, nil
 }
@@ -262,6 +269,8 @@ func (vm *KvmVM) Copy() VM {
 	for k, v := range vm.hotplug {
 		vm2.hotplug[k] = v
 	}
+
+	vm2.vSerPortOpenEvent = make(chan bool)
 
 	return vm2
 }
@@ -777,7 +786,7 @@ func (vm *KvmVM) launch() error {
 		return vm.setErrorf("unable to connect to qmp socket: %v", err)
 	}
 
-	go qmpLogger(vm.ID, vm.q)
+	go vm.qmpLogger()
 
 	if err := vm.connectVNC(); err != nil {
 		// Failed to connect to vnc so clean up the process
@@ -812,7 +821,20 @@ func (vm *KvmVM) Connect(cc *ron.Server, reconnect bool) error {
 		cc.RegisterVM(vm)
 	}
 
-	return cc.DialSerial(vm.path("cc"))
+	ccPortOpened := make(chan struct{})
+	ccPortClosed := make(chan struct{})
+
+	go func() {
+		for open := range vm.vSerPortOpenEvent {
+			if open {
+				ccPortOpened <- struct{}{}
+			} else {
+				ccPortClosed <- struct{}{}
+			}
+		}
+	}()
+
+	return cc.DialSerial(vm.path("cc"), ccPortOpened, ccPortClosed)
 }
 
 func (vm *KvmVM) Disconnect(cc *ron.Server) error {
@@ -1314,9 +1336,43 @@ func (c QemuOverrides) WriteConfig(w io.Writer) error {
 }
 
 // log any asynchronous messages, such as vnc connects, to log.Info
-func qmpLogger(id int, q qmp.Conn) {
-	for v := q.Message(); v != nil; v = q.Message() {
-		log.Info("VM %v received asynchronous message: %v", id, v)
+func (vm KvmVM) qmpLogger() {
+	for v := vm.q.Message(); v != nil; v = vm.q.Message() {
+		log.Info("VM %v received asynchronous message: %v", vm.ID, v)
+
+		// Push to `vSerPortOpenEvent` channel if this is a VSERPORT_CHANGE event
+		// (example event below).
+		/*
+			map[string]interface{} {
+				"data": map[string]interface{} {
+					"id": "charvserialCC", "open": false
+				},
+				"event": "VSERPORT_CHANGE",
+				"timestamp": map[string]interface{} {
+					"microseconds":452889,
+					"seconds":1.608260782e+09
+				}
+			}
+		*/
+
+		event, ok := v["event"].(string)
+		if !ok {
+			continue
+		}
+
+		if event == "VSERPORT_CHANGE" {
+			data, ok := v["data"].(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			open, ok := data["open"].(bool)
+			if !ok {
+				continue
+			}
+
+			vm.vSerPortOpenEvent <- open
+		}
 	}
 }
 
