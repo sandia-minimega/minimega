@@ -1366,6 +1366,16 @@ func (vm KvmVM) qmpLogger() {
 				continue
 			}
 
+			id, ok := data["id"].(string)
+			if !ok {
+				continue
+			}
+
+			// We only care about the serial port used for CC.
+			if id != "charvserialCC" {
+				continue
+			}
+
 			open, ok := data["open"].(bool)
 			if !ok {
 				continue
