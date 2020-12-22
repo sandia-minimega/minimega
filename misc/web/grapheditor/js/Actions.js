@@ -3,7 +3,11 @@
  * Copyright (c) 2006-2020, draw.io AG
  *
  * Constructs the actions object for the given UI.
+ * Copyright (2017) Sandia Corporation.
+ * Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+ * the U.S. Government retains certain rights in this software.
  */
+
 function Actions(editorUi)
 {
     this.editorUi = editorUi;
@@ -108,7 +112,6 @@ Actions.prototype.init = function()
     this.addAction('editVariables', function()
     {
         var dlg = new VariablesDialog(ui);
-        // ui.showDialog(dlg.container, 480, 420, true, false, null, false);
         dlg.init();
     });
 

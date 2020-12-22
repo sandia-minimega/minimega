@@ -1,5 +1,8 @@
 /**
  * Copyright (c) 2006-2012, JGraph Ltd
+ * Copyright (2017) Sandia Corporation.
+ * Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
+ * the U.S. Government retains certain rights in this software.
  */
 
 /**
@@ -1809,9 +1812,6 @@ function lookforvlan(graph, cell, toSwitch=null){
             }
         }
         // remove interfaces copied over from another cell
-        // schemaVars.network.interfaces = (schemaVars.network.interfaces).filter(function( obj ) {
-        //     return vlans.indexOf(obj.vlan) >= 0;
-        // });
         // track indices of bridge/disconnected vlans so they don't get overwritten
         // console.log(toSwitch);
         for (var i = 0; i < schemaVars.network.interfaces.length; i++){
@@ -1827,7 +1827,6 @@ function lookforvlan(graph, cell, toSwitch=null){
         // console.log(JSON.stringify(schemaVars.network.interfaces));
         // if the edge is new and doesn't have a vlan name yet, vlans will be empty, so assign empty obj
         if (typeof schemaVars.network.interfaces[0] === 'undefined') schemaVars.network.interfaces[0] = {};
-        // eth = 'eth' + (Math.max.apply(Math, interfaces.map(function(o) { return (o.name).substr(-1); })) + 1);
     }
     catch(e) {
         // console.log(e);
@@ -1835,7 +1834,6 @@ function lookforvlan(graph, cell, toSwitch=null){
             schemaVars.network = {};
             schemaVars.network.interfaces = [];
             schemaVars.network.interfaces[0] = {};
-            // eth = 'eth0';
         }
     }
 
