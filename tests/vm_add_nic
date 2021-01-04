@@ -1,0 +1,84 @@
+clear cc responses
+vm config kernel $images/miniccc.kernel
+vm config initrd $images/miniccc.initrd
+# Launch a vm with no network
+vm launch kvm foo
+
+# Launch one vm on vlan 100
+vm config net 100
+vm launch kvm bar
+vm start all
+
+# wait for cc to connect
+shell sleep 30
+
+.column name,vlan,bridge,ip vm info
+
+# try adding a nic to foo on the same vlan as bar
+vm net add foo 100
+.column name,vlan,bridge,ip vm info
+shell sleep 1
+
+# Let's give foo an ip
+clear cc filter
+cc filter name=foo
+cc exec bash -c 'ip addr'
+shell sleep 1
+cc exec bash -c 'ip addr | grep eth0'
+shell sleep 1
+cc exec bash -c 'ifconfig eth0 10.0.0.2 netmask 255.255.255.0 up'
+shell sleep 1
+cc exec bash -c 'ip addr | grep eth0'
+
+# Now, let's give bar an ip
+clear cc filter
+cc filter name=bar
+cc exec bash -c 'ip addr | grep eth0'
+shell sleep 1
+cc exec bash -c 'ifconfig eth0 10.0.0.3 netmask 255.255.255.0 up'
+shell sleep 1
+cc exec bash -c 'ip addr | grep eth0'
+shell sleep 1
+
+# Now let's try to ping
+cc exec bash -c 'ping 10.0.0.2 -c 1 | grep "1 received"'
+shell sleep 1
+
+# now let's give them both new nics
+vm net add foo 110
+shell sleep 1
+vm net add bar 110
+shell sleep 1
+.column vlan,bridge,ip vm info
+
+# still targetting bar
+cc exec bash -c 'ip addr | grep eth1'
+shell sleep 1
+cc exec bash -c 'ifconfig eth1 20.0.0.3 netmask 255.255.255.0 up'
+shell sleep 1
+cc exec bash -c 'ip addr | grep eth1'
+
+# now give foo:eth1 an ip
+clear cc filter
+cc filter name=foo
+cc exec bash -c 'ip addr | grep eth1'
+shell sleep 1
+cc exec bash -c 'ifconfig eth1 20.0.0.2 netmask 255.255.255.0 up'
+shell sleep 1
+cc exec bash -c 'ip addr | grep eth1'
+
+#now let's ping
+cc exec bash -c 'ping 20.0.0.3 -c 1 | grep "1 received"'
+
+shell sleep 60
+cc response 2 raw
+cc response 4 raw
+cc response 5 raw
+cc response 7 raw
+cc response 8 raw
+cc response 9 raw
+cc response 11 raw
+cc response 12 raw
+cc response 14 raw
+cc response 15 raw
+clear cc responses

@@ -1,0 +1,107 @@
+## clear cc responses
+## vm config kernel $images/miniccc.kernel
+## vm config initrd $images/miniccc.initrd
+## # Launch a vm with no network
+## vm launch kvm foo
+
+## # Launch one vm on vlan 100
+## vm config net 100
+## vm launch kvm bar
+## vm start all
+
+## # wait for cc to connect
+## shell sleep 30
+
+## .column name,vlan,bridge,ip vm info
+name | vlan  | bridge        | ip
+bar  | [100] | [mega_bridge] | []
+foo  | []    | []            | []
+
+## # try adding a nic to foo on the same vlan as bar
+## vm net add foo 100
+## .column name,vlan,bridge,ip vm info
+name | vlan  | bridge        | ip
+bar  | [100] | [mega_bridge] | []
+foo  | [100] | [mega_bridge] | []
+## shell sleep 1
+
+## # Let's give foo an ip
+## clear cc filter
+## cc filter name=foo
+## cc exec bash -c 'ip addr'
+## shell sleep 1
+## cc exec bash -c 'ip addr | grep eth0'
+## shell sleep 1
+## cc exec bash -c 'ifconfig eth0 10.0.0.2 netmask 255.255.255.0 up'
+## shell sleep 1
+## cc exec bash -c 'ip addr | grep eth0'
+
+## # Now, let's give bar an ip
+## clear cc filter
+## cc filter name=bar
+## cc exec bash -c 'ip addr | grep eth0'
+## shell sleep 1
+## cc exec bash -c 'ifconfig eth0 10.0.0.3 netmask 255.255.255.0 up'
+## shell sleep 1
+## cc exec bash -c 'ip addr | grep eth0'
+## shell sleep 1
+
+## # Now let's try to ping
+## cc exec bash -c 'ping 10.0.0.2 -c 1 | grep "1 received"'
+## shell sleep 1
+
+## # now let's give them both new nics
+## vm net add foo 110
+## shell sleep 1
+## vm net add bar 110
+## shell sleep 1
+## .column vlan,bridge,ip vm info
+vlan       | bridge                     | ip
+[100, 110] | [mega_bridge, mega_bridge] | [, ]
+[100, 110] | [mega_bridge, mega_bridge] | [, ]
+
+## # still targetting bar
+## cc exec bash -c 'ip addr | grep eth1'
+## shell sleep 1
+## cc exec bash -c 'ifconfig eth1 20.0.0.3 netmask 255.255.255.0 up'
+## shell sleep 1
+## cc exec bash -c 'ip addr | grep eth1'
+
+## # now give foo:eth1 an ip
+## clear cc filter
+## cc filter name=foo
+## cc exec bash -c 'ip addr | grep eth1'
+## shell sleep 1
+## cc exec bash -c 'ifconfig eth1 20.0.0.2 netmask 255.255.255.0 up'
+## shell sleep 1
+## cc exec bash -c 'ip addr | grep eth1'
+
+## #now let's ping
+## cc exec bash -c 'ping 20.0.0.3 -c 1 | grep "1 received"'
+
+## shell sleep 60
+## cc response 2 raw
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+## cc response 4 raw
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    inet 10.0.0.2/24 brd 10.0.0.255 scope global eth0
+## cc response 5 raw
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+## cc response 7 raw
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    inet 10.0.0.3/24 brd 10.0.0.255 scope global eth0
+## cc response 8 raw
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+## cc response 9 raw
+3: eth1: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default qlen 1000
+## cc response 11 raw
+3: eth1: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc pfifo_fast state DOWN group default qlen 1000
+    inet 20.0.0.3/24 brd 20.0.0.255 scope global eth1
+## cc response 12 raw
+3: eth1: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default qlen 1000
+## cc response 14 raw
+3: eth1: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 qdisc pfifo_fast state DOWN group default qlen 1000
+    inet 20.0.0.2/24 brd 20.0.0.255 scope global eth1
+## cc response 15 raw
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+## clear cc responses

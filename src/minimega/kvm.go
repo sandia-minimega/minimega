@@ -632,6 +632,51 @@ func (vm *KvmVM) connectVNC() error {
 	return nil
 }
 
+// createTapName will return a generated tap name from the specified bridge
+func (vm *KvmVM) createTapName(bridge string) (string, error) {
+	br, err := getBridge(bridge)
+	if err != nil {
+		return "", vm.setErrorf("unable to get bridge %v: %v", bridge, err)
+	}
+	return br.CreateTapName(), nil
+}
+
+// addTap does the work of adding the specified tap associated with a network
+func (vm *KvmVM) addTap(name, bridge, mac string, vlan int) (string, error) {
+	br, err := getBridge(bridge)
+	if err != nil {
+		return name, vm.setErrorf("unable to get bridge %v: %v", bridge, err)
+	}
+	return br.CreateTap(name, mac, vlan)
+}
+
+// createTaps does the work of adding any taps if we are associated with
+// any networks
+func (vm *KvmVM) createTaps() error {
+	for i := range vm.Networks {
+		nic := &vm.Networks[i]
+		if nic.Tap != "" {
+			// tap has already been created, don't need to do again
+			continue
+		}
+
+		tap, err := vm.addTap("", nic.Bridge, nic.MAC, nic.VLAN)
+		if err != nil {
+			return vm.setErrorf("unable to create tap %v: %v", i, err)
+		}
+
+		nic.Tap = tap
+	}
+
+	if len(vm.Networks) > 0 {
+		if err := vm.writeTaps(); err != nil {
+			return vm.setErrorf("unable to write taps: %v", err)
+		}
+	}
+
+	return nil
+}
+
 // launch is the low-level launch function for KVM VMs. The caller should hold
 // the VM's lock.
 func (vm *KvmVM) launch() error {
@@ -664,31 +709,8 @@ func (vm *KvmVM) launch() error {
 
 	mustWrite(vm.path("name"), vm.Name)
 
-	// create and add taps if we are associated with any networks
-	for i := range vm.Networks {
-		nic := &vm.Networks[i]
-		if nic.Tap != "" {
-			// tap has already been created, don't need to do again
-			continue
-		}
-
-		br, err := getBridge(nic.Bridge)
-		if err != nil {
-			return vm.setErrorf("unable to get bridge %v: %v", nic.Bridge, err)
-		}
-
-		tap, err := br.CreateTap(nic.MAC, nic.VLAN)
-		if err != nil {
-			return vm.setErrorf("unable to create tap %v: %v", i, err)
-		}
-
-		nic.Tap = tap
-	}
-
-	if len(vm.Networks) > 0 {
-		if err := vm.writeTaps(); err != nil {
-			return vm.setErrorf("unable to write taps: %v", err)
-		}
+	if err := vm.createTaps(); err != nil {
+		return err
 	}
 
 	var sOut bytes.Buffer
@@ -799,6 +821,41 @@ func (vm *KvmVM) Disconnect(cc *ron.Server) error {
 	}
 
 	cc.UnregisterVM(vm)
+
+	return nil
+}
+
+func (vm *KvmVM) AddNIC(nic NetConfig) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if nic.MAC == "" {
+		nic.MAC = randomMac()
+	}
+	var err error
+	nic.Tap, err = vm.createTapName(nic.Bridge)
+	vm.Networks = append(vm.Networks, nic)
+
+	if _, err := vm.addTap(nic.Tap, nic.Bridge, nic.MAC, nic.VLAN); err != nil {
+		return vm.setErrorf("Unable to add tap %v: %v", nic.Tap, err)
+	}
+
+	if err := vm.writeTaps(); err != nil {
+		return vm.setErrorf("unable to write taps: %v", err)
+	}
+
+	// TODO: figure out a better naming convention for these
+	r, err := vm.q.NetDevAdd("tap", nic.Tap, nic.Tap)
+	if err != nil {
+		return err
+	}
+	log.Debugln("qmp netdev_add response:", r)
+
+	r, err = vm.q.NicAdd(nic.Tap, nic.Tap, "pci.0", nic.Driver, nic.MAC)
+	if err != nil {
+		return err
+	}
+	log.Debugln("qmp device_add response:", r)
 
 	return nil
 }
