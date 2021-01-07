@@ -1,6 +1,6 @@
-// Copyright (2017) Sandia Corporation.
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
-// the U.S. Government retains certain rights in this software.
+// Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS). 
+// Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain 
+// rights in this software.
 
 // This package provides a singleton bridge object that wraps openvswitch. It
 // allows the programmatic creation and deletion of bridges and taps, packet
