@@ -1,0 +1,18 @@
+{
+  "$id": "#/diagraming",
+  "type": "object",
+  "title": "Diagraming",
+  "required": [
+    "text"
+  ],
+  "properties": {
+    "text": {
+      "$id": "#/diagraming/properties/text",
+      "type": "string",
+      "title": "Text",
+      "default": "",
+      "minLength": 0,
+      "pattern": "^(.*)$"
+    }
+  }
+}

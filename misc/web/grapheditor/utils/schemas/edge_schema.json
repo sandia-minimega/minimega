@@ -1,0 +1,33 @@
+{
+  "$id": "#/vlans",
+  "type": "object",
+  "title": "VLAN",
+  "required": [
+    "id",
+    "name"
+  ],
+  "properties": {
+    "id": {
+      "$id": "#/vlans/properties/id",
+      "type": "string",
+      "title": "Id",
+      "minLength": 1,
+      "default": "",
+      "examples": [
+        "101"
+      ],
+      "pattern": "^(.*)$"
+    },
+    "name": {
+      "$id": "#/vlans/properties/name",
+      "type": "string",
+      "title": "Name",
+      "minLength": 1,
+      "default": "",
+      "examples": [
+        "SCADAPWR"
+      ],
+      "pattern": "^(.*)$"
+    }
+  }
+}

@@ -1,6 +1,6 @@
-// Copyright (2017) Sandia Corporation.
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
-// the U.S. Government retains certain rights in this software.
+// Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS). 
+// Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain 
+// rights in this software.
 
 package main
 
@@ -90,6 +90,7 @@ func main() {
 	mux.HandleFunc("/graph", mustAuth(templateHandler))
 	mux.HandleFunc("/tilevnc", mustAuth(templateHandler))
 	mux.HandleFunc("/montage", mustAuth(templateHandler))
+	mux.HandleFunc("/minibuilder", mustAuth(templateHandler))
 
 	mux.HandleFunc("/hosts.json", mustAuth(tabularHandler))
 	mux.HandleFunc("/vlans.json", mustAuth(tabularHandler))
@@ -99,6 +100,8 @@ func main() {
 
 	mux.HandleFunc("/files/", mustAuth(filesHandler))
 	mux.HandleFunc("/files.json", mustAuth(tabularHandler))
+
+	mux.HandleFunc("/minibuilder/", mustAuth(minibuilderHandler))
 
 	mux.HandleFunc("/vm/", mustAuth(vmHandler))
 
@@ -116,6 +119,7 @@ func main() {
 		mux.HandleFunc("/console", mustAuth(consoleHandler))
 		mux.HandleFunc("/console/", mustAuth(consoleHandler))
 		mux.HandleFunc("/command", mustAuth(commandHandler))
+		mux.HandleFunc("/commands", mustAuth(commandsHandler))
 	} else {
 		disabled := func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "disabled, see -console flag", http.StatusNotImplemented)
@@ -123,6 +127,7 @@ func main() {
 		}
 		mux.HandleFunc("/console", disabled)
 		mux.HandleFunc("/command", disabled)
+		mux.HandleFunc("/commands", disabled)
 	}
 
 	server := &http.Server{

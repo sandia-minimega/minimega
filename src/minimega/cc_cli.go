@@ -1,6 +1,6 @@
-// Copyright (2015) Sandia Corporation.
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
-// the U.S. Government retains certain rights in this software.
+// Copyright 2015-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS). 
+// Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain 
+// rights in this software.
 
 package main
 
@@ -208,10 +208,6 @@ func cliCCTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	}
 
 	host := c.StringArgs["host"]
-
-	if c.BoolArgs["rtunnel"] {
-		return ns.ccServer.Reverse(ns.ccFilter, src, host, dst)
-	}
 
 	v := c.StringArgs["vm"]
 

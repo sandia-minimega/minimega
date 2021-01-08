@@ -1,6 +1,6 @@
-// Copyright (2017) Sandia Corporation.
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
-// the U.S. Government retains certain rights in this software.
+// Copyright 2017-2021 National Technology & Engineering Solutions of Sandia, LLC (NTESS). 
+// Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain 
+// rights in this software.
 
 package main
 
@@ -13,6 +13,7 @@ import (
 	"minicli"
 	log "minilog"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -549,13 +550,13 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 //
 // Example usage:
 //   curl 'http://localhost:9001/command' -d '{
-//   	"command": "vm info"
+//	"command": "vm info"
 //   }'
 //
 //   curl 'http://localhost:9001/command' -d '{
-//   	"command": "vm info",
-//   	"columns": ["name", "hostname"],
-//   	"filters": ["state=building"]
+//	"command": "vm info",
+//	"columns": ["name", "hostname"],
+//	"filters": ["state=building"]
 //   }'
 //
 // Must have -console=true to enable.
@@ -581,6 +582,76 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 
 	for resp := range run(cmd) {
 		resps = append(resps, resp.Resp)
+	}
+
+	respondJSON(w, resps)
+}
+
+func minibuilderHandler(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	lp := parts[len(parts)-1]
+
+	switch lp {
+	case "export":
+	case "save":
+		// target filename
+		fname := r.FormValue("filename")
+		if fname == "" {
+			fname = "export"
+		}
+
+		// target format
+		format := r.FormValue("format")
+		if format == "" {
+			format = "xml"
+		}
+
+		log.Info(fmt.Sprintf("Saving file %s as %s", fname, format))
+
+		data, err := url.QueryUnescape(r.FormValue("xml"))
+		if err != nil {
+			log.Warn("Unable to decode XML")
+		}
+
+		w.Header().Set("Content-Type", "text/plain")
+
+		dis := fmt.Sprintf("attachment; filename=\"%s\"; filename*=UTF-8''%s", fname, fname)
+		w.Header().Set("Content-Disposition", dis)
+		w.WriteHeader(http.StatusOK)
+
+		fmt.Fprint(w, data)
+
+	case "open":
+	}
+}
+
+func commandsHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "must use POST", http.StatusMethodNotAllowed)
+		return
+	}
+
+	ns := NewCommand(r).Namespace
+
+	cmds := []*Command{}
+	if err := json.NewDecoder(r.Body).Decode(&cmds); err != nil {
+		log.Error("unable to parse body: %v", err)
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	resps := []minicli.Responses{}
+	for _, cmd := range cmds {
+		if cmd.Command == "" {
+			log.Info("must specify command")
+			continue
+		}
+
+		cmd.Namespace = ns
+
+		for resp := range run(cmd) {
+			resps = append(resps, resp.Resp)
+		}
 	}
 
 	respondJSON(w, resps)

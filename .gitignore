@@ -13,3 +13,4 @@ lib/MANIFEST
 lib/minimega.py
 tests/*.got
 tests/*/*.got
+.DS_Store*

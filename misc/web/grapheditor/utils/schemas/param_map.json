@@ -1,0 +1,233 @@
+{
+    "parameters": [
+        {
+            "name": "memory",
+            "path": "hardware",
+            "args": [
+                "memory"
+            ]
+        },
+        {
+            "name": "vcpus",
+            "path": "hardware",
+            "args": [
+                "vcpus"
+            ]
+        },
+        {
+            "name": "net",
+            "path": "network.interfaces",
+            "args": [
+                "bridge",
+                "vlan",
+                "mac",
+                "driver"
+            ]
+        },
+        {
+            "name": "snapshot",
+            "path": "general",
+            "args": [
+                "snapshot"
+            ]
+        },
+        {
+            "name": "uuid",
+            "path": "general",
+            "args": [
+                "uuid"
+            ]
+        },
+        {
+            "name": "schedule",
+            "path": "general",
+            "args": [
+                "schedule"
+            ]
+        },
+        {
+            "name": "coschedule",
+            "path": "general",
+            "args": [
+                "coschedule"
+            ]
+        },
+        {
+            "name": "colocate",
+            "path": "general",
+            "args": [
+                "colocate"
+            ]
+        },
+        {
+            "name": "backchannel",
+            "path": "general",
+            "args": [
+                "backchannel"
+            ]
+        },
+        {
+            "name": "tags",
+            "path": "general",
+            "args": [
+                "tags"
+            ]
+        },
+        {
+            "name": "migrate",
+            "path": "hardware",
+            "args": [
+                "migrate"
+            ]
+        },
+        {
+            "name": "disk",
+            "path": "hardware.drives",
+            "args": [
+                "image",
+                "interface",
+                "cache_mode"
+            ]
+        },
+        {
+            "name": "cdrom",
+            "path": "hardware",
+            "args": [
+                "cdrom"
+            ]
+        },
+        {
+            "name": "kernel",
+            "path": "hardware",
+            "args": [
+                "kernel"
+            ]
+        },
+        {
+            "name": "initrd",
+            "path": "hardware",
+            "args": [
+                "initrd"
+            ]
+        },
+        {
+            "name": "qemu",
+            "path": "general",
+            "args": [
+                "qemu"
+            ]
+        },
+        {
+            "name": "append",
+            "path": "general",
+            "args": [
+                "append"
+            ]
+        },
+        {
+            "name": "qemu-append",
+            "path": "advanced",
+            "args": [
+                "qemu-append"
+            ]
+        },
+        {
+            "name": "serial-ports",
+            "path": "hardware",
+            "args": [
+                "serial-ports"
+            ]
+        },
+        {
+            "name": "virtio-ports",
+            "path": "hardware",
+            "args": [
+                "virtio-ports"
+            ]
+        },
+        {
+            "name": "machine",
+            "path": "general",
+            "args": [
+                "machine"
+            ]
+        },
+        {
+            "name": "cpu",
+            "path": "hardware",
+            "args": [
+                "cpu"
+            ]
+        },
+        {
+            "name": "cores",
+            "path": "hardware",
+            "args": [
+                "cores"
+            ]
+        },
+        {
+            "name": "threads",
+            "path": "hardware",
+            "args": [
+                "threads"
+            ]
+        },
+        {
+            "name": "sockets",
+            "path": "hardware",
+            "args": [
+                "sockets"
+            ]
+        },
+        {
+            "name": "vga",
+            "path": "hardware",
+            "args": [
+                "vga"
+            ]
+        },
+        {
+            "name": "filesystem",
+            "path": "hardware",
+            "args": [
+                "filesystem"
+            ]
+        },
+        {
+            "name": "hostname",
+            "path": "general",
+            "args": [
+                "hostname"
+            ]
+        },
+        {
+            "name": "init",
+            "path": "general",
+            "args": [
+                "init"
+            ]
+        },
+        {
+            "name": "preinit",
+            "path": "general",
+            "args": [
+                "preinit"
+            ]
+        },
+        {
+            "name": "fifos",
+            "path": "general",
+            "args": [
+                "fifos"
+            ]
+        },
+        {
+            "name": "volume",
+            "path": "general",
+            "args": [
+                "volume"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,38 @@
+{
+  "$id": "#/experimentVars",
+  "type": "array",
+  "title": "Experiment Variables",
+  "items": {
+    "$id": "#/experimentVars/items",
+    "type": "object",
+    "title": "Variable",
+    "required": [
+      "name",
+      "value"
+    ],
+    "properties": {
+      "name": {
+        "$id": "#/experimentVars/items/properties/name",
+        "type": "string",
+        "title": "Name",
+        "minLength": 1,
+        "default": "",
+        "examples": [
+          "101"
+        ],
+        "pattern": "^[A-Z_0-9]+$"
+      },
+      "value": {
+        "$id": "#/experimentVars/items/properties/value",
+        "type": "string",
+        "title": "Value",
+        "minLength": 1,
+        "default": "",
+        "examples": [
+          "SCADAPWR"
+        ],
+        "pattern": "^(.*)$"
+      }
+    }
+  }
+}
