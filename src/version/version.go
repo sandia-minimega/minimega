@@ -1,6 +1,6 @@
 package version
 
 var (
-	Revision = "507fe708f3ff81103bd1af706512c18364faad53"
-	Date     = "2020-01-29"
+	Revision = "d26f23b2ac7222ddd92f77f8a14187f88ade32ca"
+	Date     = "2021-01-08"
 )
