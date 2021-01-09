@@ -1,0 +1,199 @@
+minimega 2.7 release notes
+
+* Introduction
+
+The minimega team is pleased to announce the release of minimega 2.7. This 
+release includes several new features and bug fixes as well as updates to 
+support the latest dependency packages. This release introduces igor web, a web
+UI similar to miniweb that allows easy use of the igor command-line tool. This 
+release also includes the addition of the minibuilder UI to the miniweb 
+front-end allowing rapid configuration and deployment of virtual machines and a 
+suite of training modules that cover nearly every tool in the minimega suite, 
+which can be found on minimega.org/training.
+
+* What's New?
+
+** Major Changes and Milestones
+
+
+*** minibuilder: A UI for minimega
+
+minibuilder allows the user to quickly and easily design and configure VM
+networks using a web interface built into miniweb. 
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1429][#1429]]
+
+
+*** mini101: Training course for minimega
+
+This PR represents a full course series on using minimega, comprised of 15 
+modules that cover nearly every aspect of using minimega and its various tools. 
+
+Training course modules can be found at [[https://minimega.org/training][minimega.org/training]].
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1404][#1404]].
+
+
+*** igorweb - A web interface to igor
+
+`igorweb` allows users to create/modify/delete `igor` reservations using a 
+friendly web interface. It has all of the functionality of `igor` in a shiny 
+package.
+
+`igorweb` is its own package separate from `igor` and issues commands to `igor`. 
+So, `igor` works without `igorweb`, but `igorweb` can't work without `igor`.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1371][#1371]].
+
+
+*** Supporting upgraded dependency packages
+
+minimega now runs with `Go` 1.12. Older versions of `Go` are no longer supported.
+
+Upgrades to `jQuery` (3.1.1 -> 3.4.1), `dataTables` (1.10.12 -> 1.10.20), and 
+`bootstrap` (3.3.5 -> 4.3.1).
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1409][#1409]], 
+PR [[https://github.com/sandia-minimega/minimega/pull/1382][#1382]].
+
+
+** Additional New Features
+
+
+*** minimega: Specify `flush` targets
+
+This PR Changes 'all' VM flush method to 'FlushAll()'.
+- Created new 'Flush()' method that uses the 'Apply' method to flush a specified target.
+- Updated help strings to reflect enhancement.
+- Backwards compatible with old `vm flush` behavior
+
+PR [[https://github.com/sandia-minimega/minimega/issues/1392][#1392]].
+
+
+*** igor: Specify VLAN for a reservation 
+
+Allows users to specify which VLAN they'd like a reservation to connect to. 
+`-vlan `can be specified for `sub` and `edit`
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1369][#1369]].
+
+
+*** igor: Pause activity
+
+Adds the ability to pause `igor` activity. When igor is paused, attempts to 
+`sub`, `show`, `del`, or other commands will fail and display a configurable 
+message. `igorweb` will display the same message.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1403][#1403]].
+
+
+*** igor: Enhanced logging
+
+Logging now include all relevant reservation information
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1395][#1395]], 
+PR [[https://github.com/sandia-minimega/minimega/pull/1399][#1399]].
+
+
+* Bug Fixes
+
+
+** minimega 
+
+
+*** Fixed issue adding virtual network interfaces to newer Ubuntu distribution 
+containers. 
+
+On newer distros, `ip link add` actually respects the `iface` name 
+given within the container `netns`, whereas it didn't before and just gave the 
+`vethX` as expected.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1378][#1378]].
+
+
+*** Fixed error checking on '`vm config net`' when only using containers
+
+Throws warning instead of an error when running just with containers (no 
+installation of `kvm/qemu`) 
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1380][#1380]].
+
+
+*** Fixed vm name check for rtunnel
+
+Fixes issue with reverse tunnel error by changing when the name check for a VM 
+occurs.
+
+PR [[https://github.com/sandia-minimega/minimega/issues/1384][#1384]].
+
+
+*** QOS Update
+
+Clarification for qos help and fixed an issue with burst computation where 
+setting rate to kbits would result in a 0 burst value, causing an error in TC.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1381][#1381]].
+
+
+** igor
+
+
+*** Don't uninstall / clear network settings when deleting future reservation
+
+Fixes an issue where deleting future reservations clobbers network settings for 
+active reservations.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1391][#1391]].
+
+
+*** Allow uninstall/clear for expired reservations
+
+Fixes an issue where the network is not cleared when a reservation expires.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1401][#1401]].
+
+
+*** Fix for the igor stats test to avoid DST issues
+
+The stats test was failing (twice a year, it would seem) due to time changes 
+affecting test outcome.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1405][#1405]].
+
+
+
+** miniweb
+
+
+*** Forcing the href update before reload as the order of operations is 
+otherwise not guaranteed.
+
+PR [[https://github.com/sandia-minimega/minimega/pull/1364][#1364]].
+
+
+* Availability
+
+minimega is available in several ways, both as pre-built distributions and 
+source. See the [[https://minimega.org/articles/installing.article][installing]] 
+guide for more information.
+
+** Debian package
+minimega is available as an x86-64 debian package, available 
+[[https://storage.googleapis.com/minimega-files/minimega-2.7.deb][here]]. It is 
+known to work in debian 9 (stretch) and ubuntu 16.04. It is known not to work on 
+debian 10 (buster).
+
+** tarball
+A pre-built, x86-64 distribution is available in a single distributable tarball 
+here. It should be sufficient to simply unpack the tarball and run tools from 
+the `bin/` directory directly. Most default paths in minimega, vmbetter, and 
+other tools are built to be used in this way (i.e. `bin/minimega`, which will 
+then look for the web directory in `misc/web`).
+
+** Building from source
+Source of the entire distribution is available on 
+[[https://github.com/sandia-minimega/minimega][Github]]. Follow the directions 
+for cloning or forking minimega on github.com. In order to build minimega, you 
+will need a Go 1.12+ compiler and libpcap headers.
+
+
