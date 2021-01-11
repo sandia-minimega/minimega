@@ -13,18 +13,23 @@ up-to-date development version if desired.
 ** Binary distribution
 
 minimega is available as a prebuilt, x86-64 debian package, or as a standalone
-tarball. The debian package is known to work on debian 7-9 and is available
-[[https://storage.googleapis.com/minimega-files/minimega-2.7.deb][here]]. The
-latest debian release, debian 10 (buster), is known not to work.
+tarball. The debian package is known to work on debian 7-9. The latest debian 
+release, debian 10 (buster), is known not to work.
 
-For other x86-64 systems, use the prebuilt tarball, available
-[[https://storage.googleapis.com/minimega-files/minimega-2.7.tar.bz2][here]].
+Current, stable release: 
+[[https://storage.googleapis.com/minimega-files/minimega-2.7.deb][minimega-2.7.deb]]
+
+For other x86-64 systems, use the prebuilt tarball: 
+[[https://storage.googleapis.com/minimega-files/minimega-2.7.tar.bz2][minimega-2.7.tar.bz2]]
+
 Simply unpack minimega and run it from the top level directory:
 
 	$ tar xjf minimega.tar.bz2 && cd minimega
 	$ ./bin/minimega
 
 You may find it convenient to place the minimega directory in `/opt`.
+
+For previous versions of minimega, visit our [[/articles/download.article][downloads page]]
 
 ** Building from source
 
