@@ -14,11 +14,11 @@ up-to-date development version if desired.
 
 minimega is available as a prebuilt, x86-64 debian package, or as a standalone
 tarball. The debian package is known to work on debian 7-9 and is available
-[[https://storage.googleapis.com/minimega-files/minimega-2.6.deb][here]]. The
+[[https://storage.googleapis.com/minimega-files/minimega-2.7.deb][here]]. The
 latest debian release, debian 10 (buster), is known not to work.
 
 For other x86-64 systems, use the prebuilt tarball, available
-[[https://storage.googleapis.com/minimega-files/minimega-2.6.tar.bz2][here]].
+[[https://storage.googleapis.com/minimega-files/minimega-2.7.tar.bz2][here]].
 Simply unpack minimega and run it from the top level directory:
 
 	$ tar xjf minimega.tar.bz2 && cd minimega
@@ -39,10 +39,10 @@ Having installed the dependencies, grab the minimega source:
        $ git clone git@github.com:sandia-minimega/minimega.git
        $ cd minimega
 
-Next, check out the 2.6 release. If you wish to run the development version
+Next, check out the 2.7 release. If you wish to run the development version
 ("tip") of minimega, skip this command.
 
-	$ git checkout 2.6
+	$ git checkout 2.7
 
 Finally, compile minimega:
 
