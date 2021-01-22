@@ -799,9 +799,22 @@ func (s *Server) clientHandler(c *client) {
 		}
 	}
 
-	if err != io.EOF && !strings.Contains(err.Error(), "connection reset by peer") {
-		log.Errorln(err)
+	// This is an OK error - likely just means the TCP connection was closed.
+	if err == io.EOF {
+		return
 	}
+
+	// This is an OK error - likely just means the client closed the connection.
+	if strings.Contains(err.Error(), "connection reset by peer") {
+		return
+	}
+
+	// This is an OK error - likely just means the unix socket was closed.
+	if strings.Contains(err.Error(), "use of closed network connection") {
+		return
+	}
+
+	log.Errorln(err)
 }
 
 // addClient adds a client to the list of active clients
