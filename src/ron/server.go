@@ -203,43 +203,76 @@ func (s *Server) ListenUnix(path string) error {
 
 // Dial a client serial port. The server will maintain this connection until a
 // client connects and then disconnects.
-func (s *Server) DialSerial(path string) error {
-	log.Info("dial serial: %v", path)
+func (s *Server) DialSerial(path string, ccPortOpened, ccPortClosed chan struct{}) error {
+	dial := func(path string) (net.Conn, error) {
+		log.Info("dial serial: %v", path)
 
-	s.connsLock.Lock()
-	defer s.connsLock.Unlock()
-
-	// are we already connected to this client?
-	if _, ok := s.conns[path]; ok {
-		return fmt.Errorf("already connected to serial client %v", path)
-	}
-
-	// connect!
-	conn, err := net.Dial("unix", path)
-	if err != nil {
-		return err
-	}
-
-	s.conns[path] = conn
-
-	go func() {
-		c, err := s.handshake(conn)
-		if err != nil {
-			if err != io.EOF {
-				// supress these, VM was probably never started
-				log.Error("handshake failed: %v", err)
-			}
-			return
-		}
-
-		s.clientHandler(c)
-
-		// client disconnected
 		s.connsLock.Lock()
 		defer s.connsLock.Unlock()
 
-		delete(s.conns, path)
-		log.Debug("disconnected from serial client: %v", path)
+		// are we already connected to this client?
+		if _, ok := s.conns[path]; ok {
+			return nil, fmt.Errorf("already connected to serial client %v", path)
+		}
+
+		// connect!
+		conn, err := net.Dial("unix", path)
+		if err != nil {
+			return nil, err
+		}
+
+		s.conns[path] = conn
+
+		return conn, nil
+	}
+
+	var (
+		conn net.Conn
+		cli  *client
+	)
+
+	go func() {
+		for {
+			<-ccPortClosed
+
+			if cli != nil {
+				s.removeClient(cli.UUID)
+			}
+
+			if conn != nil {
+				conn.Close()
+
+				// client disconnected
+				s.connsLock.Lock()
+				delete(s.conns, path)
+				s.connsLock.Unlock()
+			}
+		}
+	}()
+
+	go func() {
+		for {
+			var err error
+
+			<-ccPortOpened
+
+			if conn, err = dial(path); err != nil {
+				log.Error("dialing serial port %v failed: %v", path, err)
+				continue
+			}
+
+			cli, err = s.handshake(conn)
+			if err != nil {
+				if err != io.EOF {
+					// supress these, VM was probably never started
+					log.Error("handshake failed: %v", err)
+				}
+
+				continue
+			}
+
+			s.clientHandler(cli)
+		}
 	}()
 
 	return nil
@@ -766,9 +799,24 @@ func (s *Server) clientHandler(c *client) {
 		}
 	}
 
-	if err != io.EOF && !strings.Contains(err.Error(), "connection reset by peer") {
-		log.Errorln(err)
+	// This is an OK error - likely just means the TCP connection was closed.
+	if err == io.EOF {
+		return
 	}
+
+	// This is an OK error - likely just means the client closed the connection.
+	if strings.Contains(err.Error(), "connection reset by peer") {
+		log.Debugln(err)
+		return
+	}
+
+	// This is an OK error - likely just means the unix socket was closed.
+	if strings.Contains(err.Error(), "use of closed network connection") {
+		log.Debugln(err)
+		return
+	}
+
+	log.Errorln(err)
 }
 
 // addClient adds a client to the list of active clients

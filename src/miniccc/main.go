@@ -157,6 +157,16 @@ func dial() error {
 			client.conn, err = net.Dial(*f_family, addr)
 		} else {
 			client.conn, err = dialSerial(*f_serial)
+
+			// Server-side, we're now reacting to async QMP VSERPORT_CHANGE events for
+			// each VM to determine when we should close and connect to the virtual
+			// serial port. The call to `dialSerial` above will trigger a
+			// VSERPORT_CHANGE event, at which point the server will connect to the
+			// virtual serial port and wait to hear from the client. We sleep for a
+			// bit here to give the server time to receive the event and connect to
+			// the virtual serial port before sending he initial magic bytes message
+			// below.
+			time.Sleep(1 * time.Second)
 		}
 
 		// write magic bytes
@@ -181,6 +191,17 @@ func dial() error {
 		}
 
 		log.Error("%v, retries = %v", err, i)
+
+		// It's possible that we could have an error after the client connection has
+		// been created. For example, when using the serial port, writing the magic
+		// `RON` bytes can result in an EOF if the host has been rebooted and the
+		// minimega server hasn't cleaned up and reconnected to the virtual serial
+		// port yet. In such a case, the connection needs to be closed to avoid a
+		// "device busy" error when trying to dial it again.
+		if client.conn != nil {
+			client.conn.Close()
+		}
+
 		time.Sleep(15 * time.Second)
 	}
 
