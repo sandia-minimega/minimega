@@ -806,11 +806,13 @@ func (s *Server) clientHandler(c *client) {
 
 	// This is an OK error - likely just means the client closed the connection.
 	if strings.Contains(err.Error(), "connection reset by peer") {
+		log.Debugln(err)
 		return
 	}
 
 	// This is an OK error - likely just means the unix socket was closed.
 	if strings.Contains(err.Error(), "use of closed network connection") {
+		log.Debugln(err)
 		return
 	}
 
