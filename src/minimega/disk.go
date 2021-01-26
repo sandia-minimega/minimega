@@ -228,9 +228,9 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		// check desired partition exists
 		_, err = os.Stat(path)
 		if err != nil {
-			return fmt.Errorf("desired partition %s not found", partition)
+			return fmt.Errorf("desired partition %s not found in image %s", partition, dst)
 		} else {
-			log.Info("desired partition %s found", partition)
+			log.Info("desired partition %s found in image %s", partition, dst)
 		}
 	}
 
