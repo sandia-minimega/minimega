@@ -99,7 +99,7 @@ func diskSnapshot(src, dst string) error {
 
 	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", src, dst)
 	if err != nil {
-		return fmt.Errorf("%v: %v", out, err)
+		return fmt.Errorf("[image %s] %v: %v", src, out, err)
 	}
 
 	return nil
@@ -111,7 +111,7 @@ func diskInfo(image string) (DiskInfo, error) {
 
 	out, err := processWrapper("qemu-img", "info", image)
 	if err != nil {
-		return info, fmt.Errorf("%v: %v", out, err)
+		return info, fmt.Errorf("[image %s] %v: %v", image, out, err)
 	}
 
 	regex := regexp.MustCompile(`.*\(actual path: (.*)\)`)
@@ -198,7 +198,7 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		timeoutTime := time.Now().Add(5 * time.Second)
 		for i := 1; ; i++ {
 			if time.Now().After(timeoutTime) {
-				return errors.New("no partitions found on image")
+				return fmt.Errorf("[image %s] no partitions found on image", dst)
 			}
 
 			// tell kernel to reread partitions
@@ -217,7 +217,7 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		if partition == "" {
 			_, err = os.Stat(nbdPath + "p2")
 			if err == nil {
-				return errors.New("please specify a partition; multiple found")
+				return fmt.Errorf("[image %s] please specify a partition; multiple found", dst)
 			}
 
 			partition = "1"
@@ -228,7 +228,7 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		// check desired partition exists
 		_, err = os.Stat(path)
 		if err != nil {
-			return fmt.Errorf("desired partition %s not found in image %s", partition, dst)
+			return fmt.Errorf("[image %s] desired partition %s not found", dst, partition)
 		} else {
 			log.Info("desired partition %s found in image %s", partition, dst)
 		}
@@ -257,7 +257,7 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		out, err := processWrapper("mount", "-o", "ntfs-3g", path, mntDir)
 		if err != nil {
 			log.Error("failed to mount partition")
-			return fmt.Errorf("%v: %v", out, err)
+			return fmt.Errorf("[image %s] %v: %v", dst, out, err)
 		}
 	}
 	defer func() {
@@ -273,14 +273,14 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 
 		out, err := processWrapper("cp", "-fr", src, filepath.Join(mntDir, dst))
 		if err != nil {
-			return fmt.Errorf("%v: %v", out, err)
+			return fmt.Errorf("[image %s] %v: %v", dst, out, err)
 		}
 	}
 
 	// explicitly flush buffers
 	out, err := processWrapper("blockdev", "--flushbufs", path)
 	if err != nil {
-		return fmt.Errorf("unable to flush: %v %v", out, err)
+		return fmt.Errorf("[image %s] unable to flush: %v %v", dst, out, err)
 	}
 
 	return nil
