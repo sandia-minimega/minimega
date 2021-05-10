@@ -990,15 +990,9 @@ func (v *BaseConfig) WriteConfig(w io.Writer) error {
 	if v.UUID != "" {
 		fmt.Fprintf(w, "vm config uuid %v\n", v.UUID)
 	}
-	if v.VCPUs != 1 {
-		fmt.Fprintf(w, "vm config vcpus %v\n", v.VCPUs)
-	}
-	if v.Memory != 2048 {
-		fmt.Fprintf(w, "vm config memory %v\n", v.Memory)
-	}
-	if v.Snapshot != true {
+	fmt.Fprintf(w, "vm config vcpus %v\n", v.VCPUs)
+	fmt.Fprintf(w, "vm config memory %v\n", v.Memory)
 		fmt.Fprintf(w, "vm config snapshot %t\n", v.Snapshot)
-	}
 	if v.Schedule != "" {
 		fmt.Fprintf(w, "vm config schedule %v\n", v.Schedule)
 	}

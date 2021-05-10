@@ -669,7 +669,9 @@ func (n *Namespace) processVMNets(vals []string) error {
 }
 
 // Snapshot creates a snapshot of a namespace so that it can be restored later.
-// If dir is not an absolute path, it will be a subdirectory of iomBase.
+// Both a state file (migrate) and hard disk file (disk) are created for each
+// VM in the namespace. If dir is not an absolute path, it will be a
+// subdirectory of iomBase.
 //
 // LOCK: Assumes cmdLock is held.
 func (n *Namespace) Snapshot(dir string) error {
@@ -693,11 +695,14 @@ func (n *Namespace) Snapshot(dir string) error {
 	}
 	defer f.Close()
 
+	fmt.Fprintf(f, "namespace %q\n\n", n.Name)
+
 	// LOCK: This is only invoked via the CLI so we already hold cmdLock (can
 	// call globalVMs instead of GlobalVMs).
 	for _, vm := range globalVMs(n) {
-		dst := filepath.Join(dir, vm.GetName()) + ".migrate"
-		cmd := minicli.MustCompilef("vm migrate %q %v", vm.GetName(), dst)
+		stateDst := filepath.Join(dir, vm.GetName()) + ".migrate"
+		diskDst := filepath.Join(dir, vm.GetName()) + ".hdd"
+		cmd := minicli.MustCompilef("vm snapshot %q %v %v", vm.GetName(), stateDst, diskDst)
 		cmd.Record = false
 
 		var respChan <-chan minicli.Responses
@@ -722,20 +727,27 @@ func (n *Namespace) Snapshot(dir string) error {
 			return err
 		}
 
+		fmt.Fprintf(f, "clear vm config\n")
+
 		if err := vm.WriteConfig(f); err != nil {
 			return err
 		}
 
-		// override the migrate path
+		// override the migrate and disk paths
 		if useIOM {
-			rel, _ := filepath.Rel(*f_iomBase, dst)
+			rel, _ := filepath.Rel(*f_iomBase, stateDst)
 			fmt.Fprintf(f, "vm config migrate file:%v\n", rel)
+			rel, _ = filepath.Rel(*f_iomBase, diskDst)
+			fmt.Fprintf(f, "vm config disk file:%v\n", rel)
 		} else {
-			fmt.Fprintf(f, "vm config migrate %v\n", dst)
+			fmt.Fprintf(f, "vm config migrate %v\n", stateDst)
+			fmt.Fprintf(f, "vm config disk %v\n", diskDst)
 		}
 
 		fmt.Fprintf(f, "vm launch %v %q\n\n", vm.GetType(), vm.GetName())
 	}
+
+	fmt.Fprintf(f, "vm start all\n")
 
 	return nil
 }
