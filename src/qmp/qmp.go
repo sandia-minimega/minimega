@@ -329,7 +329,7 @@ func (q *Conn) SaveDisk(path, device string) error {
 	}
 	v := <-q.messageSync
 	if !success(v) {
-		return errors.New("save")
+		return errors.New("error in qmp SaveDisk")
 	}
 	return nil
 }

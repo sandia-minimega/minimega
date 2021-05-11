@@ -733,15 +733,21 @@ func (n *Namespace) Snapshot(dir string) error {
 			return err
 		}
 
-		// override the migrate and disk paths
+		// override the migrate and disk paths;
+		// skip disk if using kernel/initrd or cdrom as boot device
+		disks, _ := vm.Info("disks")
 		if useIOM {
 			rel, _ := filepath.Rel(*f_iomBase, stateDst)
 			fmt.Fprintf(f, "vm config migrate file:%v\n", rel)
-			rel, _ = filepath.Rel(*f_iomBase, diskDst)
-			fmt.Fprintf(f, "vm config disk file:%v\n", rel)
+			if disks != "" {
+				rel, _ = filepath.Rel(*f_iomBase, diskDst)
+				fmt.Fprintf(f, "vm config disk file:%v\n", rel)
+			}
 		} else {
 			fmt.Fprintf(f, "vm config migrate %v\n", stateDst)
-			fmt.Fprintf(f, "vm config disk %v\n", diskDst)
+			if disks != "" {
+				fmt.Fprintf(f, "vm config disk %v\n", diskDst)
+			}
 		}
 
 		fmt.Fprintf(f, "vm launch %v %q\n\n", vm.GetType(), vm.GetName())

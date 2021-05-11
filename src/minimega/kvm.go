@@ -472,6 +472,12 @@ func (vm *KvmVM) QMPRaw(input string) (string, error) {
 }
 
 func (vm *KvmVM) Save(filename string) error {
+	// skip save if using kernel/initrd or cdrom as boot device
+	if len(vm.KVMConfig.Disks) == 0 {
+		log.Warn("Skipping kvm disk save for non-disk VM: %v", vm.Name)
+		return nil
+	}
+
 	if !filepath.IsAbs(filename) {
 		filename = filepath.Join(*f_iomBase, filename)
 	}
