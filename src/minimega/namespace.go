@@ -700,25 +700,34 @@ func (n *Namespace) Snapshot(dir string) error {
 	// LOCK: This is only invoked via the CLI so we already hold cmdLock (can
 	// call globalVMs instead of GlobalVMs).
 	for _, vm := range globalVMs(n) {
+		cmds := []*minicli.Command{}
+		// pause all vms
+		cmd := minicli.MustCompilef("vm stop all")
+		cmd.Record = false
+		cmds = append(cmds, cmd)
+		// snapshot all vms
 		stateDst := filepath.Join(dir, vm.GetName()) + ".migrate"
 		diskDst := filepath.Join(dir, vm.GetName()) + ".hdd"
-		cmd := minicli.MustCompilef("vm snapshot %q %v %v", vm.GetName(), stateDst, diskDst)
+		cmd = minicli.MustCompilef("vm snapshot %q %v %v", vm.GetName(), stateDst, diskDst)
 		cmd.Record = false
+		cmds = append(cmds, cmd)
 
 		var respChan <-chan minicli.Responses
-		if vm.GetHost() == hostname {
-			// run locally
-			respChan = runCommands(cmd)
-		} else {
-			// run remotely
-			cmd = minicli.MustCompilef("namespace %q %v", n.Name, cmd.Original)
-			cmd.Source = n.Name
-			cmd.Record = false
+		for _, c := range cmds {
+			if vm.GetHost() == hostname {
+				// run locally
+				respChan = runCommands(c)
+			} else {
+				// run remotely
+				cmd = minicli.MustCompilef("namespace %q %v", n.Name, c.Original)
+				cmd.Source = n.Name
+				cmd.Record = false
 
-			var err error
-			respChan, err = meshageSend(cmd, vm.GetHost())
-			if err != nil {
-				return err
+				var err error
+				respChan, err = meshageSend(cmd, vm.GetHost())
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -753,6 +762,10 @@ func (n *Namespace) Snapshot(dir string) error {
 		fmt.Fprintf(f, "vm launch %v %q\n\n", vm.GetType(), vm.GetName())
 	}
 
+	fmt.Fprintf(f, "vm start all\n")
+	// the snapshot process saves the VMs in a paused state, so do a stop/start
+	fmt.Fprintf(f, "shell sleep 10\n")
+	fmt.Fprintf(f, "vm stop all\n")
 	fmt.Fprintf(f, "vm start all\n")
 
 	return nil
