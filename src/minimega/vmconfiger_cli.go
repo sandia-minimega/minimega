@@ -992,7 +992,7 @@ func (v *BaseConfig) WriteConfig(w io.Writer) error {
 	}
 	fmt.Fprintf(w, "vm config vcpus %v\n", v.VCPUs)
 	fmt.Fprintf(w, "vm config memory %v\n", v.Memory)
-		fmt.Fprintf(w, "vm config snapshot %t\n", v.Snapshot)
+	fmt.Fprintf(w, "vm config snapshot %t\n", v.Snapshot)
 	if v.Schedule != "" {
 		fmt.Fprintf(w, "vm config schedule %v\n", v.Schedule)
 	}
