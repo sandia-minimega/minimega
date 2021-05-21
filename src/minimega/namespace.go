@@ -700,62 +700,72 @@ func (n *Namespace) Snapshot(dir string) error {
 	// LOCK: This is only invoked via the CLI so we already hold cmdLock (can
 	// call globalVMs instead of GlobalVMs).
 	for _, vm := range globalVMs(n) {
-		cmds := []*minicli.Command{}
-		// pause all vms
-		cmd := minicli.MustCompilef("vm stop all")
-		cmd.Record = false
-		cmds = append(cmds, cmd)
-		// snapshot all vms
-		stateDst := filepath.Join(dir, vm.GetName()) + ".migrate"
-		diskDst := filepath.Join(dir, vm.GetName()) + ".hdd"
-		cmd = minicli.MustCompilef("vm snapshot %q %v %v", vm.GetName(), stateDst, diskDst)
-		cmd.Record = false
-		cmds = append(cmds, cmd)
+		// only snapshot KVMs
+		if vm.GetType() == KVM {
+			cmds := []*minicli.Command{}
+			// pause all vms
+			cmd := minicli.MustCompilef("vm stop all")
+			cmd.Record = false
+			cmds = append(cmds, cmd)
+			// snapshot all vms
+			stateDst := filepath.Join(dir, vm.GetName()) + ".migrate"
+			diskDst := filepath.Join(dir, vm.GetName()) + ".hdd"
+			cmd = minicli.MustCompilef("vm snapshot %q %v %v", vm.GetName(), stateDst, diskDst)
+			cmd.Record = false
+			cmds = append(cmds, cmd)
 
-		var respChan <-chan minicli.Responses
-		for _, c := range cmds {
-			if vm.GetHost() == hostname {
-				// run locally
-				respChan = runCommands(c)
-			} else {
-				// run remotely
-				cmd = minicli.MustCompilef("namespace %q %v", n.Name, c.Original)
-				cmd.Source = n.Name
-				cmd.Record = false
+			var respChan <-chan minicli.Responses
+			for _, c := range cmds {
+				if vm.GetHost() == hostname {
+					// run locally
+					respChan = runCommands(c)
+				} else {
+					// run remotely
+					cmd = minicli.MustCompilef("namespace %q %v", n.Name, c.Original)
+					cmd.Source = n.Name
+					cmd.Record = false
 
-				var err error
-				respChan, err = meshageSend(cmd, vm.GetHost())
-				if err != nil {
-					return err
+					var err error
+					respChan, err = meshageSend(cmd, vm.GetHost())
+					if err != nil {
+						return err
+					}
 				}
 			}
-		}
 
-		// read all the responses and look for any errors
-		if err := consume(respChan); err != nil {
-			return err
-		}
-
-		fmt.Fprintf(f, "clear vm config\n")
-
-		if err := vm.WriteConfig(f); err != nil {
-			return err
-		}
-
-		// override the migrate and disk paths;
-		// skip disk if using kernel/initrd or cdrom as boot device
-		disks, _ := vm.Info("disks")
-		if useIOM {
-			rel, _ := filepath.Rel(*f_iomBase, stateDst)
-			fmt.Fprintf(f, "vm config migrate file:%v\n", rel)
-			if disks != "" {
-				rel, _ = filepath.Rel(*f_iomBase, diskDst)
-				fmt.Fprintf(f, "vm config disk file:%v\n", rel)
+			// read all the responses and look for any errors
+			if err := consume(respChan); err != nil {
+				return err
 			}
-		} else {
-			fmt.Fprintf(f, "vm config migrate %v\n", stateDst)
-			if disks != "" {
-				fmt.Fprintf(f, "vm config disk %v\n", diskDst)
+
+			fmt.Fprintf(f, "clear vm config\n")
+
+			if err := vm.WriteConfig(f); err != nil {
+				return err
+			}
+
+			// override the migrate and disk paths;
+			// skip disk if using kernel/initrd or cdrom as boot device
+			disks, _ := vm.Info("disks")
+			if useIOM {
+				rel, _ := filepath.Rel(*f_iomBase, stateDst)
+				fmt.Fprintf(f, "vm config migrate file:%v\n", rel)
+				if disks != "" {
+					rel, _ = filepath.Rel(*f_iomBase, diskDst)
+					fmt.Fprintf(f, "vm config disk file:%v\n", rel)
+				}
+			} else {
+				fmt.Fprintf(f, "vm config migrate %v\n", stateDst)
+				if disks != "" {
+					fmt.Fprintf(f, "vm config disk %v\n", diskDst)
+				}
+			}
+		} else if vm.GetType() == CONTAINER {
+			log.Warn("Skipping snapshot for container: %q\n", vm.GetName(), err)
+			fmt.Fprintf(f, "clear vm config\n")
+
+			if err := vm.WriteConfig(f); err != nil {
+				return err
 			}
 		}
 
@@ -764,6 +774,7 @@ func (n *Namespace) Snapshot(dir string) error {
 
 	fmt.Fprintf(f, "vm start all\n")
 	// the snapshot process saves the VMs in a paused state, so do a stop/start
+	fmt.Fprintf(f, "# the snapshot process saves the VMs in a paused state, so do a stop/start\n")
 	fmt.Fprintf(f, "shell sleep 10\n")
 	fmt.Fprintf(f, "vm stop all\n")
 	fmt.Fprintf(f, "vm start all\n")
