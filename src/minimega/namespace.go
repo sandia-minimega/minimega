@@ -761,7 +761,7 @@ func (n *Namespace) Snapshot(dir string) error {
 				}
 			}
 		} else if vm.GetType() == CONTAINER {
-			log.Warn("Skipping snapshot for container: %q\n", vm.GetName(), err)
+			log.Warn("Skipping snapshot for container: %q\n", vm.GetName())
 			fmt.Fprintf(f, "clear vm config\n")
 
 			if err := vm.WriteConfig(f); err != nil {
