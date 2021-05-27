@@ -287,14 +287,36 @@ namespace.
 
 ** Snapshot
 
-Namespaces are working towards a full snapshot of a running experiment. This
-capability is partially implemented in the `ns`snapshot` API. This API records
-a minimega script to relaunch the running VMs and calls `vm`migrate` on each VM
-to capture its memory. The resulting migration files are added to the minimega
-script using the `vm`config`migrate` API. This snapshot capability should work
-for VMs with a kernel/initrd but not for VMs with a disk.
+The `ns`snapshot` API can be used to take a full snapshot of a running
+experiment. This API first pauses all VMs in the experiment and then calls
+`vm`snapshot` on each VM to capture both its memory and disk state as separate
+files. In addition, the command records a minimega script to relaunch the
+running VMs using the saved disk and memory files via the `vm`config`migrate`
+and `vm`config`disk` APIs. This snapshot capability will work for both KVM and
+container type VMs. For KVMs without a disk (kernel/initrd), only the memory
+state is saved. For containers, no state is saved -- the vm config is simply
+copied to the relaunch script.
 
-In future releases, we plan to expand upon this capability.
+The state files and relaunch script are saved in a user-specified subdirectory:
+
+    <minimega filepath>/snapshots/<name>/vm1.hdd
+    <minimega filepath>/snapshots/<name>/vm1.migrate
+    <minimega filepath>/snapshots/<name>/vm2.hdd
+    <minimega filepath>/snapshots/<name>/vm2.migrate
+    ...
+    <minimega filepath>/snapshots/<name>/launch.mm
+
+Notes: This command will block until VMs have completed the disk save portion
+of the snapshot. After that, the memory save portion will continue to run in
+the background until finished. Progress can be monitored by running
+`ns`snapshot` or `vm`snapshot` without arguments. This command does not
+restart any VMs after the snapshot, so they will be left in a paused state. The
+snapshotted experiment can be restarted using the `read` command and passing it
+the generated minimega script.
+
+Warning: The process of saving both disk and memory state for an entire
+experiment can result in large files created on the host filesystem. Before
+running, verify there is enough storage available.
 
 ** vm API
 
