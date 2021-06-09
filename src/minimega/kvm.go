@@ -7,6 +7,7 @@ package main
 import (
 	"bridge"
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -219,6 +220,20 @@ type KvmVM struct {
 	// the virtual serial port was opened client-side, and `false` if it was
 	// closed client-side. Used to handle miniccc restarts in the client.
 	vSerPortOpenEvent chan bool
+}
+
+type BlockDevice struct {
+	Device   string `json:"device"`
+	Inserted *struct {
+		File string `json:"file"`
+	} `json:"inserted"`
+}
+
+type BlockDeviceJobs struct {
+	Device string `json:"device"`
+	Status int    `json:"io-status"`
+	Length int    `json:"len"`
+	Offset int    `json:"offset"`
 }
 
 // Ensure that KvmVM implements the VM interface
@@ -454,6 +469,58 @@ func (vm *KVMConfig) DiskString(namespace string) string {
 
 func (vm *KvmVM) QMPRaw(input string) (string, error) {
 	return vm.q.Raw(input)
+}
+
+func (vm *KvmVM) Save(filename string) error {
+	// skip save if using kernel/initrd or cdrom as boot device
+	if len(vm.KVMConfig.Disks) == 0 {
+		log.Warn("Skipping kvm disk save for non-disk VM: %v", vm.Name)
+		return nil
+	}
+
+	if !filepath.IsAbs(filename) {
+		filename = filepath.Join(*f_iomBase, filename)
+	}
+
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	fp := fmt.Sprintf("%s/%s", *f_base, strconv.Itoa(vm.ID))
+
+	r, err := vm.q.QueryBlock()
+	if err != nil {
+		return err
+	}
+
+	rString, err := json.Marshal(r)
+	var v []BlockDevice
+	json.Unmarshal(rString, &v)
+
+	// find the device name
+	var device string
+	for _, dev := range v {
+		if dev.Inserted != nil {
+			if strings.HasPrefix(dev.Inserted.File, fp) {
+				device = dev.Device
+				break
+			}
+		}
+	}
+
+	err = vm.q.SaveDisk(filename, device)
+	if err != nil {
+		return err
+	}
+
+	// wait for drive-backup to finish
+	for {
+		if r, _ := vm.q.QueryBlockJobs(); len(r) == 0 {
+			break
+		}
+		time.Sleep(time.Second * 1)
+	}
+
+	return err
 }
 
 func (vm *KvmVM) Migrate(filename string) error {

@@ -669,7 +669,9 @@ func (n *Namespace) processVMNets(vals []string) error {
 }
 
 // Snapshot creates a snapshot of a namespace so that it can be restored later.
-// If dir is not an absolute path, it will be a subdirectory of iomBase.
+// Both a state file (migrate) and hard disk file (disk) are created for each
+// VM in the namespace. If dir is not an absolute path, it will be a
+// subdirectory of iomBase.
 //
 // LOCK: Assumes cmdLock is held.
 func (n *Namespace) Snapshot(dir string) error {
@@ -693,49 +695,89 @@ func (n *Namespace) Snapshot(dir string) error {
 	}
 	defer f.Close()
 
+	fmt.Fprintf(f, "namespace %q\n\n", n.Name)
+
 	// LOCK: This is only invoked via the CLI so we already hold cmdLock (can
 	// call globalVMs instead of GlobalVMs).
 	for _, vm := range globalVMs(n) {
-		dst := filepath.Join(dir, vm.GetName()) + ".migrate"
-		cmd := minicli.MustCompilef("vm migrate %q %v", vm.GetName(), dst)
-		cmd.Record = false
-
-		var respChan <-chan minicli.Responses
-		if vm.GetHost() == hostname {
-			// run locally
-			respChan = runCommands(cmd)
-		} else {
-			// run remotely
-			cmd = minicli.MustCompilef("namespace %q %v", n.Name, cmd.Original)
-			cmd.Source = n.Name
+		// only snapshot KVMs
+		if vm.GetType() == KVM {
+			cmds := []*minicli.Command{}
+			// pause all vms
+			cmd := minicli.MustCompilef("vm stop all")
 			cmd.Record = false
+			cmds = append(cmds, cmd)
+			// snapshot all vms
+			stateDst := filepath.Join(dir, vm.GetName()) + ".migrate"
+			diskDst := filepath.Join(dir, vm.GetName()) + ".hdd"
+			cmd = minicli.MustCompilef("vm snapshot %q %v %v", vm.GetName(), stateDst, diskDst)
+			cmd.Record = false
+			cmds = append(cmds, cmd)
 
-			var err error
-			respChan, err = meshageSend(cmd, vm.GetHost())
-			if err != nil {
+			var respChan <-chan minicli.Responses
+			for _, c := range cmds {
+				if vm.GetHost() == hostname {
+					// run locally
+					respChan = runCommands(c)
+				} else {
+					// run remotely
+					cmd = minicli.MustCompilef("namespace %q %v", n.Name, c.Original)
+					cmd.Source = n.Name
+					cmd.Record = false
+
+					var err error
+					respChan, err = meshageSend(cmd, vm.GetHost())
+					if err != nil {
+						return err
+					}
+				}
+			}
+
+			// read all the responses and look for any errors
+			if err := consume(respChan); err != nil {
+				return err
+			}
+
+			fmt.Fprintf(f, "clear vm config\n")
+
+			if err := vm.WriteConfig(f); err != nil {
+				return err
+			}
+
+			// override the migrate and disk paths;
+			// skip disk if using kernel/initrd or cdrom as boot device
+			disks, _ := vm.Info("disks")
+			if useIOM {
+				rel, _ := filepath.Rel(*f_iomBase, stateDst)
+				fmt.Fprintf(f, "vm config migrate file:%v\n", rel)
+				if disks != "" {
+					rel, _ = filepath.Rel(*f_iomBase, diskDst)
+					fmt.Fprintf(f, "vm config disk file:%v\n", rel)
+				}
+			} else {
+				fmt.Fprintf(f, "vm config migrate %v\n", stateDst)
+				if disks != "" {
+					fmt.Fprintf(f, "vm config disk %v\n", diskDst)
+				}
+			}
+		} else if vm.GetType() == CONTAINER {
+			log.Warn("Skipping snapshot for container: %q\n", vm.GetName())
+			fmt.Fprintf(f, "clear vm config\n")
+
+			if err := vm.WriteConfig(f); err != nil {
 				return err
 			}
 		}
 
-		// read all the responses and look for any errors
-		if err := consume(respChan); err != nil {
-			return err
-		}
-
-		if err := vm.WriteConfig(f); err != nil {
-			return err
-		}
-
-		// override the migrate path
-		if useIOM {
-			rel, _ := filepath.Rel(*f_iomBase, dst)
-			fmt.Fprintf(f, "vm config migrate file:%v\n", rel)
-		} else {
-			fmt.Fprintf(f, "vm config migrate %v\n", dst)
-		}
-
 		fmt.Fprintf(f, "vm launch %v %q\n\n", vm.GetType(), vm.GetName())
 	}
+
+	fmt.Fprintf(f, "vm start all\n")
+	// the snapshot process saves the VMs in a paused state, so do a stop/start
+	fmt.Fprintf(f, "# the snapshot process saves the VMs in a paused state, so do a stop/start\n")
+	fmt.Fprintf(f, "shell sleep 10\n")
+	fmt.Fprintf(f, "vm stop all\n")
+	fmt.Fprintf(f, "vm start all\n")
 
 	return nil
 }

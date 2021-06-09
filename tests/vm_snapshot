@@ -1,0 +1,32 @@
+# Create disk image
+disk create qcow2 foo.qcow2 512M
+
+# Launch a couple VMs to snapshot
+vm config disk foo.qcow2
+vm launch kvm foo
+clear vm config
+vm launch kvm foo-no-disk
+
+# Dump migration and disk state files
+vm snapshot foo foo.migrate foo.hdd
+vm snapshot foo-no-disk foo-nd.migrate foo-nd.hdd
+
+# Check that the snapshots completed after a quick nap
+shell sleep 1
+.column name,status vm snapshot
+
+# Check for the files on disk
+.filter name=foo.migrate .column dir,name file list
+.filter name=foo.hdd .column dir,name file list
+.filter name=foo-nd.migrate .column dir,name file list
+# This one shouldn't exist
+.filter name=foo-nd.hdd .column dir,name file list
+
+# Check for VM state
+.column name,state vm info
+
+# Clean up
+file delete foo.migrate
+file delete foo.hdd
+file delete foo-nd.migrate
+file delete foo.qcow2

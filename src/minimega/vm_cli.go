@@ -248,7 +248,7 @@ connections via vm config when launching VMs. See "vm config net" for more detai
 
 You will need to specify the VLAN of which the interface is a member. Optionally, you may
 specify the brige the interface will be connected on. You may also specify a MAC address for
-the interface. Finally, you may also specify the network device for qemu to use. By default, 
+the interface. Finally, you may also specify the network device for qemu to use. By default,
 "e1000" is used. The order is:
 
 	<bridge>,<VLAN>,<MAC>,<driver>
@@ -333,6 +333,22 @@ You can also specify the maximum dimension:
 			"vm screenshot <vm name> file <filename> [maximum dimension]",
 		},
 		Call:    wrapVMTargetCLI(cliVMScreenshot),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
+	},
+	{ // vm snapshot
+		HelpShort: "write VM state and disk to file",
+		HelpLong: `
+Write VM state (migrate) and disk to file, which can later be booted with 'vm config
+migrate ...' and 'vm config disk ...', respectively.
+
+Saved migrate and disk files are written to the files directory as specified with
+-filepath. On success, a call to snapshot a VM will return immediately. You can
+check the status of in-flight snapshots by invoking vm snapshot with no arguments.`,
+		Patterns: []string{
+			"vm snapshot",
+			"vm snapshot <vm name> <state filename> <disk filename>",
+		},
+		Call:    wrapVMTargetCLI(cliVMSnapshot),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // vm migrate
@@ -710,6 +726,71 @@ func cliVMScreenshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 	resp.Data = data
 
 	return nil
+}
+
+func cliVMSnapshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if _, ok := c.StringArgs["vm"]; !ok { // report current status
+		resp.Header = []string{"id", "name", "status", "complete (%)"}
+
+		for _, vm := range ns.FindKvmVMs() {
+			status, complete, err := vm.QueryMigrate()
+			if err != nil {
+				return err
+			}
+			if status == "" {
+				continue
+			}
+
+			resp.Tabular = append(resp.Tabular, []string{
+				fmt.Sprintf("%v", vm.GetID()),
+				vm.GetName(),
+				status,
+				fmt.Sprintf("%.2f", complete)})
+		}
+
+		return nil
+	}
+
+	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
+	if err != nil {
+		return err
+	}
+
+	// save disk
+	filename := c.StringArgs["disk"]
+
+	if !filepath.IsAbs(filename) {
+		filename = filepath.Join(*f_iomBase, filename)
+	}
+
+	if _, err := os.Stat(filepath.Dir(filename)); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	if err := vm.Save(filename); err != nil {
+		return err
+	}
+
+	// save state
+	filename = c.StringArgs["state"]
+
+	if !filepath.IsAbs(filename) {
+		filename = filepath.Join(*f_iomBase, filename)
+	}
+
+	if _, err := os.Stat(filepath.Dir(filename)); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+
+	return vm.Migrate(filename)
 }
 
 func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

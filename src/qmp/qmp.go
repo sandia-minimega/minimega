@@ -311,6 +311,29 @@ func (q *Conn) Screendump(path string) error {
 	return nil
 }
 
+func (q *Conn) SaveDisk(path, device string) error {
+	if !q.ready {
+		return ERR_READY
+	}
+	s := map[string]interface{}{
+		"execute": "drive-backup",
+		"arguments": map[string]interface{}{
+			"device": device,
+			"sync":   "top",
+			"target": path,
+		},
+	}
+	err := q.write(s)
+	if err != nil {
+		return err
+	}
+	v := <-q.messageSync
+	if !success(v) {
+		return errors.New("error in qmp SaveDisk")
+	}
+	return nil
+}
+
 func (q *Conn) MigrateDisk(path string) error {
 	if !q.ready {
 		return ERR_READY
@@ -350,6 +373,45 @@ func (q *Conn) QueryMigrate() (map[string]interface{}, error) {
 		return nil, errors.New("received nil status")
 	}
 	return status.(map[string]interface{}), nil
+}
+
+func (q *Conn) QueryBlock() ([]interface{}, error) {
+	if !q.ready {
+		return nil, ERR_READY
+	}
+	s := map[string]interface{}{
+		"execute": "query-block",
+	}
+	err := q.write(s)
+	if err != nil {
+		return nil, err
+	}
+	v := <-q.messageSync
+	status := v["return"]
+	if status == nil {
+		return nil, errors.New("received nil status")
+	}
+	return status.([]interface{}), nil
+}
+
+func (q *Conn) QueryBlockJobs() ([]interface{}, error) {
+	if !q.ready {
+		return nil, ERR_READY
+	}
+	s := map[string]interface{}{
+		"execute": "query-block-jobs",
+	}
+	err := q.write(s)
+	if err != nil {
+		return nil, err
+	}
+	v := <-q.messageSync
+
+	status := v["return"]
+	if status == nil {
+		return nil, errors.New("received nil status")
+	}
+	return status.([]interface{}), nil
 }
 
 func (q *Conn) HumanMonitorCommand(command string) (string, error) {
