@@ -697,43 +697,32 @@ func (n *Namespace) Snapshot(dir string) error {
 
 	fmt.Fprintf(f, "namespace %q\n\n", n.Name)
 
+	// pause all vms
+	var respChan <-chan minicli.Responses
+	cmd := minicli.MustCompilef("vm stop all")
+	cmd.Record = false
+
+	respChan = runCommands(cmd)
+
+	// read the response and look for any errors
+	if err := consume(respChan); err != nil {
+		return err
+	}
+
 	// LOCK: This is only invoked via the CLI so we already hold cmdLock (can
 	// call globalVMs instead of GlobalVMs).
 	for _, vm := range globalVMs(n) {
 		// only snapshot KVMs
 		if vm.GetType() == KVM {
-			cmds := []*minicli.Command{}
-			// pause all vms
-			cmd := minicli.MustCompilef("vm stop all")
-			cmd.Record = false
-			cmds = append(cmds, cmd)
 			// snapshot all vms
 			stateDst := filepath.Join(dir, vm.GetName()) + ".migrate"
 			diskDst := filepath.Join(dir, vm.GetName()) + ".hdd"
 			cmd = minicli.MustCompilef("vm snapshot %q %v %v", vm.GetName(), stateDst, diskDst)
 			cmd.Record = false
-			cmds = append(cmds, cmd)
 
-			var respChan <-chan minicli.Responses
-			for _, c := range cmds {
-				if vm.GetHost() == hostname {
-					// run locally
-					respChan = runCommands(c)
-				} else {
-					// run remotely
-					cmd = minicli.MustCompilef("namespace %q %v", n.Name, c.Original)
-					cmd.Source = n.Name
-					cmd.Record = false
+			respChan = runCommands(cmd)
 
-					var err error
-					respChan, err = meshageSend(cmd, vm.GetHost())
-					if err != nil {
-						return err
-					}
-				}
-			}
-
-			// read all the responses and look for any errors
+			// read the response and look for any errors
 			if err := consume(respChan); err != nil {
 				return err
 			}
