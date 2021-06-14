@@ -37,7 +37,7 @@ docker run -d -it \
   minimega
 ```
 
-The container runs systemd as PID 1, which takes care of starting openvswitch, minimega, and minimweb.
+The container runs systemd as PID 1, which takes care of starting openvswitch, minimega, and miniweb.
 
 ---
 
