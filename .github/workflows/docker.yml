@@ -28,5 +28,5 @@ jobs:
           file: docker/Dockerfile
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}/phenix:${{ steps.short.outputs.sha }}
-            ghcr.io/${{ github.repository }}/phenix:${{ steps.short.outputs.branch }}
+            ghcr.io/${{ github.repository }}/minimega:${{ steps.short.outputs.sha }}
+            ghcr.io/${{ github.repository }}/minimega:${{ steps.short.outputs.branch }}
