@@ -1,17 +1,12 @@
-version: '3.5'
+version: '3.7'
 services:
   minimega:
-    command: >
-      bash -c "service openvswitch-switch start &&
-               minimega \
-               -nostdin=true \
-               -logfile=/var/log/minimega/minimega.log"
     image: minimega
     container_name: minimega
     hostname: minimega
     privileged: true
     cap_add:
-      - ALL
+    - ALL
     restart: always
     logging:
       driver: "json-file"
@@ -19,15 +14,15 @@ services:
         max-file: "5"
         max-size: "10m"
     ports:
-      - 9001:9001
-      - 11235:11235/udp
+    - 9000:9000/udp
+    - 9001:9001
     volumes:
-      - /tmp/minimega:/tmp/minimega
-      - /var/log/minimega:/var/log/minimega
-      - /dev:/dev
-      - /lib/modules:/lib/modules:ro
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-      - /root/.ssh:/root/.ssh:ro
-      - /etc/localtime:/etc/localtime:ro
+    - /dev:/dev
+    - /lib/modules:/lib/modules:ro
+    - /sys/fs/cgroup:/sys/fs/cgroup:ro
+    - /etc/localtime:/etc/localtime:ro
+    - /tmp/minimega:/tmp/minimega
+    - /var/log/minimega:/var/log/minimega
+    - /root/.ssh:/root/.ssh:ro
     healthcheck:
       test: minimega -e version
