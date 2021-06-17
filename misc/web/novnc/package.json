@@ -39,7 +39,7 @@
     "karma-sinon": "^1.0.4",
     "karma-sinon-chai-latest": "^0.1.0",
     "mocha": "^2.1.0",
-    "open": "^0.0.5",
+    "open": "^6.4.0",
     "phantom": "^0.7.2",
     "phantomjs": "^1.9.15",
     "sinon": "^1.12.2",
