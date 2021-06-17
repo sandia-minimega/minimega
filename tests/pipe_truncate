@@ -1,0 +1,16 @@
+# Send a long message
+pipe send foo "thisisamessagethatislongandwillbetruncated"
+
+.columns name,previous pipe
+
+# Truncate with no effect
+.columns name,previous pipe truncate 256
+
+# Truncate the message properly
+.columns name,previous pipe truncate 14
+
+# Truncate to zero length
+.columns name,previous pipe truncate 0
+
+# Invalid length
+.columns name,previous pipe truncate -1

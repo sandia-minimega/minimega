@@ -13,19 +13,19 @@ plumb p2 p6
 plumb
 .columns name,mode,readers,writers,count pipe
 
-pipe p0 "Hello to you."
+pipe send p0 "Hello to you."
 shell sleep 2s
 
 .columns name,mode,readers,writers,count pipe
 
 # Round-robin mode testing: set all parents to RR and verify message count distributions
-pipe p0 mode round-robin
-pipe p1 mode round-robin
-pipe p2 mode round-robin
+pipe name p0 mode round-robin
+pipe name p1 mode round-robin
+pipe name p2 mode round-robin
 
-pipe p0 "This is round robin."
-pipe p0 "This is round 2."
-pipe p0 "This is round 3."
-pipe p0 "This is round 4."
+pipe send p0 "This is round robin."
+pipe send p0 "This is round 2."
+pipe send p0 "This is round 3."
+pipe send p0 "This is round 4."
 
 .columns name,mode,readers,writers,count pipe

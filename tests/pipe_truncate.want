@@ -1,0 +1,25 @@
+## # Send a long message
+## pipe send foo "thisisamessagethatislongandwillbetruncated"
+
+## .columns name,previous pipe
+name          | previous
+minimega//foo | thisisamessagethatislongandwillbetruncated
+
+## # Truncate with no effect
+## .columns name,previous pipe truncate 256
+name          | previous
+minimega//foo | thisisamessagethatislongandwillbetruncated
+
+## # Truncate the message properly
+## .columns name,previous pipe truncate 14
+name          | previous
+minimega//foo | thisisamessage
+
+## # Truncate to zero length
+## .columns name,previous pipe truncate 0
+name          | previous
+minimega//foo |
+
+## # Invalid length
+## .columns name,previous pipe truncate -1
+E: invalid truncation length: -1
