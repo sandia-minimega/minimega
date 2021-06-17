@@ -14,9 +14,11 @@ func init() {
 	if networkSetFuncs == nil {
 		networkSetFuncs = make(map[string]func([]string, int) error)
 		networkClearFuncs = make(map[string]func([]string) error)
+		networkVlanFuncs = make(map[string]func() (map[string]string, error))
 	}
 	networkSetFuncs["arista"] = aristaSet
 	networkClearFuncs["arista"] = aristaClear
+	networkVlanFuncs["arista"] = aristaVlan
 }
 
 var aristaClearTemplate = `enable
@@ -37,7 +39,7 @@ type AristaConfig struct {
 }
 
 // Issue the given commands via the specified URL, username, and password.
-func aristaJSONRPC(user, password, URL string, commands []string) error {
+func aristaJSONRPC(user, password, URL string, commands []string) (map[string]interface{}, error) {
 	data, err := json.Marshal(map[string]interface{}{
 		"jsonrpc": "2.0",
 		"method":  "runCmds",
@@ -45,7 +47,7 @@ func aristaJSONRPC(user, password, URL string, commands []string) error {
 		"params":  map[string]interface{}{"version": 1, "cmds": commands},
 	})
 	if err != nil {
-		return fmt.Errorf("marshal: %v", err)
+		return nil, fmt.Errorf("marshal: %v", err)
 	}
 
 	path := fmt.Sprintf("http://%s:%s@%s", user, password, URL)
@@ -54,21 +56,21 @@ func aristaJSONRPC(user, password, URL string, commands []string) error {
 		// replace the password with a placeholder so that it doesn't show up
 		// in error logs
 		msg := strings.Replace(err.Error(), password, "<PASSWORD>", -1)
-		return fmt.Errorf("post failed: %v", msg)
+		return nil, fmt.Errorf("post failed: %v", msg)
 	}
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return fmt.Errorf("readall: %v", err)
+		return nil, fmt.Errorf("readall: %v", err)
 	}
 
 	result := make(map[string]interface{})
 	err = json.Unmarshal(body, &result)
 	if err != nil {
-		return fmt.Errorf("unmarshal: %v", err)
+		return nil, fmt.Errorf("unmarshal: %v", err)
 	}
-	return nil
+	return result, nil
 }
 
 func aristaSet(nodes []string, vlan int) error {
@@ -91,7 +93,7 @@ func aristaSet(nodes []string, vlan int) error {
 		// now split b into strings with newlines
 		commands := strings.Split(b.String(), "\n")
 
-		err = aristaJSONRPC(igor.NetworkUser, igor.NetworkPassword, igor.NetworkURL, commands)
+		_, err = aristaJSONRPC(igor.NetworkUser, igor.NetworkPassword, igor.NetworkURL, commands)
 		if err != nil {
 			return err
 		}
@@ -120,11 +122,44 @@ func aristaClear(nodes []string) error {
 		// now split b into strings with newlines
 		commands := strings.Split(b.String(), "\n")
 
-		err = aristaJSONRPC(igor.NetworkUser, igor.NetworkPassword, igor.NetworkURL, commands)
+		_, err = aristaJSONRPC(igor.NetworkUser, igor.NetworkPassword, igor.NetworkURL, commands)
 		if err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func aristaVlan() (map[string]string, error) {
+	commands := []string{"show vlan brief"}
+	res, err := aristaJSONRPC(igor.NetworkUser, igor.NetworkPassword, igor.NetworkURL, commands)
+	reverse_node_map := reverseMap(igor.NodeMap)
+	result := make(map[string]string)
+	if err != nil {
+		// log the error somewhere/how?
+		return nil, err
+	}
+	res2 := res["result"].([]interface{})
+	res3 := res2[0].(map[string]interface{})
+	res4 := res3["vlans"].(map[string]interface{})
+	for key, value := range res4 {
+		inter := value.(map[string]interface{})["interfaces"].(map[string]interface{})
+		for k, _ := range inter {
+			et_k := strings.ReplaceAll(k, "Ethernet", "Et")
+			if node, ok := reverse_node_map[et_k]; ok {
+				result[node] = key
+			}
+		}
+	}
+	return result, nil
+}
+
+// reverse node mapper - for one-to-one k-v pairs only
+func reverseMap(m map[string]string) map[string]string {
+	n := make(map[string]string)
+	for k, v := range m {
+		n[v] = k
+	}
+	return n
 }
