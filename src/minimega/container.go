@@ -774,6 +774,8 @@ func (vm *ContainerVM) Conflicts(vm2 VM) error {
 		return vm.ConflictsContainer(vm2)
 	case *KvmVM:
 		return vm.BaseVM.conflicts(vm2.BaseVM)
+	case *RKvmVM:
+		return vm.BaseVM.conflicts(vm2.BaseVM)
 	}
 
 	return errors.New("unknown VM type")

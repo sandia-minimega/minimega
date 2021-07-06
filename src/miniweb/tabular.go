@@ -33,8 +33,10 @@ func tabularToMapCols(columns []string) tabularToMapper {
 		res := map[string]string{}
 		for _, column := range cols {
 			if strings.Contains(column, "host") {
-				res["host"] = resp.Host
-				continue
+				if !strings.Contains(column, "vnc_host") {
+					res["host"] = resp.Host
+					continue
+				}
 			}
 
 			for i, header := range resp.Header {

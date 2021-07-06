@@ -1247,3 +1247,30 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 
 	return nil
 }
+
+func (v *RKVMConfig) Info(field string) (string, error) {
+	if field == "vnc_host" {
+		return v.Vnc_host, nil
+	}
+	if field == "vnc_port" {
+		return strconv.Itoa(v.Vnc_port), nil
+	}
+	return "", fmt.Errorf("invalid info field: %v", field)
+}
+func (v *RKVMConfig) Clear(mask string) {
+	if mask == Wildcard || mask == "vnc_host" {
+		v.Vnc_host = ""
+	}
+	if mask == Wildcard || mask == "vnc_port" {
+		v.Vnc_port = 0
+	}
+}
+func (v *RKVMConfig) WriteConfig(w io.Writer) error {
+	if v.Vnc_host != "" {
+		fmt.Fprintf(w, "vm config vnc_host %v\n", v.Vnc_host)
+	}
+	if v.Vnc_port != 0 {
+		fmt.Fprintf(w, "vm config vnc_port %v\n", v.Vnc_port)
+	}
+	return nil
+}
