@@ -243,6 +243,36 @@ func (vms *VMs) FindKvmVMs() []*KvmVM {
 	return res
 }
 
+func (vms *VMs) FindRKvmVM(s string) (*RKvmVM, error) {
+	vms.mu.Lock()
+	defer vms.mu.Unlock()
+
+	vm := vms.findVM(s)
+	if vm == nil {
+		return nil, vmNotFound(s)
+	}
+	if vm, ok := vm.(*RKvmVM); ok {
+		return vm, nil
+	}
+
+	return nil, vmNotRKVM(s)
+
+}
+func (vms *VMs) FindRKvmVMs() []*RKvmVM {
+	vms.mu.Lock()
+	defer vms.mu.Unlock()
+
+	res := []*RKvmVM{}
+
+	for _, vm := range vms.m {
+		if vm, ok := vm.(*RKvmVM); ok {
+			res = append(res, vm)
+		}
+	}
+
+	return res
+}
+
 // Launch takes QueuedVMs and launches them after performing a few sanity
 // checks. Launch returns any errors that occur via a channel since it launches
 // VMs asynchronously.

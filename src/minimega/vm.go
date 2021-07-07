@@ -30,6 +30,7 @@ const (
 	_ VMType = iota
 	KVM
 	CONTAINER
+	RKVM
 )
 
 type VM interface {
@@ -142,6 +143,8 @@ var vmInfo = []string{
 	// container fields
 	"filesystem", "hostname", "init", "preinit", "fifo", "volume",
 	"console_port",
+	//rkvm fields
+	"vnc_host", "vnc_port",
 	// more generic fields (tags can be huge so throw it at the end)
 	"tags",
 }
@@ -161,6 +164,7 @@ func init() {
 	gob.Register([]VM{})
 	gob.Register(&KvmVM{})
 	gob.Register(&ContainerVM{})
+	gob.Register(&RKvmVM{})
 }
 
 func NewVM(name, namespace string, vmType VMType, config VMConfig) (VM, error) {
@@ -169,6 +173,8 @@ func NewVM(name, namespace string, vmType VMType, config VMConfig) (VM, error) {
 		return NewKVM(name, namespace, config)
 	case CONTAINER:
 		return NewContainer(name, namespace, config)
+	case RKVM:
+		return NewRKVM(name, namespace, config)
 	}
 
 	return nil, errors.New("unknown VM type")
@@ -251,6 +257,8 @@ func (s VMType) String() string {
 		return "kvm"
 	case CONTAINER:
 		return "container"
+	case RKVM:
+		return "rkvm"
 	default:
 		return "???"
 	}
@@ -262,6 +270,8 @@ func ParseVMType(s string) (VMType, error) {
 		return KVM, nil
 	case "container":
 		return CONTAINER, nil
+	case "rkvm":
+		return RKVM, nil
 	default:
 		return 0, errors.New("invalid VMType")
 	}
@@ -843,4 +853,7 @@ func vmNotContainer(name string) error {
 
 func isVMNotFound(err string) bool {
 	return strings.HasPrefix(err, "vm not found: ")
+}
+func vmNotRKVM(name string) error {
+	return fmt.Errorf("vm not RKVM: %v", name)
 }

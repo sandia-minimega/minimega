@@ -5,10 +5,10 @@ The minimega authors
 
 * Introduction
 
-This document describes the two virtual machine (VM) types minimega is capable
-of launching - QEMU/KVM virtual machines and containers. minimega uses a common
-API to describe features and supports launching experiments consisting of both
-types of VM.
+This document describes the various virtual machine (VM) types minimega is capable
+of launching - QEMU/KVM virtual machines, containers, and RKVM. Minimega uses 
+a common API to describe features and supports launching experiments consisting 
+of multiple types of VM.
 
 * A quick example
 
@@ -188,3 +188,41 @@ To better work with systemd-based systems, minimega requires the cgroup hierarch
 	mount -t cgroup cgroup -o memory /sys/fs/cgroup/memory
 	mount -t cgroup cgroup -o freezer /sys/fs/cgroup/freezer
 	mount -t cgroup cgroup -o devices /sys/fs/cgroup/devices
+
+** RKVM Remote Keyboard Video Mouse 
+
+minimega supports booting `rkvm` type VMs by using a vnc interface. When launching
+`rkvm` type VMs, minimega will use the configuration provided in the `vm`config`
+API.
+
+*** RKVM-specific configuration parameters
+
+Most `vm config` parameters are common to all VM types, however since RKVM
+does not actually build a VM but rather an interface only a few specfic 
+parameters apply. See the[[/articles/api.article][minimega API]] for 
+documentation on specific configuration parameters.
+
+Configuration parameters specific to `RKVM` instances:
+
+- `vnc_host` - Configure the hostname or ip address that hosts the vnc interface
+- `vnc_port` - Configure the tcp port that hosts the vnc interface
+
+*** Example
+
+.mega vmtypes/example2.mm
+
+*** Technical details
+
+When launching `rkvm` type VMs, the following occurs, in order:
+
+- A new VM handler is created within minimega, which is populated with a copy of the VM configuration
+- An instance directory for the VM is created (by default /tmp/minimega/N, where N is the VM ID), and the configuration is written to disk
+- Checks are performed to ensure there are no conflicts in names or duplicate connections
+- After a successful VNC connection, the VM is put into the BUILDING state, otherwise the VM is put in the ERROR state
+- minimega returns control to the user
+
+RKVM extends the Minimega VNC api to remotely connect to standalone VNC servers. This enables keybuffer and framebuffer recording, as well as VNC automation to external assets with Minimega. 
+
+RKVM has had limited testing against ESXI and x11vnc. Multiple connections are used and you will need to use the --shared and --forever switches with x11vnc. 
+
+Currently only VNC servers allowing RAW encoding are supported, VNC servers configured to force other encodings like TIGHT will not work.

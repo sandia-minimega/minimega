@@ -23,6 +23,7 @@ type VMConfig struct {
 	BaseConfig
 	KVMConfig
 	ContainerConfig
+	RKVMConfig
 }
 
 type ConfigWriter interface {
@@ -90,19 +91,22 @@ func (old VMConfig) Copy() VMConfig {
 		BaseConfig:      old.BaseConfig.Copy(),
 		KVMConfig:       old.KVMConfig.Copy(),
 		ContainerConfig: old.ContainerConfig.Copy(),
+		RKVMConfig:      old.RKVMConfig.Copy(),
 	}
 }
 
 func (vm VMConfig) String(namespace string) string {
 	return vm.BaseConfig.String(namespace) +
 		vm.KVMConfig.String() +
-		vm.ContainerConfig.String()
+		vm.ContainerConfig.String() +
+		vm.RKVMConfig.String()
 }
 
 func (vm *VMConfig) Clear(mask string) {
 	vm.BaseConfig.Clear(mask)
 	vm.KVMConfig.Clear(mask)
 	vm.ContainerConfig.Clear(mask)
+	vm.RKVMConfig.Clear(mask)
 }
 
 func (vm *VMConfig) WriteConfig(w io.Writer) error {
@@ -110,6 +114,7 @@ func (vm *VMConfig) WriteConfig(w io.Writer) error {
 		vm.BaseConfig.WriteConfig,
 		vm.KVMConfig.WriteConfig,
 		vm.ContainerConfig.WriteConfig,
+		vm.RKVMConfig.WriteConfig,
 	}
 
 	for _, fn := range funcs {
