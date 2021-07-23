@@ -8,15 +8,16 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	log "minilog"
 	"net"
 	"os"
 	"path/filepath"
-	"ron"
 	"sort"
 	"strconv"
 	"strings"
 	"text/tabwriter"
+
+	log "minilog"
+	"ron"
 )
 
 type Router struct {
@@ -35,6 +36,7 @@ type Router struct {
 	ospfRoutes   map[string]*ospf
 	bgpRoutes    map[string]*bgp
 	routerID     string
+	FW           *fw
 }
 
 type ospf struct {
@@ -62,6 +64,25 @@ type bgp struct {
 	exportNetworks map[string]bool
 }
 
+type fw struct {
+	defaultAction string
+	rules         [][]*fwRule // firewall rule per network interface index
+	chains        map[string]*fwChain
+}
+
+type fwChain struct {
+	defaultAction string
+	rules         []*fwRule
+}
+
+type fwRule struct {
+	in     bool // if true then in, if false then out - not used for chain rules
+	src    string
+	dst    string
+	proto  string
+	action string // will be accept/drop/reject, or the name of a chain
+}
+
 // NewRouter creates a new router with a given number of interfaces,
 // initializing all the maps and setting sane defaults.
 func NewRouter(i int) *Router {
@@ -77,6 +98,12 @@ func NewRouter(i int) *Router {
 		ospfRoutes:   make(map[string]*ospf),
 		bgpRoutes:    make(map[string]*bgp),
 		routerID:     "0.0.0.0",
+
+		FW: &fw{
+			defaultAction: "accept",
+			rules:         make([][]*fwRule, i),
+			chains:        make(map[string]*fwChain),
+		},
 	}
 	return r
 }
@@ -340,6 +367,60 @@ func (r *Router) writeConfig(w io.Writer) error {
 	r.setRouterID()
 	fmt.Fprintf(w, "bird routerid %v\n", r.routerID)
 	fmt.Fprintf(w, "bird commit\n")
+
+	// ***** firewall stuff ***** //
+
+	fmt.Fprintln(w, "fw flush") // no need to manage firewall state - just start over
+	fmt.Fprintf(w, "fw default %s\n", r.FW.defaultAction)
+
+	for name, chain := range r.FW.chains {
+		for _, rule := range chain.rules {
+			cmd := fmt.Sprintf("fw chain %s action %s", name, rule.action)
+
+			if rule.src != "" {
+				cmd = fmt.Sprintf("%s %s", cmd, rule.src)
+			}
+
+			cmd = fmt.Sprintf("%s %s %s", cmd, rule.dst, rule.proto)
+
+			fmt.Fprintln(w, cmd)
+		}
+
+		fmt.Fprintf(w, "fw chain %s default action %s\n", name, chain.defaultAction)
+	}
+
+	for i, rules := range r.FW.rules {
+		for _, rule := range rules {
+			if rule.src == "" && rule.dst == "" && rule.proto == "" {
+				cmd := fmt.Sprintf("fw chain %s apply", rule.action)
+
+				if rule.in {
+					cmd = fmt.Sprintf("%s in %d", cmd, i)
+				} else {
+					cmd = fmt.Sprintf("%s out %d", cmd, i)
+				}
+
+				fmt.Fprintln(w, cmd)
+				continue
+			}
+
+			cmd := fmt.Sprintf("fw %s", rule.action)
+
+			if rule.in {
+				cmd = fmt.Sprintf("%s in %d", cmd, i)
+			} else {
+				cmd = fmt.Sprintf("%s out %d", cmd, i)
+			}
+
+			if rule.src != "" {
+				cmd = fmt.Sprintf("%s %s", cmd, rule.src)
+			}
+
+			cmd = fmt.Sprintf("%s %s %s", cmd, rule.dst, rule.proto)
+
+			fmt.Fprintln(w, cmd)
+		}
+	}
 
 	return nil
 }
@@ -942,6 +1023,84 @@ func (r *Router) RouteBGPDel(processname string, local, clearall bool) error {
 		}
 	}
 	delete(r.bgpRoutes, processname)
+	return nil
+}
+
+func (r *Router) FirewallDefault(d string) error {
+	log.Debug("RouterFirewallDefault: %s", d)
+
+	r.FW.defaultAction = d
+	return nil
+}
+
+func (r *Router) FirewallAdd(n int, in bool, src, dst, proto, action string) error {
+	log.Debug("RouterFirewallAdd: %d, %b, %s, %s, %s, %s", n, in, src, dst, proto, action)
+
+	if n >= len(r.FW.rules) {
+		return fmt.Errorf("no such network index: %v", n)
+	}
+
+	rule := &fwRule{in: in, src: src, dst: dst, proto: proto, action: action}
+	r.FW.rules[n] = append(r.FW.rules[n], rule)
+
+	return nil
+}
+
+func (r *Router) FirewallChainDefault(chain, d string) error {
+	log.Debug("RouterFirewallChainDefault: %s, %s", chain, d)
+
+	c, ok := r.FW.chains[chain]
+	if !ok {
+		c = new(fwChain)
+		r.FW.chains[chain] = c
+	}
+
+	c.defaultAction = d
+	return nil
+}
+
+func (r *Router) FirewallChainAdd(chain, src, dst, proto, action string) error {
+	log.Debug("RouterFirewallChainAdd: %s, %s, %s, %s, %s", chain, src, dst, proto, action)
+
+	c, ok := r.FW.chains[chain]
+	if !ok {
+		c = &fwChain{defaultAction: "drop"}
+		r.FW.chains[chain] = c
+	}
+
+	rule := &fwRule{src: src, dst: dst, proto: proto, action: action}
+	c.rules = append(c.rules, rule)
+
+	return nil
+}
+
+func (r *Router) FirewallChainApply(n int, in bool, chain string) error {
+	log.Debug("RouterFirewallChainApply: %d, %b, %s", n, in, chain)
+
+	if _, ok := r.FW.chains[chain]; !ok {
+		return fmt.Errorf("unknown chain %s", chain)
+	}
+
+	if n >= len(r.FW.rules) {
+		return fmt.Errorf("no such network index: %v", n)
+	}
+
+	rule := &fwRule{in: in, action: chain}
+	r.FW.rules[n] = append(r.FW.rules[n], rule)
+
+	return nil
+}
+
+func (r *Router) FirewallFlush() error {
+	log.Debug("RouterFirewallFlush")
+
+	i := len(r.FW.rules)
+	r.FW = &fw{
+		defaultAction: "accept",
+		rules:         make([][]*fwRule, i),
+		chains:        make(map[string]*fwChain),
+	}
+
 	return nil
 }
 
