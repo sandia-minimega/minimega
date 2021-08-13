@@ -7,6 +7,7 @@ package main
 import (
 	"encoding/gob"
 	"errors"
+	"fmt"
 	"iomeshage"
 	"math"
 	"math/rand"
@@ -14,6 +15,7 @@ import (
 	"minicli"
 	log "minilog"
 	"miniplumber"
+	"net"
 	"ranges"
 	"reflect"
 	"strconv"
@@ -67,8 +69,13 @@ func init() {
 	gob.Register(miniplumber.Message{})
 }
 
-func meshageStart(host, namespace string, degree, msaTimeout uint, port int) error {
-	meshageNode, meshageMessages = meshage.NewNode(host, namespace, degree, port, version.Revision)
+func meshageStart(host, namespace string, degree, msaTimeout uint, broadcastIP string, port int) error {
+	bip := net.ParseIP(broadcastIP)
+	if bip == nil {
+		return fmt.Errorf("invalid broadcast IP %s for meshage", broadcastIP)
+	}
+
+	meshageNode, meshageMessages = meshage.NewNode(host, namespace, degree, bip, port, version.Revision)
 
 	meshageNode.Snoop = meshageSnooper
 
