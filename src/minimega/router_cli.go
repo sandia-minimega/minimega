@@ -328,6 +328,10 @@ func cliRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		}
 		rtr.routerID = c.StringArgs["id"]
 	} else if c.BoolArgs["fw"] {
+		if vm.GetType() == CONTAINER {
+			return fmt.Errorf("firewall rules cannot be applied to minirouter containers")
+		}
+
 		if chain := c.StringArgs["chain"]; chain != "" {
 			if c.BoolArgs["default"] {
 				if c.BoolArgs["accept"] {
