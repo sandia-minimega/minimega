@@ -174,17 +174,17 @@ func handleFW(c *minicli.Command, r chan<- minicli.Responses) {
 	if c.BoolArgs["default"] {
 		if c.BoolArgs["accept"] {
 			if out, err := exec.Command("iptables", "-P", "FORWARD", "ACCEPT").CombinedOutput(); err != nil {
-				log.Errorln("defaulting FORWARD to ACCEPT %v: %v", err, string(out))
+				log.Error("defaulting FORWARD to ACCEPT %v: %v", err, string(out))
 				return
 			}
 		} else if c.BoolArgs["drop"] {
 			if out, err := exec.Command("iptables", "-P", "FORWARD", "DROP").CombinedOutput(); err != nil {
-				log.Errorln("defaulting FORWARD to DROP %v: %v", err, string(out))
+				log.Error("defaulting FORWARD to DROP %v: %v", err, string(out))
 				return
 			}
 		} else if c.BoolArgs["reject"] {
 			if out, err := exec.Command("iptables", "-P", "FORWARD", "REJECT").CombinedOutput(); err != nil {
-				log.Errorln("defaulting FORWARD to REJECT %v: %v", err, string(out))
+				log.Error("defaulting FORWARD to REJECT %v: %v", err, string(out))
 				return
 			}
 		}
@@ -202,7 +202,7 @@ func handleFW(c *minicli.Command, r chan<- minicli.Responses) {
 		if c.StringArgs["index"] != "lo" {
 			idx, err = strconv.Atoi(c.StringArgs["index"])
 			if err != nil {
-				log.Errorln("converting interface index: %v", err)
+				log.Error("converting interface index: %v", err)
 				return
 			}
 		}
@@ -210,7 +210,7 @@ func handleFW(c *minicli.Command, r chan<- minicli.Responses) {
 		if idx != -1 {
 			// get interface name using the index
 			if iface, err = findEth(idx); err != nil {
-				log.Errorln("getting interface name for index: %v", err)
+				log.Error("getting interface name for index: %v", err)
 				return
 			}
 		}
@@ -235,7 +235,7 @@ func handleFW(c *minicli.Command, r chan<- minicli.Responses) {
 				rule = append(rule, "-s", src)
 			case 2:
 				if _, err = strconv.Atoi(fields[1]); err != nil {
-					log.Errorln("converting source port: %v", err)
+					log.Error("converting source port: %v", err)
 					return
 				}
 
@@ -259,7 +259,7 @@ func handleFW(c *minicli.Command, r chan<- minicli.Responses) {
 				rule = append(rule, "-d", dst)
 			case 2:
 				if _, err = strconv.Atoi(fields[1]); err != nil {
-					log.Errorln("converting destination port: %v", err)
+					log.Error("converting destination port: %v", err)
 					return
 				}
 

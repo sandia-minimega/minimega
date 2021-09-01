@@ -1034,7 +1034,7 @@ func (r *Router) FirewallDefault(d string) error {
 }
 
 func (r *Router) FirewallAdd(n int, in bool, src, dst, proto, action string) error {
-	log.Debug("RouterFirewallAdd: %d, %b, %s, %s, %s, %s", n, in, src, dst, proto, action)
+	log.Debug("RouterFirewallAdd: %d, %v, %s, %s, %s, %s", n, in, src, dst, proto, action)
 
 	if n >= len(r.FW.rules) {
 		return fmt.Errorf("no such network index: %v", n)
@@ -1075,7 +1075,7 @@ func (r *Router) FirewallChainAdd(chain, src, dst, proto, action string) error {
 }
 
 func (r *Router) FirewallChainApply(n int, in bool, chain string) error {
-	log.Debug("RouterFirewallChainApply: %d, %b, %s", n, in, chain)
+	log.Debug("RouterFirewallChainApply: %d, %v, %s", n, in, chain)
 
 	if _, ok := r.FW.chains[chain]; !ok {
 		return fmt.Errorf("unknown chain %s", chain)
