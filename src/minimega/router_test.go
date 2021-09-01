@@ -178,6 +178,8 @@ bird bgp r2 filter route1
 bird bgp r2 filter route2
 bird routerid 192.168.4.1
 bird commit
+fw flush
+fw default accept
 `
 const testInterfaceWant = `
 IPs:
