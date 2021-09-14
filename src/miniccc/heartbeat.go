@@ -14,18 +14,32 @@ import (
 const HeartbeatRate = 5 * time.Second
 
 // periodically send the client heartbeat.
-func periodic() {
+func periodic(done chan struct{}) {
 	for {
-		log.Debug("periodic")
+		t := time.NewTimer(HeartbeatRate)
 
-		now := time.Now()
-		if now.Sub(client.lastHeartbeat) > HeartbeatRate {
-			// issue a heartbeat
-			heartbeat()
+		select {
+		case <-t.C:
+			log.Debug("periodic")
+
+			now := time.Now()
+			if now.Sub(client.lastHeartbeat) > HeartbeatRate {
+				// issue a heartbeat
+				heartbeat()
+			}
+
+			sleep := HeartbeatRate - now.Sub(client.lastHeartbeat)
+			// time.Sleep(sleep)
+			t.Reset(sleep)
+		case <-done:
+			if !t.Stop() {
+				<-t.C
+			}
+
+			log.Debug("stopping periodic heartbeat")
+
+			return
 		}
-
-		sleep := HeartbeatRate - now.Sub(client.lastHeartbeat)
-		time.Sleep(sleep)
 	}
 }
 

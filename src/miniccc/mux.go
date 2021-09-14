@@ -7,15 +7,18 @@ package main
 import (
 	"fmt"
 	"io"
+	"math"
+	"net"
+	"sort"
+	"time"
+
 	log "minilog"
 	"minitunnel"
-	"net"
 	"ron"
-	"sort"
 )
 
 // mux routes incoming messages from the server based on message type
-func mux() {
+func mux(done chan struct{}) {
 	// start piping data to minitunnel and trunking it over the ron
 	local, remote := net.Pipe()
 	defer local.Close()
@@ -35,12 +38,27 @@ func mux() {
 	log.Debug("starting mux")
 
 	for err == nil {
-		var m ron.Message
-		if err = client.dec.Decode(&m); err == io.EOF {
-			// server disconnected... try to reconnect
-			err = dial()
-			continue
-		} else if err != nil {
+		var (
+			m ron.Message
+			d = time.Duration(math.Round(2.5 * ron.HEARTBEAT_RATE))
+		)
+
+		err = timeout(d*time.Second, func() (err error) {
+			err = client.dec.Decode(&m)
+			if err != nil {
+				err = fmt.Errorf("decoding cc message: %v", err)
+			}
+
+			return
+		})
+
+		if err == errTimeout || err == io.EOF {
+			// server connection lost, so reset client
+			resetClient()
+			return
+		}
+
+		if err != nil {
 			break
 		}
 
@@ -50,8 +68,9 @@ func mux() {
 		case ron.MESSAGE_CLIENT:
 			// ACK of the handshake
 			log.Info("handshake complete")
-			go periodic()
-			go commandHandler()
+
+			go periodic(done)
+			go commandHandler(done)
 		case ron.MESSAGE_COMMAND:
 			client.commandChan <- m.Commands
 		case ron.MESSAGE_FILE:
@@ -62,6 +81,10 @@ func mux() {
 			pipeMessage(&m)
 		case ron.MESSAGE_UFS:
 			ufsMessage(&m)
+		case ron.MESSAGE_HEARTBEAT:
+			// Don't need to do anything with these... they just get sent by the
+			// server on a known frequency so the client can detect a loss of
+			// connection when using the virtual serial port.
 		default:
 			err = fmt.Errorf("unknown message type: %v", m.Type)
 		}
@@ -70,18 +93,22 @@ func mux() {
 	log.Info("mux exit: %v", err)
 }
 
-func commandHandler() {
-	for commands := range client.commandChan {
-		var ids []int
-		for k, _ := range commands {
-			ids = append(ids, k)
-		}
-		sort.Ints(ids)
+func commandHandler(done chan struct{}) {
+	for {
+		select {
+		case commands := <-client.commandChan:
+			var ids []int
+			for k, _ := range commands {
+				ids = append(ids, k)
+			}
+			sort.Ints(ids)
 
-		for _, id := range ids {
-			processCommand(commands[id])
+			for _, id := range ids {
+				processCommand(commands[id])
+			}
+		case <-done:
+			log.Info("command handler exit")
+			return
 		}
 	}
-
-	log.Info("command handler exit")
 }

@@ -5,16 +5,18 @@
 package ron
 
 import (
-	log "minilog"
 	"regexp"
 	"strings"
+
+	log "minilog"
 )
 
 const (
-	HEARTBEAT_RATE = 5
-	REAPER_RATE    = 30
-	CLIENT_EXPIRED = 30
-	RESPONSE_PATH  = "miniccc_responses"
+	HEARTBEAT_RATE        = 5
+	REAPER_RATE           = 30
+	CLIENT_RECONNECT_RATE = 5
+	CLIENT_EXPIRED        = 30
+	RESPONSE_PATH         = "miniccc_responses"
 )
 
 type Process struct {

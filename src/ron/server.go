@@ -203,16 +203,16 @@ func (s *Server) ListenUnix(path string) error {
 
 // Dial a client serial port. The server will maintain this connection until a
 // client connects and then disconnects.
-func (s *Server) DialSerial(path string, ccPortOpened, ccPortClosed chan struct{}) error {
+func (s *Server) DialSerial(path, uuid string) error {
 	dial := func(path string) (net.Conn, error) {
 		log.Info("dial serial: %v", path)
 
 		s.connsLock.Lock()
 		defer s.connsLock.Unlock()
 
-		// are we already connected to this client?
-		if _, ok := s.conns[path]; ok {
-			return nil, fmt.Errorf("already connected to serial client %v", path)
+		// close any lingering connections to this client
+		if conn, ok := s.conns[path]; ok {
+			conn.Close()
 		}
 
 		// connect!
@@ -226,52 +226,43 @@ func (s *Server) DialSerial(path string, ccPortOpened, ccPortClosed chan struct{
 		return conn, nil
 	}
 
-	var (
-		conn net.Conn
-		cli  *client
-	)
-
+	// Monitor this client connection, reconnecting when the client handler
+	// completes if the VM still exists.
 	go func() {
 		for {
-			<-ccPortClosed
+			if _, ok := s.vms[uuid]; !ok {
+				log.Debug("vm %s (serial://%s) no longer exists -- closing serial connection", uuid, path)
 
-			if cli != nil {
-				s.removeClient(cli.UUID)
-			}
+				if conn := s.conns[path]; conn != nil {
+					conn.Close()
 
-			if conn != nil {
-				conn.Close()
-
-				// client disconnected
-				s.connsLock.Lock()
-				delete(s.conns, path)
-				s.connsLock.Unlock()
-			}
-		}
-	}()
-
-	go func() {
-		for {
-			var err error
-
-			<-ccPortOpened
-
-			if conn, err = dial(path); err != nil {
-				log.Error("dialing serial port %v failed: %v", path, err)
-				continue
-			}
-
-			cli, err = s.handshake(conn)
-			if err != nil {
-				if err != io.EOF {
-					// supress these, VM was probably never started
-					log.Error("handshake failed: %v", err)
+					s.connsLock.Lock()
+					delete(s.conns, path)
+					s.connsLock.Unlock()
 				}
 
+				return
+			}
+
+			conn, err := dial(path)
+			if err != nil {
+				log.Error("dialing serial port %v failed: %v", path, err)
+				return
+			}
+
+			cli, err := s.handshake(conn)
+			if err != nil {
+				log.Error("handshake failed (due to %v) - retrying", err)
+
+				time.Sleep(CLIENT_RECONNECT_RATE * time.Second)
+
 				continue
 			}
 
+			// This blocks, but will return on a loss of connection to the client.
 			s.clientHandler(cli)
+
+			log.Info("client handler for %s completed", path)
 		}
 	}()
 
@@ -655,11 +646,12 @@ func (s *Server) handshake(conn net.Conn) (*client, error) {
 	}
 
 	c := &client{
-		conn:        conn,
-		enc:         gob.NewEncoder(conn),
-		dec:         gob.NewDecoder(conn),
-		pipeReaders: make(map[string]*miniplumber.Reader),
-		pipeWriters: make(map[string]chan<- string),
+		conn:            conn,
+		enc:             gob.NewEncoder(conn),
+		dec:             gob.NewDecoder(conn),
+		pipeReaders:     make(map[string]*miniplumber.Reader),
+		pipeWriters:     make(map[string]chan<- string),
+		cancelHeartbeat: make(chan struct{}),
 	}
 
 	// get the first client struct as a handshake
@@ -694,7 +686,26 @@ func (s *Server) handshake(conn net.Conn) (*client, error) {
 
 	c.Namespace = namespace
 
-	if m.Client.Version != version.Revision {
+	if m.Client.Version == version.Revision {
+		// Only send heartbeats to client if versions match to prevent older clients
+		// from failing against this version of the server (sending a message to a
+		// client that doesn't recognize the message type will cause the client to
+		// fail).
+		go func() {
+			t := time.NewTicker(HEARTBEAT_RATE * time.Second)
+
+			for {
+				select {
+				case <-c.cancelHeartbeat:
+					t.Stop()
+					return
+				case <-t.C:
+					m := Message{Type: MESSAGE_HEARTBEAT}
+					c.enc.Encode(&m) // no need to worry about errors here
+				}
+			}
+		}()
+	} else {
 		log.Warn("mismatched miniccc version: %v", m.Client.Version)
 	}
 
@@ -853,6 +864,9 @@ func (s *Server) removeClient(uuid string) {
 		for _, p := range c.pipeWriters {
 			close(p)
 		}
+
+		// stop Goroutine sending heartbeats to this client
+		close(c.cancelHeartbeat)
 
 		delete(s.clients, uuid)
 	}
