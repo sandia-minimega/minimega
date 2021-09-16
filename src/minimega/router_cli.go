@@ -125,7 +125,7 @@ router takes a number of subcommands:
   put the previous rule into a chain named "allow-http" and apply it to the
   interface at index 0 via the following:
 
-	router foo fw chain allow-http default drop
+	router foo fw chain allow-http default action drop
 	router foo fw chain allow-http action accept 192.168.0.5:80 tcp
 	router foo fw chain allow-http apply out 0
 `,
