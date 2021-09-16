@@ -13,7 +13,7 @@ import (
 func init() {
 	minicli.Register(&minicli.Handler{
 		Patterns: []string{
-			"fw <default,> <accept,drop,reject>",
+			"fw <default,> <accept,drop>",
 			"fw <accept,drop,reject> <in,out> <index> <dst> <proto>",
 			"fw <accept,drop,reject> <in,out> <index> <src> <dst> <proto>",
 			"fw chain <chain> <default,> action <accept,drop,reject>",
@@ -180,11 +180,6 @@ func handleFW(c *minicli.Command, r chan<- minicli.Responses) {
 		} else if c.BoolArgs["drop"] {
 			if out, err := exec.Command("iptables", "-P", "FORWARD", "DROP").CombinedOutput(); err != nil {
 				log.Error("defaulting FORWARD to DROP %v: %v", err, string(out))
-				return
-			}
-		} else if c.BoolArgs["reject"] {
-			if out, err := exec.Command("iptables", "-P", "FORWARD", "REJECT").CombinedOutput(); err != nil {
-				log.Error("defaulting FORWARD to REJECT %v: %v", err, string(out))
 				return
 			}
 		}

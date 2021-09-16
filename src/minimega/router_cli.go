@@ -151,7 +151,7 @@ router takes a number of subcommands:
 			"router <vm> <route,> <bgp,> <processname> <rrclient,>",
 			"router <vm> <route,> <bgp,> <processname> <export,> <all,filter> <filtername>",
 			//"router <vm> <importbird,> <configfilepath>", TODO
-			"router <vm> <fw,> <default,> <accept,drop,reject>",
+			"router <vm> <fw,> <default,> <accept,drop>",
 			"router <vm> <fw,> <accept,drop,reject> <in,out> <index> <dst> <proto>",
 			"router <vm> <fw,> <accept,drop,reject> <in,out> <index> <src> <dst> <proto>",
 			"router <vm> <fw,> chain <chain> <default,> action <accept,drop,reject>",
@@ -410,8 +410,6 @@ func cliRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 				return rtr.FirewallDefault("accept")
 			} else if c.BoolArgs["drop"] {
 				return rtr.FirewallDefault("drop")
-			} else if c.BoolArgs["reject"] {
-				return rtr.FirewallDefault("reject")
 			}
 
 			return fmt.Errorf("unexpected default fw action")
