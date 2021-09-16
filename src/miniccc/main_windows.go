@@ -161,7 +161,9 @@ func (this *miniSvc) Execute(args []string, r <-chan svc.ChangeRequest, changes 
 	changes <- svc.Status{State: svc.Running, Accepts: svc.AcceptStop | svc.AcceptShutdown}
 
 	// kickoff miniccc
-	resetClient()
+	// Running in a Goroutine so we can still respond to Windows Service
+	// Controller requests if for some reason the reset hangs.
+	go resetClient()
 
 	// manage Windows service manager controller requests and changes
 	for {

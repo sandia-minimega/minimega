@@ -687,6 +687,8 @@ func (s *Server) handshake(conn net.Conn) (*client, error) {
 	c.Namespace = namespace
 
 	if m.Client.Version == version.Revision {
+		log.Debug("miniccc version matches -- starting heartbeat to client")
+
 		// Only send heartbeats to client if versions match to prevent older clients
 		// from failing against this version of the server (sending a message to a
 		// client that doesn't recognize the message type will cause the client to
@@ -697,9 +699,11 @@ func (s *Server) handshake(conn net.Conn) (*client, error) {
 			for {
 				select {
 				case <-c.cancelHeartbeat:
+					log.Debug("stopping heartbeats to client %s", m.Client.UUID)
 					t.Stop()
 					return
 				case <-t.C:
+					log.Debug("sending HEARTBEAT to client %s", m.Client.UUID)
 					m := Message{Type: MESSAGE_HEARTBEAT}
 					c.enc.Encode(&m) // no need to worry about errors here
 				}
@@ -1166,6 +1170,7 @@ func (s *Server) clientReaper() {
 				log.Debug("client %v expired", k)
 				// the same as removeClient except we already hold clientLock
 				v.conn.Close()
+				close(v.cancelHeartbeat)
 				delete(s.clients, k)
 			}
 
