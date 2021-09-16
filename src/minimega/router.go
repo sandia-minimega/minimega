@@ -423,29 +423,43 @@ func (r *Router) writeConfig(w io.Writer) error {
 
 	// ***** firewall stuff ***** //
 
-	fmt.Fprintln(w, "fw flush") // no need to manage firewall state - just start over
-	fmt.Fprintf(w, "fw default %s\n", r.FW.defaultAction)
+	// can only apply firewall rules to VMs
+	if r.vm != nil && r.vm.GetType() != CONTAINER {
+		fmt.Fprintln(w, "fw flush") // no need to manage firewall state - just start over
+		fmt.Fprintf(w, "fw default %s\n", r.fw.defaultAction)
 
-	for name, chain := range r.FW.chains {
-		for _, rule := range chain.rules {
-			cmd := fmt.Sprintf("fw chain %s action %s", name, rule.action)
+		for name, chain := range r.fw.chains {
+			for _, rule := range chain.rules {
+				cmd := fmt.Sprintf("fw chain %s action %s", name, rule.action)
 
-			if rule.src != "" {
-				cmd = fmt.Sprintf("%s %s", cmd, rule.src)
+				if rule.src != "" {
+					cmd = fmt.Sprintf("%s %s", cmd, rule.src)
+				}
+
+				cmd = fmt.Sprintf("%s %s %s", cmd, rule.dst, rule.proto)
+
+				fmt.Fprintln(w, cmd)
 			}
 
-			cmd = fmt.Sprintf("%s %s %s", cmd, rule.dst, rule.proto)
-
-			fmt.Fprintln(w, cmd)
+			fmt.Fprintf(w, "fw chain %s default action %s\n", name, chain.defaultAction)
 		}
 
-		fmt.Fprintf(w, "fw chain %s default action %s\n", name, chain.defaultAction)
-	}
+		for i, rules := range r.fw.rules {
+			for _, rule := range rules {
+				if rule.src == "" && rule.dst == "" && rule.proto == "" {
+					cmd := fmt.Sprintf("fw chain %s apply", rule.action)
 
-	for i, rules := range r.FW.rules {
-		for _, rule := range rules {
-			if rule.src == "" && rule.dst == "" && rule.proto == "" {
-				cmd := fmt.Sprintf("fw chain %s apply", rule.action)
+					if rule.in {
+						cmd = fmt.Sprintf("%s in %d", cmd, i)
+					} else {
+						cmd = fmt.Sprintf("%s out %d", cmd, i)
+					}
+
+					fmt.Fprintln(w, cmd)
+					continue
+				}
+
+				cmd := fmt.Sprintf("fw %s", rule.action)
 
 				if rule.in {
 					cmd = fmt.Sprintf("%s in %d", cmd, i)
@@ -453,25 +467,14 @@ func (r *Router) writeConfig(w io.Writer) error {
 					cmd = fmt.Sprintf("%s out %d", cmd, i)
 				}
 
+				if rule.src != "" {
+					cmd = fmt.Sprintf("%s %s", cmd, rule.src)
+				}
+
+				cmd = fmt.Sprintf("%s %s %s", cmd, rule.dst, rule.proto)
+
 				fmt.Fprintln(w, cmd)
-				continue
 			}
-
-			cmd := fmt.Sprintf("fw %s", rule.action)
-
-			if rule.in {
-				cmd = fmt.Sprintf("%s in %d", cmd, i)
-			} else {
-				cmd = fmt.Sprintf("%s out %d", cmd, i)
-			}
-
-			if rule.src != "" {
-				cmd = fmt.Sprintf("%s %s", cmd, rule.src)
-			}
-
-			cmd = fmt.Sprintf("%s %s %s", cmd, rule.dst, rule.proto)
-
-			fmt.Fprintln(w, cmd)
 		}
 	}
 
