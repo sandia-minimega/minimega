@@ -6,9 +6,11 @@ package main
 
 import (
 	"fmt"
-	"minicli"
 	"net"
 	"strconv"
+	"strings"
+
+	"minicli"
 )
 
 var routerCLIHandlers = []minicli.Handler{
@@ -62,7 +64,7 @@ router takes a number of subcommands:
   next-hop, and optionally a name for this router. For example to specify a
   static route(s):
 
-    router foo route static 0.0.0.0/0 10.0.0.1 default-route
+	router foo route static 0.0.0.0/0 10.0.0.1 default-route
 
   OSPF routes include an area and a network index corresponding to the
   interface described in 'vm config net'. You can also specify what networks
@@ -78,7 +80,7 @@ router takes a number of subcommands:
   For example, to advertise specific networks, advertise a static route or
   use a static route as a filter:
 
-    router foo route static 11.0.0.0/24 0 bar-route
+	router foo route static 11.0.0.0/24 0 bar-route
 	router foo route static 12.0.0.0/24 0 bar-route
 	router foo route ospf 0 export 10.0.0.0/24
 	router foo route ospf 0 export default-route
@@ -90,20 +92,42 @@ router takes a number of subcommands:
   For example, local router is in AS 100 with an ip 10.0.0.1 and bgp peer is in AS 200 with an ip of 20.0.0.1
   and you want to advterise network 10.0.0.0/24:
 
-    router foo route static 10.0.0.0/24 0 foo_out
-    router foo bgp bar local 10.0.0.1 100
+	router foo route static 10.0.0.0/24 0 foo_out
+	router foo bgp bar local 10.0.0.1 100
 	router foo bgp bar neighbor 20.0.0.1 200
 	router foo bgp bar export filter foo_out
 
   You can set up route reflection for BGP by ussing the rrclient command for that process.
   By using the command it indicates that the peer is a bgp client:
 
-    router foo bgp bar rrclient
+	router foo bgp bar rrclient
 
 - 'rid': Sets the 32 bit router ID for the router. Typically this ID is unqiue
   across the orginizations network and is used for various routing protocols ie OSPF
 
-    router foo rid 1.1.1.1
+	router foo rid 1.1.1.1
+
+- 'fw': specify flows to accept/drop/reject via iptables. For example, to
+  globally globally drop all forwarded packets and accept HTTP traffic from any
+  IP address to host 192.168.0.5 on the interface at index 0 (which is on the
+  192.168.0.0/24 network):
+
+	router foo fw default drop
+	router foo fw accept out 0 192.168.0.5:80 tcp
+
+  Note that we use 'out' here since we're applying the rule to the interface
+  that's on the same network as the destination. The source and destination does
+  not have to include a port.
+
+  New iptables chains can also be created, providing a method for grouping rules
+  together instead of adding rules at the global level. Chains are then applied
+  to one or more interfaces using the interface index. For example, one could
+  put the previous rule into a chain named "allow-http" and apply it to the
+  interface at index 0 via the following:
+
+	router foo fw chain allow-http default action drop
+	router foo fw chain allow-http action accept 192.168.0.5:80 tcp
+	router foo fw chain allow-http apply out 0
 `,
 		Patterns: []string{
 			"router <vm>",
@@ -127,6 +151,13 @@ router takes a number of subcommands:
 			"router <vm> <route,> <bgp,> <processname> <rrclient,>",
 			"router <vm> <route,> <bgp,> <processname> <export,> <all,filter> <filtername>",
 			//"router <vm> <importbird,> <configfilepath>", TODO
+			"router <vm> <fw,> <default,> <accept,drop>",
+			"router <vm> <fw,> <accept,drop,reject> <in,out> <index> <dst> <proto>",
+			"router <vm> <fw,> <accept,drop,reject> <in,out> <index> <src> <dst> <proto>",
+			"router <vm> <fw,> chain <chain> <default,> action <accept,drop,reject>",
+			"router <vm> <fw,> chain <chain> action <accept,drop,reject> <dst> <proto>",
+			"router <vm> <fw,> chain <chain> action <accept,drop,reject> <src> <dst> <proto>",
+			"router <vm> <fw,> chain <chain> apply <in,out> <index>",
 		},
 		Call:    wrapVMTargetCLI(cliRouter),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
@@ -164,6 +195,7 @@ router takes a number of subcommands:
 			"clear router <vm> <route,> <bgp,> <processname>",
 			"clear router <vm> <route,> <bgp,> <processname> <rrclient,>",
 			"clear router <vm> <route,> <bgp,> <processname> <local,neighbor>",
+			"clear router <vm> <fw,>",
 		},
 		Call:    wrapVMTargetCLI(cliClearRouter),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
@@ -295,6 +327,147 @@ func cliRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 			return fmt.Errorf("invalid routerid: %v", c.StringArgs["id"])
 		}
 		rtr.routerID = c.StringArgs["id"]
+	} else if c.BoolArgs["fw"] {
+		if vm.GetType() == CONTAINER {
+			return fmt.Errorf("firewall rules cannot be applied to minirouter containers")
+		}
+
+		if chain := c.StringArgs["chain"]; chain != "" {
+			if c.BoolArgs["default"] {
+				if c.BoolArgs["accept"] {
+					return rtr.FirewallChainDefault(chain, "accept")
+				} else if c.BoolArgs["drop"] {
+					return rtr.FirewallChainDefault(chain, "drop")
+				} else if c.BoolArgs["reject"] {
+					return rtr.FirewallChainDefault(chain, "reject")
+				}
+
+				return fmt.Errorf("unexpected default fw chain action")
+			}
+
+			if c.BoolArgs["accept"] || c.BoolArgs["drop"] || c.BoolArgs["reject"] {
+				var src, dst string
+
+				if src = c.StringArgs["src"]; src != "" {
+					fields := strings.Split(src, ":")
+
+					switch len(fields) {
+					case 1: // all good here
+					case 2:
+						if _, err := strconv.Atoi(fields[1]); err != nil {
+							return fmt.Errorf("validating fw source port %s: %v", fields[1], err)
+						}
+					default:
+						return fmt.Errorf("malformed fw source %s", src)
+					}
+				}
+
+				if dst = c.StringArgs["dst"]; dst != "" {
+					fields := strings.Split(dst, ":")
+
+					switch len(fields) {
+					case 1: // all good here
+					case 2:
+						if _, err := strconv.Atoi(fields[1]); err != nil {
+							return fmt.Errorf("validating fw destination port %s: %v", fields[1], err)
+						}
+					default:
+						return fmt.Errorf("malformed fw destination %s", dst)
+					}
+				}
+
+				var (
+					proto  = c.StringArgs["proto"]
+					action string
+				)
+
+				if c.BoolArgs["accept"] {
+					action = "accept"
+				} else if c.BoolArgs["drop"] {
+					action = "drop"
+				} else if c.BoolArgs["reject"] {
+					action = "reject"
+				}
+
+				return rtr.FirewallChainAdd(chain, src, dst, proto, action)
+			}
+
+			if c.BoolArgs["in"] || c.BoolArgs["out"] {
+				idx, err := strconv.Atoi(c.StringArgs["index"])
+				if err != nil {
+					return fmt.Errorf("converting fw chain interface index: %v", err)
+				}
+
+				return rtr.FirewallChainApply(idx, c.BoolArgs["in"], chain)
+			}
+
+			// if we get here, it's an unexpected error...
+			return fmt.Errorf("error processing fw chain")
+		}
+
+		if c.BoolArgs["default"] {
+			if c.BoolArgs["accept"] {
+				return rtr.FirewallDefault("accept")
+			} else if c.BoolArgs["drop"] {
+				return rtr.FirewallDefault("drop")
+			}
+
+			return fmt.Errorf("unexpected default fw action")
+		}
+
+		if c.BoolArgs["accept"] || c.BoolArgs["drop"] || c.BoolArgs["reject"] {
+			idx, err := strconv.Atoi(c.StringArgs["index"])
+			if err != nil {
+				return fmt.Errorf("converting fw interface index: %v", err)
+			}
+
+			var (
+				in    = c.BoolArgs["in"]
+				proto = c.StringArgs["proto"]
+				src   string
+				dst   string
+			)
+
+			if src = c.StringArgs["src"]; src != "" {
+				fields := strings.Split(src, ":")
+
+				switch len(fields) {
+				case 1: // all good here
+				case 2:
+					if _, err = strconv.Atoi(fields[1]); err != nil {
+						return fmt.Errorf("validating fw source port %s: %v", fields[1], err)
+					}
+				default:
+					return fmt.Errorf("malformed fw source %s", src)
+				}
+			}
+
+			if dst = c.StringArgs["dst"]; dst != "" {
+				fields := strings.Split(dst, ":")
+
+				switch len(fields) {
+				case 1: // all good here
+				case 2:
+					if _, err = strconv.Atoi(fields[1]); err != nil {
+						return fmt.Errorf("validating fw destination port %s: %v", fields[1], err)
+					}
+				default:
+					return fmt.Errorf("malformed fw destination %s", dst)
+				}
+			}
+
+			var action string
+
+			if c.BoolArgs["accept"] {
+				action = "accept"
+			} else if c.BoolArgs["drop"] {
+				action = "drop"
+			} else if c.BoolArgs["reject"] {
+				action = "reject"
+			}
+
+			return rtr.FirewallAdd(idx, in, src, dst, proto, action)
+		}
 	}
 
 	return nil
@@ -424,6 +597,8 @@ func cliClearRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 	} else if c.BoolArgs["rid"] {
 		rtr.routerID = "0.0.0.0"
 		return nil
+	} else if c.BoolArgs["fw"] {
+		return rtr.FirewallFlush()
 	} else {
 		// remove everything about this router
 		err := rtr.InterfaceDel("", "", true)
@@ -438,6 +613,7 @@ func cliClearRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 		rtr.dhcp = make(map[string]*dhcp)
 		rtr.RouteBGPDel("", false, true)
 		rtr.routerID = "0.0.0.0"
+		rtr.FirewallFlush()
 	}
 	return nil
 }

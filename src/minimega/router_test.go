@@ -186,6 +186,8 @@ Network: 1: [192.168.2.1/24]
 Network: 2: [192.168.3.1/24]
 Loopback IPs:
 192.168.4.1/32
+Firewall Rules:
+  Default Action: accept
 `
 const testOSPFWant = `
 IPs:
@@ -197,6 +199,8 @@ Interfaces:
 	0
 OSPF Export Networks or Routes:
 	192.168.3.0/24
+Firewall Rules:
+  Default Action: accept
 `
 const testStaticWant = `
 IPs:
@@ -211,6 +215,8 @@ defaultroute
 ospf
 	192.168.1.1/32
 	192.168.1.2/32
+Firewall Rules:
+  Default Action: accept
 `
 const testBGPAddWant = `
 IPs:
@@ -223,6 +229,8 @@ BGP Local As:	200
 BGP Neighbor IP:	192.168.1.1
 BGP Neighbor As:	100
 BGP RouteReflector:	false
+Firewall Rules:
+  Default Action: accept
 `
 const testBGPExportWant = `
 IPs:
@@ -238,4 +246,6 @@ BGP RouteReflector:	false
 BGP Export Networks or Routes:
 	all
 	r1route
+Firewall Rules:
+  Default Action: accept
 `
