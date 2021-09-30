@@ -72,6 +72,9 @@ type client struct {
 
 	ufsListener net.Listener
 	ufsConn     net.Conn
+
+	// used to stop the server --> client heartbeat Goroutine
+	cancelHeartbeat chan struct{}
 }
 
 func (c *client) sendMessage(m *Message) error {

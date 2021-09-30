@@ -5,7 +5,6 @@
 package main
 
 import (
-	"bridge"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -13,18 +12,20 @@ import (
 	"io"
 	"io/ioutil"
 	"math/rand"
-	log "minilog"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"qemu"
-	"qmp"
-	"ron"
 	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
+
+	"bridge"
+	log "minilog"
+	"qemu"
+	"qmp"
+	"ron"
 	"vnc"
 )
 
@@ -214,12 +215,6 @@ type KvmVM struct {
 
 	vncShim net.Listener // shim for VNC connections
 	VNCPort int
-
-	// Channel to track virtual serial port open status per async QMP events
-	// received over the `qmp.Conn` above. Will push `true` into the channel if
-	// the virtual serial port was opened client-side, and `false` if it was
-	// closed client-side. Used to handle miniccc restarts in the client.
-	vSerPortOpenEvent chan bool
 }
 
 type BlockDevice struct {
@@ -262,7 +257,6 @@ func NewKVM(name, namespace string, config VMConfig) (*KvmVM, error) {
 	vm.KVMConfig = config.KVMConfig.Copy() // deep-copy configured fields
 
 	vm.hotplug = make(map[int]vmHotplug)
-	vm.vSerPortOpenEvent = make(chan bool)
 
 	return vm, nil
 }
@@ -284,8 +278,6 @@ func (vm *KvmVM) Copy() VM {
 	for k, v := range vm.hotplug {
 		vm2.hotplug[k] = v
 	}
-
-	vm2.vSerPortOpenEvent = make(chan bool)
 
 	return vm2
 }
@@ -886,22 +878,11 @@ func (vm *KvmVM) Connect(cc *ron.Server, reconnect bool) error {
 
 	if !reconnect {
 		cc.RegisterVM(vm)
+
+		return cc.DialSerial(vm.path("cc"), vm.GetUUID())
 	}
 
-	ccPortOpened := make(chan struct{})
-	ccPortClosed := make(chan struct{})
-
-	go func() {
-		for open := range vm.vSerPortOpenEvent {
-			if open {
-				ccPortOpened <- struct{}{}
-			} else {
-				ccPortClosed <- struct{}{}
-			}
-		}
-	}()
-
-	return cc.DialSerial(vm.path("cc"), ccPortOpened, ccPortClosed)
+	return nil
 }
 
 func (vm *KvmVM) Disconnect(cc *ron.Server) error {
@@ -1406,50 +1387,6 @@ func (c QemuOverrides) WriteConfig(w io.Writer) error {
 func (vm KvmVM) qmpLogger() {
 	for v := vm.q.Message(); v != nil; v = vm.q.Message() {
 		log.Info("VM %v received asynchronous message: %v", vm.ID, v)
-
-		// Push to `vSerPortOpenEvent` channel if this is a VSERPORT_CHANGE event
-		// (example event below).
-		/*
-			map[string]interface{} {
-				"data": map[string]interface{} {
-					"id": "charvserialCC", "open": false
-				},
-				"event": "VSERPORT_CHANGE",
-				"timestamp": map[string]interface{} {
-					"microseconds":452889,
-					"seconds":1.608260782e+09
-				}
-			}
-		*/
-
-		event, ok := v["event"].(string)
-		if !ok {
-			continue
-		}
-
-		if event == "VSERPORT_CHANGE" {
-			data, ok := v["data"].(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			id, ok := data["id"].(string)
-			if !ok {
-				continue
-			}
-
-			// We only care about the serial port used for CC.
-			if id != "charvserialCC" {
-				continue
-			}
-
-			open, ok := data["open"].(bool)
-			if !ok {
-				continue
-			}
-
-			vm.vSerPortOpenEvent <- open
-		}
 	}
 }
 

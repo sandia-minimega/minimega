@@ -29,3 +29,5 @@ da137c7871d730100384dbcf36e6f8fa493aef5b golang.org/x/net/bpf
 6ec70d6a5542cba804c6d16ebe8392601a0b7b60 golang.org/x/sys/unix
 
 575fdbe86e5dd89229707ebec0575ce7d088a4a6 golang.org/x/crypto
+
+3b5209105503162ded1863c307ac66fec31120dd golang.org/x/sys/windows

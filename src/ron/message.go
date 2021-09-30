@@ -14,6 +14,7 @@ const (
 	MESSAGE_FILE
 	MESSAGE_PIPE
 	MESSAGE_UFS
+	MESSAGE_HEARTBEAT
 )
 
 // Pipe modes
@@ -72,6 +73,8 @@ func (t Type) String() string {
 		return "PIPE"
 	case MESSAGE_UFS:
 		return "UFS"
+	case MESSAGE_HEARTBEAT:
+		return "HEARTBEAT"
 	}
 
 	return "UNKNOWN"
