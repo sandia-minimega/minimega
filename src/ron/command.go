@@ -8,6 +8,7 @@ import (
 	"fmt"
 	log "minilog"
 	"strings"
+	"time"
 )
 
 type Filter struct {
@@ -36,6 +37,9 @@ type Command struct {
 
 	// Files to transfer back to the master
 	FilesRecv []string
+
+	// Connectivity test to execute
+	ConnTest *ConnTest
 
 	// PID of the process to signal, -1 signals all processes
 	PID int
@@ -71,6 +75,12 @@ type Response struct {
 	// Output from responding command, if any
 	Stdout string
 	Stderr string
+}
+
+type ConnTest struct {
+	Endpoint string
+	Wait     time.Duration
+	Packet   []byte
 }
 
 func (f *Filter) String() string {
@@ -128,9 +138,15 @@ func (c *Command) Copy() *Command {
 		c2.Filter = new(Filter)
 		*c2.Filter = *c.Filter
 	}
+
 	if c.Level != nil {
 		c2.Level = new(log.Level)
 		*c2.Level = *c.Level
+	}
+
+	if c.ConnTest != nil {
+		c2.ConnTest = new(ConnTest)
+		*c2.ConnTest = *c.ConnTest
 	}
 
 	return c2

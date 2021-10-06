@@ -7,11 +7,16 @@ package main
 import (
 	"bufio"
 	"bytes"
-	log "minilog"
+	"fmt"
+	"net"
+	"net/url"
 	"os/exec"
 	"path/filepath"
-	"ron"
 	"strings"
+	"time"
+
+	log "minilog"
+	"ron"
 )
 
 func processCommand(cmd *ron.Command) {
@@ -42,6 +47,10 @@ func processCommand(cmd *ron.Command) {
 
 	if len(cmd.Command) != 0 {
 		resp.Stdout, resp.Stderr = runCommand(cmd.Stdin, cmd.Stdout, cmd.Stderr, cmd.Command, cmd.Background)
+	}
+
+	if cmd.ConnTest != nil {
+		resp.Stdout, resp.Stderr = testConnect(cmd.ConnTest)
 	}
 
 	if len(cmd.FilesRecv) != 0 {
@@ -263,6 +272,48 @@ func killAll(needle string) {
 			log.Info("killing matched process: %v", p.Command)
 			if err := p.process.Kill(); err != nil {
 				log.Errorln(err)
+			}
+		}
+	}
+}
+
+func testConnect(test *ron.ConnTest) (string, string) {
+	log.Debug("testConnect called with %v", *test)
+
+	uri, err := url.Parse(test.Endpoint)
+	if err != nil {
+		return "", fmt.Sprintf("unable to parse test URI %s: %v", test.Endpoint, err)
+	}
+
+	timeout := time.After(test.Wait)
+
+	for {
+		select {
+		case <-timeout:
+			return fmt.Sprintf("%s | fail", uri.Host), ""
+		default:
+			if conn, err := net.DialTimeout(uri.Scheme, uri.Host, 500*time.Millisecond); err == nil {
+				defer conn.Close()
+
+				if uri.Scheme == "udp" {
+					if err := conn.SetDeadline(time.Now().Add(500 * time.Millisecond)); err != nil {
+						return fmt.Sprintf("%s | fail", uri.Host), ""
+					}
+
+					if len(test.Packet) > 0 {
+						if _, err := conn.Write(test.Packet); err != nil {
+							return fmt.Sprintf("%s | fail", uri.Host), ""
+						}
+					}
+
+					buf := make([]byte, 1)
+
+					if _, err := conn.Read(buf); err != nil {
+						return fmt.Sprintf("%s | fail", uri.Host), ""
+					}
+				}
+
+				return fmt.Sprintf("%s | pass", uri.Host), ""
 			}
 		}
 	}

@@ -5,18 +5,21 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"minicli"
-	log "minilog"
 	"net"
 	"os"
-	"ron"
 	"sort"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
+
+	"minicli"
+	log "minilog"
+	"ron"
 )
 
 type ccMount struct {
@@ -84,6 +87,23 @@ without arguments displays the existing mounts. Users can use "clear cc mount"
 to unmount the filesystem of one or all VMs. This should be done before killing
 or stopping the VM ("clear namespace <name>" will handle this automatically).
 
+"cc test-conn" allows users to test network connectivity from a guest to the
+given IP or domain name and port. The wait timeout should be specified as a Go
+duration string (e.g. 5s, 1m). If "udp" is used, a "base64 udp packet" that will
+generate a valid response must be specified. Results of the test will be written
+to the command's STDOUT file, whether it passed or failed. An example test is as
+follows:
+
+	cc test-conn tcp 10.0.0.68 443 wait 10s
+
+If the above test passes, STDOUT for the command will contain the following:
+
+	10.0.0.68:443 | pass
+
+If it fails, STDOUT will instead contain the following:
+
+	10.0.0.68:443 | fail
+
 For more documentation, see the article "Command and Control API Tutorial".`,
 		Patterns: []string{
 			"cc",
@@ -112,6 +132,8 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 
 			"cc <delete,> <command,> <id or prefix or all>",
 			"cc <delete,> <response,> <id or prefix or all>",
+
+			"cc <test-conn,> <tcp,udp> <ip or fqdn> <port> wait <timeout> [base64 udp packet]",
 		},
 		Call: wrapBroadcastCLI(cliCC),
 	},
@@ -169,6 +191,7 @@ var ccCliSubHandlers = map[string]wrappedCLIFunc{
 	"send":       cliCCFileSend,
 	"tunnel":     cliCCTunnel,
 	"listen":     cliCCListen,
+	"test-conn":  cliCCTestConn,
 }
 
 func cliCC(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -568,7 +591,7 @@ func cliCCClients(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 func cliCCCommand(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{
 		"id", "prefix", "command", "responses", "background",
-		"sent", "received", "level", "filter",
+		"sent", "received", "connectivity", "level", "filter",
 	}
 	resp.Tabular = [][]string{}
 
@@ -591,6 +614,12 @@ func cliCCCommand(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 			strconv.FormatBool(v.Background),
 			fmt.Sprintf("%v", v.FilesSend),
 			fmt.Sprintf("%v", v.FilesRecv),
+		}
+
+		if v.ConnTest != nil {
+			row = append(row, fmt.Sprintf("%s (%v wait)", v.ConnTest.Endpoint, v.ConnTest.Wait))
+		} else {
+			row = append(row, "")
 		}
 
 		if v.Level != nil {
@@ -640,6 +669,41 @@ func cliCCListen(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	}
 
 	return ns.ccServer.Listen(port)
+}
+
+func cliCCTestConn(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if _, err := strconv.Atoi(c.StringArgs["port"]); err != nil {
+		return fmt.Errorf("invalid port %s: %v", c.StringArgs["port"], err)
+	}
+
+	wait, err := time.ParseDuration(c.StringArgs["timeout"])
+	if err != nil {
+		return fmt.Errorf("invalid wait duration %s: %v", c.StringArgs["timeout"], err)
+	}
+
+	scheme := "tcp"
+	if c.BoolArgs["udp"] {
+		scheme = "udp"
+	}
+
+	test := ron.ConnTest{
+		Endpoint: fmt.Sprintf("%s://%s:%s", scheme, c.StringArgs["ip"], c.StringArgs["port"]),
+		Wait:     wait,
+	}
+
+	if packet := c.StringArgs["base64"]; len(packet) > 0 {
+		var err error
+
+		test.Packet, err = base64.StdEncoding.DecodeString(packet)
+		if err != nil {
+			return fmt.Errorf("unable to decode base64 packet string: %v", err)
+		}
+	}
+
+	cmd := &ron.Command{ConnTest: &test}
+
+	resp.Data = ns.NewCommand(cmd)
+	return nil
 }
 
 // cliCCMount needs to collect mounts from both the local ccMounts for the
