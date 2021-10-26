@@ -11,7 +11,7 @@ COPY ./src    ./src
 RUN ./build.bash
 
 
-FROM jrei/systemd-ubuntu:20.04
+FROM ubuntu:20.04
 
 RUN apt update && apt install -y \
   dnsmasq iproute2 isc-dhcp-client \
@@ -31,19 +31,20 @@ COPY --from=gobuilder /minimega/bin/miniweb  /opt/minimega/bin/miniweb
 COPY --from=gobuilder /minimega/bin/miniccc     /opt/minimega/bin/miniccc
 COPY --from=gobuilder /minimega/bin/miniccc.exe /opt/minimega/bin/miniccc.exe
 
-# For the sake of consistency, let's go ahead and include protonuke in the image
-# too so we can easily grab a copy if/when necessary.
+# For the sake of consistency, let's go ahead and include protonuke and
+# minirouter in the image too so we can easily grab a copy if/when necessary.
 COPY --from=gobuilder /minimega/bin/protonuke     /opt/minimega/bin/protonuke
 COPY --from=gobuilder /minimega/bin/protonuke.exe /opt/minimega/bin/protonuke.exe
+COPY --from=gobuilder /minimega/bin/minirouter    /opt/minimega/bin/minirouter
 
-COPY ./misc/web /opt/minimega/misc/web
+COPY ./misc/web  /opt/minimega/misc/web
+COPY ./docker/mm /usr/local/bin/mm
 
-ADD docker/minimega.service /etc/systemd/system/minimega.service
-ADD docker/miniweb.service  /etc/systemd/system/miniweb.service
+COPY ./docker/start-minimega.sh /start-minimega.sh
 
-WORKDIR /etc/systemd/system/multi-user.target.wants
-
-RUN ln -s ../minimega.service \
-  && ln -s ../miniweb.service
+RUN chmod +x /usr/local/bin/mm \
+  && chmod +x /start-minimega.sh
 
 WORKDIR /opt/minimega
+
+CMD ["/start-minimega.sh"]
