@@ -252,7 +252,7 @@ func (s *Server) DialSerial(path, uuid string) error {
 
 			cli, err := s.handshake(conn)
 			if err != nil {
-				log.Error("handshake failed (due to %v) - retrying", err)
+				log.Debug("handshake failed (due to %v) - retrying", err)
 
 				time.Sleep(CLIENT_RECONNECT_RATE * time.Second)
 
