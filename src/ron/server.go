@@ -230,16 +230,19 @@ func (s *Server) DialSerial(path, uuid string) error {
 	// completes if the VM still exists.
 	go func() {
 		for {
-			if _, ok := s.vms[uuid]; !ok {
+			s.clientLock.Lock()
+			_, exists := s.vms[uuid]
+			s.clientLock.Unlock()
+
+			if !exists {
 				log.Debug("vm %s (serial://%s) no longer exists -- closing serial connection", uuid, path)
 
+				s.connsLock.Lock()
 				if conn := s.conns[path]; conn != nil {
 					conn.Close()
-
-					s.connsLock.Lock()
 					delete(s.conns, path)
-					s.connsLock.Unlock()
 				}
+				s.connsLock.Unlock()
 
 				return
 			}
