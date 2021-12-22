@@ -8,7 +8,7 @@ mesh send mm2 plumb bar "sed -u s/mm1/mm2/" baz
 mesh send mm3 plumb baz "sed -u s/mm2/mm3/" qux
 
 # Send a message through foo (created on mm1)
-mesh send mm1 pipe foo "hello from cc!"
+mesh send mm1 pipe send foo "hello from cc!"
 
 # Give the message time to go through the pipeline
 shell sleep 5

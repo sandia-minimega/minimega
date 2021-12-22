@@ -14,6 +14,7 @@ import (
 	"miniplumber"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -51,6 +52,8 @@ pipelines:
 		Call: wrapSimpleCLI(cliPlumbLocal),
 	},
 	{ // plumb
+		HelpShort: "view status of all pipelines",
+		HelpLong:  ``,
 		Patterns: []string{
 			"plumb",
 		},
@@ -70,7 +73,7 @@ pipelines:
 Interact with named pipes. To write to a pipe, simply invoke the pipe API with
 the pipe name and value:
 
-	pipe foo Hello pipes!
+	pipe send foo "Hello pipes!"
 
 Pipes have several message delivery modes. Based on the mode, messages written
 to a pipe will be delivered to one or more readers. Mode "all" copies messages
@@ -83,21 +86,35 @@ This allows for mutating data on a per-reader basis with a single write. For
 example, to send a unique floating-point value on a normal distribution with a
 written mean to all readers:
 
-	pipe foo via normal -stddev 5.0
-	pipe foo 1.5
+	pipe send foo via normal -stddev 5.0
+	pipe send foo 1.5
 
-Pipes in other namespaces can be referenced with the syntax <namespace>//<pipe>.`,
+Pipes in other namespaces can be referenced with the syntax <namespace>//<pipe>.
+
+You can view the status of all pipes:
+
+	pipe
+
+If you wish to view messages that are very long but do not need to see the
+entire message, you can truncate the output to, say, 32 characters in length:
+
+	pipe truncate 32
+
+This command will not modify the message itself, but only how it is viewed.`,
 		Patterns: []string{
 			"pipe",
-			"pipe <pipe> <mode,> <all,round-robin,random>",
-			"pipe <pipe> <log,> <true,false>",
+			"pipe name <pipe> <mode,> <all,round-robin,random>",
+			"pipe name <pipe> <log,> <true,false>",
+			"pipe <truncate,> <length>",
 		},
 		Call: wrapBroadcastCLI(cliPipeBroadcast),
 	},
 	{ // pipe
+		HelpShort: "send messages over pipes or vias",
+		HelpLong:  ``,
 		Patterns: []string{
-			"pipe <pipe> <data>",
-			"pipe <pipe> <via,> <command>...",
+			"pipe send <pipe> <data>",
+			"pipe send <pipe> <via,> <command>...",
 		},
 		Call: wrapSimpleCLI(cliPipeLocal),
 	},
@@ -197,11 +214,28 @@ func cliPipeBroadcast(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 			if !strings.Contains(name, fmt.Sprintf("%v//", ns)) {
 				continue
 			}
-			resp.Tabular = append(resp.Tabular, []string{name, v.Mode(), fmt.Sprintf("%v", v.NumReaders()), fmt.Sprintf("%v", v.NumWriters()), fmt.Sprintf("%v", v.NumMessages()), v.GetVia(), strings.TrimSpace(v.Last())})
+
+			if c.BoolArgs["truncate"] {
+				length, err := strconv.Atoi(c.StringArgs["length"])
+				if err != nil || length < 0 {
+					return fmt.Errorf("invalid truncation length: %v", c.StringArgs["length"])
+				} else {
+					resp.Tabular = append(resp.Tabular, []string{name, v.Mode(), fmt.Sprintf("%v", v.NumReaders()), fmt.Sprintf("%v", v.NumWriters()), fmt.Sprintf("%v", v.NumMessages()), v.GetVia(), truncatePipeOutput(strings.TrimSpace(v.Last()), length)})
+				}
+			} else {
+				resp.Tabular = append(resp.Tabular, []string{name, v.Mode(), fmt.Sprintf("%v", v.NumReaders()), fmt.Sprintf("%v", v.NumWriters()), fmt.Sprintf("%v", v.NumMessages()), v.GetVia(), strings.TrimSpace(v.Last())})
+			}
 		}
 	}
 
 	return nil
+}
+
+func truncatePipeOutput(s string, length int) string {
+	if len(s) < length {
+		return s
+	}
+	return s[:length]
 }
 
 func cliPipeLocal(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
