@@ -5,6 +5,7 @@ After=multi-user.target
 [Service]
 Environment="MM_BASE=/tmp/minimega"
 Environment="MM_FILEPATH=/tmp/minimega/files"
+Environment="MM_BROADCAST=255.255.255.255"
 Environment="MM_PORT=9000"
 Environment="MM_DEGREE=2"
 Environment="MM_CONTEXT=minimega"
@@ -16,6 +17,7 @@ ExecStart=/opt/minimega/bin/minimega \
   -nostdin \
   -base=${MM_BASE} \
   -filepath=${MM_FILEPATH} \
+  -broadcast=${MM_BROADCAST} \
   -port=${MM_PORT} \
   -degree=${MM_DEGREE} \
   -context=${MM_CONTEXT} \

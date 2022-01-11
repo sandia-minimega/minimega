@@ -34,19 +34,20 @@ const (
 )
 
 var (
-	f_base       = flag.String("base", BASE_PATH, "base path for minimega data")
-	f_degree     = flag.Uint("degree", 0, "meshage starting degree")
-	f_msaTimeout = flag.Uint("msa", 10, "meshage MSA timeout")
-	f_port       = flag.Int("port", 9000, "meshage port to listen on")
-	f_force      = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
-	f_nostdin    = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
-	f_version    = flag.Bool("version", false, "print the version and copyright notices")
-	f_context    = flag.String("context", "minimega", "meshage context for discovery")
-	f_iomBase    = flag.String("filepath", IOM_PATH, "directory to serve files from")
-	f_cli        = flag.Bool("cli", false, "validate and print the minimega cli, in JSON, to stdout and exit")
-	f_panic      = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
-	f_cgroup     = flag.String("cgroup", "/sys/fs/cgroup", "path to cgroup mount")
-	f_pipe       = flag.String("pipe", "", "read/write to or from a named pipe")
+	f_base        = flag.String("base", BASE_PATH, "base path for minimega data")
+	f_degree      = flag.Uint("degree", 0, "meshage starting degree")
+	f_msaTimeout  = flag.Uint("msa", 10, "meshage MSA timeout")
+	f_broadcastIP = flag.String("broadcast", "255.255.255.255", "meshage broadcast address to use")
+	f_port        = flag.Int("port", 9000, "meshage port to listen on")
+	f_force       = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
+	f_nostdin     = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
+	f_version     = flag.Bool("version", false, "print the version and copyright notices")
+	f_context     = flag.String("context", "minimega", "meshage context for discovery")
+	f_iomBase     = flag.String("filepath", IOM_PATH, "directory to serve files from")
+	f_cli         = flag.Bool("cli", false, "validate and print the minimega cli, in JSON, to stdout and exit")
+	f_panic       = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
+	f_cgroup      = flag.String("cgroup", "/sys/fs/cgroup", "path to cgroup mount")
+	f_pipe        = flag.String("pipe", "", "read/write to or from a named pipe")
 
 	f_e         = flag.Bool("e", false, "execute command on running minimega")
 	f_attach    = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
@@ -216,7 +217,7 @@ func main() {
 	// needs a reference to the plumber, so the order here counts
 	tapReaperStart()
 
-	if err := meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_port); err != nil {
+	if err := meshageStart(hostname, *f_context, *f_degree, *f_msaTimeout, *f_broadcastIP, *f_port); err != nil {
 		// TODO: we've created the PID file...
 		log.Fatal("unable to start meshage: %v", err)
 	}

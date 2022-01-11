@@ -65,6 +65,7 @@ type Node struct {
 	routes           map[string]string  // one-hop routes for every node on the network, including this node
 	receive          chan *Message      // channel of incoming messages, A program will read this channel for incoming messages to this node
 	clients          map[string]*client // list of clients to this node
+	broadcastIP      net.IP             // IP to broadcast on (UDP only)
 	port             int                // port to operate on, uses both tcp and udp
 	timeout          time.Duration      // timeout for various non-response elements (Dial, ACK, etc.)
 	msaTimeout       time.Duration      // timeout for MSA messages
@@ -91,10 +92,10 @@ func init() {
 // NewNode returns a new node, receiver channel, and error channel with a given name
 // and degree. If degree is non-zero, the node will automatically begin broadcasting
 // for connections.
-func NewNode(name string, namespace string, degree uint, port int, version string) (*Node, chan *Message) {
+func NewNode(name string, namespace string, degree uint, broadcastIP net.IP, port int, version string) (*Node, chan *Message) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	log.Debug("NewNode: %v %v %v", name, degree, port)
+	log.Debug("NewNode: %v %v %v %v", name, degree, broadcastIP, port)
 	n := &Node{
 		name:             name,
 		namespace:        namespace,
@@ -104,6 +105,7 @@ func NewNode(name string, namespace string, degree uint, port int, version strin
 		routes:           make(map[string]string),
 		receive:          make(chan *Message, RECEIVE_BUFFER),
 		clients:          make(map[string]*client),
+		broadcastIP:      broadcastIP,
 		port:             port,
 		timeout:          time.Duration(DEFAULT_TIMEOUT * time.Second),
 		msaTimeout:       time.Duration(DEFAULT_MSA_TIMEOUT * time.Second),
@@ -358,9 +360,8 @@ func (n *Node) checkDegree() {
 	var backoff uint = 1
 	for n.numClients() < n.degree {
 		log.Debugln("soliciting connections")
-		b := net.IPv4(255, 255, 255, 255)
 		addr := net.UDPAddr{
-			IP:   b,
+			IP:   n.broadcastIP,
 			Port: n.port,
 		}
 		socket, err := net.DialUDP("udp4", nil, &addr)
