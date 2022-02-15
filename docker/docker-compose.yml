@@ -1,6 +1,9 @@
 version: '3.7'
 services:
   minimega:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
     image: minimega
     container_name: minimega
     hostname: minimega
@@ -19,10 +22,8 @@ services:
     volumes:
     - /dev:/dev
     - /lib/modules:/lib/modules:ro
-    - /sys/fs/cgroup:/sys/fs/cgroup:ro
     - /etc/localtime:/etc/localtime:ro
     - /tmp/minimega:/tmp/minimega
     - /var/log/minimega:/var/log/minimega
-    - /root/.ssh:/root/.ssh:ro
     healthcheck:
-      test: minimega -e version
+      test: mm version
