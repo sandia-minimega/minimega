@@ -14,6 +14,52 @@ import (
 // vmconfigCLIHandlers are special cases that are not worth generating via
 // vmconfiger.
 var vmconfigCLIHandlers = []minicli.Handler{
+	{
+		HelpShort: "configures vnc host",
+		HelpLong: `Configure the hostname or ip address that hosts the rkvm vnc interface
+Note: this configuration only applies to rkvm and must be specified.
+`,
+		Patterns: []string{
+			"vm config vnc_host [value]",
+		},
+
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = ns.vmConfig.Vnc_host
+				return nil
+			}
+
+			v := c.StringArgs["value"]
+
+			ns.vmConfig.Vnc_host = v
+
+			return nil
+		}),
+	},
+	{
+		HelpShort: "configures vnc port",
+		HelpLong: `Configure the port that hosts the rkvm vnc interface
+Note: this configuration only applies to rkvm and must be specified.
+`,
+		Patterns: []string{
+			"vm config vnc_port [value]",
+		},
+
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = strconv.FormatInt(int64(ns.vmConfig.Vnc_port), 10)
+				return nil
+			}
+
+			i, err := strconv.ParseInt(c.StringArgs["value"], 10, 64)
+			if err != nil {
+				return err
+			}
+
+			ns.vmConfig.Vnc_port = int(i)
+			return nil
+		}),
+	},
 	{ // vm config
 		HelpShort: "display, save, or restore the current VM configuration",
 		HelpLong: `
@@ -246,6 +292,9 @@ func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 		case *ContainerVM:
 			ns.vmConfig.BaseConfig = vm.BaseConfig.Copy()
 			ns.vmConfig.ContainerConfig = vm.ContainerConfig.Copy()
+		case *RKvmVM:
+			ns.vmConfig.BaseConfig = vm.BaseConfig.Copy()
+			ns.vmConfig.RKVMConfig = vm.RKVMConfig.Copy()
 		}
 
 		// clear UUID since we can't launch VMs with the same UUID
