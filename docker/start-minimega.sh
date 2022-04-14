@@ -2,7 +2,9 @@
 
 /usr/share/openvswitch/scripts/ovs-ctl start
 
-/opt/minimega/bin/miniweb -root=/opt/minimega/misc/web -addr=0.0.0.0:9001 &
+: "${MINIWEB_ROOT:=/opt/minimega/misc/web}"
+: "${MINIWEB_HOST:=0.0.0.0}"
+: "${MINIWEB_PORT:=9001}"
 
 : "${MM_BASE:=/tmp/minimega}"
 : "${MM_FILEPATH:=/tmp/minimega/files}"
@@ -14,6 +16,8 @@
 : "${MM_LOGFILE:=/var/log/minimega.log}"
 
 [[ -f "/etc/default/minimega" ]] && source "/etc/default/minimega"
+
+/opt/minimega/bin/miniweb -root=${MINIWEB_ROOT} -addr=${MINIWEB_HOST}:${MINIWEB_PORT} &
 
 /opt/minimega/bin/minimega \
   -force \

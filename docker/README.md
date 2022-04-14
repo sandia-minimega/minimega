@@ -2,9 +2,9 @@
 
 ### Install docker
 
-  ```bash
-  $ sudo apt-get install docker.io
-  ```
+```bash
+sudo apt-get install docker.io
+```
 
 ### Build the minimega docker image
 
@@ -15,9 +15,9 @@
 > NOTE: The docker image needs to be built from the base directory of the
 > minimega repository.
 
-  ```bash
-  $ docker build -t minimega -f docker/Dockerfile .
-  ```
+```bash
+docker build -t minimega -f docker/Dockerfile .
+```
 
 ### Start the minimega docker container
 
@@ -52,20 +52,20 @@ logs will be available in the container logs via Docker.
 
 ---
 
-#  Using docker-compose
+# Using docker-compose
 
 ### Install docker-compose
 
 ```bash
-$ VERSION=`git ls-remote https://github.com/docker/compose | grep refs/tags | grep -oP "[0-9]+\.[0-9][0-9]+\.[0-9]+$" | sort | tail -n 1`
-$ sudo curl -ksL "https://github.com/docker/compose/releases/download/${VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-$ sudo chmod +x /usr/local/bin/docker-compose
+VERSION=`git ls-remote https://github.com/docker/compose | grep refs/tags | grep -oP "[0-9]+\.[0-9][0-9]+\.[0-9]+$" | sort | tail -n 1`
+sudo curl -ksL "https://github.com/docker/compose/releases/download/${VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+sudo chmod +x /usr/local/bin/docker-compose
 ```
 
 ### Start the minimega docker container
 
 ```bash
-$ docker-compose up -d
+docker-compose up -d
 ```
 
 ---
@@ -75,18 +75,14 @@ $ docker-compose up -d
 ### Convenience aliases
 
 ```bash
-$ cat <<EOF >> ~/.bash_aliases
+cat <<EOF >> ~/.bash_aliases
 alias minimega='docker exec -it minimega minimega '
 alias ovs-vsctl='docker exec -it minimega ovs-vsctl'
 EOF
-$ source ~/.bash_aliases
+source ~/.bash_aliases
 ```
 
-### Starting miniweb
-
-miniweb gets started in the container automatically.
-
-### minimega configuration
+### minimega and miniweb configuration
 
 By default, the following values are set for minimega:
 
@@ -101,6 +97,14 @@ MM_LOGLEVEL=info
 MM_LOGFILE=/var/log/minimega.log
 ```
 
+By default, the following values are set for miniweb:
+
+```
+MINIWEB_ROOT=/opt/minimega/misc/web
+MINIWEB_HOST=0.0.0.0
+MINIWEB_PORT=9001
+```
+
 These values can be overwritten either by passing environment variables to
 Docker when starting the container or by binding a file to
 `/etc/default/minimega` in the container that contains updated values.
@@ -108,3 +112,8 @@ Docker when starting the container or by binding a file to
 > NOTE: If a value is specified both as an environment variable to Docker and in
 > the file bound to `/etc/default/minimega`, the value in
 > `/etc/default/minimega` will be used.
+
+> NOTE: If the port is changed for minimega or miniweb and standard container
+> networking is used (not host networking), then the `ports` section in your
+> `docker-compose.yml` or `-p` arguments to `docker run` will need to be updated
+> to the new value(s) specified.
