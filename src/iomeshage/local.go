@@ -7,10 +7,12 @@ package iomeshage
 import (
 	"io"
 	"io/ioutil"
-	log "minilog"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	log "minilog"
 )
 
 // FileInfo object. Used by the calling API to describe existing files.
@@ -21,6 +23,9 @@ type FileInfo struct {
 	// Size of the file
 	Size int64
 
+	// Modification time of the file
+	ModTime time.Time
+
 	// embed
 	os.FileMode
 }
@@ -29,6 +34,7 @@ func newFileInfo(path string, fi os.FileInfo) FileInfo {
 	return FileInfo{
 		Path:     path,
 		Size:     fi.Size(),
+		ModTime:  fi.ModTime(),
 		FileMode: fi.Mode(),
 	}
 }

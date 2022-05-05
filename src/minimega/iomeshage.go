@@ -68,7 +68,8 @@ The stream command allows users to stream files through the Response. Each part
 of the file is returned as a separate response which can then be combined to
 form the original file. This command blocks until the stream is complete.`,
 		Patterns: []string{
-			"file <list,> [path]",
+			"file <list,>",
+			"file <list,> <path> [recursive,]",
 			"file <get,> <file>",
 			"file <stream,> <file>",
 			"file <delete,> <file>",
@@ -96,10 +97,12 @@ func cliFile(c *minicli.Command, respChan chan<- minicli.Responses) {
 
 		resp := &minicli.Response{Host: hostname}
 
-		resp.Header = []string{"dir", "name", "size"}
+		resp.Header = []string{"dir", "name", "size", "modified"}
 		resp.Tabular = [][]string{}
 
-		files, err := iom.List(path, false)
+		recursive := c.BoolArgs["recursive"]
+
+		files, err := iom.List(path, recursive)
 		if err != nil {
 			respChan <- errResp(err)
 			return
@@ -111,7 +114,7 @@ func cliFile(c *minicli.Command, respChan chan<- minicli.Responses) {
 				dir = "<dir>"
 			}
 
-			row := []string{dir, iom.Rel(f), strconv.FormatInt(f.Size, 10)}
+			row := []string{dir, iom.Rel(f), strconv.FormatInt(f.Size, 10), f.ModTime.Format(time.RFC3339)}
 			resp.Tabular = append(resp.Tabular, row)
 		}
 
