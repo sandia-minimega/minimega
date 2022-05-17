@@ -77,9 +77,10 @@ func heartbeat() {
 	client.Tags = make(map[string]string)
 
 	m := &ron.Message{
-		Type:   ron.MESSAGE_CLIENT,
-		UUID:   c.UUID,
-		Client: c,
+		Type:    ron.MESSAGE_CLIENT,
+		UUID:    c.UUID,
+		Client:  c,
+		Version: "v1",
 	}
 
 	if err := sendMessage(m); err != nil {
