@@ -971,8 +971,11 @@ func cliCCClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 	}
 
 	// local clean up
-	if err := ns.clearCCMount(""); err != nil {
-		return err
+	if len(c.BoolArgs) == 0 {
+		// clear mounts too (not a sub handler)
+		if err := ns.clearCCMount(""); err != nil {
+			return err
+		}
 	}
 
 	// fan out behavior
