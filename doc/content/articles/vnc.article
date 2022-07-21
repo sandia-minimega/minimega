@@ -72,7 +72,7 @@ and 3 both left and right.
 For keyboard events, there is an event for a key press (press is `true` in the
 schema), and a key release. For code points not represented by ASCII, the key
 value is one of the codepoints defined in the minimega
-[[https://github.com/sandia-minimega/minimega/blob/master/src/vnc/keysymdef.go][keydef file]].
+[[https://github.com/sandia-minimega/minimega/v2/blob/master/src/vnc/keysymdef.go][keydef file]].
 
 For example, the following shows several mouse movements, and someone typing
 `foo`:

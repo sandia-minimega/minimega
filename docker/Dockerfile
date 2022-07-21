@@ -1,14 +1,21 @@
-FROM golang:1.12.17 AS gobuilder
+FROM golang:1.18.2 AS gobuilder
 
 RUN apt-get update && apt-get install -y libpcap-dev
 
 WORKDIR /minimega/
 
-COPY ./.git   ./.git
-COPY ./*.bash ./
-COPY ./src    ./src
+COPY . .
 
-RUN ./build.bash
+# COPY ./.git     ./.git
+# COPY ./scripts  ./scripts
+# COPY ./cmd      ./cmd
+# COPY ./pkg      ./pkg
+# COPY ./internal ./internal
+# COPY ./packages ./packages
+# COPY ./go.mod   ./go.mod
+# COPY ./go.sum   ./go.sum
+
+RUN ./scripts/all.bash
 
 
 FROM ubuntu:20.04
@@ -37,7 +44,7 @@ COPY --from=gobuilder /minimega/bin/protonuke     /opt/minimega/bin/protonuke
 COPY --from=gobuilder /minimega/bin/protonuke.exe /opt/minimega/bin/protonuke.exe
 COPY --from=gobuilder /minimega/bin/minirouter    /opt/minimega/bin/minirouter
 
-COPY ./misc/web  /opt/minimega/misc/web
+COPY ./web       /opt/minimega/web
 COPY ./docker/mm /usr/local/bin/mm
 
 COPY ./docker/start-minimega.sh /start-minimega.sh

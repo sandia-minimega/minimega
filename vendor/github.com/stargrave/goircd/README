@@ -1,0 +1,101 @@
+     goircd -- minimalistic simple Internet Relay Chat (IRC) server
+     ==============================================================
+
+DESCRIPTION
+
+goircd is very simple IRC server, written on Go.
+It was heavily inspired by miniircd daemon written on Python.
+goircd is free software: see the file COPYING for copying conditions.
+It does not aim to replace full featured mass scalable IRC networks:
+
+* It can not connect to other servers. Just standalone installation
+* It has few basic IRC commands
+* There is no support for channel operators, modes, votes, invites
+* No ident lookups
+
+But it has some convincing features:
+
+* Only standard Go libraries, no external requirements
+* Single executable binary
+* No configuration file, just few command line arguments
+* IPv6 out-of-box support
+* Ability to listen on TLS-capable ports
+* Optional channel logging to plain text files
+* Optional permanent channel's state saving in plain text files
+  (so you can reload daemon and all channels topics and keys won't
+  disappear)
+* Optional ability to authenticate users by nickname and password
+
+Some remarks and recommendations related to it's simplicity:
+
+* Use either nohup or similar tools to daemonize it
+* Just plain logging on stderr, without syslog support
+
+SUPPORTED IRC COMMANDS
+
+* PASS/NICK/USER during registration workflow
+* PING/PONGs
+* NOTICE/PRIVMSG, ISON
+* AWAY, MOTD, LUSERS, WHO, WHOIS, VERSION, QUIT
+* LIST, JOIN, TOPIC, +k/-k channel MODE
+
+USAGE
+
+Just execute goircd daemon. It has following optional arguments:
+
+   -hostname: hostname to show for client's connections
+       -bind: address to bind to (:6667 by default)
+       -motd: absolute path to MOTD file. It is reread every time
+              MOTD is requested
+     -logdir: directory where all channels messages will be saved. If
+              omitted, then no logs will be kept
+   -statedir: directory where all channels states will be saved and
+              loaded during startup. If omitted, then states will be
+              lost after daemon termination
+    -tlsbind: enable TLS, specify address to listen on and path
+     -tlspem  to PEM file with certificate and private key
+  -passwords: enable client authentication and specify path to
+              passwords file
+          -v: increase verbosity
+
+TLS
+
+If you specify -bind and -tlsbind simultaneously, then you will have
+both raw and encrypted listening sockets. You can use -bind "" to
+disable raw socket.
+
+AUTHENTICATION
+
+You can turn on optional client authentication by preparing passwords
+file and using the -passwords argument. Format of passwords file is:
+
+    login1:password1\n
+    login2:password2\n
+    ...
+
+LOG FILES
+
+Log files are not opened all the time, but only during each message
+saving. That is why you can safely rename them for rotation purposes.
+
+STATE FILES
+
+Each state file has the name equals to room's one. It contains two plain
+text lines: room's topic and room's authentication key (empty if none
+specified). For example:
+
+    % cat states/meinroom
+    This is meinroom's topic
+    secretkey
+
+LICENCE
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.

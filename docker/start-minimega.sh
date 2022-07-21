@@ -2,7 +2,7 @@
 
 /usr/share/openvswitch/scripts/ovs-ctl start
 
-: "${MINIWEB_ROOT:=/opt/minimega/misc/web}"
+: "${MINIWEB_ROOT:=/opt/minimega/web}"
 : "${MINIWEB_HOST:=0.0.0.0}"
 : "${MINIWEB_PORT:=9001}"
 

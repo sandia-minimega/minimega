@@ -1,0 +1,6 @@
+goircd requires only standard Go's libraries and consists of single main
+package. You can install it like that:
+
+    % git clone git://git.cypherpunks.ru/goircd.git
+    % make -C goircd
+    % goircd/goircd -help
