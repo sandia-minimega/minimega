@@ -689,13 +689,17 @@ func (s *Server) handshake(conn net.Conn) (*client, error) {
 
 	c.Namespace = namespace
 
-	if m.Client.Version == version.Revision {
-		log.Debug("miniccc version matches -- starting heartbeat to client")
+	if m.Client.Version != version.Revision {
+		log.Warn("mismatched miniccc version: %v", m.Client.Version)
+	}
 
-		// Only send heartbeats to client if versions match to prevent older clients
-		// from failing against this version of the server (sending a message to a
-		// client that doesn't recognize the message type will cause the client to
-		// fail).
+	if majorVersion(m.Version) > 0 {
+		log.Info("starting heartbeat to client %s", m.Client.UUID)
+
+		// Only send heartbeats to client if message version is present to prevent
+		// older clients from failing against this version of the server (sending a
+		// message to a client that doesn't recognize the message type will cause
+		// the client to fail).
 		go func() {
 			t := time.NewTicker(HEARTBEAT_RATE * time.Second)
 
@@ -707,13 +711,13 @@ func (s *Server) handshake(conn net.Conn) (*client, error) {
 					return
 				case <-t.C:
 					log.Debug("sending HEARTBEAT to client %s", m.Client.UUID)
-					m := Message{Type: MESSAGE_HEARTBEAT}
+					m := Message{Type: MESSAGE_HEARTBEAT, Version: "v1"}
 					c.enc.Encode(&m) // no need to worry about errors here
 				}
 			}
 		}()
 	} else {
-		log.Warn("mismatched miniccc version: %v", m.Client.Version)
+		log.Warn("client %s is missing message version -- not starting heartbeat", m.Client.UUID)
 	}
 
 	// TODO: if the client blocks, ron will hang... probably not good

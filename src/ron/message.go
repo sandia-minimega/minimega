@@ -57,6 +57,11 @@ type Message struct {
 
 	// MESSAGE_UFS
 	UfsMode int
+
+	// version of message
+	// (initially added to help determine if server should send periodic
+	// heartbeats to client in support of serial reconnect)
+	Version string
 }
 
 func (t Type) String() string {
