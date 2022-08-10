@@ -49,6 +49,7 @@ var (
 	f_panic       = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 	f_cgroup      = flag.String("cgroup", "/sys/fs/cgroup", "path to cgroup mount")
 	f_pipe        = flag.String("pipe", "", "read/write to or from a named pipe")
+	f_lognode     = flag.String("lognode", "", "mesh node to send all logs to")
 
 	f_e         = flag.Bool("e", false, "execute command on running minimega")
 	f_attach    = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
@@ -227,6 +228,7 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 
 	plumberStart(meshageNode)
+	setupMeshageLogging(*f_lognode)
 
 	// has to happen after meshageNode is created
 	GetOrCreateNamespace(DefaultNamespace)
