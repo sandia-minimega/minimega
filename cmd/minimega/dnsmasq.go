@@ -83,7 +83,8 @@ to the file.`,
 		HelpShort: "configure dhcp/dns options",
 		HelpLong: `
 Configuration options for running dnsmasq instances. Define a static IP
-allocation, specify a hostname->IP mapping for DNS, or set DHCP options.
+allocation, specify a hostname->IP mapping for DNS, configure upstream DNS
+servers (useful when forwarding/NAT is enabled), or set DHCP options.
 
 To list all existing static IP allocations on the first running dnsmasq
 server, do the following:
@@ -102,6 +103,14 @@ To see DNS entries:
 To add a DNS entry:
 
 	dnsmasq configure 0 dns 172.17.0.50 example.com
+
+To see upstream DNS servers:
+
+	dnsmasq configure 0 upstream
+
+To add an upstream DNS server:
+
+	dnsmasq configure 0 upstream server 1.1.1.1
 
 To see a list of all DHCP options:
 
