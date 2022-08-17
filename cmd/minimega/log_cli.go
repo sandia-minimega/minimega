@@ -53,6 +53,15 @@ Log to a file. To disable file logging, call "clear log file".`,
 		},
 		Call: wrapSimpleCLI(cliLogFile),
 	},
+	{ // log mesh
+		HelpShort: "enable logging to a mesh node",
+		HelpLong: `
+Log to a mesh node. To disable mesh logging, call "clear log mesh".`,
+		Patterns: []string{
+			"log mesh [node]",
+		},
+		Call: wrapSimpleCLI(cliLogMesh),
+	},
 	{ // log ring
 		HelpShort: "enable, disable, or dump log ring",
 		HelpLong: `
@@ -99,6 +108,7 @@ Resets state for logging. See "help log ..." for more information.`,
 		Patterns: []string{
 			"clear log",
 			"clear log <file,>",
+			"clear log <mesh,>",
 			"clear log <level,>",
 			"clear log <stderr,>",
 			"clear log <filter,>",
@@ -120,8 +130,21 @@ func cliLogLevel(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	for k := range c.BoolArgs {
 		level, _ := log.ParseLevel(k)
 
+		// Meshage events get included in debug logs... if we propogate those to the
+		// meshage logger we end up in a memory-consuming loop.
+		if level == log.DEBUG {
+			for _, logger := range log.Loggers() {
+				if logger == "meshage" {
+					log.SetLevel(logger, log.INFO)
+				} else {
+					log.SetLevel(logger, level)
+				}
+			}
+		} else {
+			log.SetLevelAll(level)
+		}
+
 		logLevel = level
-		log.SetLevelAll(level)
 	}
 
 	return nil
@@ -175,6 +198,30 @@ func cliLogFile(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 
 	log.AddLogger("file", logFile, logLevel, false)
 	return nil
+}
+
+func cliLogMesh(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if len(c.StringArgs) == 0 {
+		if logMeshNode == "" {
+			resp.Response = "mesh logging disabled"
+		} else {
+			resp.Response = fmt.Sprintf("sending all logs to node %s", logMeshNode)
+		}
+
+		return nil
+	}
+
+	node := c.StringArgs["node"]
+
+	if _, ok := meshageNode.Mesh()[node]; !ok {
+		return fmt.Errorf("node %s not in mesh", node)
+	}
+
+	// reset logging to mesh if it's already enabled
+	log.DelLogger("meshage")
+	logMeshNode = ""
+
+	return setupMeshageLogging(node)
 }
 
 func cliLogRing(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -268,6 +315,12 @@ func cliLogClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 		if err := stopFileLogger(); err != nil {
 			return err
 		}
+	}
+
+	// Reset mesh if explicitly cleared or we're clearing everything
+	if c.BoolArgs["mesh"] || len(c.BoolArgs) == 0 {
+		log.DelLogger("meshage")
+		logMeshNode = ""
 	}
 
 	// Reset syslog if explicitly cleared or we're clearing everything
