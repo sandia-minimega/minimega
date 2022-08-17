@@ -157,9 +157,7 @@ func main() {
 				parts = append(parts, "namespace", *f_namespace)
 			}
 
-			for _, arg := range flag.Args() {
-				parts = append(parts, arg)
-			}
+			parts = append(parts, flag.Args()...)
 
 			cmd := quoteJoin(parts, " ")
 			if len(parts) == 1 {
@@ -228,7 +226,10 @@ func main() {
 	time.Sleep(500 * time.Millisecond)
 
 	plumberStart(meshageNode)
-	setupMeshageLogging(*f_lognode)
+
+	if err := setupMeshageLogging(*f_lognode); err != nil {
+		log.Fatal("unable to setup mesh logging: %v", err)
+	}
 
 	// has to happen after meshageNode is created
 	GetOrCreateNamespace(DefaultNamespace)

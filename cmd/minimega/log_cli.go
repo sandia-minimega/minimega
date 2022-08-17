@@ -211,14 +211,17 @@ func cliLogMesh(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 		return nil
 	}
 
-	// rese logging to mesh if it's already enabled
-	if logMeshNode != "" {
-		log.DelLogger("meshage")
+	node := c.StringArgs["node"]
+
+	if _, ok := meshageNode.Mesh()[node]; !ok {
+		return fmt.Errorf("node %s not in mesh", node)
 	}
 
-	setupMeshageLogging(c.StringArgs["node"])
+	// reset logging to mesh if it's already enabled
+	log.DelLogger("meshage")
+	logMeshNode = ""
 
-	return nil
+	return setupMeshageLogging(node)
 }
 
 func cliLogRing(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
