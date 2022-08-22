@@ -176,14 +176,8 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 		respChan <- minicli.Responses{resp}
 		return
 	}
-	defer file.Close()
 
-	// HACK: We *don't* want long-running read commands to cause all other
-	// commands to block so we *unlock* the command lock here and *lock* it
-	// again for each command that we read (well, `RunCommands` handles the
-	// locking for us).
-	cmdLock.Unlock()
-	defer cmdLock.Lock()
+	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
 
@@ -238,7 +232,7 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 			}
 		}
 
-		forward(RunCommands(cmd), respChan)
+		forward(runCommands(cmd), respChan)
 
 		if namespace != "" {
 			log.Info("read switching to namespace `%v`", namespace)
