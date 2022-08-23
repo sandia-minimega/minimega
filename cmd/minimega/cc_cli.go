@@ -400,7 +400,7 @@ func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 			file = rel
 		}
 
-		_, err := iomHelper(file)
+		_, err := iomHelper(file, c.Source)
 		if err != nil {
 			// There's no namespace directory created for the default namespace.
 			if ns.Name == DefaultNamespace {
@@ -410,7 +410,7 @@ func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 			file = filepath.Join(ns.Name, file)
 
 			// Try again, but this time with the namespace directory prepended.
-			_, err := iomHelper(file)
+			_, err := iomHelper(file, c.Source)
 			if err != nil {
 				return fmt.Errorf("unable to get file %s via the mesh: %w", original, err)
 			}

@@ -42,6 +42,10 @@ type Response struct {
 	Rendered string
 	More     bool // whether there are more responses coming
 
+	// Status is set if responding with status update for command (Rendered will
+	// contain the status message).
+	Status bool
+
 	// Suggest is returned in response to Suggest request
 	Suggest []string `json:",omitempty"`
 }
@@ -218,6 +222,13 @@ func (mm *Conn) Run(cmd string) chan *Response {
 			}
 
 			out <- &r
+
+			// If this was a status update response then continue reading from the
+			// socket no matter what.
+			if r.Status {
+				continue
+			}
+
 			if !r.More {
 				log.Debugln("got last message")
 				break

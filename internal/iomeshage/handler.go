@@ -39,18 +39,24 @@ func (iom *IOMeshage) handleMessages() {
 }
 
 // Handle incoming responses (ACK, file transfer, etc.). It's possible for an
-// incoming response to be invalid, such as when a message times out and the
-// receiver is no longer expecting the message to arrive. If so, drop the
-// message. Responses are sent along registered channels, which are closed when
-// the receiver gives up. If we try to send on a closed channel, recover and
-// move on.
+// incoming response to be invalid, such as when a message times out, or
+// multiple nodes respond to a request, and the receiver is no longer expecting
+// the message to arrive. If so, drop the message. Responses are sent along
+// registered channels, which are closed when the receiver gives up. If we try
+// to send on a closed channel, recover and move on.
 func (iom *IOMeshage) handleResponse(m *Message) {
 	iom.tidLock.Lock()
 	c, ok := iom.TIDs[m.TID]
 	iom.tidLock.Unlock()
 
 	if !ok {
-		log.Errorln("dropping message for invalid TID: ", m.TID)
+		// This will happen when, for example, the `whoHas` function sends a
+		// TYPE_WHOAS message to multiple nodes and multiple nodes respond but the
+		// `whoHas` function only cares about the first response.
+		if log.WillLog(log.DEBUG) {
+			log.Debugln("dropping message for invalid TID: ", m.TID)
+		}
+
 		return
 	}
 
@@ -171,6 +177,9 @@ func (iom *IOMeshage) handlePart(m *Message, xfer bool) {
 	if err != nil {
 		resp.ACK = false
 		log.Error("invalid file %v: %v", m.Filename, err)
+	} else if len(files) == 0 {
+		// it's okay to not have the entire file on this node
+		resp.ACK = false
 	} else if len(files) == 1 {
 		resp.ACK = true
 		resp.Part = m.Part
@@ -178,7 +187,7 @@ func (iom *IOMeshage) handlePart(m *Message, xfer bool) {
 			resp.Data = iom.readPart(files[0].Path, m.Part)
 		}
 	} else {
-		// found zero or more than one file
+		// found more than one file
 		resp.ACK = false
 		log.Error("invalid file %v, found %v files", m.Filename, len(files))
 	}

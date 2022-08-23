@@ -1,0 +1,59 @@
+Status Updates
+
+The minimega authors
+23 Aug 2022
+
+* Introduction
+
+Status updates allow developers to provide periodic feedback for long running
+commands, like file transfers, to users outside of the existing command response
+channel. A channel separate from the existing command response channel is used
+to prevent developers from having to change their existing workflow and allow
+developers to add status updates to existing code quickly and easily.
+
+* Overview
+
+One of the major design goals of status updates was to make as few changes to
+the existing code base as possible while facilitating periodic feedback to
+users. The initial use case for status updates was to prevent minimega from
+seeming like (to users) it has locked up when a user launches VMs that require
+disk images to be transferred between minimega nodes.
+
+** Sending status updates
+
+Status updates are simple strings describing whatever the current status of a
+long running command is -- they are context specific. They have their own
+message format -- `meshageStatusMessage` -- that is used to send status updates
+to nodes as the body of a meshage message, which contains the update message and
+the node that generated the update.
+
+The `sendStatusMessage` function can be used to send a status update to another
+node in the mesh. See `cmd/minimega/status.go` for implementation-specific
+details. See the `iomWait` function in `cmd/minimega/iomeshage.go` for an
+example of how status updates are being sent.
+
+The `meshageStatusPeriod` duration variable should be used by developers to
+limit how often status updates are sent for any particular long running task.
+The duration defaults to 3s, and can be configured by users via the `status
+update [frequency]` API command. Users are able to disable status updates by
+setting the frequency to 0. When status updates are disabled, rather than
+setting `meshageStatusPeriod` to 0, it is set to `math.MaxInt64` to make the
+common check of `if time.Since(lastUpdate) >= meshageStatusPeriod` work the same
+regardless.
+
+** Receiving and processing status updates
+
+The meshage mux handles status update messages coming into a node. It sends a
+copy of the status update string, prepended with the name of the node that sent
+the update, to one or more channels that have been registered to receive a copy.
+
+Functions that want to process (e.g., display) status updates, like
+`cmd/minimega/main.go` and `cmd/minimega/command_socket.go`, register a channel
+using `addStatusMessageChannel` and process updates that are sent to the channel
+(e.g., print them via the minipager).
+
+** Receiving status updates via miniclient
+
+The `miniclient.Response` struct has been updated to include a `Status bool`
+field. When set, the `Response` struct is a status update with the `Rendered`
+field containing the update string.

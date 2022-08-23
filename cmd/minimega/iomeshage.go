@@ -164,7 +164,9 @@ func cliFile(c *minicli.Command, respChan chan<- minicli.Responses) {
 // iomHelper supports grabbing files for internal minimega operations. It
 // returns the local path of the file or an error if the file doesn't exist or
 // could not transfer. iomHelper blocks until all file transfers are completed.
-func iomHelper(file string) (string, error) {
+// If updatee is provided, it will periodically be sent status update messages
+// about file transfer status.
+func iomHelper(file, updatee string) (string, error) {
 	// remove any weirdness from the filename like '..'
 	file = filepath.Clean(file)
 
@@ -186,7 +188,7 @@ func iomHelper(file string) (string, error) {
 		}
 	}
 
-	iomWait(file)
+	iomWait(file, updatee)
 
 	dst := filepath.Join(*f_iomBase, file)
 
@@ -206,7 +208,7 @@ func iomHelper(file string) (string, error) {
 
 		log.Info("fetching backing image: %v", file)
 
-		if _, err := iomHelper(file); err != nil {
+		if _, err := iomHelper(file, updatee); err != nil {
 			return "", fmt.Errorf("failed to fetch backing image %v: %v", file, err)
 		}
 	}
@@ -214,15 +216,36 @@ func iomHelper(file string) (string, error) {
 	return dst, nil
 }
 
-// iomWait polls until the file transfer is completed
-func iomWait(file string) {
+// iomWait polls until the file transfer is completed, optionally periodically
+// sending status update messages to the updatee if provided
+func iomWait(file, updatee string) {
 	log.Info("waiting on file: %v", file)
+
+	lastStatus := time.Now()
+
+	meshageStatusLock.RLock()
+	period := meshageStatusPeriod
+	meshageStatusLock.RUnlock()
 
 outer:
 	for {
 		for _, f := range iom.Status() {
 			if strings.Contains(f.Filename, file) {
 				log.Info("iomHelper waiting on %v: %v/%v", f.Filename, len(f.Parts), f.NumParts)
+
+				if updatee != "" && time.Since(lastStatus) >= period {
+					var status string
+
+					if len(f.Parts) == f.NumParts {
+						status = fmt.Sprintf("merging file %s", f.Filename)
+					} else {
+						status = fmt.Sprintf("transferring file %s: %f%% complete", f.Filename, float64(len(f.Parts))/float64(f.NumParts)*100.0)
+					}
+
+					sendStatusMessage(status, updatee)
+					lastStatus = time.Now()
+				}
+
 				time.Sleep(IOM_HELPER_WAIT)
 				continue outer
 			}

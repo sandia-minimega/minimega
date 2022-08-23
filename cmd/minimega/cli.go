@@ -504,12 +504,12 @@ func cliPreprocess(v string) (string, error) {
 		switch u.Scheme {
 		case "file":
 			log.Debug("file preprocessor")
-			return iomHelper(u.Opaque)
+			return iomHelper(u.Opaque, "")
 		case "http", "https":
 			log.Debug("http/s preprocessor")
 
 			// Check if we've already downloaded the file
-			v2, err := iomHelper(u.Path)
+			v2, err := iomHelper(u.Path, "")
 			if err == nil {
 				return v2, err
 			}
@@ -534,7 +534,7 @@ func cliPreprocess(v string) (string, error) {
 
 			if !filepath.IsAbs(u.Path) {
 				// not absolute -- try to fetch via meshage
-				v2, err := iomHelper(u.Opaque)
+				v2, err := iomHelper(u.Opaque, "")
 				if err != nil {
 					return v, err
 				}

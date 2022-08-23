@@ -524,10 +524,10 @@ Outer:
 
 // Launch wraps VMs.Launch, registering the launched VMs with ron. It blocks
 // until all the VMs are launched.
-func (n *Namespace) Launch(q *QueuedVMs) []error {
+func (n *Namespace) Launch(requestor string, q *QueuedVMs) []error {
 	// collect all the errors
 	errs := []error{}
-	for err := range n.VMs.Launch(n.Name, q) {
+	for err := range n.VMs.Launch(requestor, n.Name, q) {
 		errs = append(errs, err)
 	}
 
@@ -557,7 +557,7 @@ func (n *Namespace) hostLaunch(host string, queued *QueuedVMs, respChan chan<- m
 			Response: strconv.Itoa(len(queued.Names)),
 		}
 
-		if err := makeErrSlice(n.Launch(queued)); err != nil {
+		if err := makeErrSlice(n.Launch("", queued)); err != nil {
 			resp.Error = err.Error()
 		}
 

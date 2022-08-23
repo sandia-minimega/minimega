@@ -476,7 +476,7 @@ func (iom *IOMeshage) whoHas(filename string, p int64) (string, error) {
 
 	var timeoutCount int
 
-	// wait for n responses, or too many timeouts
+	// wait for a response, or too many timeouts
 	for i := 0; i < len(recipients); i++ {
 		select {
 		case resp := <-c:

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -78,6 +79,24 @@ VM). The check stops at the first invalid command.`,
 			"read <file> [check,]",
 		},
 		Call: cliRead,
+	},
+	{ // status update frequency
+		HelpShort: "view or set the status update frequency",
+		HelpLong: `
+View or set how often status updates should be published by long running
+commands.
+
+Long running commands, like launching a VM that requires the VM's disk image to
+be transferred, can periodically publish status updates back to the original
+caller to show progress.
+
+By default, the status update frequency is 3s. Status updates can be disabled by
+setting this value to 0. Otherwise, when setting update frequency, valid Go time
+units must be used ("5s", "1m", etc.).`,
+		Patterns: []string{
+			"status updates [frequency]",
+		},
+		Call: wrapSimpleCLI(cliStatusUpdates),
 	},
 	{ // debug
 		HelpShort: "display internal debug information",
@@ -258,6 +277,38 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 		resp.Error = err.Error()
 		respChan <- minicli.Responses{resp}
 	}
+}
+
+func cliStatusUpdates(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if len(c.StringArgs) == 0 {
+		if meshageStatusPeriod == math.MaxInt64 {
+			resp.Response = "status updates disabled"
+		} else {
+			resp.Response = fmt.Sprintf("status update frequency: %v", meshageStatusPeriod)
+		}
+
+		return nil
+	}
+
+	freq := c.StringArgs["frequency"]
+
+	duration, err := time.ParseDuration(freq)
+	if err != nil {
+		return fmt.Errorf("invalid frequency duration provided")
+	}
+
+	meshageStatusLock.Lock()
+	if duration == 0 {
+		// If a user is disabling status updates by setting frequency to 0, set the
+		// status period to the maximum duration value (290 years) so checks like
+		// `time.Since(last) >= meshageStatusPeriod` are always false.
+		meshageStatusPeriod = math.MaxInt64
+	} else {
+		meshageStatusPeriod = duration
+	}
+	meshageStatusLock.Unlock()
+
+	return nil
 }
 
 func cliDebug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
