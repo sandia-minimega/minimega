@@ -166,6 +166,7 @@ func filesHandler(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			defer fileMm.Close()
+			defer log.Info("closing file mm connection")
 
 			for resps := range fileMm.Run(cmd.String()) {
 				for _, resp := range resps.Resp {
