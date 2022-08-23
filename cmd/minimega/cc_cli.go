@@ -773,7 +773,6 @@ func cliCCMount(c *minicli.Command, respChan chan<- minicli.Responses) {
 
 	var res minicli.Responses
 
-	// LOCK: this is a CLI handler so we already hold the cmdLock.
 	for resps := range runCommands(namespaceCommands(ns, c)...) {
 		for _, resp := range resps {
 			res = append(res, resp)
@@ -818,7 +817,6 @@ func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
 	// If we're doing the local behavior, only look at the local VMs.
 	// Otherwise, look globally. See note in cli.go.
 	if c.Source == "" {
-		// LOCK: this is a CLI handler so we already hold the cmdLock.
 		for _, vm2 := range globalVMs(ns) {
 			if vm2.GetName() == id || vm2.GetUUID() == id {
 				vm = vm2
@@ -1015,7 +1013,6 @@ func cliCCClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 	}
 
 	// fan out behavior
-	// LOCK: this is a CLI handler so we already hold the cmdLock.
 	return consume(runCommands(namespaceCommands(ns, c)...))
 }
 
@@ -1034,7 +1031,6 @@ func cliCCClearMount(c *minicli.Command, respChan chan<- minicli.Responses) {
 	}
 
 	if c.Source == "" {
-		// LOCK: this is a CLI handler so we already hold the cmdLock.
 		err := consume(runCommands(namespaceCommands(ns, c)...))
 		if err != nil {
 			resp.Error = err.Error()

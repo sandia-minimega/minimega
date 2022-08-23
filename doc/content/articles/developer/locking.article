@@ -13,8 +13,7 @@ This leads to many potential deadlocks which this article aims to prevent.
 In general, locks should only be used in the file where they are defined. Files
 typically include a type definition and some number of functions that operate
 on those types. Therefore, if a file defines a lock, most of the functions that
-are semantically related to the lock should be defined in the same file. An
-exception to this rule is the `cmdLock` which is described below.
+are semantically related to the lock should be defined in the same file.
 
 We are in the process of moving towards a naming convention within minimega --
 if both an `exported` and `internal` function exist, the exported function
@@ -39,26 +38,16 @@ that calling the internal function is indeed correct.
 
 ** Locks in minimega
 
-*** `cmdLock`
+*** `cmdChannel`
 
-This is the biggest lock in minimega -- it serializes all commands from the
-CLI, meshage, the domain socket, and other sources.  All `cli*` handlers assume
-that this lock is held when they are invoked.  `RunCommands`, which wraps
-`minicli.ProcessCommand`, acquires the cmdLock and should be used for all
-asynchronous tasks (e.g. handling meshage requests). If a handler needs to run
-a subsequent command, it may use `runCommands` instead since the cmdLock is
-already held. `minicli.ProcessCommand` should only be called by `runCommands`.
+`cmdChannel` is a channel that acts as a lock to serialize all commands from the
+CLI, meshage, domain socket, and other sources. All `cli*` handlers assume this
+channel is used for synchronization when they are invoked. `runCommands`, which
+wraps `minicli.ProcessCommand`, adds commands to the `cmdChannel` and should be
+used for all asynchronous tasks (e.g. handling meshage requests).
+`minicli.ProcessCommand` should only be called by `runCommands`.
 
-This lock greatly reduces the overall locking in minimega -- if data is only
-accessed via a CLI handler, it does not require its own lock.
-
-Note: the `read` API handler uses the `cmdLock` unnaturally -- it releases the
-lock in the handler and relocks it upon returning. This allows the commands
-that are read from the file to be interleaved with commands from meshage and
-the web so that the user can observe the progression of the `read` command.
-This may create issues if the interleaved commands are not strictly read-only
-but it was unacceptable to lock up minimega for tens of minutes or more while
-it read long scripts.
+This channel greatly reduces the overall locking in minimega.
 
 *** `vmLock`
 
@@ -92,7 +81,7 @@ for minimega once, when we try to launch the first container.
 getting and setting the active namespace and creating a new namespace. The
 exported `*Namespace` functions acquire this lock automatically. We currently
 do not use this lock to synchronize access to the underlying Namespace structs
--- these should be synchronized via the `cmdLock`.
+-- these should be synchronized via the `cmdChannel` used by `runCommands`.
 
 ** Hierarchy of locks
 
@@ -100,7 +89,7 @@ One way to prevent deadlocks in programs with multiple locks is to ensure that
 threads always acquire locks in the same order. We attempt to follow this idea
 and have defined the following hierarchy:
 
-    cmdLock > vmLock > VM.lock > all other locks
+    cmdChannel > vmLock > VM.lock > all other locks
     locks in minimega >> locks in other packages
 
 Developers must ensure that any blocking operations on channels do not

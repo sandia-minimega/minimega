@@ -148,7 +148,6 @@ func wrapBroadcastCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 
 		res := minicli.Responses{}
 
-		// LOCK: this is a CLI handler so we already hold the cmdLock.
 		for resps := range runCommands(namespaceCommands(ns, c)...) {
 			// TODO: we are flattening commands that return multiple responses
 			// by doing this... should we implement proper buffering? Only a
@@ -183,7 +182,6 @@ func wrapVMTargetCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 
 		var notFound string
 
-		// LOCK: this is a CLI handler so we already hold the cmdLock.
 		for resps := range runCommands(namespaceCommands(ns, c)...) {
 			for _, resp := range resps {
 				ok = ok || (resp.Error == "")

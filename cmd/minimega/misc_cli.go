@@ -343,7 +343,6 @@ func cliClearAll(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 	var cmds []*minicli.Command
 
-	// LOCK: this is a CLI hander so we already hold the cmdLock.
 	for _, v := range all {
 		cmd := minicli.MustCompile(v)
 		// keep the original source
