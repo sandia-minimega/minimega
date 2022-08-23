@@ -58,7 +58,8 @@ that are read from the file to be interleaved with commands from meshage and
 the web so that the user can observe the progression of the `read` command.
 This may create issues if the interleaved commands are not strictly read-only
 but it was unacceptable to lock up minimega for tens of minutes or more while
-it read long scripts.
+it read long scripts. The `file stream` command in `iomeshage` follows the same
+pattern to prevent locking all of minimega while a large file is streamed.
 
 *** `vmLock`
 
