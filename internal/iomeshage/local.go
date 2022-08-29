@@ -26,9 +26,6 @@ type FileInfo struct {
 	// Modification time of the file
 	ModTime time.Time
 
-	// Hash of the file
-	Hash string
-
 	// embed
 	os.FileMode
 }
@@ -74,13 +71,13 @@ func (iom *IOMeshage) List(path string, recurse bool) ([]FileInfo, error) {
 	var res []FileInfo
 
 	for _, f := range glob {
-		stat, err := os.Stat(f)
+		info, err := os.Stat(f)
 		if err != nil {
 			return nil, err
 		}
 
-		if !stat.IsDir() {
-			res = append(res, newFileInfo(f, stat))
+		if !info.IsDir() {
+			res = append(res, newFileInfo(f, info))
 			continue
 		}
 
@@ -90,9 +87,9 @@ func (iom *IOMeshage) List(path string, recurse bool) ([]FileInfo, error) {
 				return nil, err
 			}
 
-			for _, f2 := range files {
-				path := filepath.Join(f, f2.Name())
-				res = append(res, newFileInfo(path, f2))
+			for _, info := range files {
+				path := filepath.Join(f, info.Name())
+				res = append(res, newFileInfo(path, info))
 			}
 
 			continue
@@ -200,6 +197,20 @@ func (iom *IOMeshage) readPart(filename string, part int64) []byte {
 	}
 
 	return data[:n]
+}
+
+func (iom *IOMeshage) getHash(path string) string {
+	iom.hashLock.RLock()
+	defer iom.hashLock.RUnlock()
+
+	return iom.hashes[path]
+}
+
+func (iom *IOMeshage) updateHash(path, hash string) {
+	iom.hashLock.Lock()
+	defer iom.hashLock.Unlock()
+
+	iom.hashes[path] = hash
 }
 
 // stream reads a file from the local node's filesystem and returns the parts

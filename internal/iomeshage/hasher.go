@@ -23,6 +23,8 @@ import (
 // wait for the CREATE event for the final, combined file.
 var ignoredDirectories = []string{"miniccc_responses", "transfer_"}
 
+// startHasher generates a Murmur3 hash for all existing files and also watches
+// for new or updated files and generates a hash for them as well.
 func (iom *IOMeshage) startHasher() {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -61,25 +63,17 @@ func (iom *IOMeshage) startHasher() {
 					} else {
 						log.Info("adding new file %s to list", event.Name)
 
-						info := newFileInfo(event.Name, stat)
-
-						iom.fileLock.Lock()
-						iom.files[info.Path] = info
-						iom.fileLock.Unlock()
-
-						if info.Size > 0 {
+						if stat.Size() > 0 {
 							log.Info("getting hash for file %s", event.Name)
 
 							go func() {
-								info.Hash, err = hashFile(info.Path)
+								hash, err := hashFile(event.Name)
 								if err != nil {
-									log.Error("getting hash for file %s: %v", info.Path, err)
+									log.Error("getting hash for file %s: %v", event.Name, err)
 									return
 								}
 
-								iom.fileLock.Lock()
-								iom.files[info.Path] = info
-								iom.fileLock.Unlock()
+								iom.updateHash(event.Name, hash)
 							}()
 						}
 					}
@@ -88,25 +82,14 @@ func (iom *IOMeshage) startHasher() {
 				if event.Has(fsnotify.Write) {
 					log.Info("getting hash for file %s", event.Name)
 
-					iom.fileLock.RLock()
-					info, ok := iom.files[event.Name]
-					iom.fileLock.RUnlock()
-
-					// Ignore writes to files we don't already know about.
-					if !ok {
-						continue
-					}
-
 					go func() {
-						info.Hash, err = hashFile(info.Path)
+						hash, err := hashFile(event.Name)
 						if err != nil {
-							log.Error("getting hash for file %s: %v", info.Path, err)
+							log.Error("getting hash for file %s: %v", event.Name, err)
 							return
 						}
 
-						iom.fileLock.Lock()
-						iom.files[info.Path] = info
-						iom.fileLock.Unlock()
+						iom.updateHash(event.Name, hash)
 					}()
 				}
 
@@ -118,6 +101,9 @@ func (iom *IOMeshage) startHasher() {
 				// file. To avoid hashing all the individual parts, we don't watch
 				// directories that start with "transfer_" and just wait for the WRITE
 				// event for the resulting combined file.
+
+				// TODO: figure out which events should trigger an update to an existing
+				// FileInfo's ModTime field. Just WRITE events? Or WRITE and CHMOD events?
 
 				// TODO (future): figure out best way to handle detection of files being
 				// moved.  May not happen that often, so not something to worry about
@@ -149,17 +135,13 @@ func (iom *IOMeshage) startHasher() {
 		}
 
 		go func(info FileInfo) {
-			var err error
-
-			info.Hash, err = hashFile(info.Path)
+			hash, err := hashFile(info.Path)
 			if err != nil {
 				log.Error("getting hash for file %s: %v", info.Path, err)
 				return
 			}
 
-			iom.fileLock.Lock()
-			iom.files[info.Path] = info
-			iom.fileLock.Unlock()
+			iom.updateHash(info.Path, hash)
 		}(info)
 	}
 
@@ -194,7 +176,7 @@ func (iom *IOMeshage) startHasher() {
 	<-make(chan struct{})
 }
 
-// hashFile generates a Murmur hash for the file at the given path.
+// hashFile generates a Murmur3 hash for the file at the given path.
 func hashFile(path string) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
