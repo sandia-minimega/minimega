@@ -26,6 +26,9 @@ type FileInfo struct {
 	// Modification time of the file
 	ModTime time.Time
 
+	// Hash of the file
+	Hash string
+
 	// embed
 	os.FileMode
 }
@@ -107,6 +110,7 @@ func (iom *IOMeshage) List(path string, recurse bool) ([]FileInfo, error) {
 
 			return nil
 		})
+
 		if err != nil {
 			return nil, err
 		}

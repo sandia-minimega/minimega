@@ -42,6 +42,10 @@ type IOMeshage struct {
 	// tidLock guards TIDs
 	tidLock sync.Mutex
 	TIDs    map[int64]chan *Message // transfer ID -> channel
+
+	// fileLock guards files
+	fileLock sync.RWMutex
+	files    map[string]FileInfo
 }
 
 // Transfer describes an in-flight transfer.
@@ -74,8 +78,10 @@ func New(base string, node *meshage.Node) (*IOMeshage, error) {
 		transfers: make(map[string]*Transfer),
 		queue:     make(chan bool, QUEUE_LEN),
 		rand:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		files:     make(map[string]FileInfo),
 	}
 
+	go r.startHasher()
 	go r.handleMessages()
 
 	return r, nil
