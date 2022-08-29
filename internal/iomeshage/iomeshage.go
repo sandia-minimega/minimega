@@ -63,7 +63,7 @@ var (
 )
 
 // New returns a new iomeshage object service base directory via meshage
-func New(base string, node *meshage.Node) (*IOMeshage, error) {
+func New(base string, node *meshage.Node, hash bool) (*IOMeshage, error) {
 	base = filepath.Clean(base)
 	log.Debug("new iomeshage node on base %v", base)
 	if err := os.MkdirAll(base, 0755); err != nil {
@@ -81,7 +81,10 @@ func New(base string, node *meshage.Node) (*IOMeshage, error) {
 		hashes:    make(map[string]string),
 	}
 
-	go r.startHasher()
+	if hash {
+		go r.startHasher()
+	}
+
 	go r.handleMessages()
 
 	return r, nil

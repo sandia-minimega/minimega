@@ -82,7 +82,7 @@ form the original file. This command blocks until the stream is complete.`,
 
 func iomeshageStart(node *meshage.Node) error {
 	var err error
-	iom, err = iomeshage.New(*f_iomBase, node)
+	iom, err = iomeshage.New(*f_iomBase, node, *f_hashfiles)
 	return err
 }
 
