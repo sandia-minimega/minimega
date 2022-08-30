@@ -51,61 +51,114 @@ func (m MessageType) String() string {
 	return "MessageType(" + strconv.Itoa(int(m)) + ")"
 }
 
-type Messages struct {
-	msgMap    map[string][]*Message
-	hashMap   map[string]string
-	useTstamp map[string]bool
+// Files handles all the logic for whether or not a file needs to be pulled
+// from another node in the mesh. It takes into account if the mesh is running
+// in -headnode mode and has -hashfiles enabled. Having -headnode mode enabled
+// but -hashfiles disabled is equivalent to having -headnode mode disabled.
+type Files struct {
+	head      string                // node to prioritize getting files from (if set)
+	msgMap    map[string][]*Message // tracks all the messages for a specific file
+	hashMap   map[string]string     // tracks all the hashes for a specific file
+	useTstamp map[string]bool       // tracks if the latest version of a specific file should be used
 
 	msgs []*Message
 }
 
-func NewMessages() *Messages {
-	return &Messages{
+func NewFiles(head string, hash bool) *Files {
+	// disable -headnode mode if -hashfiles mode is disabled
+	if !hash {
+		head = ""
+	}
+
+	return &Files{
+		head:      head,
 		msgMap:    make(map[string][]*Message),
 		hashMap:   make(map[string]string),
 		useTstamp: make(map[string]bool),
 	}
 }
 
-func (m *Messages) messages() []*Message {
-	if m.msgs != nil {
-		return m.msgs
+func (this *Files) messages() []*Message {
+	if this.msgs != nil {
+		return this.msgs
 	}
 
-	for _, v := range m.msgMap {
-		m.msgs = append(m.msgs, v...)
+	for _, v := range this.msgMap {
+		this.msgs = append(this.msgs, v...)
 	}
 
-	return m.msgs
+	return this.msgs
 }
 
-func (m *Messages) add(message *Message) {
-	msgs := m.msgMap[message.Filename]
+func (this *Files) add(message *Message) {
+	msgs := this.msgMap[message.Filename]
 	msgs = append(msgs, message)
-	m.msgMap[message.Filename] = msgs
+	this.msgMap[message.Filename] = msgs
 
+	// Don't track hashes for glob file messages. The hashMap and useTstamp maps
+	// are only used in the `use` function below, which should not be called with
+	// glob paths.
 	if len(message.Glob) > 0 {
 		return
 	}
 
-	if hash, ok := m.hashMap[message.Filename]; ok {
+	if hash, ok := this.hashMap[message.Filename]; ok {
 		if hash != message.Hash {
-			m.useTstamp[message.Filename] = true
+			this.useTstamp[message.Filename] = true
 		}
 
 		return
 	}
 
-	m.hashMap[message.Filename] = message.Hash
+	this.hashMap[message.Filename] = message.Hash
 }
 
-func (m Messages) use(path string) *Message {
+// use determines what Message should be used to get the correct version of a
+// file from another node in the mesh. (nil, true) is returned when no file
+// needs to be used because the local file is the correct one. (nil, false) is
+// returned when we're unable to determine which Message to use (mainly because
+// the path is a glob). (*Message, true) is returned when the correct Message to
+// use was determined. The result of passing a glob path to this function is
+// undefined.
+func (this Files) use(path, hash string, local bool) (*Message, bool) {
+	// If running in -headnode mode, and the file exists on the head node, and the
+	// hash is different, use the file from the head node. This will also use the
+	// file from the head node when the file doesn't exist locally (since the hash
+	// will be different).
+	if this.head != "" { // running in -headnode mode
+		for _, msg := range this.msgMap[path] {
+			if msg.From == this.head { // file exists on head node
+				if msg.Hash == hash {
+					// This will happen if the local file is the same as the file on the
+					// head node.
+					return nil, true
+				} else {
+					// This will happen if the local file is different from the file on
+					// the head node or if the file does not exist locally.
+					return msg, true
+				}
+			}
+		}
+
+		// If we get here, the file does not exist on the head node.
+
+		// If the file exists locally (the hash is not empty), then stick with the
+		// local file.
+		if local {
+			return nil, true
+		}
+
+		// If the file doesn't exist locally, and doesn't exist on the head node
+		// either, then proceed as if we're not running in -headnode mode.
+	}
+
 	// Different file hashes were returned by nodes in the mesh for this file, so
-	// use the node with the newest timestamp for the file.
-	if m.useTstamp[path] {
+	// use the node with the newest timestamp for the file. This will never be the
+	// case when file hashing is disabled.
+	if this.useTstamp[path] {
 		var use *Message
 
-		for _, msg := range m.msgMap[path] {
+		for _, msg := range this.msgMap[path] {
 			if use == nil { // first message
 				use = msg
 			}
@@ -115,13 +168,16 @@ func (m Messages) use(path string) *Message {
 			}
 		}
 
-		return use
+		return use, true
 	}
 
 	// All the file hashes were the same, so just use the first message present.
-	for _, msg := range m.msgMap[path] {
-		return msg
+	// This will always be the case when file hashing is disabled.
+	for _, msg := range this.msgMap[path] {
+		return msg, true
 	}
 
-	return nil
+	// Likely the path provided was a glob, so it was never present in the list of
+	// messages for these files.
+	return nil, false
 }

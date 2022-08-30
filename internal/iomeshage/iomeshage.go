@@ -35,6 +35,9 @@ type IOMeshage struct {
 	queue     chan bool
 	rand      *rand.Rand
 
+	head string // node to prioritize getting files from (if set)
+	hash bool   // file hashing enabled
+
 	// transferLock guards transfers
 	transferLock sync.RWMutex
 	transfers    map[string]*Transfer // current transfers
@@ -63,9 +66,11 @@ var (
 )
 
 // New returns a new iomeshage object service base directory via meshage
-func New(base string, node *meshage.Node, hash bool) (*IOMeshage, error) {
+func New(base string, node *meshage.Node, head string, hash bool) (*IOMeshage, error) {
 	base = filepath.Clean(base)
+
 	log.Debug("new iomeshage node on base %v", base)
+
 	if err := os.MkdirAll(base, 0755); err != nil {
 		return nil, err
 	}
@@ -78,6 +83,8 @@ func New(base string, node *meshage.Node, hash bool) (*IOMeshage, error) {
 		transfers: make(map[string]*Transfer),
 		queue:     make(chan bool, QUEUE_LEN),
 		rand:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		head:      head,
+		hash:      hash,
 		hashes:    make(map[string]string),
 	}
 
@@ -90,7 +97,7 @@ func New(base string, node *meshage.Node, hash bool) (*IOMeshage, error) {
 	return r, nil
 }
 
-func (iom *IOMeshage) info(file string) (*Messages, error) {
+func (iom *IOMeshage) info(file string) (*Files, error) {
 	TID, c := iom.newTID()
 	defer iom.unregisterTID(TID)
 
@@ -100,15 +107,17 @@ func (iom *IOMeshage) info(file string) (*Messages, error) {
 		Filename: file,
 		TID:      TID,
 	}
+
 	recipients, err := iom.node.Broadcast(m)
 	if err != nil {
 		return nil, err
 	}
+
 	if log.WillLog(log.DEBUG) {
 		log.Debug("sent info request to %v nodes", len(recipients))
 	}
 
-	info := NewMessages()
+	info := NewFiles(iom.head, iom.hash)
 
 	// wait for n responses, or a timeout
 	for i := 0; i < len(recipients); i++ {
@@ -196,11 +205,17 @@ func (iom *IOMeshage) Info(file string) []string {
 // directory, the entire directory will be recursively transferred. If the file
 // already exists on this node, Get will return immediately with no error.
 func (iom *IOMeshage) Get(file string) error {
-	// If this is a file, and it currently exists locally on disk, then don't
-	// attempt to get the file from the mesh.
+	var exists bool
+
+	// If this is a file, and it currently exists locally on disk, and we're not
+	// in -headnode mode, then don't attempt to get the file from the mesh.
 	fi, err := os.Stat(filepath.Join(iom.base, file))
 	if err == nil && !fi.IsDir() {
-		return nil
+		if iom.head == "" {
+			return nil
+		}
+
+		exists = true
 	}
 
 	// is this file already in flight?
@@ -228,9 +243,14 @@ func (iom *IOMeshage) Get(file string) error {
 				continue
 			}
 
-			use := info.use(v.Filename)
-			if use == nil { // should never happen since this isn't a glob
+			use, ok := info.use(v.Filename, iom.getHash(v.Filename), exists)
+			if !ok { // should never happen since this isn't a glob
 				log.Error("unable to determine where to get file %s from", v.Filename)
+				continue
+			}
+
+			if use == nil {
+				log.Info("local file %s has the correct hash", v.Filename)
 				continue
 			}
 
@@ -239,9 +259,9 @@ func (iom *IOMeshage) Get(file string) error {
 			// create a transfer object
 			tdir, err := ioutil.TempDir(iom.base, "transfer_")
 			if err != nil {
-				log.Errorln(err)
 				return err
 			}
+
 			iom.transferLock.Lock()
 			iom.transfers[use.Filename] = &Transfer{
 				Dir:      tdir,
@@ -254,7 +274,6 @@ func (iom *IOMeshage) Get(file string) error {
 			iom.transferLock.Unlock()
 
 			go iom.getParts(use)
-
 			inflight[use.Filename] = true
 		} else {
 			// call Get on each of the constituent files, queued in a random order
@@ -285,10 +304,17 @@ func (iom *IOMeshage) Get(file string) error {
 // the parts from. This does not store the file locally to avoid filling up the
 // local disk.
 func (iom *IOMeshage) Stream(file string) (chan []byte, error) {
-	// If this is a file, and it currently exists locally on disk, then stream it.
+	var exists bool
+
+	// If this is a file, and it currently exists locally on disk, and we're not
+	// in -headnode mode, then stream it.
 	fi, err := os.Stat(filepath.Join(iom.base, file))
 	if err == nil && !fi.IsDir() {
-		return stream(filepath.Join(iom.base, file))
+		if iom.head == "" {
+			return stream(filepath.Join(iom.base, file))
+		}
+
+		exists = true
 	}
 
 	info, err := iom.info(file)
@@ -299,9 +325,13 @@ func (iom *IOMeshage) Stream(file string) (chan []byte, error) {
 		return nil, fmt.Errorf("stream %v: file not found", file)
 	}
 
-	use := info.use(file)
-	if use == nil {
+	use, ok := info.use(file, iom.getHash(file), exists)
+	if !ok {
 		return nil, errors.New("cannot stream a glob")
+	}
+
+	if use == nil {
+		return stream(filepath.Join(iom.base, file))
 	}
 
 	out := make(chan []byte)

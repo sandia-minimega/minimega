@@ -15,7 +15,7 @@ import (
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
-// FileInfo object. Used by the calling API to describe existing files.
+// FileInfo is used by the calling API to describe existing files.
 type FileInfo struct {
 	// Path is the absolute path to the file
 	Path string
@@ -26,15 +26,19 @@ type FileInfo struct {
 	// Modification time of the file
 	ModTime time.Time
 
+	// Murmur3 hash of the file
+	Hash string
+
 	// embed
 	os.FileMode
 }
 
-func newFileInfo(path string, fi os.FileInfo) FileInfo {
+func newFileInfo(path, hash string, fi os.FileInfo) FileInfo {
 	return FileInfo{
 		Path:     path,
 		Size:     fi.Size(),
 		ModTime:  fi.ModTime(),
+		Hash:     hash,
 		FileMode: fi.Mode(),
 	}
 }
@@ -77,7 +81,7 @@ func (iom *IOMeshage) List(path string, recurse bool) ([]FileInfo, error) {
 		}
 
 		if !info.IsDir() {
-			res = append(res, newFileInfo(f, info))
+			res = append(res, newFileInfo(f, iom.getHash(f), info))
 			continue
 		}
 
@@ -89,7 +93,7 @@ func (iom *IOMeshage) List(path string, recurse bool) ([]FileInfo, error) {
 
 			for _, info := range files {
 				path := filepath.Join(f, info.Name())
-				res = append(res, newFileInfo(path, info))
+				res = append(res, newFileInfo(path, iom.getHash(path), info))
 			}
 
 			continue
@@ -102,7 +106,7 @@ func (iom *IOMeshage) List(path string, recurse bool) ([]FileInfo, error) {
 			}
 
 			if !info.IsDir() {
-				res = append(res, newFileInfo(path, info))
+				res = append(res, newFileInfo(path, iom.getHash(path), info))
 			}
 
 			return nil

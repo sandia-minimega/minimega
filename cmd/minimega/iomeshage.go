@@ -82,7 +82,7 @@ form the original file. This command blocks until the stream is complete.`,
 
 func iomeshageStart(node *meshage.Node) error {
 	var err error
-	iom, err = iomeshage.New(*f_iomBase, node, *f_hashfiles)
+	iom, err = iomeshage.New(*f_iomBase, node, *f_headnode, *f_hashfiles)
 	return err
 }
 
@@ -97,9 +97,12 @@ func cliFile(c *minicli.Command, respChan chan<- minicli.Responses) {
 		}
 
 		resp := &minicli.Response{Host: hostname}
-
 		resp.Header = []string{"dir", "name", "size", "modified"}
 		resp.Tabular = [][]string{}
+
+		if *f_hashfiles {
+			resp.Header = append(resp.Header, "hash")
+		}
 
 		recursive := c.BoolArgs["recursive"]
 
@@ -111,11 +114,17 @@ func cliFile(c *minicli.Command, respChan chan<- minicli.Responses) {
 
 		for _, f := range files {
 			var dir string
+
 			if f.IsDir() {
 				dir = "<dir>"
 			}
 
 			row := []string{dir, iom.Rel(f), strconv.FormatInt(f.Size, 10), f.ModTime.Format(time.RFC3339)}
+
+			if *f_hashfiles {
+				row = append(row, f.Hash)
+			}
+
 			resp.Tabular = append(resp.Tabular, row)
 		}
 
