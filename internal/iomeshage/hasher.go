@@ -48,7 +48,7 @@ func (iom *IOMeshage) startHasher() {
 					continue
 				}
 
-				log.Info("NEW FSNOTIFY EVENT: %s", event)
+				log.Debug("new file system event: %s", event)
 
 				if event.Has(fsnotify.Create) {
 					stat, err := os.Stat(event.Name)
@@ -58,13 +58,11 @@ func (iom *IOMeshage) startHasher() {
 					}
 
 					if stat.IsDir() {
-						log.Info("adding new directory %s to watcher", event.Name)
+						log.Debug("adding new directory %s to file system watcher", event.Name)
 						watcher.Add(event.Name)
 					} else {
-						log.Info("adding new file %s to list", event.Name)
-
 						if stat.Size() > 0 {
-							log.Info("getting hash for file %s", event.Name)
+							log.Debug("getting hash for file %s", event.Name)
 
 							go func() {
 								hash, err := hashFile(event.Name)
@@ -80,7 +78,7 @@ func (iom *IOMeshage) startHasher() {
 				}
 
 				if event.Has(fsnotify.Write) {
-					log.Info("getting hash for file %s", event.Name)
+					log.Debug("getting hash for file %s", event.Name)
 
 					go func() {
 						hash, err := hashFile(event.Name)
@@ -93,21 +91,9 @@ func (iom *IOMeshage) startHasher() {
 					}()
 				}
 
-				// TODO: when a file is transferred over the mesh, it's transferred in
-				// parts. A temporary directory whose name begins with "transfer_" is
-				// created, and all the parts are written to this temporary directory.
-				// Once all the parts have been transferred, they're combined into a
-				// single file, which results in a WRITE event for the new combined
-				// file. To avoid hashing all the individual parts, we don't watch
-				// directories that start with "transfer_" and just wait for the WRITE
-				// event for the resulting combined file.
-
-				// TODO: figure out which events should trigger an update to an existing
-				// FileInfo's ModTime field. Just WRITE events? Or WRITE and CHMOD events?
-
 				// TODO (future): figure out best way to handle detection of files being
-				// moved.  May not happen that often, so not something to worry about
-				// right now.
+				// moved locally (renamed). May not happen that often, so not something
+				// to worry about right now.
 			case err, ok := <-watcher.Errors:
 				if !ok {
 					return
@@ -193,7 +179,7 @@ func hashFile(path string) (string, error) {
 
 	hash := fmt.Sprintf("%x", hasher.Sum(nil))
 
-	log.Info("hashing %s (%s) took %s", path, hash, time.Since(start))
+	log.Debug("hashing %s (%s) took %s", path, hash, time.Since(start))
 
 	return hash, nil
 }

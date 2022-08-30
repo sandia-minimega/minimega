@@ -142,6 +142,13 @@ func main() {
 		log.Warn("hostname `%s` is a reserved word -- abandon all hope, ye who enter here", hostname)
 	}
 
+	// Don't allow a minimega instance to point to itself as the headnode, which
+	// would break mesh logging and iomeshage.
+	if *f_headnode == hostname {
+		headnode := ""
+		f_headnode = &headnode
+	}
+
 	// special case, catch -e and execute a command on an already running
 	// minimega instance
 	if *f_e || *f_attach {

@@ -21,10 +21,37 @@ directory provided to minimega (by default `/tmp/minimega/files`).
 iomeshage supports transferring single files, globs (wildcard files such as
 foo*), and entire directories. Permissions on transferred files are preserved.
 
-*CAUTION*: iomeshage uses filenames (including the path) as the unique
-identifier for that file. For example, if two nodes have a file "foo", which is
-different on each node, iomeshage will have undefined behavior when
-transferring the file.
+By default, iomeshage uses filenames, including the file path, as the unique
+identifier for files. This identification scheme can lead to undefined behavior
+when, for example, two nodes have a file "foo" that each contains different
+content.
+
+One option for preventing this undefined behavior is to enable the `-hashfiles`
+option when starting minimega. This option enables the automatic generation of
+file hashes in the background for each file in the `filepath` directory. When
+enabled, the file hashes are compared to detect files with the same name across
+the mesh but with different content. When `file get` is called on such a file,
+minimega examines the timestamps of each copy of the file on the mesh; minimega
+will then transfer the file with the newest timestamp.
+
+Another option for preventing this undefined behavior is to set the `-headnode`
+option when starting minimega. When all the nodes in a mesh are configured to
+use a single node as the head node, files on the head node will always be the
+files transferred to other nodes in the mesh. However, having a file requested
+using `file get` not present on the head node will still lead to undefined
+behavior if there are multiple versions of the file, so any new or updated files
+should always be added to the defined head node when using the `-headnode`
+setting.
+
+Combining these two options is highly recommended. With `-headnode` set and
+`-hashfiles` enabled, nodes on the mesh will automatically be able to detect
+that a different version of a file is present on the head node and will
+automatically transfer it.
+
+When minimega is deployed using `deploy launch`, the node the deploy command is
+run from is considered the head node. Therefore, the `-headnode` flag is
+automatically set for the deployed nodes. If the head node was started with
+`-hashfiles` enabled, that would also propagate to the deployed nodes.
 
 ** `file` API
 
