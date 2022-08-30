@@ -204,6 +204,10 @@ func (iom *IOMeshage) readPart(filename string, part int64) []byte {
 }
 
 func (iom *IOMeshage) getHash(path string) string {
+	if !filepath.IsAbs(path) {
+		path = iom.cleanPath(path)
+	}
+
 	iom.hashLock.RLock()
 	defer iom.hashLock.RUnlock()
 
@@ -211,10 +215,18 @@ func (iom *IOMeshage) getHash(path string) string {
 }
 
 func (iom *IOMeshage) updateHash(path, hash string) {
+	if !filepath.IsAbs(path) {
+		path = iom.cleanPath(path)
+	}
+
 	iom.hashLock.Lock()
 	defer iom.hashLock.Unlock()
 
-	iom.hashes[path] = hash
+	if hash == "" {
+		delete(iom.hashes, path)
+	} else {
+		iom.hashes[path] = hash
+	}
 }
 
 // stream reads a file from the local node's filesystem and returns the parts

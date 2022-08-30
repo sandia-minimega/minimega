@@ -91,6 +91,11 @@ func (iom *IOMeshage) startHasher() {
 					}()
 				}
 
+				if event.Has(fsnotify.Remove) {
+					log.Debug("deleting hash for file %s", event.Name)
+					iom.updateHash(event.Name, "")
+				}
+
 				// TODO (future): figure out best way to handle detection of files being
 				// moved locally (renamed). May not happen that often, so not something
 				// to worry about right now.
