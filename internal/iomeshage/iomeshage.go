@@ -62,6 +62,10 @@ type Transfer struct {
 }
 
 var (
+	// ErrInFlight is the error returned when getting a file that is already being
+	// transferred to this node.
+	ErrInFlight = errors.New("file already in flight")
+
 	timeout = time.Duration(30 * time.Second)
 )
 
@@ -220,11 +224,12 @@ func (iom *IOMeshage) Get(file string) error {
 
 	// is this file already in flight?
 	iom.transferLock.RLock()
-	if _, ok := iom.transfers[file]; ok {
-		iom.transferLock.RUnlock()
-		return fmt.Errorf("file already in flight")
-	}
+	_, ok := iom.transfers[file]
 	iom.transferLock.RUnlock()
+
+	if ok {
+		return ErrInFlight
+	}
 
 	info, err := iom.info(file)
 	if err != nil {
@@ -262,8 +267,7 @@ func (iom *IOMeshage) Get(file string) error {
 				return err
 			}
 
-			iom.transferLock.Lock()
-			iom.transfers[use.Filename] = &Transfer{
+			transfer := &Transfer{
 				Dir:      tdir,
 				Filename: use.Filename,
 				Parts:    make(map[int64]bool),
@@ -271,6 +275,9 @@ func (iom *IOMeshage) Get(file string) error {
 				Inflight: -1,
 				Queued:   true,
 			}
+
+			iom.transferLock.Lock()
+			iom.transfers[use.Filename] = transfer
 			iom.transferLock.Unlock()
 
 			go iom.getParts(use)
@@ -290,8 +297,11 @@ func (iom *IOMeshage) Get(file string) error {
 				if _, ok := inflight[x]; ok {
 					continue
 				}
+
 				if err := iom.Get(x); err != nil {
-					return err
+					if !errors.Is(err, ErrInFlight) {
+						return err
+					}
 				}
 			}
 		}
@@ -478,6 +488,9 @@ Outer:
 		return
 	}
 
+	// Give the file system watcher time to start watching the directory (if it's
+	// not already) before moving the file into it.
+	time.Sleep(500 * time.Millisecond)
 	os.Rename(name, fullPath)
 
 	log.Debug("changing permissions: %v %v", fullPath, msg.Perm)

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -190,7 +191,7 @@ func iomHelper(file string) (string, error) {
 
 	if err := iom.Get(file); err != nil {
 		// suppress in-flight error -- we'll just wait as normal
-		if err.Error() != "file already in flight" {
+		if !errors.Is(err, iomeshage.ErrInFlight) {
 			return "", err
 		}
 	}
