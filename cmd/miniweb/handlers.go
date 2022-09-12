@@ -180,8 +180,9 @@ func filesHandler(w http.ResponseWriter, r *http.Request) {
 						// should be a base64 encoded string
 						dec := base64.NewDecoder(base64.StdEncoding, strings.NewReader(d))
 						_, err := io.Copy(w, dec)
+
 						if err != nil {
-							log.Error("unable to stream file: %v", err)
+							log.Warn("unable to stream file (user may have cancelled download): %v", err)
 							return
 						}
 					default:
