@@ -38,7 +38,7 @@ func meshageHandler() {
 			}
 
 			resps := []minicli.Responses{}
-			for resp := range RunCommands(cmd) {
+			for resp := range runCommands(cmd) {
 				resps = append(resps, resp)
 			}
 

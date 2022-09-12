@@ -199,19 +199,30 @@ func deployRun(hosts []string, user, remotePath string, sudo bool) []error {
 func deployGetFlags() string {
 	if deployFlags != nil {
 		f := strings.Join(deployFlags, " ")
+
 		if !strings.Contains(f, "nostdin") {
 			f += " -nostdin=true"
 		}
+
 		return f
 	}
-	var flags []string
+
+	// default to having all mesh nodes send logs to this node
+	flags := []string{fmt.Sprintf("-lognode=%s", hostname)}
+
 	flag.VisitAll(func(f *flag.Flag) {
+		// ignore lognode setting for this node (will likely be empty)
+		if f.Name == "lognode" {
+			return
+		}
+
 		if f.Name == "nostdin" {
 			flags = append(flags, fmt.Sprintf("-%v=true", f.Name))
 		} else {
 			flags = append(flags, fmt.Sprintf("-%v=%v", f.Name, f.Value.String()))
 		}
 	})
+
 	return strings.Join(flags, " ")
 }
 

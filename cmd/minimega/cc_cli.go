@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -382,10 +383,45 @@ func cliCCFilter(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 // send
 func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	cmd, err := ns.ccServer.NewFilesSendCommand(c.ListArgs["file"])
+	files := make([]string, len(c.ListArgs["file"]))
+
+	// Ensure each file to be sent to the VM is present locally before sending.
+	for i, file := range c.ListArgs["file"] {
+		original := file
+
+		// Strip base path from the file if it's present since the base path gets
+		// prepended to the relative path somewhere along the way.
+		if strings.HasPrefix(file, *f_iomBase) {
+			rel, err := filepath.Rel(*f_iomBase, file)
+			if err != nil {
+				return err
+			}
+
+			file = rel
+		}
+
+		_, err := iomHelper(file)
+		if err != nil {
+			// There's no namespace directory created for the default namespace.
+			if ns.Name == DefaultNamespace {
+				return fmt.Errorf("unable to get file %s via the mesh: %w", original, err)
+			}
+
+			file = filepath.Join(ns.Name, file)
+
+			// Try again, but this time with the namespace directory prepended.
+			_, err := iomHelper(file)
+			if err != nil {
+				return fmt.Errorf("unable to get file %s via the mesh: %w", original, err)
+			}
+		}
+
+		files[i] = file
+	}
+
+	cmd, err := ns.ccServer.NewFilesSendCommand(files)
 	if err != nil {
 		return err
-
 	}
 
 	resp.Data = ns.NewCommand(cmd)
@@ -737,7 +773,6 @@ func cliCCMount(c *minicli.Command, respChan chan<- minicli.Responses) {
 
 	var res minicli.Responses
 
-	// LOCK: this is a CLI handler so we already hold the cmdLock.
 	for resps := range runCommands(namespaceCommands(ns, c)...) {
 		for _, resp := range resps {
 			res = append(res, resp)
@@ -782,7 +817,6 @@ func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
 	// If we're doing the local behavior, only look at the local VMs.
 	// Otherwise, look globally. See note in cli.go.
 	if c.Source == "" {
-		// LOCK: this is a CLI handler so we already hold the cmdLock.
 		for _, vm2 := range globalVMs(ns) {
 			if vm2.GetName() == id || vm2.GetUUID() == id {
 				vm = vm2
@@ -979,7 +1013,6 @@ func cliCCClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 	}
 
 	// fan out behavior
-	// LOCK: this is a CLI handler so we already hold the cmdLock.
 	return consume(runCommands(namespaceCommands(ns, c)...))
 }
 
@@ -998,7 +1031,6 @@ func cliCCClearMount(c *minicli.Command, respChan chan<- minicli.Responses) {
 	}
 
 	if c.Source == "" {
-		// LOCK: this is a CLI handler so we already hold the cmdLock.
 		err := consume(runCommands(namespaceCommands(ns, c)...))
 		if err != nil {
 			resp.Error = err.Error()

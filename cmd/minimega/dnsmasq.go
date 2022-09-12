@@ -21,16 +21,17 @@ import (
 )
 
 type dnsmasqServer struct {
-	Addr        string
-	MinRange    string
-	MaxRange    string
-	Path        string
-	Hostdir     string
-	DHCPdir     string
-	DHCPoptsdir string
-	DHCPhosts   map[string]string // map MAC to IP address
-	Hostnames   map[string]string // map IP to hostname
-	DHCPopts    []string          // DHCP options
+	Addr            string
+	MinRange        string
+	MaxRange        string
+	Path            string
+	Hostdir         string
+	DHCPdir         string
+	DHCPoptsdir     string
+	DHCPhosts       map[string]string // map MAC to IP address
+	Hostnames       map[string]string // map IP to hostname
+	DHCPopts        []string          // DHCP options
+	UpstreamServers []string          // upstream DNS servers to use
 }
 
 var (
@@ -82,7 +83,8 @@ to the file.`,
 		HelpShort: "configure dhcp/dns options",
 		HelpLong: `
 Configuration options for running dnsmasq instances. Define a static IP
-allocation, specify a hostname->IP mapping for DNS, or set DHCP options.
+allocation, specify a hostname->IP mapping for DNS, configure upstream DNS
+servers (useful when forwarding/NAT is enabled), or set DHCP options.
 
 To list all existing static IP allocations on the first running dnsmasq
 server, do the following:
@@ -102,6 +104,14 @@ To add a DNS entry:
 
 	dnsmasq configure 0 dns 172.17.0.50 example.com
 
+To see upstream DNS servers:
+
+	dnsmasq configure 0 upstream
+
+To add an upstream DNS server:
+
+	dnsmasq configure 0 upstream server 1.1.1.1
+
 To see a list of all DHCP options:
 
 	dnsmasq configure 0 options
@@ -115,6 +125,8 @@ To add a DHCP option:
 			"dnsmasq configure <ID> <ip,> <mac address> <ip>",
 			"dnsmasq configure <ID> <dns,>",
 			"dnsmasq configure <ID> <dns,> <ip> <hostname>",
+			"dnsmasq configure <ID> <dns,> <upstream,>",
+			"dnsmasq configure <ID> <dns,> <upstream,> server <ip>",
 			"dnsmasq configure <ID> <options,>",
 			"dnsmasq configure <ID> <options,> <optionstring>",
 		},
@@ -124,6 +136,34 @@ To add a DHCP option:
 
 func init() {
 	dnsmasqServers = make(map[int]*dnsmasqServer)
+}
+
+func dnsmasqUpstreamInfo(c *minicli.Command, resp *minicli.Response) {
+	// print info about upstream servers
+	resp.Header = []string{"id", "upstream server"}
+	resp.Tabular = [][]string{}
+
+	if c.StringArgs["ID"] == Wildcard {
+		for id, v := range dnsmasqServers {
+			for _, upstream := range v.UpstreamServers {
+				resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(id), upstream})
+			}
+		}
+	} else {
+		id, err := strconv.Atoi(c.StringArgs["ID"])
+		if err != nil {
+			resp.Error = "Invalid dnsmasq ID"
+			return
+		}
+
+		if _, ok := dnsmasqServers[id]; ok {
+			for _, upstream := range dnsmasqServers[id].UpstreamServers {
+				resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(id), upstream})
+			}
+		} else {
+			resp.Error = "Invalid dnsmasq ID"
+		}
+	}
 }
 
 func dnsmasqHostInfo(c *minicli.Command, resp *minicli.Response) {
@@ -203,6 +243,17 @@ func dnsmasqDHCPOptionInfo(c *minicli.Command, resp *minicli.Response) {
 	}
 }
 
+func (d *dnsmasqServer) writeUpstreamServersFile() {
+	// Generate the new file contents
+	var upstreamfile string
+	for _, upstream := range d.UpstreamServers {
+		upstreamfile = upstreamfile + fmt.Sprintf("nameserver %s\n", upstream)
+	}
+
+	// ioutil.WriteFile to save it
+	ioutil.WriteFile(filepath.Join(d.Path, "resolv.conf"), []byte(upstreamfile), 0644)
+}
+
 func (d *dnsmasqServer) writeHostFile() {
 	// Generate the new file contents
 	var hostsfile string
@@ -268,6 +319,26 @@ func cliDnsmasqConfigure(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 
 		return nil
 	} else if c.BoolArgs["dns"] {
+		if c.BoolArgs["upstream"] {
+			ip := c.StringArgs["ip"]
+
+			if ip == "" {
+				dnsmasqUpstreamInfo(c, resp)
+			} else {
+				if argID == Wildcard {
+					for _, v := range dnsmasqServers {
+						v.UpstreamServers = append(v.UpstreamServers, ip)
+						v.writeUpstreamServersFile()
+					}
+				} else {
+					dnsmasqServers[id].UpstreamServers = append(dnsmasqServers[id].UpstreamServers, ip)
+					dnsmasqServers[id].writeUpstreamServersFile()
+				}
+			}
+
+			return nil
+		}
+
 		hostname := c.StringArgs["hostname"]
 		ip := c.StringArgs["ip"]
 
@@ -372,7 +443,7 @@ func dnsmasqKill(id int) error {
 	return syscall.Kill(pid, syscall.SIGTERM)
 }
 
-func dnsmasqStart(ip, min, max, hosts string) error {
+func dnsmasqStart(ip, min, max, config string) error {
 	path, err := dnsmasqPath()
 	if err != nil {
 		return err
@@ -392,16 +463,16 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 	d.Hostdir = filepath.Join(path, "hostdir")
 	d.DHCPdir = filepath.Join(path, "dhcpdir")
 	d.DHCPoptsdir = filepath.Join(path, "dhcpoptsdir")
-	err = os.MkdirAll(d.Hostdir, 0755)
-	if err != nil {
+
+	if err := os.MkdirAll(d.Hostdir, 0755); err != nil {
 		return err
 	}
-	err = os.MkdirAll(d.DHCPdir, 0755)
-	if err != nil {
+
+	if err := os.MkdirAll(d.DHCPdir, 0755); err != nil {
 		return err
 	}
-	err = os.MkdirAll(d.DHCPoptsdir, 0755)
-	if err != nil {
+
+	if err := os.MkdirAll(d.DHCPoptsdir, 0755); err != nil {
 		return err
 	}
 
@@ -412,24 +483,25 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
+
 	cmd := &exec.Cmd{
 		Path: p,
 		Args: []string{
 			p,
-			"-u",
-			"root",
-			fmt.Sprintf("--pid-file=%v/dnsmasq.pid", d.Path),
-			"-o",
-			"-k",
-			fmt.Sprintf("--hostsdir=%v", d.Hostdir),
+			"--keep-in-foreground",
+			"--user=root",
 			fmt.Sprintf("--dhcp-hostsdir=%v", d.DHCPdir),
 			fmt.Sprintf("--dhcp-optsdir=%v", d.DHCPoptsdir),
+			fmt.Sprintf("--hostsdir=%v", d.Hostdir),
+			fmt.Sprintf("--pid-file=%v/dnsmasq.pid", d.Path),
+			fmt.Sprintf("--resolv-file=%v/resolv.conf", d.Path),
 		},
 		Env:    nil,
 		Dir:    "",
 		Stdout: &sOut,
 		Stderr: &sErr,
 	}
+
 	if ip != "" {
 		cmd.Args = append(cmd.Args, "--except-interface")
 		cmd.Args = append(cmd.Args, "lo")
@@ -441,12 +513,14 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		cmd.Args = append(cmd.Args, fmt.Sprintf("--dhcp-leasefile=%v/dnsmasq.leases", d.Path))
 		cmd.Args = append(cmd.Args, "--dhcp-lease-max=4294967295")
 	}
-	if hosts != "" {
-		cmd.Args = append(cmd.Args, fmt.Sprintf("--conf-file=%v", hosts))
+
+	if config != "" {
+		cmd.Args = append(cmd.Args, fmt.Sprintf("--conf-file=%v", config))
 	}
+
 	log.Debug("starting dnsmasq server with command: %v", cmd)
-	err = cmd.Start()
-	if err != nil {
+
+	if err := cmd.Start(); err != nil {
 		return err
 	}
 
@@ -455,8 +529,7 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 
 	// wait on the server to finish or be killed
 	go func() {
-		err = cmd.Wait()
-		if err != nil {
+		if err := cmd.Wait(); err != nil {
 			if err.Error() != "signal 9" { // because we killed it
 				log.Error("killing dnsmasq: %v %v", err, sErr.String())
 			}
@@ -465,12 +538,13 @@ func dnsmasqStart(ip, min, max, hosts string) error {
 		delete(dnsmasqServers, id)
 
 		// and clean up the directory
-		err = os.RemoveAll(d.Path)
-		if err != nil {
+		if err := os.RemoveAll(d.Path); err != nil {
 			log.Error("removing dnsmasq directory: %v", err)
 		}
+
 		log.Info("dnsmasq server %v quit", id)
 	}()
+
 	return nil
 }
 

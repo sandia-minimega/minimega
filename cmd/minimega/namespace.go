@@ -263,8 +263,6 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 	takenName := map[string]bool{}
 	takenUUID := map[string]bool{}
 
-	// LOCK: This is only invoked via the CLI so we already hold cmdLock (can
-	// call globalVMs instead of GlobalVMs).
 	for _, vm := range globalVMs(n) {
 		takenName[vm.GetName()] = true
 		takenUUID[vm.GetUUID()] = true
@@ -312,8 +310,6 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 }
 
 // hostStats returns stats from hosts in the namespace.
-//
-// LOCK: Assumes cmdLock is held.
 func (n *Namespace) hostStats() []*HostStats {
 	// run `host` across the namespace
 	cmds := namespaceCommands(n, minicli.MustCompile("host"))
@@ -343,8 +339,6 @@ func (n *Namespace) hostStats() []*HostStats {
 //
 // If dryRun is true, the scheduler will determine VM placement but not
 // actually launch any VMs so that the user can tinker with the schedule.
-//
-// LOCK: Assumes cmdLock is held.
 func (n *Namespace) Schedule(dryRun bool) error {
 	if len(n.Hosts) == 0 {
 		return errors.New("namespace must contain at least one host to launch VMs")
@@ -673,8 +667,6 @@ func (n *Namespace) processVMNets(vals []string) error {
 // Both a state file (migrate) and hard disk file (disk) are created for each
 // VM in the namespace. If dir is not an absolute path, it will be a
 // subdirectory of iomBase.
-//
-// LOCK: Assumes cmdLock is held.
 func (n *Namespace) Snapshot(dir string) error {
 	var useIOM bool
 	if !filepath.IsAbs(dir) {
@@ -710,8 +702,6 @@ func (n *Namespace) Snapshot(dir string) error {
 		return err
 	}
 
-	// LOCK: This is only invoked via the CLI so we already hold cmdLock (can
-	// call globalVMs instead of GlobalVMs).
 	for _, vm := range globalVMs(n) {
 		// only snapshot KVMs
 		if vm.GetType() == KVM {

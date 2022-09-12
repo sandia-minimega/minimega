@@ -149,7 +149,7 @@ func commandSocketHandle(c net.Conn) {
 
 		// Keep sending until we hit the first error, then just consume the
 		// channel to ensure that we release any locks acquired by cmd.
-		for resp := range RunCommands(cmd) {
+		for resp := range runCommands(cmd) {
 			if prev != nil && err == nil {
 				err = sendLocalResp(enc, prev, true)
 			} else if err != nil && len(resp) > 0 {

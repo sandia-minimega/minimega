@@ -68,6 +68,7 @@ func init() {
 	gob.Register(meshageVMResponse{})
 	gob.Register(iomeshage.Message{})
 	gob.Register(miniplumber.Message{})
+	gob.Register(meshageLogMessage{})
 }
 
 func meshageStart(host, namespace string, degree, msaTimeout uint, broadcastIP string, port int) error {
@@ -105,6 +106,23 @@ func meshageMux() {
 			iom.Messages <- m
 		case miniplumber.Message:
 			plumber.Messages <- m
+		case meshageLogMessage:
+			msg := m.Body.(meshageLogMessage)
+
+			// The mesh logger will never send debug logs, so don't take them into
+			// account here.
+
+			switch msg.Level {
+			case log.INFO:
+				log.Info("[node: %s] %s", msg.From, msg.Log)
+			case log.WARN:
+				log.Warn("[node: %s] %s", msg.From, msg.Log)
+			case log.ERROR:
+				log.Error("[node: %s] %s", msg.From, msg.Log)
+			case log.FATAL:
+				// don't let a fatal log on another node kill this node
+				log.Error("[node: %s] %s", msg.From, msg.Log)
+			}
 		default:
 			log.Errorln("got invalid message!")
 		}
