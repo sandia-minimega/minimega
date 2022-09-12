@@ -126,13 +126,6 @@ func cliFile(c *minicli.Command, respChan chan<- minicli.Responses) {
 		return
 	case c.BoolArgs["stream"]:
 		stream, err := iom.Stream(fname)
-
-			// HACK: We *don't* want long-running stream commands to cause all other
-			// commands to block so we *unlock* the command lock here and *lock* it
-			// again at the end (so that the caller's unlock works)
-			cmdLock.Unlock()
-			defer cmdLock.Lock()
-
 		if err != nil {
 			respChan <- errResp(err)
 			return
