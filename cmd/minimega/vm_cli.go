@@ -1038,7 +1038,7 @@ func cliVMSuggest(ns *Namespace, prefix string, mask VMState, wild bool) []strin
 		res = append(res, Wildcard)
 	}
 
-	for _, vm := range GlobalVMs(ns) {
+	for _, vm := range globalVMs(ns) {
 		if vm.GetState()&mask == 0 {
 			continue
 		}

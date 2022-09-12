@@ -57,8 +57,6 @@ func cliDot(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 
 	vlans := make(map[int]bool)
 
-	// LOCK: This is a CLI handler so we already hold cmdLock (can call
-	// globalVMs instaed of GlobalVMs).
 	for _, vm := range globalVMs(ns) {
 		ip, err := vm.Info("ip")
 		ip6, err2 := vm.Info("ip6")

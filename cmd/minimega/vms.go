@@ -600,17 +600,9 @@ func meshageVMLauncher() {
 	}
 }
 
-// GlobalVMs gets the VMs from all hosts in the mesh, filtered to the current
+// globalVMs gets the VMs from all hosts in the mesh, filtered to the current
 // namespace, if applicable. The keys of the returned map do not match the VM's
 // ID.
-func GlobalVMs(ns *Namespace) []VM {
-	cmdLock.Lock()
-	defer cmdLock.Unlock()
-
-	return globalVMs(ns)
-}
-
-// globalVMs is GlobalVMs without locking cmdLock.
 func globalVMs(ns *Namespace) []VM {
 	// run `vm info` across the namespace
 	cmds := namespaceCommands(ns, minicli.MustCompile("vm info"))

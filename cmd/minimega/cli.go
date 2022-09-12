@@ -17,7 +17,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"unicode"
 
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
@@ -27,8 +26,13 @@ import (
 	"github.com/peterh/liner"
 )
 
+type commands struct {
+	in  []*minicli.Command
+	out chan minicli.Responses
+}
+
 // Prevents multiple commands from running at the same time
-var cmdLock sync.Mutex
+var cmdChannel chan commands
 
 type wrappedCLIFunc func(*Namespace, *minicli.Command, *minicli.Response) error
 type wrappedSuggestFunc func(*Namespace, string, string) []string
@@ -63,6 +67,21 @@ func cliSetup() {
 	registerHandlers("vmconfiger", vmconfigerCLIHandlers)
 	registerHandlers("vnc", vncCLIHandlers)
 	registerHandlers("plumb", plumbCLIHandlers)
+
+	cmdChannel = make(chan commands)
+	go cmdProcessor()
+}
+
+func cmdProcessor() {
+	for cmd := range cmdChannel {
+		go func(cmd commands) {
+			defer close(cmd.out)
+
+			for _, c := range cmd.in {
+				forward(minicli.ProcessCommand(c), cmd.out)
+			}
+		}(cmd)
+	}
 }
 
 // registerHandlers registers all the provided handlers with minicli, panicking
@@ -129,7 +148,6 @@ func wrapBroadcastCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 
 		res := minicli.Responses{}
 
-		// LOCK: this is a CLI handler so we already hold the cmdLock.
 		for resps := range runCommands(namespaceCommands(ns, c)...) {
 			// TODO: we are flattening commands that return multiple responses
 			// by doing this... should we implement proper buffering? Only a
@@ -164,7 +182,6 @@ func wrapVMTargetCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 
 		var notFound string
 
-		// LOCK: this is a CLI handler so we already hold the cmdLock.
 		for resps := range runCommands(namespaceCommands(ns, c)...) {
 			for _, resp := range resps {
 				ok = ok || (resp.Error == "")
@@ -354,37 +371,13 @@ func consume(in <-chan minicli.Responses) error {
 	return err
 }
 
-// runCommands is RunCommands without locking cmdLock.
-func runCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
-	out := make(chan minicli.Responses)
-
-	// Run commands serially and forward all the responses to out
-	go func() {
-		defer close(out)
-
-		for _, c := range cmd {
-			forward(minicli.ProcessCommand(c), out)
-		}
-	}()
-
-	return out
-}
-
-// RunCommands wraps minicli.ProcessCommand for multiple commands, combining
+// runCommands wraps minicli.ProcessCommand for multiple commands, combining
 // their outputs into a single channel.
-func RunCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
-	cmdLock.Lock()
+func runCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
+	c := commands{in: cmd, out: make(chan minicli.Responses)}
 
-	out := make(chan minicli.Responses)
-	go func() {
-		// Unlock and close the channel after forwarding all the responses
-		defer cmdLock.Unlock()
-		defer close(out)
-
-		forward(runCommands(cmd...), out)
-	}()
-
-	return out
+	cmdChannel <- c
+	return c.out
 }
 
 // namespaceCommands creates commands to run the given command on all hosts in
@@ -482,7 +475,7 @@ func cliLocal(input *liner.State) {
 			log.Warn("namespace changed between prompt and execution")
 		}
 
-		for resp := range RunCommands(cmd) {
+		for resp := range runCommands(cmd) {
 			// print the responses
 			minipager.DefaultPager.Page(resp.String())
 

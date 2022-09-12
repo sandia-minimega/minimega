@@ -174,9 +174,6 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 			c.Subcommand.Record = false
 
 			// Run the subcommand and forward the responses.
-			//
-			// LOCK: This is a CLI so we already hold cmdLock (can call
-			// runCommands instead of RunCommands).
 			forward(runCommands(c.Subcommand), respChan)
 			return
 		}
