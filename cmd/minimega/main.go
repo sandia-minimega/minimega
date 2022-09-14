@@ -49,7 +49,8 @@ var (
 	f_panic       = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 	f_cgroup      = flag.String("cgroup", "/sys/fs/cgroup", "path to cgroup mount")
 	f_pipe        = flag.String("pipe", "", "read/write to or from a named pipe")
-	f_lognode     = flag.String("lognode", "", "mesh node to send all logs to")
+	f_headnode    = flag.String("headnode", "", "mesh node to send all logs to and get all files from")
+	f_hashfiles   = flag.Bool("hashfiles", false, "hash files to be served by iomeshage")
 
 	f_e         = flag.Bool("e", false, "execute command on running minimega")
 	f_attach    = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
@@ -141,6 +142,13 @@ func main() {
 		log.Warn("hostname `%s` is a reserved word -- abandon all hope, ye who enter here", hostname)
 	}
 
+	// Don't allow a minimega instance to point to itself as the headnode, which
+	// would break mesh logging and iomeshage.
+	if *f_headnode == hostname {
+		headnode := ""
+		f_headnode = &headnode
+	}
+
 	// special case, catch -e and execute a command on an already running
 	// minimega instance
 	if *f_e || *f_attach {
@@ -227,7 +235,7 @@ func main() {
 
 	plumberStart(meshageNode)
 
-	if err := setupMeshageLogging(*f_lognode); err != nil {
+	if err := setupMeshageLogging(*f_headnode); err != nil {
 		log.Fatal("unable to setup mesh logging: %v", err)
 	}
 

@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -47,18 +48,21 @@ Files can be deleted with the delete command:
 If a directory is given, the directory will be recursively deleted.
 
 Files are transferred using the get command. When a get command is issued, the
-node will begin searching for a file matching the path and name within the
-mesh. If the file exists, it will be transferred to the requesting node. If
-multiple different files exist with the same name, the behavior is undefined.
-When a file transfer begins, control will return to minimega while the transfer
-completes.
+node will begin searching for a file matching the path and name within the mesh.
+If the file exists, it will be transferred to the requesting node. Which file is
+transferred over the mesh depends on the mode minimega is running in (see the
+"File transfer with minimega" article for details). When a file transfer begins,
+control will return to minimega while the transfer completes. If the -hashfiles
+flag is disabled (the default), and multiple files with the same name but
+different content exist across the mesh, the "file get" behavior for the file is
+undefined.
+
+If a directory is specified, that directory will be recursively transferred to
+the node.
 
 To see files that are currently being transferred, use the status command:
 
 	file status
-
-If a directory is specified, that directory will be recursively transferred to
-the node.
 
 You can also supply globs (wildcards) with the * operator. For example:
 
@@ -82,7 +86,7 @@ form the original file. This command blocks until the stream is complete.`,
 
 func iomeshageStart(node *meshage.Node) error {
 	var err error
-	iom, err = iomeshage.New(*f_iomBase, node)
+	iom, err = iomeshage.New(*f_iomBase, node, *f_headnode, *f_hashfiles)
 	return err
 }
 
@@ -97,9 +101,12 @@ func cliFile(c *minicli.Command, respChan chan<- minicli.Responses) {
 		}
 
 		resp := &minicli.Response{Host: hostname}
-
 		resp.Header = []string{"dir", "name", "size", "modified"}
 		resp.Tabular = [][]string{}
+
+		if *f_hashfiles {
+			resp.Header = append(resp.Header, "hash")
+		}
 
 		recursive := c.BoolArgs["recursive"]
 
@@ -111,11 +118,17 @@ func cliFile(c *minicli.Command, respChan chan<- minicli.Responses) {
 
 		for _, f := range files {
 			var dir string
+
 			if f.IsDir() {
 				dir = "<dir>"
 			}
 
 			row := []string{dir, iom.Rel(f), strconv.FormatInt(f.Size, 10), f.ModTime.Format(time.RFC3339)}
+
+			if *f_hashfiles {
+				row = append(row, f.Hash)
+			}
+
 			resp.Tabular = append(resp.Tabular, row)
 		}
 
@@ -183,7 +196,7 @@ func iomHelper(file, updatee string) (string, error) {
 
 	if err := iom.Get(file); err != nil {
 		// suppress in-flight error -- we'll just wait as normal
-		if err.Error() != "file already in flight" {
+		if !errors.Is(err, iomeshage.ErrInFlight) {
 			return "", err
 		}
 	}

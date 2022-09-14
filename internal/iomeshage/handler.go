@@ -93,6 +93,8 @@ func (iom *IOMeshage) handleInfo(m *Message) {
 		resp.ACK = !files[0].IsDir()
 		resp.Part = files[0].numParts()
 		resp.Perm = files[0].Perm()
+		resp.ModTime = files[0].ModTime
+		resp.Hash = iom.getHash(files[0].Path)
 
 		log.Debug("handleInfo: found %v with %v parts", m.Filename, resp.Part)
 	} else {
@@ -183,8 +185,12 @@ func (iom *IOMeshage) handlePart(m *Message, xfer bool) {
 	} else if len(files) == 1 {
 		resp.ACK = true
 		resp.Part = m.Part
+
 		if xfer {
 			resp.Data = iom.readPart(files[0].Path, m.Part)
+		} else {
+			resp.ModTime = files[0].ModTime
+			resp.Hash = iom.getHash(files[0].Path)
 		}
 	} else {
 		// found more than one file

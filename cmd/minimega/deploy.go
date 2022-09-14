@@ -207,12 +207,13 @@ func deployGetFlags() string {
 		return f
 	}
 
-	// default to having all mesh nodes send logs to this node
-	flags := []string{fmt.Sprintf("-lognode=%s", hostname)}
+	// Default to having all mesh nodes using this node as the head node for
+	// logging and file transfer purposes.
+	flags := []string{fmt.Sprintf("-headnode=%s", hostname)}
 
 	flag.VisitAll(func(f *flag.Flag) {
-		// ignore lognode setting for this node (will likely be empty)
-		if f.Name == "lognode" {
+		// ignore headnode setting for this node (will likely be empty)
+		if f.Name == "headnode" {
 			return
 		}
 

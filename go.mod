@@ -7,6 +7,7 @@ require (
 	github.com/anthonynsimon/bild v0.10.1-0.20190311092716-e21126554192
 	github.com/c9s/goprocinfo v0.0.0-20151025191153-19cb9f127a9c
 	github.com/dutchcoders/goftp v0.0.0-00010101000000-000000000000
+	github.com/fsnotify/fsnotify v1.5.5-0.20220826001856-69c24b069553
 	github.com/goftp/server v0.0.0-00010101000000-000000000000
 	github.com/google/gopacket v1.1.18-0.20190711070436-ce2e696dc0c9
 	github.com/jbuchbinder/gopnm v0.0.0-20150223212718-5176c556b9ce
@@ -16,10 +17,11 @@ require (
 	github.com/peterh/liner v1.0.1-0.20170317030525-88609521dc4b
 	github.com/stargrave/goircd v0.0.0-00010101000000-000000000000
 	github.com/thoj/go-ircevent v0.0.0-00010101000000-000000000000
+	github.com/twmb/murmur3 v1.1.6
 	github.com/ziutek/telnet v0.0.0-20150427115447-49d9be70897f
 	golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
 	golang.org/x/net v0.0.0-20210614182718-04defd469f4e
-	golang.org/x/sys v0.0.0-20210423082822-04245dca01da
+	golang.org/x/sys v0.0.0-20220825204002-c680a09ffe64
 )
 
 replace github.com/Harvey-OS/ninep => github.com/jcrussell/ninep v0.0.0-20180619175724-35ad2879c0a3

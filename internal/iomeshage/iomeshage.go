@@ -35,6 +35,9 @@ type IOMeshage struct {
 	queue     chan bool
 	rand      *rand.Rand
 
+	head string // node to prioritize getting files from (if set)
+	hash bool   // file hashing enabled
+
 	// transferLock guards transfers
 	transferLock sync.RWMutex
 	transfers    map[string]*Transfer // current transfers
@@ -42,6 +45,10 @@ type IOMeshage struct {
 	// tidLock guards TIDs
 	tidLock sync.Mutex
 	TIDs    map[int64]chan *Message // transfer ID -> channel
+
+	// hashLock guards hashes
+	hashLock sync.RWMutex
+	hashes   map[string]string
 }
 
 // Transfer describes an in-flight transfer.
@@ -55,13 +62,19 @@ type Transfer struct {
 }
 
 var (
+	// ErrInFlight is the error returned when getting a file that is already being
+	// transferred to this node.
+	ErrInFlight = errors.New("file already in flight")
+
 	timeout = time.Duration(30 * time.Second)
 )
 
 // New returns a new iomeshage object service base directory via meshage
-func New(base string, node *meshage.Node) (*IOMeshage, error) {
+func New(base string, node *meshage.Node, head string, hash bool) (*IOMeshage, error) {
 	base = filepath.Clean(base)
+
 	log.Debug("new iomeshage node on base %v", base)
+
 	if err := os.MkdirAll(base, 0755); err != nil {
 		return nil, err
 	}
@@ -74,6 +87,13 @@ func New(base string, node *meshage.Node) (*IOMeshage, error) {
 		transfers: make(map[string]*Transfer),
 		queue:     make(chan bool, QUEUE_LEN),
 		rand:      rand.New(rand.NewSource(time.Now().UnixNano())),
+		head:      head,
+		hash:      hash,
+		hashes:    make(map[string]string),
+	}
+
+	if hash {
+		go r.startHasher()
 	}
 
 	go r.handleMessages()
@@ -81,7 +101,7 @@ func New(base string, node *meshage.Node) (*IOMeshage, error) {
 	return r, nil
 }
 
-func (iom *IOMeshage) info(file string) ([]*Message, error) {
+func (iom *IOMeshage) info(file string) (*Files, error) {
 	TID, c := iom.newTID()
 	defer iom.unregisterTID(TID)
 
@@ -91,15 +111,17 @@ func (iom *IOMeshage) info(file string) ([]*Message, error) {
 		Filename: file,
 		TID:      TID,
 	}
+
 	recipients, err := iom.node.Broadcast(m)
 	if err != nil {
 		return nil, err
 	}
+
 	if log.WillLog(log.DEBUG) {
 		log.Debug("sent info request to %v nodes", len(recipients))
 	}
 
-	var info []*Message
+	info := NewFiles(iom.head, iom.hash)
 
 	// wait for n responses, or a timeout
 	for i := 0; i < len(recipients); i++ {
@@ -112,7 +134,8 @@ func (iom *IOMeshage) info(file string) ([]*Message, error) {
 				if log.WillLog(log.DEBUG) {
 					log.Debugln("got info from: ", resp.From)
 				}
-				info = append(info, resp)
+
+				info.add(resp)
 			}
 		case <-time.After(timeout):
 			return nil, fmt.Errorf("timeout")
@@ -186,61 +209,79 @@ func (iom *IOMeshage) Info(file string) []string {
 // directory, the entire directory will be recursively transferred. If the file
 // already exists on this node, Get will return immediately with no error.
 func (iom *IOMeshage) Get(file string) error {
-	// is this a directory or a glob
+	var exists bool
+
+	// If this is a file, and it currently exists locally on disk, and we're not
+	// in -headnode mode, then don't attempt to get the file from the mesh.
 	fi, err := os.Stat(filepath.Join(iom.base, file))
 	if err == nil && !fi.IsDir() {
-		return nil
+		if iom.head == "" {
+			return nil
+		}
+
+		exists = true
 	}
 
 	// is this file already in flight?
 	iom.transferLock.RLock()
-	if _, ok := iom.transfers[file]; ok {
-		iom.transferLock.RUnlock()
-		return fmt.Errorf("file already in flight")
-	}
+	_, ok := iom.transfers[file]
 	iom.transferLock.RUnlock()
+
+	if ok {
+		return ErrInFlight
+	}
 
 	info, err := iom.info(file)
 	if err != nil {
 		return err
 	}
-	if len(info) == 0 {
+	if len(info.messages()) == 0 {
 		return fmt.Errorf("get %v: file not found", file)
 	}
 
 	inflight := make(map[string]bool)
 
-	for _, v := range info {
+	for _, v := range info.messages() {
 		// is this a single file or a directory/blob?
 		if len(v.Glob) == 0 {
 			if _, ok := inflight[v.Filename]; ok {
 				continue
 			}
 
-			if log.WillLog(log.INFO) {
-				log.Info("found file on node %v with %v parts", v.From, v.Part)
+			use, ok := info.use(v.Filename, iom.getHash(v.Filename), exists)
+			if !ok { // should never happen since this isn't a glob
+				log.Error("unable to determine where to get file %s from", v.Filename)
+				continue
 			}
+
+			if use == nil {
+				log.Info("local file %s has the correct hash", v.Filename)
+				continue
+			}
+
+			log.Info("found file on node %v with %v parts", use.From, use.Part)
 
 			// create a transfer object
 			tdir, err := ioutil.TempDir(iom.base, "transfer_")
 			if err != nil {
-				log.Errorln(err)
 				return err
 			}
-			iom.transferLock.Lock()
-			iom.transfers[v.Filename] = &Transfer{
+
+			transfer := &Transfer{
 				Dir:      tdir,
-				Filename: v.Filename,
+				Filename: use.Filename,
 				Parts:    make(map[int64]bool),
-				NumParts: int(v.Part),
+				NumParts: int(use.Part),
 				Inflight: -1,
 				Queued:   true,
 			}
+
+			iom.transferLock.Lock()
+			iom.transfers[use.Filename] = transfer
 			iom.transferLock.Unlock()
 
-			go iom.getParts(v.Filename, v.Part, v.Perm)
-
-			inflight[v.Filename] = true
+			go iom.getParts(use)
+			inflight[use.Filename] = true
 		} else {
 			// call Get on each of the constituent files, queued in a random order
 
@@ -256,8 +297,11 @@ func (iom *IOMeshage) Get(file string) error {
 				if _, ok := inflight[x]; ok {
 					continue
 				}
+
 				if err := iom.Get(x); err != nil {
-					return err
+					if !errors.Is(err, ErrInFlight) {
+						return err
+					}
 				}
 			}
 		}
@@ -270,24 +314,34 @@ func (iom *IOMeshage) Get(file string) error {
 // the parts from. This does not store the file locally to avoid filling up the
 // local disk.
 func (iom *IOMeshage) Stream(file string) (chan []byte, error) {
-	// is this a directory or a glob
+	var exists bool
+
+	// If this is a file, and it currently exists locally on disk, and we're not
+	// in -headnode mode, then stream it.
 	fi, err := os.Stat(filepath.Join(iom.base, file))
 	if err == nil && !fi.IsDir() {
-		return stream(filepath.Join(iom.base, file))
+		if iom.head == "" {
+			return stream(filepath.Join(iom.base, file))
+		}
+
+		exists = true
 	}
 
 	info, err := iom.info(file)
 	if err != nil {
 		return nil, err
 	}
-	if len(info) == 0 {
+	if len(info.messages()) == 0 {
 		return nil, fmt.Errorf("stream %v: file not found", file)
 	}
 
-	// request file from the first responder
-	first := info[0]
-	if len(first.Glob) > 0 {
+	use, ok := info.use(file, iom.getHash(file), exists)
+	if !ok {
 		return nil, errors.New("cannot stream a glob")
+	}
+
+	if use == nil {
+		return stream(filepath.Join(iom.base, file))
 	}
 
 	out := make(chan []byte)
@@ -296,7 +350,7 @@ func (iom *IOMeshage) Stream(file string) (chan []byte, error) {
 		defer close(out)
 
 		if log.WillLog(log.DEBUG) {
-			log.Debug("found file on node %v with %v parts", first.From, first.Part)
+			log.Debug("found file on node %v with %v parts", use.From, use.Part)
 		}
 
 		// get in line
@@ -305,8 +359,8 @@ func (iom *IOMeshage) Stream(file string) (chan []byte, error) {
 			<-iom.queue
 		}()
 
-		for i := int64(0); i < first.Part; i++ {
-			data, err := iom.xfer(first.Filename, i, first.From)
+		for i := int64(0); i < use.Part; i++ {
+			data, err := iom.xfer(use, i)
 			if err != nil {
 				log.Error("stream failed: %v", err)
 				return
@@ -319,18 +373,18 @@ func (iom *IOMeshage) Stream(file string) (chan []byte, error) {
 	return out, nil
 }
 
-// Get a file with numParts parts. getParts will randomize the order of the
-// parts to maximize the distributed transfer behavior of iomeshage when used
-// at scale.
-func (iom *IOMeshage) getParts(filename string, numParts int64, perm os.FileMode) {
-	defer iom.destroyTempTransfer(filename)
+// Get a file with msg.Part parts. getParts will randomize the order of the
+// parts to maximize the distributed transfer behavior of iomeshage when used at
+// scale.
+func (iom *IOMeshage) getParts(msg *Message) {
+	defer iom.destroyTempTransfer(msg.Filename)
 
 	// corner case - empty file
-	if numParts == 0 {
-		fname := filepath.Join(iom.base, filename)
+	if msg.Part == 0 {
+		fname := filepath.Join(iom.base, msg.Filename)
 		log.Debug("file %v has 0 parts, creating empty file", fname)
 
-		if err := touch(fname, perm); err != nil {
+		if err := touch(fname, msg.Perm); err != nil {
 			log.Error("touch failed: %v", err)
 		}
 
@@ -338,14 +392,17 @@ func (iom *IOMeshage) getParts(filename string, numParts int64, perm os.FileMode
 	}
 
 	// create a random list of parts to grab
-	var parts []int64
-	var i int64
-	for i = 0; i < numParts; i++ {
+	var (
+		parts []int64
+		i     int64
+	)
+
+	for i = 0; i < msg.Part; i++ {
 		parts = append(parts, i)
 	}
 
 	// fisher-yates shuffle
-	for i = numParts - 1; i > 0; i-- {
+	for i = msg.Part - 1; i > 0; i-- {
 		j := iom.rand.Int63n(i + 1)
 		t := parts[j]
 		parts[j] = parts[i]
@@ -359,7 +416,7 @@ func (iom *IOMeshage) getParts(filename string, numParts int64, perm os.FileMode
 	}()
 
 	iom.transferLock.Lock()
-	iom.transfers[filename].Queued = false
+	iom.transfers[msg.Filename].Queued = false
 	iom.transferLock.Unlock()
 
 Outer:
@@ -367,11 +424,11 @@ Outer:
 		// attempt to get this part up to MAX_ATTEMPTS attempts
 		for attempt := 0; attempt < MAX_ATTEMPTS; attempt++ {
 			if log.WillLog(log.DEBUG) {
-				log.Debug("transferring filepart %v:%vattempt %v", filename, p, attempt)
+				log.Debug("transferring filepart %v:%vattempt %v", msg.Filename, p, attempt)
 			}
 
-			if err := iom.getPart(filename, p); err != nil {
-				log.Error("get filepart %v:%v failed: %v", filename, p, err)
+			if err := iom.getPart(msg, p); err != nil {
+				log.Error("get filepart %v:%v failed: %v", msg.Filename, p, err)
 
 				if attempt > 0 {
 					// we're most likely issuing multiple attempts because of
@@ -386,51 +443,59 @@ Outer:
 		}
 
 		iom.transferLock.RLock()
-		if !iom.transfers[filename].Parts[p] {
-			log.Error("could not transfer filepart %v:%v after %v attempts", filename, p, MAX_ATTEMPTS)
+		if !iom.transfers[msg.Filename].Parts[p] {
+			log.Error("could not transfer filepart %v:%v after %v attempts", msg.Filename, p, MAX_ATTEMPTS)
 			iom.transferLock.RUnlock()
 			return
 		}
 		iom.transferLock.RUnlock()
 	}
 
-	log.Info("got all parts for %v", filename)
+	log.Info("got all parts for %v", msg.Filename)
 
 	// copy the parts into the whole file
 	iom.transferLock.RLock()
-	t := iom.transfers[filename]
+	t := iom.transfers[msg.Filename]
 	iom.transferLock.RUnlock()
+
 	tfile, err := ioutil.TempFile(t.Dir, "cat_")
 	if err != nil {
 		log.Errorln(err)
 	}
 
-	for i = 0; i < numParts; i++ {
-		fname := fmt.Sprintf("%v/%v.part_%v", t.Dir, filepath.Base(filename), i)
+	for i = 0; i < msg.Part; i++ {
+		fname := fmt.Sprintf("%v/%v.part_%v", t.Dir, filepath.Base(msg.Filename), i)
+
 		fpart, err := os.Open(fname)
 		if err != nil {
 			log.Errorln(err)
 			tfile.Close()
 			return
 		}
+
 		io.Copy(tfile, fpart)
 		fpart.Close()
 	}
+
 	name := tfile.Name()
 	tfile.Close()
 
 	// create subdirectories
-	fullPath := filepath.Join(iom.base, filename)
-	err = os.MkdirAll(filepath.Dir(fullPath), 0755)
-	if err != nil {
+	fullPath := filepath.Join(iom.base, msg.Filename)
+
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 		log.Errorln(err)
 		return
 	}
+
+	// Give the file system watcher time to start watching the directory (if it's
+	// not already) before moving the file into it.
+	time.Sleep(500 * time.Millisecond)
 	os.Rename(name, fullPath)
 
-	log.Debug("changing permissions: %v %v", fullPath, perm)
-	err = os.Chmod(fullPath, perm)
-	if err != nil {
+	log.Debug("changing permissions: %v %v", fullPath, msg.Perm)
+
+	if err := os.Chmod(fullPath, msg.Perm); err != nil {
 		log.Errorln(err)
 	}
 }
@@ -500,27 +565,29 @@ func (iom *IOMeshage) whoHas(filename string, p int64) (string, error) {
 	return "", fmt.Errorf("who has %v: file not found", filename)
 }
 
-func (iom *IOMeshage) getPart(filename string, p int64) error {
+func (iom *IOMeshage) getPart(msg *Message, p int64) error {
 	// did I already get this part via another node's request?
 	iom.transferLock.Lock()
-	if iom.transfers[filename].Parts[p] {
+	if iom.transfers[msg.Filename].Parts[p] {
 		iom.transferLock.Unlock()
 		return nil
 	}
-	iom.transfers[filename].Inflight = p
+	iom.transfers[msg.Filename].Inflight = p
 	iom.transferLock.Unlock()
 
-	who, err := iom.whoHas(filename, p)
-	if err != nil {
-		return err
-	}
+	/*
+		who, err := iom.whoHas(filename, p)
+		if err != nil {
+			return err
+		}
 
-	if log.WillLog(log.DEBUG) {
-		log.Debug("found part %v on node %v", p, who)
-	}
+		if log.WillLog(log.DEBUG) {
+			log.Debug("found part %v on node %v", p, who)
+		}
+	*/
 
-	// transfer the part
-	data, err := iom.xfer(filename, p, who)
+	// transfer the part from a specific node
+	data, err := iom.xfer(msg, p)
 	if err != nil {
 		return err
 	}
@@ -528,12 +595,13 @@ func (iom *IOMeshage) getPart(filename string, p int64) error {
 	iom.transferLock.Lock()
 	defer iom.transferLock.Unlock()
 
-	t, ok := iom.transfers[filename]
+	t, ok := iom.transfers[msg.Filename]
 	if !ok {
-		return fmt.Errorf("ghost transfer of %v:%v finished", filename, p)
+		return fmt.Errorf("ghost transfer of %v:%v finished", msg.Filename, p)
 	}
 
-	outfile := fmt.Sprintf("%v/%v.part_%v", t.Dir, filepath.Base(filename), p)
+	outfile := fmt.Sprintf("%v/%v.part_%v", t.Dir, filepath.Base(msg.Filename), p)
+
 	if err := ioutil.WriteFile(outfile, data, 0664); err != nil {
 		return err
 	}
@@ -544,18 +612,18 @@ func (iom *IOMeshage) getPart(filename string, p int64) error {
 }
 
 // xfer returns a part of the file read requested from a remote node.
-func (iom *IOMeshage) xfer(filename string, part int64, from string) ([]byte, error) {
+func (iom *IOMeshage) xfer(msg *Message, part int64) ([]byte, error) {
 	TID, c := iom.newTID()
 	defer iom.unregisterTID(TID)
 
 	m := &Message{
 		From:     iom.node.Name(),
 		Type:     TYPE_XFER,
-		Filename: filename,
+		Filename: msg.Filename,
 		TID:      TID,
 		Part:     part,
 	}
-	if _, err := iom.node.Set([]string{from}, m); err != nil {
+	if _, err := iom.node.Set([]string{msg.From}, m); err != nil {
 		return nil, err
 	}
 

@@ -15,7 +15,7 @@ import (
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
-// FileInfo object. Used by the calling API to describe existing files.
+// FileInfo is used by the calling API to describe existing files.
 type FileInfo struct {
 	// Path is the absolute path to the file
 	Path string
@@ -26,15 +26,19 @@ type FileInfo struct {
 	// Modification time of the file
 	ModTime time.Time
 
+	// Murmur3 hash of the file
+	Hash string
+
 	// embed
 	os.FileMode
 }
 
-func newFileInfo(path string, fi os.FileInfo) FileInfo {
+func newFileInfo(path, hash string, fi os.FileInfo) FileInfo {
 	return FileInfo{
 		Path:     path,
 		Size:     fi.Size(),
 		ModTime:  fi.ModTime(),
+		Hash:     hash,
 		FileMode: fi.Mode(),
 	}
 }
@@ -71,13 +75,13 @@ func (iom *IOMeshage) List(path string, recurse bool) ([]FileInfo, error) {
 	var res []FileInfo
 
 	for _, f := range glob {
-		stat, err := os.Stat(f)
+		info, err := os.Stat(f)
 		if err != nil {
 			return nil, err
 		}
 
-		if !stat.IsDir() {
-			res = append(res, newFileInfo(f, stat))
+		if !info.IsDir() {
+			res = append(res, newFileInfo(f, iom.getHash(f), info))
 			continue
 		}
 
@@ -87,9 +91,9 @@ func (iom *IOMeshage) List(path string, recurse bool) ([]FileInfo, error) {
 				return nil, err
 			}
 
-			for _, f2 := range files {
-				path := filepath.Join(f, f2.Name())
-				res = append(res, newFileInfo(path, f2))
+			for _, info := range files {
+				path := filepath.Join(f, info.Name())
+				res = append(res, newFileInfo(path, iom.getHash(path), info))
 			}
 
 			continue
@@ -102,11 +106,12 @@ func (iom *IOMeshage) List(path string, recurse bool) ([]FileInfo, error) {
 			}
 
 			if !info.IsDir() {
-				res = append(res, newFileInfo(path, info))
+				res = append(res, newFileInfo(path, iom.getHash(path), info))
 			}
 
 			return nil
 		})
+
 		if err != nil {
 			return nil, err
 		}
@@ -196,6 +201,32 @@ func (iom *IOMeshage) readPart(filename string, part int64) []byte {
 	}
 
 	return data[:n]
+}
+
+func (iom *IOMeshage) getHash(path string) string {
+	if !filepath.IsAbs(path) {
+		path = iom.cleanPath(path)
+	}
+
+	iom.hashLock.RLock()
+	defer iom.hashLock.RUnlock()
+
+	return iom.hashes[path]
+}
+
+func (iom *IOMeshage) updateHash(path, hash string) {
+	if !filepath.IsAbs(path) {
+		path = iom.cleanPath(path)
+	}
+
+	iom.hashLock.Lock()
+	defer iom.hashLock.Unlock()
+
+	if hash == "" {
+		delete(iom.hashes, path)
+	} else {
+		iom.hashes[path] = hash
+	}
 }
 
 // stream reads a file from the local node's filesystem and returns the parts

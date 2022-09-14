@@ -16,6 +16,8 @@ github.com/anthonynsimon/bild/util
 github.com/c9s/goprocinfo/linux
 # github.com/dutchcoders/goftp v0.0.0-00010101000000-000000000000 => ./packages/github.com/dutchcoders/goftp
 github.com/dutchcoders/goftp
+# github.com/fsnotify/fsnotify v1.5.5-0.20220826001856-69c24b069553
+github.com/fsnotify/fsnotify
 # github.com/goftp/server v0.0.0-00010101000000-000000000000 => ./packages/github.com/goftp/server
 github.com/goftp/server
 # github.com/google/gopacket v1.1.18-0.20190711070436-ce2e696dc0c9
@@ -38,6 +40,8 @@ github.com/peterh/liner
 github.com/stargrave/goircd
 # github.com/thoj/go-ircevent v0.0.0-00010101000000-000000000000 => ./packages/github.com/thoj/go-ircevent
 github.com/thoj/go-ircevent
+# github.com/twmb/murmur3 v1.1.6
+github.com/twmb/murmur3
 # github.com/ziutek/telnet v0.0.0-20150427115447-49d9be70897f
 github.com/ziutek/telnet
 # golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
@@ -54,7 +58,7 @@ golang.org/x/crypto/ssh/terminal
 # golang.org/x/net v0.0.0-20210614182718-04defd469f4e
 golang.org/x/net/bpf
 golang.org/x/net/websocket
-# golang.org/x/sys v0.0.0-20210423082822-04245dca01da
+# golang.org/x/sys v0.0.0-20220825204002-c680a09ffe64
 golang.org/x/sys/cpu
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/unix

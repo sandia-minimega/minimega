@@ -76,7 +76,7 @@ func (this meshageLogWriter) log(l []byte) {
 
 func setupMeshageLogging(node string) error {
 	if node == "" {
-		// Do not error out here, since node will be an empty string if the -lognode
+		// Do not error out here, since node will be an empty string if the -headnode
 		// flag was not provided (which is the default).
 		return nil
 	}
@@ -96,7 +96,7 @@ func setupMeshageLogging(node string) error {
 	// We do not verify the presence of the destination node in the mesh in this
 	// function just in case the mesh hasn't been fully formed by the time this
 	// function is called (for example, at startup when the destination node is
-	// specified via the -lognode flag).
+	// specified via the -headnode flag).
 
 	meshLogger := meshageLogWriter{dest: node}
 
