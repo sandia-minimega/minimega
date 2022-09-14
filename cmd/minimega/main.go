@@ -241,6 +241,23 @@ func main() {
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
 	if !*f_nostdin {
+		// start status handler
+		go func() {
+			status := make(chan string)
+
+			addStatusMessageChannel("localcli", status)
+
+			for {
+				select {
+				case <-shutdown:
+					delStatusMessageChannel("localcli")
+					return
+				case s := <-status:
+					minipager.DefaultPager.Page(s)
+				}
+			}
+		}()
+
 		// start CLI
 		input := liner.NewLiner()
 		defer input.Close()

@@ -37,9 +37,11 @@ type meshageResponse struct {
 
 // meshageVMLaunch is sent by the scheduler to launch VMs on a remote host
 type meshageVMLaunch struct {
-	Namespace  string
-	*QueuedVMs       // embed
-	TID        int32 // unique ID for command/response pair
+	*QueuedVMs // embed
+
+	Namespace string
+	TID       int32  // unique ID for command/response pair
+	From      string // node scheduling the launch
 }
 
 // meshageVMResponse is sent back to the scheduler to notify it of any errors
@@ -69,6 +71,7 @@ func init() {
 	gob.Register(iomeshage.Message{})
 	gob.Register(miniplumber.Message{})
 	gob.Register(meshageLogMessage{})
+	gob.Register(meshageStatusMessage{})
 }
 
 func meshageStart(host, namespace string, degree, msaTimeout uint, broadcastIP string, port int) error {
@@ -123,6 +126,17 @@ func meshageMux() {
 				// don't let a fatal log on another node kill this node
 				log.Error("[node: %s] %s", msg.From, msg.Log)
 			}
+		case meshageStatusMessage:
+			// defined in status.go
+			msg := m.Body.(meshageStatusMessage)
+
+			meshageStatusLock.RLock()
+
+			for _, c := range meshageStatusChans {
+				c <- fmt.Sprintf("[%s]: %s", msg.From, msg.Status)
+			}
+
+			meshageStatusLock.RUnlock()
 		default:
 			log.Errorln("got invalid message!")
 		}
@@ -222,9 +236,10 @@ func meshageLaunch(host, namespace string, queued *QueuedVMs) <-chan minicli.Res
 
 	to := []string{host}
 	msg := meshageVMLaunch{
-		Namespace: namespace,
 		QueuedVMs: queued,
+		Namespace: namespace,
 		TID:       rand.Int31(),
+		From:      hostname,
 	}
 
 	go func() {

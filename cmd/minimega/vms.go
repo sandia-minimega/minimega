@@ -50,8 +50,9 @@ type QueuedVMs struct {
 
 // GetFiles looks through the VMConfig for files in the IOMESHAGE directory and
 // fetches them if they do not already exist. Currently, we enumerate all the
-// fields that take a file.
-func (q QueuedVMs) GetFiles() error {
+// fields that take a file. If updatee is provided, it will periodically be sent
+// status update messages about file transfer status.
+func (q QueuedVMs) GetFiles(updatee string) error {
 	files := []string{
 		q.ContainerConfig.Preinit,
 		q.KVMConfig.CdromPath,
@@ -65,7 +66,7 @@ func (q QueuedVMs) GetFiles() error {
 
 	for _, f := range files {
 		if strings.HasPrefix(f, *f_iomBase) {
-			if _, err := iomHelper(f); err != nil {
+			if _, err := iomHelper(f, updatee); err != nil {
 				return err
 			}
 		}
@@ -247,14 +248,14 @@ func (vms *VMs) FindKvmVMs() []*KvmVM {
 // Launch takes QueuedVMs and launches them after performing a few sanity
 // checks. Launch returns any errors that occur via a channel since it launches
 // VMs asynchronously.
-func (vms *VMs) Launch(namespace string, q *QueuedVMs) <-chan error {
+func (vms *VMs) Launch(requestor, namespace string, q *QueuedVMs) <-chan error {
 	errs := make(chan error)
 
 	go func() {
 		defer close(errs)
 
 		// prefetch any files associated with VMs
-		if err := q.GetFiles(); err != nil {
+		if err := q.GetFiles(requestor); err != nil {
 			errs <- err
 			return
 		}
@@ -586,7 +587,7 @@ func meshageVMLauncher() {
 			ns := GetOrCreateNamespace(cmd.Namespace)
 
 			errs := []string{}
-			for _, err := range ns.Launch(cmd.QueuedVMs) {
+			for _, err := range ns.Launch(cmd.From, cmd.QueuedVMs) {
 				errs = append(errs, err.Error())
 			}
 

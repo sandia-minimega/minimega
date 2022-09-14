@@ -50,6 +50,7 @@ func commandSocketHandle(c net.Conn) {
 
 	enc := json.NewEncoder(c)
 	dec := json.NewDecoder(c)
+	done := make(chan struct{})
 
 	var err error
 
@@ -144,6 +145,22 @@ func commandSocketHandle(c net.Conn) {
 			cmd.SetRecord(false)
 		}
 
+		go func() {
+			for {
+				status := make(chan string)
+
+				addStatusMessageChannel("cmdsocket", status)
+
+				select {
+				case <-done:
+					delStatusMessageChannel("cmdsocket")
+					return
+				case s := <-status:
+					sendLocalStatus(enc, s)
+				}
+			}
+		}()
+
 		// HAX: Work around so that we can add the more boolean.
 		var prev minicli.Responses
 
@@ -163,6 +180,8 @@ func commandSocketHandle(c net.Conn) {
 			err = sendLocalResp(enc, prev, false)
 		}
 	}
+
+	close(done)
 
 	// finally, log the error, if there was one
 	if err == nil || err == io.EOF {
@@ -201,6 +220,15 @@ func sendLocalResp(enc *json.Encoder, resp minicli.Responses, more bool) error {
 func sendLocalSuggest(enc *json.Encoder, suggest []string) error {
 	r := miniclient.Response{
 		Suggest: suggest,
+	}
+
+	return enc.Encode(&r)
+}
+
+func sendLocalStatus(enc *json.Encoder, status string) error {
+	r := miniclient.Response{
+		Rendered: status,
+		Status:   true,
 	}
 
 	return enc.Encode(&r)
