@@ -13,7 +13,7 @@ import (
 func init() {
 	if networkSetFuncs == nil {
 		networkSetFuncs = make(map[string]func([]string, int) error)
-		networkClearFuncs = make(map[string]func([]string) error)
+		networkClearFuncs = make(map[string]func([]string, int) error)
 	}
 	networkSetFuncs["arista"] = aristaSet
 	networkClearFuncs["arista"] = aristaClear
@@ -100,7 +100,7 @@ func aristaSet(nodes []string, vlan int) error {
 	return nil
 }
 
-func aristaClear(nodes []string) error {
+func aristaClear(nodes []string, _ int) error {
 	t := template.Must(template.New("set").Parse(aristaClearTemplate))
 
 	for _, n := range nodes {

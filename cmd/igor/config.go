@@ -92,6 +92,8 @@ type Config struct {
 	// creating new reservations or extending current
 	// reservations. If the value is not "", igor is paused.
 	Pause string
+
+	Advanced map[string]interface{}
 }
 
 // Read in the configuration from the specified path. Checks to make sure that

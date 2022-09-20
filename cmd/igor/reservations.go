@@ -146,7 +146,7 @@ func (r *Reservations) Delete(id uint64) error {
 	// Only clear network and uninstall if the reservation is installed
 	if res.Installed {
 		// clean up the network config
-		if err := networkClear(res.Hosts); err != nil {
+		if err := networkClear(res.Hosts, res.Vlan); err != nil {
 			return fmt.Errorf("error clearing network isolation: %v", err)
 		}
 
