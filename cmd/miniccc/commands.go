@@ -46,7 +46,9 @@ func processCommand(cmd *ron.Command) {
 	}
 
 	if len(cmd.Command) != 0 {
-		resp.Stdout, resp.Stderr = runCommand(cmd.Stdin, cmd.Stdout, cmd.Stderr, cmd.Command, cmd.Background)
+		resp.Stdout, resp.Stderr, resp.ExitCode = runCommand(cmd.Stdin, cmd.Stdout, cmd.Stderr, cmd.Command, cmd.Background)
+		// don't record exit code if this is a background command
+		resp.RecordExitCode = !cmd.Background
 	}
 
 	if cmd.ConnTest != nil {
@@ -76,7 +78,7 @@ func lookPath(file string) (string, error) {
 	return exec.LookPath(file)
 }
 
-func runCommand(stdin, stdout, stderr string, command []string, background bool) (string, string) {
+func runCommand(stdin, stdout, stderr string, command []string, background bool) (string, string, int) {
 	done := make(chan struct{})
 	var bufout, buferr bytes.Buffer
 
@@ -84,7 +86,7 @@ func runCommand(stdin, stdout, stderr string, command []string, background bool)
 	if err != nil {
 		log.Errorln(err)
 		close(done)
-		return "", err.Error()
+		return "", err.Error(), -1
 	}
 
 	cmd := &exec.Cmd{
@@ -96,13 +98,13 @@ func runCommand(stdin, stdout, stderr string, command []string, background bool)
 		pStdin, err := cmd.StdinPipe()
 		if err != nil {
 			log.Errorln(err)
-			return "", ""
+			return "", "", -1
 		}
 
 		cStdin, err := NewPlumberReader(stdin)
 		if err != nil {
 			log.Errorln(err)
-			return "", ""
+			return "", "", -1
 		}
 
 		go func() {
@@ -127,14 +129,14 @@ func runCommand(stdin, stdout, stderr string, command []string, background bool)
 		if err != nil {
 			log.Errorln(err)
 			close(done)
-			return "", ""
+			return "", "", -1
 		}
 
 		cStdout, err := NewPlumberWriter(stdout)
 		if err != nil {
 			log.Errorln(err)
 			close(done)
-			return "", ""
+			return "", "", -1
 		}
 
 		go func() {
@@ -161,14 +163,14 @@ func runCommand(stdin, stdout, stderr string, command []string, background bool)
 		if err != nil {
 			log.Errorln(err)
 			close(done)
-			return "", ""
+			return "", "", -1
 		}
 
 		cStderr, err := NewPlumberWriter(stderr)
 		if err != nil {
 			log.Errorln(err)
 			close(done)
-			return "", ""
+			return "", "", -1
 		}
 
 		go func() {
@@ -196,7 +198,7 @@ func runCommand(stdin, stdout, stderr string, command []string, background bool)
 		log.Debug("starting in background")
 		if err := cmd.Start(); err != nil {
 			log.Errorln(err)
-			return "", buferr.String()
+			return "", buferr.String(), -1
 		}
 
 		pid := cmd.Process.Pid
@@ -224,13 +226,24 @@ func runCommand(stdin, stdout, stderr string, command []string, background bool)
 			delete(client.Processes, pid)
 		}()
 
-		return "", ""
+		return "", "", 0
 	}
 
-	if err := cmd.Run(); err != nil {
+	// To avoid returning a false positive, default to -1 in case error below
+	// isn't an exec.ExitError.
+	exitCode := -1
+
+	if err := cmd.Run(); err == nil {
+		exitCode = 0
+	} else {
 		log.Errorln(err)
+
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		}
 	}
-	return bufout.String(), buferr.String()
+
+	return bufout.String(), buferr.String(), exitCode
 }
 
 func kill(pid int) {

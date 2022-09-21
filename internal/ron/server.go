@@ -361,6 +361,43 @@ func (s *Server) GetProcesses(uuid string) ([]*Process, error) {
 	return res, nil
 }
 
+func (s *Server) GetExitCode(id int, client string) (int, error) {
+	var cid string
+
+	if _, ok := s.clients[client]; ok {
+		cid = client
+	} else {
+		for _, c := range s.clients {
+			if c.Hostname == client {
+				cid = c.UUID
+				break
+			}
+		}
+	}
+
+	if cid == "" {
+		return 0, fmt.Errorf("no client %s", client)
+	}
+
+	path := filepath.Join(s.responsePath(&id), cid, "exitcode")
+
+	if _, err := os.Stat(path); err != nil {
+		return 0, err
+	}
+
+	body, err := ioutil.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+
+	code, err := strconv.Atoi(strings.TrimSpace(string(body)))
+	if err != nil {
+		return 0, err
+	}
+
+	return code, nil
+}
+
 func (s *Server) GetResponse(id int, raw bool) (string, error) {
 	base := filepath.Join(s.responsePath(&id))
 	res, err := s.getResponses(base, raw)
@@ -1089,10 +1126,18 @@ func (s *Server) responseHandler() {
 			s.commandCheckIn(v.ID, cin.UUID)
 
 			path := filepath.Join(s.responsePath(&v.ID), cin.UUID)
-			err := os.MkdirAll(path, os.FileMode(0770))
-			if err != nil {
+
+			if err := os.MkdirAll(path, os.FileMode(0770)); err != nil {
 				log.Error("could not record response %v for %v: %v", v.ID, cin.UUID, err)
 				continue
+			}
+
+			// generate exitcode file
+			if v.RecordExitCode {
+				err := ioutil.WriteFile(filepath.Join(path, "exitcode"), []byte(strconv.Itoa(v.ExitCode)), os.FileMode(0660))
+				if err != nil {
+					log.Error("could not record exit code %v for %v: %v", v.ID, cin.UUID, err)
+				}
 			}
 
 			// generate stdout and stderr if they exist
@@ -1102,6 +1147,7 @@ func (s *Server) responseHandler() {
 					log.Error("could not record stdout %v for %v: %v", v.ID, cin.UUID, err)
 				}
 			}
+
 			if v.Stderr != "" {
 				err := ioutil.WriteFile(filepath.Join(path, "stderr"), []byte(v.Stderr), os.FileMode(0660))
 				if err != nil {
@@ -1198,6 +1244,10 @@ func (s *Server) getResponses(base string, raw bool) (string, error) {
 		}
 
 		if !info.IsDir() {
+			if strings.HasSuffix(path, "exitcode") {
+				return nil
+			}
+
 			log.Debug("add to response files: %v", path)
 
 			data, err := ioutil.ReadFile(path)

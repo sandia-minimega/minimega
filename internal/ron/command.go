@@ -76,6 +76,11 @@ type Response struct {
 	// Output from responding command, if any
 	Stdout string
 	Stderr string
+
+	// exec'ed command exit code
+	ExitCode int
+	// should server record exit code
+	RecordExitCode bool
 }
 
 type ConnTest struct {
