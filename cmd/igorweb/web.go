@@ -11,6 +11,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"os/user"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -377,6 +379,131 @@ func getDefaultImages() map[string]*kiPair {
 	return imagelist
 }
 
+func nodeInfoHandler(w http.ResponseWriter, r *http.Request) {
+	if !webS {
+		log.Debug(fmt.Sprintf("%s %s %s", r.Method, r.URL, r.RemoteAddr))
+	}
+
+	hostname := r.URL.Query().Get("hostname")
+	if hostname == "" {
+		http.Error(w, "no hostname provided", http.StatusBadRequest)
+		return
+	}
+
+	status := show("igor")
+	var info map[string]interface{}
+
+	keySnatcher := func(uname string) []string {
+		var keys []string
+
+		owner, err := user.Lookup(uname)
+		if err != nil {
+			log.Error("unable to lookup user %s: %v", uname, err)
+			return keys
+		}
+
+		if owner.HomeDir != "" {
+			sshDir := filepath.Join(owner.HomeDir, ".ssh")
+
+			entries, err := ioutil.ReadDir(sshDir)
+			if err != nil {
+				log.Error("unable to get list of files from %s: %v", sshDir, err)
+				return keys
+			}
+
+			for _, entry := range entries {
+				if entry.Name() == "authorized_keys" || strings.HasSuffix(entry.Name(), ".pub") {
+					path := filepath.Join(sshDir, entry.Name())
+
+					file, err := os.Open(path)
+					if err != nil {
+						log.Error("unable to open %s for reading: %v", path, err)
+						continue
+					}
+
+					scanner := bufio.NewScanner(file)
+					scanner.Split(bufio.ScanLines)
+
+					for scanner.Scan() {
+						line := scanner.Text()
+
+						if line == "" {
+							continue
+						}
+
+						keys = append(keys, line)
+					}
+				}
+			}
+		}
+
+		return keys
+	}
+
+	groupUsers := func(gname string) []string {
+		file, err := os.Open("/etc/group")
+		if err != nil {
+			return nil
+		}
+
+		scanner := bufio.NewScanner(file)
+		scanner.Split(bufio.ScanLines)
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			if strings.HasPrefix(line, gname) {
+				tokens := strings.Split(line, ":")
+				return strings.Split(tokens[3], ",")
+			}
+		}
+
+		return nil
+	}
+
+	for _, res := range status.Reservations {
+		for _, host := range res.Hosts {
+			if host == hostname {
+				info = map[string]interface{}{
+					"reservation": res.Name,
+					"owner":       res.Owner,
+					"nodes":       res.Hosts,
+				}
+
+				// ensure empty slice instead of nil
+				keys := make([]string, 0)
+
+				keys = append(keys, keySnatcher(res.Owner)...)
+
+				if res.Group != "" {
+					for _, u := range groupUsers(res.Group) {
+						if u != "" { // could be empty string if no users in group
+							keys = append(keys, keySnatcher(u)...)
+						}
+					}
+				}
+
+				info["ssh_keys"] = keys
+
+				break
+			}
+		}
+
+		if info != nil {
+			break
+		}
+	}
+
+	if info == nil {
+		http.Error(w, "no reservations found", http.StatusBadRequest)
+		return
+	}
+
+	body, _ := json.Marshal(info)
+
+	w.Write(body)
+}
+
 func main() {
 	flag.Usage = usage
 	flag.Parse()
@@ -403,6 +530,9 @@ func main() {
 
 	// commands
 	http.HandleFunc("/run/", cmdHandler)
+
+	// node info
+	http.HandleFunc("/info", nodeInfoHandler)
 
 	// spin up server on specified port
 	log.Fatal(http.ListenAndServe("127.0.0.1:"+webP, nil).Error())
