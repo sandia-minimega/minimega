@@ -51,6 +51,10 @@ type VM interface {
 	GetNetwork(i int) (NetConfig, error) // GetNetwork returns the ith NetConfigs associated with the vm.
 	GetNetworks() []NetConfig            // GetNetworks returns an ordered, deep copy of the NetConfigs associated with the vm.
 
+	GetBonds() map[string]BondConfig                         // GetBonds returns a map of bond names to bond configs for the VM.
+	AddBond(string, []int, string, string, bool, bool) error // AddBond creates a new bond for the VM to include the given interfaces.
+	ClearBond(string) error                                  // ClearBond deletes bond for the VM.
+
 	// Lifecycle functions
 	Launch() error
 	Kill() error
@@ -134,7 +138,7 @@ var vmInfo = []string{
 	// generic fields
 	"id", "name", "state", "uptime", "type", "uuid", "cc_active", "pid",
 	// network fields
-	"vlan", "bridge", "tap", "mac", "ip", "ip6", "qos", "qinq",
+	"vlan", "bridge", "tap", "mac", "ip", "ip6", "qos", "qinq", "bond",
 	// more generic fields but want next to vcpus
 	"memory",
 	// kvm fields
@@ -296,6 +300,10 @@ func (vm *BaseVM) GetNetwork(i int) (NetConfig, error) {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
+	return vm.getNetwork(i)
+}
+
+func (vm *BaseVM) getNetwork(i int) (NetConfig, error) {
 	if len(vm.Networks) <= i {
 		return NetConfig{}, fmt.Errorf("no such interface %v for %v", i, vm.Name)
 	}
@@ -312,6 +320,113 @@ func (vm *BaseVM) GetNetworks() []NetConfig {
 	copy(n, vm.Networks)
 
 	return n
+}
+
+func (vm *BaseVM) GetBonds() map[string]BondConfig {
+	return vm.Bonds
+}
+
+func (vm *BaseVM) AddBond(name string, ifaces []int, mode, lacp string, fallback, qinq bool) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	var (
+		interfaces = make([]NetConfig, len(ifaces))
+		ifaceMap   = make(map[string]int) // name --> VLAN mapping
+		vlan       = -1
+
+		bridge string
+	)
+
+	for i, idx := range ifaces {
+		cfg, err := vm.getNetwork(idx)
+		if err != nil {
+			return fmt.Errorf("interface %d not found for vm %s", idx, vm.Name)
+		}
+
+		if bridge == "" {
+			bridge = cfg.Bridge
+		} else if cfg.Bridge != bridge {
+			return fmt.Errorf("interfaces being bonded are not on the same bridge")
+		}
+
+		if vlan < 0 {
+			vlan = cfg.VLAN
+		} else if cfg.VLAN != vlan {
+			log.Warn("interface %d on vm %s is not on VLAN %d -- still defaulting to %d for bond", idx, vm.Name, vlan, vlan)
+		}
+
+		qinq = qinq || cfg.QinQ
+
+		interfaces[i] = cfg
+		ifaceMap[cfg.Tap] = cfg.VLAN
+	}
+
+	br, err := getBridge(bridge)
+	if err != nil {
+		return err
+	}
+
+	if name == "" {
+		name = br.CreateBondName()
+	}
+
+	if err := br.AddBond(name, mode, lacp, fallback, ifaceMap, vlan); err != nil {
+		return err
+	}
+
+	if qinq {
+		br.SetTapQinQ(name, vlan)
+	}
+
+	bond := BondConfig{
+		Name:       name,
+		Bridge:     bridge,
+		VLAN:       vlan,
+		QinQ:       qinq,
+		Interfaces: interfaces,
+	}
+
+	vm.Bonds[name] = bond
+	return nil
+}
+
+func (vm *BaseVM) ClearBond(name string) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	bond, ok := vm.Bonds[name]
+	if !ok {
+		return fmt.Errorf("bond %s doesn't exist on VM %s", name, vm.Name)
+	}
+
+	br, err := getBridge(bond.Bridge)
+	if err != nil {
+		return err
+	}
+
+	if err := br.DeleteBond(name); err != nil {
+		return err
+	}
+
+	var errs []string
+
+	for _, iface := range bond.Interfaces {
+		if iface.QinQ {
+			if err := br.SetTapQinQ(iface.Tap, iface.VLAN); err != nil {
+				errs = append(errs, err.Error())
+			}
+		}
+	}
+
+	// Delete bond even if setting QinQ for any of the taps failed above.
+	delete(vm.Bonds, name)
+
+	if len(errs) > 0 {
+		return fmt.Errorf("configuring QinQ for unbonded interfaces:\n%s", strings.Join(errs, "\n"))
+	}
+
+	return nil
 }
 
 func (vm *BaseVM) GetHost() string {
@@ -715,10 +830,39 @@ func (vm *BaseVM) Info(field string) (string, error) {
 			}
 		}
 	case "qinq":
-		for _, v := range vm.Networks {
-			if v.QinQ {
-				vals = append(vals, fmt.Sprintf("%s (%d)", v.Tap, v.VLAN))
+		for _, n := range vm.Networks {
+			if n.QinQ {
+				var bonded bool
+
+				for _, b := range vm.Bonds {
+					if b.Contains(n.Tap) {
+						bonded = true
+						break
+					}
+				}
+
+				// Don't show tap in QinQ list if it's part of a bond, since the bond it
+				// is part of will show up in the list as well.
+				if !bonded {
+					vals = append(vals, fmt.Sprintf("%s (%d)", n.Tap, n.VLAN))
+				}
 			}
+		}
+
+		for _, b := range vm.Bonds {
+			if b.QinQ {
+				vals = append(vals, fmt.Sprintf("%s (%d)", b.Name, b.VLAN))
+			}
+		}
+	case "bond":
+		for _, b := range vm.Bonds {
+			taps := make([]string, len(b.Interfaces))
+
+			for i, c := range b.Interfaces {
+				taps[i] = c.Tap
+			}
+
+			vals = append(vals, fmt.Sprintf("%s (%s)", b.Name, strings.Join(taps, " ")))
 		}
 	case "tags":
 		return marshal(vm.Tags), nil

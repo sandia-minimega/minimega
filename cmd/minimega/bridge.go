@@ -26,6 +26,7 @@ const (
 const (
 	DefaultBridge = "mega_bridge"
 	TapFmt        = "mega_tap%v"
+	BondFmt       = "mega_bond%v"
 	TapReapRate   = time.Second
 )
 
@@ -34,7 +35,7 @@ type Tap struct {
 	host bool
 }
 
-var bridges = bridge.NewBridges(DefaultBridge, TapFmt)
+var bridges = bridge.NewBridges(DefaultBridge, TapFmt, BondFmt)
 
 // tapReaperStart periodically calls bridges.ReapTaps
 func tapReaperStart() {

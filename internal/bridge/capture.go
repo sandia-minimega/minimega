@@ -155,7 +155,7 @@ func (b *Bridge) Capture(fname string, config ...CaptureConfig) (int, error) {
 
 	var id int
 
-	tap := <-b.nameChan
+	tap := <-b.tapChan
 	if err := b.createHostTap(tap, 0); err != nil {
 		return 0, err
 	}

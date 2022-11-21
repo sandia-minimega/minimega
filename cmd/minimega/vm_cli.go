@@ -276,11 +276,33 @@ optional bridge:
 
 If the bridge name is omitted, the interface will be reconnected to the same
 bridge that it is already on. If the interface is not connected to a bridge, it
-will be connected to the default bridge, "mega_bridge".`,
+will be connected to the default bridge, "mega_bridge".
+
+To create a bond comprised of two or more interfaces on a VM, use 'vm net bond'.
+For example, to create an 'active-backup' bond with interfaces 1 and 2 on VM foo
+with LACP set to active:
+
+	vm net bond foo 1,2 active-backup active
+
+There are three bond modes supported: active-backup, balance-slb, and
+balance-tcp, and three LACP modes supported: active, passive, and off. To
+disable the bond if LACP negotiation fails instead of falling back to
+active-backup mode, provide the 'no-lacp-fallback' option.
+
+Bonds can also be configured in "dot1q-tunnel" mode (QinQ) in OVS with the
+"qinq" option. If configured in "dot1q-tunnel" mode, the outer VLAN tag will be
+set to the VLAN the bonded interfaces originally belonged to. Note that a bond
+will also be configured in "dot1q-tunnel" mode if at least one of the bonded
+interfaces was configured in "dot1q-tunnel" mode, even without the "qinq"
+option.`,
 		Patterns: []string{
 			"vm net <add,> <vm target> [netspec]...",
 			"vm net <connect,> <vm target> <tap position> <vlan> [bridge]",
 			"vm net <disconnect,> <vm target> <tap position>",
+			"vm net <bond,> <vm target> <interface indexes> <active-backup,balance-slb,balance-tcp> <active,passive,off> [qinq,]",
+			"vm net <bond,> <vm target> <interface indexes> <active-backup,balance-slb,balance-tcp> <active,passive,off> name <name> [qinq,]",
+			"vm net <bond,> <vm target> <interface indexes> <active-backup,balance-slb,balance-tcp> <active,passive> <no-lacp-fallback,> [qinq,]",
+			"vm net <bond,> <vm target> <interface indexes> <active-backup,balance-slb,balance-tcp> <active,passive> <no-lacp-fallback,> name <name> [qinq,]",
 		},
 		Call: wrapVMTargetCLI(cliVMNetMod),
 		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
@@ -450,6 +472,14 @@ Clear all tags from all VMs:
 			"clear vm tag <vm target> [tag]",
 		},
 		Call:    wrapVMTargetCLI(cliClearVMTag),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
+	},
+	{ // clear vm net bond
+		HelpShort: "remove net bonds from a VM",
+		Patterns: []string{
+			"clear vm net bond <vm target> [name]",
+		},
+		Call:    wrapVMTargetCLI(cliClearVMNetBond),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
 	},
 	{ // vm top
@@ -627,6 +657,29 @@ func cliClearVMTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 
 	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
 		vm.ClearTag(key)
+
+		return true, nil
+	})
+}
+
+func cliClearVMNetBond(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	var (
+		target = c.StringArgs["vm"]
+		name   = c.StringArgs["name"]
+	)
+
+	return ns.VMs.Apply(target, func(vm VM, _ bool) (bool, error) {
+		if name == "" { // clear all VM bonds
+			for name := range vm.GetBonds() {
+				if err := vm.ClearBond(name); err != nil {
+					return true, err
+				}
+			}
+		} else { // clear VM bond by name
+			if err := vm.ClearBond(name); err != nil {
+				return true, err
+			}
+		}
 
 		return true, nil
 	})
@@ -921,62 +974,168 @@ func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 
 func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	target := c.StringArgs["vm"]
-	var pos int
-	var err error
-	if !c.BoolArgs["add"] {
-		pos, err = strconv.Atoi(c.StringArgs["tap"])
-		if err != nil {
-			return err
-		}
-	}
 
-	var vlan int
-	if !c.BoolArgs["disconnect"] && !c.BoolArgs["add"] {
-		vlan, err = lookupVLAN(ns.Name, c.StringArgs["vlan"])
-		if err != nil {
-			return err
-		}
-	}
+	var fn vmApplyFunc
 
-	bridge := c.StringArgs["bridge"]
-
-	return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
-		var err error
-
-		log.Info("vm networks: %v", vm.GetNetworks())
-
-		if c.BoolArgs["add"] {
-			// This will do the work of adding the interface to the vm
+	if c.BoolArgs["add"] {
+		// this will do the work of adding the interface to the vm
+		fn = func(vm VM, _ bool) (bool, error) {
 			nics, err := ns.parseVMNets(c.ListArgs["netspec"])
 			if err != nil {
 				return true, err
 			}
+
 			kvm, ok := vm.(*KvmVM)
 			if !ok {
-				return true, fmt.Errorf("Unable to get Kvm")
+				return true, fmt.Errorf("unable to get Kvm")
 			}
+
 			for _, n := range nics {
 				err = kvm.AddNIC(n)
 			}
-		} else if c.BoolArgs["disconnect"] {
-			err = vm.NetworkDisconnect(pos)
-		} else {
-			err = vm.NetworkConnect(pos, vlan, bridge)
-		}
 
+			if err != nil {
+				return true, err
+			}
+
+			log.Info("vm networks: %v", vm.GetNetworks())
+
+			if err := writeVMConfig(vm); err != nil {
+				// don't propagate this error
+				log.Warn("unable to update vm config for %v: %v", vm.GetID(), err)
+			}
+
+			return true, nil
+		}
+	} else if c.BoolArgs["connect"] {
+		pos, err := strconv.Atoi(c.StringArgs["tap"])
 		if err != nil {
-			return true, err
+			return err
 		}
 
-		log.Info("vm networks: %v", vm.GetNetworks())
-
-		if err := writeVMConfig(vm); err != nil {
-			// don't propagate this error
-			log.Warn("unable to update vm config for %v: %v", vm.GetID(), err)
+		vlan, err := lookupVLAN(ns.Name, c.StringArgs["vlan"])
+		if err != nil {
+			return err
 		}
 
-		return true, nil
-	})
+		bridge := c.StringArgs["bridge"]
+
+		fn = func(vm VM, _ bool) (bool, error) {
+			if err := vm.NetworkConnect(pos, vlan, bridge); err != nil {
+				return true, err
+			}
+
+			log.Info("vm networks: %v", vm.GetNetworks())
+
+			if err := writeVMConfig(vm); err != nil {
+				// don't propagate this error
+				log.Warn("unable to update vm config for %v: %v", vm.GetID(), err)
+			}
+
+			return true, nil
+		}
+	} else if c.BoolArgs["disconnect"] {
+		pos, err := strconv.Atoi(c.StringArgs["tap"])
+		if err != nil {
+			return err
+		}
+
+		fn = func(vm VM, _ bool) (bool, error) {
+			if err := vm.NetworkDisconnect(pos); err != nil {
+				return true, err
+			}
+
+			log.Info("vm networks: %v", vm.GetNetworks())
+
+			if err := writeVMConfig(vm); err != nil {
+				// don't propagate this error
+				log.Warn("unable to update vm config for %v: %v", vm.GetID(), err)
+			}
+
+			return true, nil
+		}
+	} else if c.BoolArgs["bond"] {
+		log.Info("adding bond for VM %s", target)
+
+		var (
+			name       = c.StringArgs["name"]
+			qinq       = c.BoolArgs["qinq"]
+			noFallback = c.BoolArgs["no-lacp-fallback"]
+			ifaces     []int
+		)
+
+		for _, i := range strings.Split(c.StringArgs["interface"], ",") {
+			idx, err := strconv.Atoi(i)
+			if err != nil {
+				return fmt.Errorf("invalid interface index: %s", i)
+			}
+
+			ifaces = append(ifaces, idx)
+		}
+
+		fn = func(vm VM, _ bool) (bool, error) {
+			if c.BoolArgs["active-backup"] {
+				if c.BoolArgs["active"] {
+					if err := vm.AddBond(name, ifaces, "active-backup", "active", !noFallback, qinq); err != nil {
+						return true, err
+					}
+				} else if c.BoolArgs["passive"] {
+					if err := vm.AddBond(name, ifaces, "active-backup", "passive", !noFallback, qinq); err != nil {
+						return true, err
+					}
+				} else if c.BoolArgs["off"] {
+					if err := vm.AddBond(name, ifaces, "active-backup", "off", !noFallback, qinq); err != nil {
+						return true, err
+					}
+				} else { // we should never get here...
+					return true, fmt.Errorf("unknown LACP mode specified")
+				}
+			} else if c.BoolArgs["balance-slb"] {
+				if c.BoolArgs["active"] {
+					if err := vm.AddBond(name, ifaces, "balance-slb", "active", !noFallback, qinq); err != nil {
+						return true, err
+					}
+				} else if c.BoolArgs["passive"] {
+					if err := vm.AddBond(name, ifaces, "balance-slb", "passive", !noFallback, qinq); err != nil {
+						return true, err
+					}
+				} else if c.BoolArgs["off"] {
+					if err := vm.AddBond(name, ifaces, "balance-slb", "off", !noFallback, qinq); err != nil {
+						return true, err
+					}
+				} else { // we should never get here...
+					return true, fmt.Errorf("unknown LACP mode specified")
+				}
+			} else if c.BoolArgs["balance-tcp"] {
+				if c.BoolArgs["active"] {
+					if err := vm.AddBond(name, ifaces, "balance-tcp", "active", !noFallback, qinq); err != nil {
+						return true, err
+					}
+				} else if c.BoolArgs["passive"] {
+					if err := vm.AddBond(name, ifaces, "balance-tcp", "passive", !noFallback, qinq); err != nil {
+						return true, err
+					}
+				} else if c.BoolArgs["off"] {
+					return true, fmt.Errorf("LACP mode must be set to active or passive for balance-tcp bond mode")
+				} else { // we should never get here...
+					return true, fmt.Errorf("unknown LACP mode specified")
+				}
+			} else { // we should never get here...
+				return true, fmt.Errorf("unknown bond mode specified")
+			}
+
+			log.Info("vm networks: %v", vm.GetNetworks())
+
+			if err := writeVMConfig(vm); err != nil {
+				// don't propagate this error
+				log.Warn("unable to update vm config for %v: %v", vm.GetID(), err)
+			}
+
+			return true, nil
+		}
+	}
+
+	return ns.VMs.Apply(target, fn)
 }
 
 func cliVMTop(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

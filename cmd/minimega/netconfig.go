@@ -48,6 +48,37 @@ type NetConfig struct {
 
 type NetConfigs []NetConfig
 
+// BondConfig contains all the bond-related configs for a bond.
+type BondConfig struct {
+	Name   string
+	Bridge string
+	VLAN   int
+	QinQ   bool
+
+	Interfaces NetConfigs
+}
+
+func (old BondConfig) Copy() BondConfig {
+	// copy all fields
+	cfg := old
+
+	// deep copy slices
+	cfg.Interfaces = make(NetConfigs, len(old.Interfaces))
+	copy(cfg.Interfaces, old.Interfaces)
+
+	return cfg
+}
+
+func (c BondConfig) Contains(tap string) bool {
+	for _, iface := range c.Interfaces {
+		if iface.Tap == tap {
+			return true
+		}
+	}
+
+	return false
+}
+
 func NewVMConfig() VMConfig {
 	c := VMConfig{}
 	c.Clear(Wildcard)

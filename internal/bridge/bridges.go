@@ -21,8 +21,10 @@ import (
 type Bridges struct {
 	Default string // Default bridge name when one isn't specified
 
-	nameChan chan string
-	bridges  map[string]*Bridge
+	tapChan  chan string
+	bondChan chan string
+
+	bridges map[string]*Bridge
 }
 
 // openflow filters to redirect arp and icmp6 traffic to the local tap
@@ -34,21 +36,25 @@ var snoopFilters = []string{
 // snoopBPF filters for ARP and Neighbor Solicitation (NDP)
 const snoopBPF = "(arp or (icmp6 and ip6[40] == 135))"
 
-// NewBridges creates a new Bridges using d as the default bridge name and f as
-// the format string for the tap names (e.g. "mega_tap%v").
-func NewBridges(d, f string) *Bridges {
-	nameChan := make(chan string)
+// NewBridges creates a new Bridges using d as the default bridge name, tf as
+// the format string for the tap names (e.g. "mega_tap%v"), and bf as the format
+// string for the bond names (e.g. "mega_bond%v").
+func NewBridges(d, tf, bf string) *Bridges {
+	var (
+		tapChan  = make(chan string)
+		bondChan = make(chan string)
+	)
 
 	// Start a goroutine to generate tap names for us
 	go func() {
-		defer close(nameChan)
+		defer close(tapChan)
 
 		for tapCount := 0; ; tapCount++ {
-			tapName := fmt.Sprintf(f, tapCount)
+			tapName := fmt.Sprintf(tf, tapCount)
 			fpath := filepath.Join("/sys/class/net", tapName)
 
 			if _, err := os.Stat(fpath); os.IsNotExist(err) {
-				nameChan <- tapName
+				tapChan <- tapName
 			} else if err != nil {
 				log.Fatal("unable to stat file -- %v %v", fpath, err)
 			}
@@ -57,9 +63,20 @@ func NewBridges(d, f string) *Bridges {
 		}
 	}()
 
+	// Start a goroutine to generate bond names for us
+	go func() {
+		defer close(bondChan)
+
+		for bondCount := 0; ; bondCount++ {
+			bondChan <- fmt.Sprintf(bf, bondCount)
+			log.Debug("bondCount: %v", bondCount)
+		}
+	}()
+
 	b := &Bridges{
 		Default:  d,
-		nameChan: nameChan,
+		tapChan:  tapChan,
+		bondChan: bondChan,
 		bridges:  map[string]*Bridge{},
 	}
 
@@ -85,8 +102,10 @@ func (b Bridges) newBridge(name string) error {
 		trunks:   make(map[string]bool),
 		tunnels:  make(map[string]bool),
 		mirrors:  make(map[string]bool),
+		bonds:    make(map[string]map[string]int),
 		captures: make(map[int]capture),
-		nameChan: b.nameChan,
+		tapChan:  b.tapChan,
+		bondChan: b.bondChan,
 		config:   make(map[string]string),
 	}
 
@@ -207,6 +226,7 @@ func (b Bridges) Info() []BridgeInfo {
 		info := BridgeInfo{
 			Name:     br.Name,
 			PreExist: br.preExist,
+			Bonds:    make(map[string][]string),
 			Config:   make(map[string]string),
 		}
 
@@ -240,6 +260,17 @@ func (b Bridges) Info() []BridgeInfo {
 			info.VLANs = append(info.VLANs, k)
 		}
 		sort.Ints(info.VLANs)
+
+		// Populate bonds
+		for k, v := range br.bonds {
+			var ifaces []string
+
+			for i := range v {
+				ifaces = append(ifaces, i)
+			}
+
+			info.Bonds[k] = ifaces
+		}
 
 		// Populate config
 		for k, v := range br.config {

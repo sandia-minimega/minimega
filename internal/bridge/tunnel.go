@@ -36,7 +36,7 @@ func (b *Bridge) AddTunnel(typ TunnelType, remoteIP, key string) error {
 
 	log.Info("adding tunnel on bridge %v: %v %v", b.Name, typ, remoteIP)
 
-	tap := <-b.nameChan
+	tap := <-b.tapChan
 
 	args := []string{
 		"add-port",
