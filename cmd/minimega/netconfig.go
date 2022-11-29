@@ -37,6 +37,7 @@ type NetConfig struct {
 	Driver string
 	IP4    string
 	IP6    string
+	QinQ   bool
 
 	RxRate, TxRate float64 // Most recent bandwidth measurements for Tap
 
@@ -60,15 +61,24 @@ func NewVMConfig() VMConfig {
 //
 // 	vlan alias
 //
-//	vlan alias,mac
 //	bridge,vlan alias
+//	vlan alias,mac
 //	vlan alias,driver
+//	vlan alias,driver,qinq
 //
 //	bridge,vlan alias,mac
-//	vlan alias,mac,driver
 //	bridge,vlan alias,driver
+//	bridge,vlan alias,qinq
+//	vlan alias,mac,driver
+//	vlan alias,mac,qinq
+//	vlan alias,driver,qinq
 //
 //	bridge,vlan alias,mac,driver
+//	bridge,vlan alias,mac,qinq
+//	bridge,vlan alias,driver,qinq
+//	vlan alias,mac,driver,qinq
+//
+//	bridge,vlan alias,mac,driver,qinq
 //
 // If there are 2 or 3 fields, just the last field for the presence of a mac
 func ParseNetConfig(spec string, nics map[string]bool) (*NetConfig, error) {
@@ -79,13 +89,21 @@ func ParseNetConfig(spec string, nics map[string]bool) (*NetConfig, error) {
 		return nics[d]
 	}
 
+	isQinQ := func(q string) bool {
+		return strings.EqualFold(q, "qinq")
+	}
+
 	var b, v, m, d string
+	var q bool
 
 	switch len(f) {
 	case 1:
 		v = f[0]
 	case 2:
-		if isMAC(f[1]) {
+		if isQinQ(f[1]) {
+			// vlan, qinq
+			v, q = f[0], true
+		} else if isMAC(f[1]) {
 			// vlan, mac
 			v, m = f[0], f[1]
 		} else if isDriver(f[1]) {
@@ -96,7 +114,16 @@ func ParseNetConfig(spec string, nics map[string]bool) (*NetConfig, error) {
 			b, v = f[0], f[1]
 		}
 	case 3:
-		if isMAC(f[2]) {
+		if isQinQ(f[2]) && isMAC(f[1]) {
+			// vlan, mac, qinq
+			v, m, q = f[0], f[1], true
+		} else if isQinQ(f[2]) && isDriver(f[1]) {
+			// vlan, driver, qinq
+			v, d, q = f[0], f[1], true
+		} else if isQinQ(f[2]) {
+			// bridge, vlan, qinq
+			b, v, q = f[0], f[1], true
+		} else if isMAC(f[2]) {
 			// bridge, vlan, mac
 			b, v, m = f[0], f[1], f[2]
 		} else if isMAC(f[1]) && isDriver(f[2]) {
@@ -109,8 +136,24 @@ func ParseNetConfig(spec string, nics map[string]bool) (*NetConfig, error) {
 			return nil, errors.New("malformed netspec")
 		}
 	case 4:
-		if isMAC(f[2]) && isDriver(f[3]) {
+		if isQinQ(f[3]) && isMAC(f[1]) {
+			// vlan, mac, driver, qinq
+			v, m, d, q = f[0], f[1], f[2], true
+		} else if isQinQ(f[3]) && isMAC(f[2]) {
+			// bridge, vlan, mac, qinq
+			b, v, m, q = f[0], f[1], f[2], true
+		} else if isQinQ(f[3]) && isDriver(f[2]) {
+			// bridge, vlan, driver, qinq
+			b, v, d, q = f[0], f[1], f[2], true
+		} else if isDriver(f[3]) && isMAC(f[2]) {
+			// bridge, vlan, mac, driver
 			b, v, m, d = f[0], f[1], f[2], f[3]
+		} else {
+			return nil, errors.New("malformed netspec")
+		}
+	case 5:
+		if isMAC(f[2]) && isDriver(f[3]) && isQinQ(f[4]) {
+			b, v, m, d, q = f[0], f[1], f[2], f[3], true
 		} else {
 			return nil, errors.New("malformed netspec")
 		}
@@ -133,6 +176,7 @@ func ParseNetConfig(spec string, nics map[string]bool) (*NetConfig, error) {
 		Bridge: b,
 		MAC:    strings.ToLower(m),
 		Driver: d,
+		QinQ:   q,
 	}, nil
 }
 
@@ -153,6 +197,10 @@ func (c NetConfig) String() string {
 
 	if c.Driver != "" && c.Driver != DefaultKVMDriver {
 		parts = append(parts, c.Driver)
+	}
+
+	if c.QinQ {
+		parts = append(parts, "qinq")
 	}
 
 	return strings.Join(parts, ",")
