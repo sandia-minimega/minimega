@@ -62,21 +62,11 @@
     <link rel="preload" as="image" href="/novnc/app/images/warning.svg">
 
     <script src="/novnc/app/error-handler.js"></script>
+    <!-- MINIMEGA INIT SCRIPT: just add correct path and autoconnect param to hash. noVNC will grab parameters from there -->
+    <script>
+        window.location.hash = `autoconnect=true&path=${window.location.pathname.substr(1)+"/ws"}`
+    </script>
     <script type="module" src="/novnc/app/ui.js"></script>
-    <!-- MINIMEGA INIT SCRIPT -->
-    <script type="module">
-        import UI from '/novnc/app/ui.js'
-	    window.onload = function () {
-		    var theurl = window.location.pathname;
-		    var thevm = theurl.substring(theurl.lastIndexOf("/")+1);
-		    document.title = thevm;
-		    document.getElementById("noVNC_setting_host").value = window.location.hostname;
-		    document.getElementById("noVNC_setting_port").value = window.location.port;
-		    document.getElementById("noVNC_password_input").value = "";
-		    document.getElementById("noVNC_setting_path").value = window.location.pathname.substr(1)+"/ws";
-            UI.connect();
-		};
-	</script>
 </head>
 
 <body>
