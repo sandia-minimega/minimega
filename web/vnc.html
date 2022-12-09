@@ -2,7 +2,10 @@
     MINIMEGA EDITS: Compare against https://github.com/novnc/noVNC/blob/v1.3.0/vnc.html 
     There are two main edits: 
     1. prepending all paths with "/novnc/" (also `package.json` reference in `/novnc/app/ui.js`)
-    2. Initializing settings on load and automatically calling connect (see script tag below)
+    2. Initializing settings by modifying the url hash (see below)
+    3. Preventing the `_qemuExtKeyEventSupported` flag from getting set to true in `core/rfb.js`
+       This flag is used to upgrade key event messages to a new format, but vnc recording/playback
+       does not support the newer format
 -->
 <!DOCTYPE html>
 <html lang="en" class="noVNC_loading">

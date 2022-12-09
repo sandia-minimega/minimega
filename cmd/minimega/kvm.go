@@ -687,6 +687,7 @@ func (vm *KvmVM) connectVNC() error {
 
 					// ignore these
 					if strings.Contains(err.Error(), "unknown client-to-server message") {
+						log.Debugln(err)
 						continue
 					}
 
