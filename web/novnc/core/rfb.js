@@ -2198,7 +2198,7 @@ export default class RFB extends EventTargetMixin {
                 return this._handleCursor();
 
             case encodings.pseudoEncodingQEMUExtendedKeyEvent:
-                // MINIMEGA edit: vnc recording in minimega doesn't understand these messages
+                // MINIMEGA EDIT: vnc recording in minimega doesn't understand these messages
                 // this._qemuExtKeyEventSupported = true;
                 return true;
 
