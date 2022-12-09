@@ -1,6 +1,6 @@
 <!-- 
     MINIMEGA EDITS: Compare against https://github.com/novnc/noVNC/blob/v1.3.0/vnc.html 
-    There are two main edits: 
+    There are three main edits (all marked with `MINIMEGA EDIT`): 
     1. prepending all paths with "/novnc/" (also `package.json` reference in `/novnc/app/ui.js`)
     2. Initializing settings by modifying the url hash (see below)
     3. Preventing the `_qemuExtKeyEventSupported` flag from getting set to true in `core/rfb.js`
@@ -65,7 +65,7 @@
     <link rel="preload" as="image" href="/novnc/app/images/warning.svg">
 
     <script src="/novnc/app/error-handler.js"></script>
-    <!-- MINIMEGA INIT SCRIPT: just add correct path and autoconnect param to hash. noVNC will grab parameters from there -->
+    <!-- MINIMEGA EDIT init script: just add correct path and autoconnect param to hash. noVNC will grab parameters from there -->
     <script>
         window.location.hash = `autoconnect=true&path=${window.location.pathname.substr(1)+"/ws"}`
     </script>

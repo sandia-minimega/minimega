@@ -60,7 +60,7 @@ const UI = {
 
         // Translate the DOM
         l10n.translateDOM();
-
+        // MINIMEGA EDIT
         fetch('/novnc/package.json')
             .then((response) => {
                 if (!response.ok) {
