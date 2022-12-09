@@ -114,13 +114,17 @@ use the default "mega_bridge".
 You can also optionally specify the MAC address of the interface to connect to
 that network. If not specifed, the MAC address will be randomly generated.
 
-Finally, you can also optionally specify a network device for qemu to use
-(which is ignored by containers). By default, "e1000" is used. To see a list of
-valid network devices, from run "qemu-kvm -device help".
+You can also optionally specify a network device for qemu to use (which is
+ignored by containers). By default, "e1000" is used. To see a list of valid
+network devices, from run "qemu-kvm -device help".
+
+Finally, you can also optionally specify whether the interface should be
+configured in "dot1q-tunnel" mode (QinQ) in OVS. If so, the outer VLAN tag will
+be set to the minimega VLAN specified as part of the netspec.
 
 The order is:
 
-	<bridge>,<VLAN>,<MAC>,<driver>
+	<bridge>,<VLAN>,<MAC>,<driver>,<qinq>
 
 Examples:
 
@@ -143,6 +147,10 @@ To connect a VM to VLAN 100 on bridge0 with a specific mac:
 To specify a specific driver, such as i82559c:
 
 	vm config net 100,i82559c
+
+To specify the use of "dot1q-tunnel" mode with VLAN 105 as the outer VLAN:
+
+	vm config net 105,qinq
 
 If you prefer, you can also use aliases for VLANs:
 

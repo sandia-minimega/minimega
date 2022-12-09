@@ -146,6 +146,16 @@ func (b *Bridge) addTap(tap, mac string, lan int, host bool) error {
 	return nil
 }
 
+// SetTapQinQ updates the port table in OVS to set the VLAN mode for the given
+// tap to dot1q-tunnel and the outer VLAN tag for the tunnel to the given VLAN
+// ID.
+func (b *Bridge) SetTapQinQ(tap string, outer int) error {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	return ovsSetPortQinQ(tap, outer)
+}
+
 // DestroyTap removes a tap from the bridge and marks it as defunct. See
 // `Bridge.ReapTaps` to clean up defunct taps. If the tap is a mirror, it
 // cleans up the mirror too.

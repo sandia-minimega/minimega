@@ -1141,6 +1141,12 @@ func (vm *ContainerVM) launchNetwork() error {
 		if err != nil {
 			return fmt.Errorf("create tap: %v", err)
 		}
+
+		if nic.QinQ {
+			if err := br.SetTapQinQ(nic.Tap, nic.VLAN); err != nil {
+				return err
+			}
+		}
 	}
 
 	if len(vm.Networks) > 0 {

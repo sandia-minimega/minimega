@@ -710,12 +710,24 @@ func (vm *KvmVM) createTapName(bridge string) (string, error) {
 }
 
 // addTap does the work of adding the specified tap associated with a network
-func (vm *KvmVM) addTap(name, bridge, mac string, vlan int) (string, error) {
+func (vm *KvmVM) addTap(name, bridge, mac string, vlan int, qinq bool) (string, error) {
 	br, err := getBridge(bridge)
 	if err != nil {
 		return name, vm.setErrorf("unable to get bridge %v: %v", bridge, err)
 	}
-	return br.CreateTap(name, mac, vlan)
+
+	tap, err := br.CreateTap(name, mac, vlan)
+	if err != nil {
+		return tap, err
+	}
+
+	if qinq {
+		if err := br.SetTapQinQ(tap, vlan); err != nil {
+			return tap, err
+		}
+	}
+
+	return tap, nil
 }
 
 // createTaps does the work of adding any taps if we are associated with
@@ -728,7 +740,7 @@ func (vm *KvmVM) createTaps() error {
 			continue
 		}
 
-		tap, err := vm.addTap("", nic.Bridge, nic.MAC, nic.VLAN)
+		tap, err := vm.addTap("", nic.Bridge, nic.MAC, nic.VLAN, nic.QinQ)
 		if err != nil {
 			return vm.setErrorf("unable to create tap %v: %v", i, err)
 		}
@@ -906,7 +918,7 @@ func (vm *KvmVM) AddNIC(nic NetConfig) error {
 	nic.Tap, err = vm.createTapName(nic.Bridge)
 	vm.Networks = append(vm.Networks, nic)
 
-	if _, err := vm.addTap(nic.Tap, nic.Bridge, nic.MAC, nic.VLAN); err != nil {
+	if _, err := vm.addTap(nic.Tap, nic.Bridge, nic.MAC, nic.VLAN, nic.QinQ); err != nil {
 		return vm.setErrorf("Unable to add tap %v: %v", nic.Tap, err)
 	}
 

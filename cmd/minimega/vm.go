@@ -134,7 +134,7 @@ var vmInfo = []string{
 	// generic fields
 	"id", "name", "state", "uptime", "type", "uuid", "cc_active", "pid",
 	// network fields
-	"vlan", "bridge", "tap", "mac", "ip", "ip6", "qos",
+	"vlan", "bridge", "tap", "mac", "ip", "ip6", "qos", "qinq",
 	// more generic fields but want next to vcpus
 	"memory",
 	// kvm fields
@@ -712,6 +712,12 @@ func (vm *BaseVM) Info(field string) (string, error) {
 			s := vm.QosString(v.Bridge, v.Tap, strconv.Itoa(idx))
 			if s != "" {
 				vals = append(vals, s)
+			}
+		}
+	case "qinq":
+		for _, v := range vm.Networks {
+			if v.QinQ {
+				vals = append(vals, fmt.Sprintf("%s (%d)", v.Tap, v.VLAN))
 			}
 		}
 	case "tags":
