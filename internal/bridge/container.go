@@ -30,7 +30,7 @@ func (b *Bridge) CreateContainerTap(tap, ns, mac string, vlan, index int) (strin
 	}
 
 	if tap == "" {
-		tap = <-b.nameChan
+		tap = <-b.tapChan
 	}
 
 	// name of the interface inside the container
