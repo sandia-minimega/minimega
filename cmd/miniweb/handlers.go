@@ -23,6 +23,7 @@ import (
 	"unsafe"
 
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
+	"github.com/sandia-minimega/minimega/v2/pkg/miniclient"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 
 	"github.com/kr/pty"
@@ -157,7 +158,17 @@ func filesHandler(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Disposition", "attachment; filename="+filepath.Base(subdir))
 			w.Header().Set("Content-Type", "application/octet-stream")
 
-			for resps := range mm.Run(cmd.String()) {
+			// create separate connection to minimega since this command may be long-lived
+			// and we don't need to block other commands from running
+			fileMm, err := miniclient.Dial(*f_base)
+			if err != nil {
+				log.Error("unable to dial: %v", err)
+				return
+			}
+			defer fileMm.Close()
+			defer log.Info("closing file mm connection")
+
+			for resps := range fileMm.Run(cmd.String()) {
 				for _, resp := range resps.Resp {
 					if resp.Error != "" {
 						log.Errorln(resp.Error)
@@ -169,8 +180,9 @@ func filesHandler(w http.ResponseWriter, r *http.Request) {
 						// should be a base64 encoded string
 						dec := base64.NewDecoder(base64.StdEncoding, strings.NewReader(d))
 						_, err := io.Copy(w, dec)
+
 						if err != nil {
-							log.Error("unable to stream file: %v", err)
+							log.Warn("unable to stream file (user may have cancelled download): %v", err)
 							return
 						}
 					default:
