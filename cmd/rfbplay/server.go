@@ -59,11 +59,16 @@ func serveFile(w http.ResponseWriter, r *http.Request, fs http.FileSystem, name 
 		dirList(w, f)
 	} else {
 		// Actually playback a recording
-		offset, err := time.ParseDuration(r.FormValue("offset"))
-		if err != nil {
-			log.Error("parse offset: %v: %v", err, r.FormValue("offset"))
-			offset = 0
+		offset := time.Duration(0)
+		formOffset := r.FormValue("offset")
+		if formOffset != "" {
+			offset, err = time.ParseDuration(formOffset)
+			if err != nil {
+				log.Error("parse offset: %v: %v", err, r.FormValue("offset"))
+				offset = time.Duration(0)
+			}
 		}
+
 
 		streamRecording(w, f, offset)
 	}
