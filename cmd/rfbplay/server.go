@@ -69,7 +69,6 @@ func serveFile(w http.ResponseWriter, r *http.Request, fs http.FileSystem, name 
 			}
 		}
 
-
 		streamRecording(w, f, offset)
 	}
 }
