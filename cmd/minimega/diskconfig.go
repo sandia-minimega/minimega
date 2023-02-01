@@ -92,6 +92,7 @@ func (c DiskConfig) String() string {
 
 func (c DiskConfigs) String() string {
 	parts := []string{}
+
 	for _, n := range c {
 		parts = append(parts, n.String())
 	}
@@ -101,7 +102,7 @@ func (c DiskConfigs) String() string {
 
 func (c DiskConfigs) WriteConfig(w io.Writer) error {
 	if len(c) > 0 {
-		_, err := fmt.Fprintf(w, "vm config disk %v\n", c)
+		_, err := fmt.Fprintf(w, "vm config disks %v\n", c)
 		return err
 	}
 

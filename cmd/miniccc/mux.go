@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -46,13 +47,15 @@ func mux(done chan struct{}) {
 		err = timeout(d*time.Second, func() (err error) {
 			err = client.dec.Decode(&m)
 			if err != nil {
-				err = fmt.Errorf("decoding cc message: %v", err)
+				err = fmt.Errorf("decoding cc message: %w", err)
 			}
 
 			return
 		})
 
-		if err == errTimeout || err == io.EOF {
+		if errors.Is(err, errTimeout) || errors.Is(err, io.EOF) {
+			log.Warn("server connection lost: resetting client")
+
 			// server connection lost, so reset client
 			resetClient()
 			return

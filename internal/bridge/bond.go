@@ -15,14 +15,18 @@ func (b *Bridge) CreateBondName() string {
 	return <-b.bondChan
 }
 
-func (b *Bridge) AddBond(name, mode, lacp string, fallback bool, interfaces map[string]int, vlan int) error {
+func (b *Bridge) AddBond(name, mode, lacp string, fallback bool, interfaces map[string]int, vlan int) (string, error) {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
+
+	if name == "" {
+		name = b.CreateBondName()
+	}
 
 	log.Info("adding bond %v on bridge %v", name, b.Name)
 
 	if _, ok := b.bonds[name]; ok {
-		return fmt.Errorf("bond %v already exists on bridge %v", name, b.Name)
+		return name, fmt.Errorf("bond %v already exists on bridge %v", name, b.Name)
 	}
 
 	// ovs-vsctl add-bond <bridge name> <bond name> <list of interfaces>
@@ -33,7 +37,7 @@ func (b *Bridge) AddBond(name, mode, lacp string, fallback bool, interfaces map[
 
 		// need to remove the taps from ovs first before we can bond
 		if err := ovsDelPort(b.Name, iface); err != nil {
-			return fmt.Errorf("failed to delete tap %v from ovs with error: %v", iface, err)
+			return name, fmt.Errorf("failed to delete tap %v from ovs with error: %v", iface, err)
 		}
 	}
 
@@ -45,7 +49,7 @@ func (b *Bridge) AddBond(name, mode, lacp string, fallback bool, interfaces map[
 	switch mode {
 	case "active-backup", "balance-slb", "balance-tcp":
 		if mode == "balance-tcp" && lacp == "off" {
-			return fmt.Errorf("LACP mode must be set to active or passive for balance-tcp bond mode")
+			return name, fmt.Errorf("LACP mode must be set to active or passive for balance-tcp bond mode")
 		}
 
 		args = append(args, fmt.Sprintf("lacp=%s", lacp))
@@ -56,7 +60,7 @@ func (b *Bridge) AddBond(name, mode, lacp string, fallback bool, interfaces map[
 
 		args = append(args, fmt.Sprintf("bond_mode=%s", mode))
 	default:
-		return fmt.Errorf("unsupported bond mode provided: %s", mode)
+		return name, fmt.Errorf("unsupported bond mode provided: %s", mode)
 	}
 
 	if _, err := ovsCmdWrapper(args); err != nil {
@@ -65,27 +69,36 @@ func (b *Bridge) AddBond(name, mode, lacp string, fallback bool, interfaces map[
 			ovsAddPort(b.Name, iface, vid, false)
 		}
 
-		return fmt.Errorf("add bond failed: %v", err)
+		return name, fmt.Errorf("add bond failed: %v", err)
 	}
-
-	bonded := make(map[string]int)
 
 	// can't avoid looping over interfaces twice...
 	// at least it won't ever be a big slice
-	for iface, vid := range interfaces {
-		tap, ok := b.taps[iface]
-		if ok {
+	for iface := range interfaces {
+		if tap, ok := b.taps[iface]; ok {
 			tap.Bond = name
 			b.taps[iface] = tap
 		} else {
 			// not really ever expected to happen...
 			log.Error("well this is awkward... tap %v isn't known on bridge %v", iface, b.Name)
 		}
-
-		bonded[iface] = vid
 	}
 
-	b.bonds[name] = bonded
+	b.bonds[name] = interfaces
+	return name, nil
+}
+
+func (b *Bridge) RecoverBond(name string, interfaces map[string]int) error {
+	for iface := range interfaces {
+		if tap, ok := b.taps[iface]; ok {
+			tap.Bond = name
+			b.taps[iface] = tap
+		} else {
+			return fmt.Errorf("well this is awkward... tap %v isn't known on bridge %v", iface, b.Name)
+		}
+	}
+
+	b.bonds[name] = interfaces
 	return nil
 }
 

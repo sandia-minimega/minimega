@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -240,12 +242,84 @@ func (old KVMConfig) Copy() KVMConfig {
 	res := old
 
 	// Make deep copy of slices
-	res.Disks = make([]DiskConfig, len(old.Disks))
+	res.Disks = make(DiskConfigs, len(old.Disks))
 	copy(res.Disks, old.Disks)
 	res.QemuAppend = make([]string, len(old.QemuAppend))
 	copy(res.QemuAppend, old.QemuAppend)
 
 	return res
+}
+
+func (vm *KVMConfig) ReadFieldConfig(r io.Reader, field, namespace string) error {
+	switch field {
+	case "disks":
+		scanner := bufio.NewScanner(r)
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			if !strings.HasPrefix(line, "vm config disks") {
+				continue
+			}
+
+			var ideCount int
+			specs := strings.Fields(line)[3:]
+
+			for _, spec := range specs {
+				disk, err := ParseDiskConfig(spec, false)
+				if err != nil {
+					log.Warnln(err) // ??
+					continue
+				}
+
+				if disk.Interface == "ide" || (disk.Interface == "" && DefaultKVMDiskInterface == "ide") {
+					ideCount += 1
+				}
+
+				// check for disk conflicts in a single VM
+				for _, d := range vm.Disks {
+					if disk.Path == d.Path {
+						log.Warnln(err) // ??
+						continue
+					}
+				}
+
+				vm.Disks = append(vm.Disks, *disk)
+			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			return err
+		}
+
+		return nil
+	case "qemu-override":
+		scanner := bufio.NewScanner(r)
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			if !strings.HasPrefix(line, "vm config qemu-override") {
+				continue
+			}
+
+			var (
+				config = strings.Fields(line)[3:]
+				match  = config[0]
+				repl   = config[1]
+			)
+
+			vm.QemuOverride = append(vm.QemuOverride, qemuOverride{Match: match, Repl: repl})
+		}
+
+		if err := scanner.Err(); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	return nil
 }
 
 func NewKVM(name, namespace string, config VMConfig) (*KvmVM, error) {
@@ -285,8 +359,15 @@ func (vm *KvmVM) Copy() VM {
 // Launch a new KVM VM.
 func (vm *KvmVM) Launch() error {
 	defer vm.lock.Unlock()
-
 	return vm.launch()
+}
+
+// Recover an existing KVM VM. This unlocks the VM since VMs come pre-locked
+// when created via NewBaseVM and recovers any known network interface bonds for
+// the VM.
+func (vm *KvmVM) Recover() error {
+	vm.lock.Unlock()
+	return nil
 }
 
 // Flush cleans up all resources allocated to the VM which includes all the
@@ -758,6 +839,32 @@ func (vm *KvmVM) createTaps() error {
 	return nil
 }
 
+// createBonds does the work of creating any bonds configured for the VM
+func (vm *KvmVM) createBonds() error {
+	for i := range vm.Bonds {
+		bond := &vm.Bonds[i]
+
+		if bond.created {
+			// bond has already been created, don't need to do it again
+			continue
+		}
+
+		if err := vm.addBond(bond); err != nil {
+			return vm.setErrorf("unable to reate bond %v: %v", i, err)
+		}
+
+		bond.created = true
+	}
+
+	if len(vm.Bonds) > 0 {
+		if err := vm.writeBonds(); err != nil {
+			return vm.setErrorf("unable to write bonds: %v", err)
+		}
+	}
+
+	return nil
+}
+
 // launch is the low-level launch function for KVM VMs. The caller should hold
 // the VM's lock.
 func (vm *KvmVM) launch() error {
@@ -791,6 +898,11 @@ func (vm *KvmVM) launch() error {
 	mustWrite(vm.path("name"), vm.Name)
 
 	if err := vm.createTaps(); err != nil {
+		return err
+	}
+
+	// this MUST be done after vm.createTaps
+	if err := vm.createBonds(); err != nil {
 		return err
 	}
 
@@ -829,27 +941,7 @@ func (vm *KvmVM) launch() error {
 	// Channel to signal when the process has exited
 	var waitChan = make(chan bool)
 
-	// Create goroutine to wait for process to exit
-	go func() {
-		defer close(waitChan)
-		err := cmd.Wait()
-
-		vm.lock.Lock()
-		defer vm.lock.Unlock()
-
-		// Check if the process quit for some reason other than being killed
-		if err != nil && err.Error() != "signal: killed" {
-			vm.setErrorf("qemu killed: %v %v", err, sErr.String())
-		} else if vm.State != VM_ERROR {
-			// Set to QUIT unless we've already been put into the error state
-			vm.setState(VM_QUIT)
-		}
-
-		// Kill the VNC shim, if it exists
-		if vm.vncShim != nil {
-			vm.vncShim.Close()
-		}
-	}()
+	vm.waitForExit(cmd.Process, waitChan)
 
 	if err := vm.connectQMP(); err != nil {
 		// Failed to connect to qmp so clean up the process
@@ -867,21 +959,59 @@ func (vm *KvmVM) launch() error {
 		return vm.setErrorf("unable to connect to vnc shim: %v", err)
 	}
 
+	vm.waitToKill(cmd.Process, waitChan)
+
+	return nil
+}
+
+func (vm *KvmVM) waitForExit(p *os.Process, wait chan bool) {
+	// Create goroutine to wait for process to exit
+	go func() {
+		defer close(wait)
+		_, err := p.Wait()
+
+		if err != nil && err.Error() == "waitid: no child processes" {
+			for {
+				time.Sleep(1 * time.Second)
+
+				if err = p.Signal(syscall.Signal(0)); err != nil {
+					break
+				}
+			}
+		}
+
+		vm.lock.Lock()
+		defer vm.lock.Unlock()
+
+		// Check if the process quit for some reason other than being killed
+		if err != nil && err.Error() != "signal: killed" {
+			vm.setErrorf("qemu killed: %v", err)
+		} else if vm.State != VM_ERROR {
+			// Set to QUIT unless we've already been put into the error state
+			vm.setState(VM_QUIT)
+		}
+
+		// Kill the VNC shim, if it exists
+		if vm.vncShim != nil {
+			vm.vncShim.Close()
+		}
+	}()
+}
+
+func (vm *KvmVM) waitToKill(p *os.Process, wait chan bool) {
 	// Create goroutine to wait to kill the VM
 	go func() {
 		defer vm.cond.Signal()
 
 		select {
-		case <-waitChan:
+		case <-wait:
 			log.Info("VM %v exited", vm.ID)
 		case <-vm.kill:
 			log.Info("Killing VM %v", vm.ID)
-			cmd.Process.Kill()
-			<-waitChan
+			p.Kill()
+			<-wait
 		}
 	}()
-
-	return nil
 }
 
 func (vm *KvmVM) Connect(cc *ron.Server, reconnect bool) error {
@@ -1391,8 +1521,8 @@ func (vm VMConfig) applyQemuOverrides(args []string) []string {
 }
 
 func (c QemuOverrides) WriteConfig(w io.Writer) error {
-	for k, v := range c {
-		if _, err := fmt.Fprintf(w, "vm config qemu-override %v %v\n", k, v); err != nil {
+	for _, o := range c {
+		if _, err := fmt.Fprintf(w, "vm config qemu-override %v %v\n", o.Match, o.Repl); err != nil {
 			return err
 		}
 	}

@@ -14,14 +14,17 @@
 : "${MM_CONTEXT:=minimega}"
 : "${MM_LOGLEVEL:=info}"
 : "${MM_LOGFILE:=/var/log/minimega.log}"
+: "${MM_RECOVER:=true}"
+: "${MM_RECOVER:=false}"
 
 [[ -f "/etc/default/minimega" ]] && source "/etc/default/minimega"
 
 /opt/minimega/bin/miniweb -root=${MINIWEB_ROOT} -addr=${MINIWEB_HOST}:${MINIWEB_PORT} &
 
 /opt/minimega/bin/minimega \
-  -force \
   -nostdin \
+  -force=${MM_FORCE} \
+  -recover=${MM_RECOVER} \
   -base=${MM_BASE} \
   -filepath=${MM_FILEPATH} \
   -broadcast=${MM_BROADCAST} \

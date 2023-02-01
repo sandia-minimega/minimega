@@ -281,6 +281,8 @@ type ContainerConfig struct {
 	//  /scratch/data2
 	//
 	// Note: this configuration only applies to containers.
+	//
+	// Default: empty map
 	VolumePaths map[string]string
 }
 
@@ -379,15 +381,16 @@ func containerTeardown() {
 //
 // A number of fds get passed to the child on specific fd numbers:
 //
-// 	3: logging port, closed just before exec into init
-// 	4: closed by the child before exec to elect to be frozen
-// 	5: closed by the parent when the child returns to allow calling exec
-// 	6: stdin
-// 	7: stdout
-// 	8: stderr
+//	3: logging port, closed just before exec into init
+//	4: closed by the child before exec to elect to be frozen
+//	5: closed by the parent when the child returns to allow calling exec
+//	6: stdin
+//	7: stdout
+//	8: stderr
 //
 // A number of arguments are passed on flag.Args to configure the container:
-// 	0 :  CONTAINER
+//
+//	0 :  CONTAINER
 //	1 :  instance path
 //	2 :  vm id
 //	3 :  hostname ("CONTAINER_NONE" if none)
@@ -689,6 +692,12 @@ func (vm *ContainerVM) Launch() error {
 	defer vm.lock.Unlock()
 
 	return vm.launch()
+}
+
+func (vm *ContainerVM) Recover() error {
+	vm.lock.Unlock()
+
+	return nil
 }
 
 func (vm *ContainerVM) Start() (err error) {

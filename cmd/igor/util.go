@@ -155,10 +155,10 @@ func getUser() (*user.User, error) {
 	return user.Current()
 }
 
-// Emits a log event stating that a particular action has occurred for a reservation
-// and prints out a summary of the reservation.
-// NOTE: Stats relies on the order of this data.
-//       If you change the order/content please update stats.go
+// Emits a log event stating that a particular action has occurred for a
+// reservation and prints out a summary of the reservation.
+// NOTE: Stats relies on the order of this data. If you change the order/content
+// please update stats.go
 func emitReservationLog(action string, res *Reservation) {
 	format := "2006-Jan-2-15:04"
 	unsplit := igor.unsplitRange(res.Hosts)

@@ -39,3 +39,20 @@ func (s VMState) String() string {
 	}
 	return fmt.Sprintf("VmState(%d)", s)
 }
+
+func VMStateFromString(s string) (VMState, error) {
+	switch s {
+	case "BUILDING":
+		return VM_BUILDING, nil
+	case "RUNNING":
+		return VM_RUNNING, nil
+	case "PAUSED":
+		return VM_PAUSED, nil
+	case "QUIT":
+		return VM_QUIT, nil
+	case "ERROR":
+		return VM_ERROR, nil
+	default:
+		return 0, fmt.Errorf("unknown state %s", s)
+	}
+}

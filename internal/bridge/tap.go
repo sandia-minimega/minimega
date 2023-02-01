@@ -101,6 +101,21 @@ func (b *Bridge) createHostTap(tap string, lan int) error {
 	return nil
 }
 
+func (b *Bridge) RecoverTap(tap, mac string, lan int, host bool) error {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	b.taps[tap] = &Tap{
+		Name:   tap,
+		Bridge: b.Name,
+		VLAN:   lan,
+		MAC:    mac,
+		Host:   host,
+	}
+
+	return nil
+}
+
 // AddTap adds an existing tap to the bridge. Can be used in conjunction with
 // `Bridge.RemoveTap` to relocate tap to a different bridge or VLAN.
 func (b *Bridge) AddTap(tap, mac string, lan int, host bool) error {

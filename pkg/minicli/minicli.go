@@ -292,7 +292,6 @@ func Suggest(input string) []string {
 	return suggest(input, in)
 }
 
-//
 func Help(input string) string {
 	inputItems, err := lexInput(input)
 	if err != nil {

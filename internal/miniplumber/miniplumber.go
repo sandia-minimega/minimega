@@ -1078,8 +1078,9 @@ func (p *Pipe) write(value string, r int64) {
 
 // Return a slice of strings, split on whitespace, not unlike strings.Fields(),
 // except that quoted fields are grouped.
-// 	Example: a b "c d"
-// 	will return: ["a", "b", "c d"]
+//
+//	Example: a b "c d"
+//	will return: ["a", "b", "c d"]
 func fieldsQuoteEscape(c string, input string) []string {
 	log.Debug("fieldsQuoteEscape splitting on %v: %v", c, input)
 	f := strings.Fields(input)
