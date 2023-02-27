@@ -245,6 +245,7 @@ VM configuration:
 Memory:           2048
 VCPUs:            1
 Networks:         []
+Bonds:            []
 Snapshot:         true
 UUID:             
 Schedule host:    

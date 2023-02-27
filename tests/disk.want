@@ -16,7 +16,7 @@ E: Information: You may need to update /etc/fstab.
 
 ## # Should fail because there are two partitions
 ## disk inject foo.qcow2 files /tmp/minimega/XXX:/tmp/minimega/XXX
-E: please specify a partition; multiple found
+E: [image /tmp/minimega/files/foo.qcow2] please specify a partition; multiple found
 
 ## # Inject a file into base image
 ## disk inject foo.qcow2:1 files /tmp/minimega/XXX:/tmp/minimega/XXX
