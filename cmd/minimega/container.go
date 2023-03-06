@@ -694,9 +694,8 @@ func (vm *ContainerVM) Launch() error {
 	return vm.launch()
 }
 
-func (vm *ContainerVM) Recover() error {
+func (vm *ContainerVM) Recover(string, int) error {
 	vm.lock.Unlock()
-
 	return nil
 }
 

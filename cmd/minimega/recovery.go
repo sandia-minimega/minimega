@@ -9,7 +9,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/sandia-minimega/minimega/v2/internal/recovery"
@@ -126,14 +125,10 @@ func recover() error {
 				return fmt.Errorf("unable to create new vm %s: %w", vm.VMID, err)
 			}
 
-			// unlock the VM and recover any known network interface bonds
-			if err := kvm.Recover(); err != nil {
+			// unlock the VM and reset VM ID and PID
+			if err := kvm.Recover(vm.VMID, vm.PID); err != nil {
 				return fmt.Errorf("unable to recover vm %s: %w", vm.VMID, err)
 			}
-
-			// reset ID to match running QEMU KVM config
-			kvm.ID, _ = strconv.Atoi(vm.VMID)
-			kvm.Pid = vm.PID
 
 			// add VM to namespace
 			ns.VMs.m[kvm.ID] = kvm

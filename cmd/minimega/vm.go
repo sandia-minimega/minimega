@@ -61,7 +61,7 @@ type VM interface {
 	Start() error
 	Stop() error
 	Flush() error
-	Recover() error
+	Recover(string, int) error
 
 	String() string
 	Info(string) (string, error)

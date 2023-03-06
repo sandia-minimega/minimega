@@ -362,10 +362,14 @@ func (vm *KvmVM) Launch() error {
 	return vm.launch()
 }
 
-// Recover an existing KVM VM. This unlocks the VM since VMs come pre-locked
-// when created via NewBaseVM and recovers any known network interface bonds for
-// the VM.
-func (vm *KvmVM) Recover() error {
+// Recover an existing KVM VM. This resets the ID and PID for the VM and unlocks
+// the VM (since VMs come pre-locked when created via NewBaseVM).
+func (vm *KvmVM) Recover(id string, pid int) error {
+	// reset ID and PID to match running QEMU KVM config
+	vm.ID, _ = strconv.Atoi(id)
+	vm.Pid = pid
+	vm.instancePath = filepath.Join(*f_base, id)
+
 	vm.lock.Unlock()
 	return nil
 }
