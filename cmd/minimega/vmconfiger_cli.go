@@ -1073,7 +1073,7 @@ func (v *BaseConfig) ReadConfig(r io.Reader, ns string) error {
 		case "bonds":
 			v.ReadFieldConfig(strings.NewReader(line), "bonds", ns)
 		case "tags":
-			v.Tags[field] = config[1]
+			v.Tags[config[1]] = config[2]
 		}
 	}
 
@@ -1176,7 +1176,7 @@ func (v *ContainerConfig) ReadConfig(r io.Reader, ns string) error {
 		case "fifos":
 			v.Fifos, _ = strconv.ParseUint(config[1], 10, 64)
 		case "volume":
-			v.VolumePaths[field] = config[1]
+			v.VolumePaths[config[1]] = config[2]
 		}
 	}
 

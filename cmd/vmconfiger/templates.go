@@ -313,7 +313,7 @@ func (v *{{ $type }} ) ReadConfig(r io.Reader, ns string) error {
 			{{- if eq .Type "bool" }}
 			v.{{ .Field }}, _ = strconv.ParseBool(config[1])
 			{{- else if eq .Type "map" }}
-			v.{{ .Field }}[field] = config[1]
+			v.{{ .Field }}[config[1]] = config[2]
 			{{- else if eq .Type "string" }}
 			v.{{ .Field }} = config[1]
 			{{- else if eq .Type "int64" }}
