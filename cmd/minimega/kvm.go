@@ -951,6 +951,8 @@ func (vm *KvmVM) Hotplug(f, version, serial string) error {
 		bus = "usb-bus.0"
 	case "2.0":
 		bus = "ehci.0"
+	case "3.0":
+		bus = "xhci.0"
 	default:
 		return fmt.Errorf("invalid version: `%v`", version)
 	}
@@ -1158,6 +1160,8 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "-usb")
 	// for USB 2.0, creates bus named ehci.0
 	args = append(args, "-device", "usb-ehci,id=ehci")
+	// for USB 3.0, creates bus named xhci.0
+	args = append(args, "-device", "qemu-xhci,id=xhci")
 	// this allows absolute pointers in vnc, and works great on android vms
 	args = append(args, "-device", "usb-tablet,bus=usb-bus.0")
 
