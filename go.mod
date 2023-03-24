@@ -12,7 +12,7 @@ require (
 	github.com/google/gopacket v1.1.18-0.20190711070436-ce2e696dc0c9
 	github.com/jbuchbinder/gopnm v0.0.0-20150223212718-5176c556b9ce
 	github.com/kr/pty v0.0.0-20160716204620-ce7fa45920dc
-	github.com/miekg/dns v0.0.0-20160726032027-db96a2b759cd
+	github.com/miekg/dns v1.1.25
 	github.com/nfnt/resize v0.0.0-20160724205520-891127d8d1b5
 	github.com/peterh/liner v1.0.1-0.20170317030525-88609521dc4b
 	github.com/stargrave/goircd v0.0.0-00010101000000-000000000000
@@ -22,7 +22,7 @@ require (
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 	golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
 	golang.org/x/sys v0.0.0-20220825204002-c680a09ffe64
-	golang.org/x/tools v0.0.0-20180917221912-90fa682c2a6e
+	golang.org/x/tools v0.0.0-20190907020128-2ca718005c18
 )
 
 replace github.com/Harvey-OS/ninep => github.com/jcrussell/ninep v0.0.0-20180619175724-35ad2879c0a3
