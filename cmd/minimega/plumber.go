@@ -217,7 +217,7 @@ func cliPipeLocal(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	return nil
 }
 
-//TODO: clearing all pipes should be restricted to this namespace
+// TODO: clearing all pipes should be restricted to this namespace
 func cliPipeClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	pipe, ok := c.StringArgs["pipe"]
 	pipe = fqnsPipe(ns, pipe)

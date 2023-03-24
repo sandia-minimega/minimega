@@ -22,7 +22,9 @@ line is the title, so the header looks like
 The subtitle, date, and tags lines are optional.
 
 The date line may be written without a time:
+
 	2 Jan 2006
+
 In this case, the time will be interpreted as 10am UTC on that date.
 
 The tags line is a comma-separated list of tags that may be used to categorize
@@ -36,34 +38,36 @@ Multiple presenters may be specified, separated by a blank line.
 
 After that come slides/sections, each after a blank line:
 
-	* Title of slide or section (must have asterisk)
+  - Title of slide or section (must have asterisk)
 
-	Some Text
+    Some Text
 
-	** Subsection
+    ** Subsection
 
-	- bullets
-	- more bullets
-	- a bullet with
+  - bullets
 
-	*** Sub-subsection
+  - more bullets
 
-	Some More text
+  - a bullet with
 
-	  Preformatted text
-	  is indented (however you like)
+    *** Sub-subsection
 
-	Further Text, including invocations like:
+    Some More text
 
-	.code x.go /^func main/,/^}/
-	.play y.go
-	.image image.jpg
-	.iframe http://foo
-	.link http://foo label
-	.html file.html
-	.caption _Gopher_ by [[http://www.reneefrench.com][Renée French]]
+    Preformatted text
+    is indented (however you like)
 
-	Again, more text
+    Further Text, including invocations like:
+
+    .code x.go /^func main/,/^}/
+    .play y.go
+    .image image.jpg
+    .iframe http://foo
+    .link http://foo label
+    .html file.html
+    .caption _Gopher_ by [[http://www.reneefrench.com][Renée French]]
+
+    Again, more text
 
 Blank lines are OK (not mandatory) after the title and after the
 text.  Text, bullets, and .code etc. are all optional; title is
@@ -98,7 +102,9 @@ in the input text. Each such invocation contains a period as the
 first character on the line, followed immediately by the name of
 the function, followed by any arguments. A typical invocation might
 be
+
 	.play demo.go /^func show/,/^}/
+
 (except that the ".play" must be at the beginning of the line and
 not be indented like this.)
 
@@ -138,7 +144,6 @@ preserves the aspect ratio of the image when scaling.
 
 	.image images/janet.jpg _ 300
 
-
 caption:
 
 The template uses the function "caption" to inject figure captions.
@@ -161,6 +166,5 @@ that cannot be created using only the slide format.
 It is your responsibilty to make sure the included HTML is valid and safe.
 
 	.html file.html
-
 */
 package present

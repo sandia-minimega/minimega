@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -127,8 +128,9 @@ func randomMac() string {
 
 // Return a slice of strings, split on whitespace, not unlike strings.Fields(),
 // except that quoted fields are grouped.
-// 	Example: a b "c d"
-// 	will return: ["a", "b", "c d"]
+//
+//	Example: a b "c d"
+//	will return: ["a", "b", "c d"]
 func fieldsQuoteEscape(c string, input string) []string {
 	log.Debug("fieldsQuoteEscape splitting on %v: %v", c, input)
 	f := strings.Fields(input)
@@ -352,6 +354,48 @@ func lookupVLAN(namespace, alias string) (int, error) {
 	}
 
 	return vlan, nil
+}
+
+func recoverVLANs() error {
+	f, err := os.Open(filepath.Join(*f_base, "vlans"))
+	if err == nil {
+		var (
+			scanner = bufio.NewScanner(f)
+			skip    = true
+		)
+
+		for scanner.Scan() {
+			if skip {
+				// skip first line in file (header data)
+				skip = false
+				continue
+			}
+
+			fields := strings.Fields(scanner.Text())
+
+			if len(fields) != 2 {
+				return fmt.Errorf("expected exactly two columns in vlans file: got %d", len(fields))
+			}
+
+			alias := fields[0]
+			vlan, err := strconv.Atoi(fields[1])
+			if err != nil {
+				return fmt.Errorf("invalid VLAN ID %s for alias %s provided in vlans file: %w", fields[1], alias, err)
+			}
+
+			if err := vlans.AddAlias("", alias, vlan); err != nil {
+				return fmt.Errorf("unable to add VLAN alias %s (ID %d): %w", alias, vlan, err)
+			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("unable to process vlans file: %w", err)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("unable to open vlans file: %w", err)
+	}
+
+	return nil
 }
 
 // printVLAN uses the vlans and active namespace to print a vlan.

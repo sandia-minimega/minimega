@@ -273,11 +273,11 @@ func (h *hostSorter) Less(i, j int) bool {
 }
 
 // Less function for sorting QueuedVMs such that:
-//  * host and a coschedule limit come first
-//  * then those that specify a host
-//  * then those that specify a coschedule limit
-//  * then those that have more colocated VMs
-//  * then those that specify neither
+//   - host and a coschedule limit come first
+//   - then those that specify a host
+//   - then those that specify a coschedule limit
+//   - then those that have more colocated VMs
+//   - then those that specify neither
 func (q *QueuedVMs) Less(q2 *QueuedVMs) bool {
 	host, host2 := q.Schedule, q2.Schedule
 

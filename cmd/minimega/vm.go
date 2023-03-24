@@ -51,9 +51,9 @@ type VM interface {
 	GetNetwork(i int) (NetConfig, error) // GetNetwork returns the ith NetConfigs associated with the vm.
 	GetNetworks() []NetConfig            // GetNetworks returns an ordered, deep copy of the NetConfigs associated with the vm.
 
-	GetBonds() map[string]BondConfig                         // GetBonds returns a map of bond names to bond configs for the VM.
-	AddBond(string, []int, string, string, bool, bool) error // AddBond creates a new bond for the VM to include the given interfaces.
-	ClearBond(string) error                                  // ClearBond deletes bond for the VM.
+	GetBonds() []BondConfig    // GetBonds returns an ordered, deep copy of the BondConfigs associated with the vm.
+	AddBond(*BondConfig) error // AddBond creates a new bond for the VM per the provided BondConfig.
+	ClearBond(string) error    // ClearBond deletes bond for the VM.
 
 	// Lifecycle functions
 	Launch() error
@@ -61,6 +61,7 @@ type VM interface {
 	Start() error
 	Stop() error
 	Flush() error
+	Recover(string, int) error
 
 	String() string
 	Info(string) (string, error)
@@ -322,82 +323,59 @@ func (vm *BaseVM) GetNetworks() []NetConfig {
 	return n
 }
 
-func (vm *BaseVM) GetBonds() map[string]BondConfig {
-	return vm.Bonds
-}
-
-func (vm *BaseVM) AddBond(name string, ifaces []int, mode, lacp string, fallback, qinq bool) error {
+func (vm *BaseVM) GetBonds() []BondConfig {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
 
-	var (
-		interfaces = make([]NetConfig, len(ifaces))
-		ifaceMap   = make(map[string]int) // name --> VLAN mapping
-		vlan       = -1
+	// Make a deep copy of the BondConfigs
+	b := make([]BondConfig, len(vm.Bonds))
+	copy(b, vm.Bonds)
 
-		bridge string
-	)
+	return b
+}
 
-	for i, idx := range ifaces {
+func (vm *BaseVM) AddBond(bond *BondConfig) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if err := vm.addBond(bond); err != nil {
+		return err
+	}
+
+	vm.Bonds = append(vm.Bonds, *bond)
+
+	if err := vm.writeBonds(); err != nil {
+		return vm.setErrorf("unable to write bonds: %v", err)
+	}
+
+	return nil
+}
+
+func (vm *BaseVM) addBond(bond *BondConfig) error {
+	ifaceMap := make(map[string]int) // name --> VLAN mapping
+
+	bond.VLAN = -1
+
+	for _, idx := range bond.Interfaces {
 		cfg, err := vm.getNetwork(idx)
 		if err != nil {
 			return fmt.Errorf("interface %d not found for vm %s", idx, vm.Name)
 		}
 
-		if bridge == "" {
-			bridge = cfg.Bridge
-		} else if cfg.Bridge != bridge {
+		if bond.Bridge == "" {
+			bond.Bridge = cfg.Bridge
+		} else if cfg.Bridge != bond.Bridge {
 			return fmt.Errorf("interfaces being bonded are not on the same bridge")
 		}
 
-		if vlan < 0 {
-			vlan = cfg.VLAN
-		} else if cfg.VLAN != vlan {
-			log.Warn("interface %d on vm %s is not on VLAN %d -- still defaulting to %d for bond", idx, vm.Name, vlan, vlan)
+		if bond.VLAN < 0 {
+			bond.VLAN = cfg.VLAN
+		} else if cfg.VLAN != bond.VLAN {
+			log.Warn("interface %d on vm %s is not on VLAN %d -- still defaulting to %d for bond", idx, vm.Name, bond.VLAN, bond.VLAN)
 		}
 
-		qinq = qinq || cfg.QinQ
-
-		interfaces[i] = cfg
+		bond.QinQ = bond.QinQ || cfg.QinQ
 		ifaceMap[cfg.Tap] = cfg.VLAN
-	}
-
-	br, err := getBridge(bridge)
-	if err != nil {
-		return err
-	}
-
-	if name == "" {
-		name = br.CreateBondName()
-	}
-
-	if err := br.AddBond(name, mode, lacp, fallback, ifaceMap, vlan); err != nil {
-		return err
-	}
-
-	if qinq {
-		br.SetTapQinQ(name, vlan)
-	}
-
-	bond := BondConfig{
-		Name:       name,
-		Bridge:     bridge,
-		VLAN:       vlan,
-		QinQ:       qinq,
-		Interfaces: interfaces,
-	}
-
-	vm.Bonds[name] = bond
-	return nil
-}
-
-func (vm *BaseVM) ClearBond(name string) error {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
-
-	bond, ok := vm.Bonds[name]
-	if !ok {
-		return fmt.Errorf("bond %s doesn't exist on VM %s", name, vm.Name)
 	}
 
 	br, err := getBridge(bond.Bridge)
@@ -405,28 +383,67 @@ func (vm *BaseVM) ClearBond(name string) error {
 		return err
 	}
 
-	if err := br.DeleteBond(name); err != nil {
+	bond.Name, err = br.AddBond(bond.Name, bond.Mode, bond.LACP, bond.Fallback, ifaceMap, bond.VLAN)
+	if err != nil {
 		return err
 	}
 
-	var errs []string
-
-	for _, iface := range bond.Interfaces {
-		if iface.QinQ {
-			if err := br.SetTapQinQ(iface.Tap, iface.VLAN); err != nil {
-				errs = append(errs, err.Error())
-			}
-		}
-	}
-
-	// Delete bond even if setting QinQ for any of the taps failed above.
-	delete(vm.Bonds, name)
-
-	if len(errs) > 0 {
-		return fmt.Errorf("configuring QinQ for unbonded interfaces:\n%s", strings.Join(errs, "\n"))
+	if bond.QinQ {
+		br.SetTapQinQ(bond.Name, bond.VLAN)
 	}
 
 	return nil
+}
+
+func (vm *BaseVM) ClearBond(name string) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	// iterate over bonds in reverse so the bond to be cleared can be safely
+	// deleted during the iteration
+	for i := len(vm.Bonds) - 1; i >= 0; i-- {
+		bond := vm.Bonds[i]
+
+		if bond.Name != name {
+			continue
+		}
+
+		br, err := getBridge(bond.Bridge)
+		if err != nil {
+			return err
+		}
+
+		if err := br.DeleteBond(name); err != nil {
+			return err
+		}
+
+		var errs []string
+
+		for _, idx := range bond.Interfaces {
+			cfg, _ := vm.getNetwork(idx)
+
+			if cfg.QinQ {
+				if err := br.SetTapQinQ(cfg.Tap, cfg.VLAN); err != nil {
+					errs = append(errs, err.Error())
+				}
+			}
+		}
+
+		// Delete bond even if setting QinQ for any of the taps failed above.
+		vm.Bonds = append(vm.Bonds[:i], vm.Bonds[i+1:]...)
+
+		if err := vm.writeBonds(); err != nil {
+			return vm.setErrorf("unable to write bonds: %v", err)
+		}
+
+		if len(errs) > 0 {
+			return fmt.Errorf("configuring QinQ for unbonded interfaces:\n%s", strings.Join(errs, "\n"))
+		}
+
+		return nil
+	}
+
+	return fmt.Errorf("bond %s doesn't exist on VM %s", name, vm.Name)
 }
 
 func (vm *BaseVM) GetHost() string {
@@ -830,12 +847,12 @@ func (vm *BaseVM) Info(field string) (string, error) {
 			}
 		}
 	case "qinq":
-		for _, n := range vm.Networks {
+		for i, n := range vm.Networks {
 			if n.QinQ {
 				var bonded bool
 
 				for _, b := range vm.Bonds {
-					if b.Contains(n.Tap) {
+					if b.Contains(i) {
 						bonded = true
 						break
 					}
@@ -858,8 +875,9 @@ func (vm *BaseVM) Info(field string) (string, error) {
 		for _, b := range vm.Bonds {
 			taps := make([]string, len(b.Interfaces))
 
-			for i, c := range b.Interfaces {
-				taps[i] = c.Tap
+			for i, idx := range b.Interfaces {
+				cfg, _ := vm.getNetwork(idx)
+				taps[i] = cfg.Tap
 			}
 
 			vals = append(vals, fmt.Sprintf("%s (%s)", b.Name, strings.Join(taps, " ")))
@@ -909,6 +927,23 @@ func (vm *BaseVM) writeTaps() error {
 	f := vm.path("taps")
 	if err := ioutil.WriteFile(f, []byte(strings.Join(taps, "\n")), 0666); err != nil {
 		return fmt.Errorf("write instance taps file: %v", err)
+	}
+
+	return nil
+}
+
+// writeBonds writes the vm's bonds to disk in the vm's instance path.
+func (vm *BaseVM) writeBonds() error {
+	bonds := []string{}
+
+	for _, bond := range vm.Bonds {
+		bonds = append(bonds, bond.Name)
+	}
+
+	f := vm.path("bonds")
+
+	if err := ioutil.WriteFile(f, []byte(strings.Join(bonds, "\n")), 0666); err != nil {
+		return fmt.Errorf("write instance bonds file: %v", err)
 	}
 
 	return nil

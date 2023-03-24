@@ -10,11 +10,14 @@ const headerTemplate = `
 package {{ .Package }}
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io"
-	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 	"strconv"
+	"strings"
+
+	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 )
 
 var vmconfigerCLIHandlers = []minicli.Handler{
@@ -287,6 +290,48 @@ func (v *{{ $type }} ) WriteConfig(w io.Writer) error {
 			}
 		{{- end }}
 	{{- end }}
+
+	return nil
+}
+
+func (v *{{ $type }} ) ReadConfig(r io.Reader, ns string) error {
+	scanner := bufio.NewScanner(r)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if !strings.HasPrefix(line, "vm config") {
+			continue
+		}
+
+		config := strings.Fields(line)[2:]
+		field := config[0]
+
+		switch field {
+		{{- range $fields }}
+		case "{{ .ConfigName }}":
+			{{- if eq .Type "bool" }}
+			v.{{ .Field }}, _ = strconv.ParseBool(config[1])
+			{{- else if eq .Type "map" }}
+			v.{{ .Field }}[config[1]] = config[2]
+			{{- else if eq .Type "string" }}
+			v.{{ .Field }} = config[1]
+			{{- else if eq .Type "int64" }}
+			v.{{ .Field }}, _ = strconv.ParseInt(config[1], 10, 64)
+			{{- else if eq .Type "uint64" }}
+			v.{{ .Field }}, _ = strconv.ParseUint(config[1], 10, 64)
+			{{- else if eq .Type "slice" }}
+			v.{{ .Field }} = strings.Fields(config[1])
+			{{- else }}
+			v.ReadFieldConfig(strings.NewReader(line), "{{ .ConfigName }}", ns)
+			{{- end }}
+		{{- end }}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
+	}
 
 	return nil
 }

@@ -3,11 +3,14 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 	"io"
 	"strconv"
+	"strings"
+
+	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 )
 
 var vmconfigerCLIHandlers = []minicli.Handler{
@@ -171,6 +174,8 @@ Commands with the same <key> will overwrite previous volumes:
  /scratch/data2
 
 Note: this configuration only applies to containers.
+
+Default: empty map
 `,
 		Patterns: []string{
 			"vm config volume",
@@ -830,6 +835,8 @@ Default: true
 		HelpShort: "configures tags",
 		HelpLong: `Set tags in the same manner as "vm tag". These tags will apply to all
 newly launched VMs.
+
+Default: empty map
 `,
 		Patterns: []string{
 			"vm config tags",
@@ -870,6 +877,7 @@ newly launched VMs.
 			"clear vm config",
 			"clear vm config <append,>",
 			"clear vm config <backchannel,>",
+			"clear vm config <bonds,>",
 			"clear vm config <cpu,>",
 			"clear vm config <cdrom,>",
 			"clear vm config <colocate,>",
@@ -946,6 +954,9 @@ func (v *BaseConfig) Info(field string) (string, error) {
 	if field == "networks" {
 		return fmt.Sprintf("%v", v.Networks), nil
 	}
+	if field == "bonds" {
+		return fmt.Sprintf("%v", v.Bonds), nil
+	}
 	if field == "tags" {
 		return fmt.Sprintf("%v", v.Tags), nil
 	}
@@ -979,10 +990,13 @@ func (v *BaseConfig) Clear(mask string) {
 		v.Backchannel = true
 	}
 	if mask == Wildcard || mask == "networks" {
-		v.Networks = nil
+		v.Networks = NetConfigs{}
+	}
+	if mask == Wildcard || mask == "bonds" {
+		v.Bonds = BondConfigs{}
 	}
 	if mask == Wildcard || mask == "tags" {
-		v.Tags = nil
+		v.Tags = make(map[string]string)
 	}
 }
 
@@ -990,9 +1004,15 @@ func (v *BaseConfig) WriteConfig(w io.Writer) error {
 	if v.UUID != "" {
 		fmt.Fprintf(w, "vm config uuid %v\n", v.UUID)
 	}
-	fmt.Fprintf(w, "vm config vcpus %v\n", v.VCPUs)
-	fmt.Fprintf(w, "vm config memory %v\n", v.Memory)
-	fmt.Fprintf(w, "vm config snapshot %t\n", v.Snapshot)
+	if v.VCPUs != 1 {
+		fmt.Fprintf(w, "vm config vcpus %v\n", v.VCPUs)
+	}
+	if v.Memory != 2048 {
+		fmt.Fprintf(w, "vm config memory %v\n", v.Memory)
+	}
+	if v.Snapshot != true {
+		fmt.Fprintf(w, "vm config snapshot %t\n", v.Snapshot)
+	}
 	if v.Schedule != "" {
 		fmt.Fprintf(w, "vm config schedule %v\n", v.Schedule)
 	}
@@ -1008,8 +1028,57 @@ func (v *BaseConfig) WriteConfig(w io.Writer) error {
 	if err := v.Networks.WriteConfig(w); err != nil {
 		return err
 	}
+	if err := v.Bonds.WriteConfig(w); err != nil {
+		return err
+	}
 	for k, v := range v.Tags {
 		fmt.Fprintf(w, "vm config tags %v %v\n", k, v)
+	}
+
+	return nil
+}
+
+func (v *BaseConfig) ReadConfig(r io.Reader, ns string) error {
+	scanner := bufio.NewScanner(r)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if !strings.HasPrefix(line, "vm config") {
+			continue
+		}
+
+		config := strings.Fields(line)[2:]
+		field := config[0]
+
+		switch field {
+		case "uuid":
+			v.UUID = config[1]
+		case "vcpus":
+			v.VCPUs, _ = strconv.ParseUint(config[1], 10, 64)
+		case "memory":
+			v.Memory, _ = strconv.ParseUint(config[1], 10, 64)
+		case "snapshot":
+			v.Snapshot, _ = strconv.ParseBool(config[1])
+		case "schedule":
+			v.Schedule = config[1]
+		case "colocate":
+			v.Colocate = config[1]
+		case "coschedule":
+			v.Coschedule, _ = strconv.ParseInt(config[1], 10, 64)
+		case "backchannel":
+			v.Backchannel, _ = strconv.ParseBool(config[1])
+		case "networks":
+			v.ReadFieldConfig(strings.NewReader(line), "networks", ns)
+		case "bonds":
+			v.ReadFieldConfig(strings.NewReader(line), "bonds", ns)
+		case "tags":
+			v.Tags[config[1]] = config[2]
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
 	}
 
 	return nil
@@ -1055,7 +1124,7 @@ func (v *ContainerConfig) Clear(mask string) {
 		v.Fifos = 0
 	}
 	if mask == Wildcard || mask == "volume" {
-		v.VolumePaths = nil
+		v.VolumePaths = make(map[string]string)
 	}
 }
 
@@ -1077,6 +1146,42 @@ func (v *ContainerConfig) WriteConfig(w io.Writer) error {
 	}
 	for k, v := range v.VolumePaths {
 		fmt.Fprintf(w, "vm config volume %v %v\n", k, v)
+	}
+
+	return nil
+}
+
+func (v *ContainerConfig) ReadConfig(r io.Reader, ns string) error {
+	scanner := bufio.NewScanner(r)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if !strings.HasPrefix(line, "vm config") {
+			continue
+		}
+
+		config := strings.Fields(line)[2:]
+		field := config[0]
+
+		switch field {
+		case "filesystem":
+			v.FilesystemPath = config[1]
+		case "hostname":
+			v.Hostname = config[1]
+		case "init":
+			v.Init = strings.Fields(config[1])
+		case "preinit":
+			v.Preinit = config[1]
+		case "fifos":
+			v.Fifos, _ = strconv.ParseUint(config[1], 10, 64)
+		case "volume":
+			v.VolumePaths[config[1]] = config[2]
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
 	}
 
 	return nil
@@ -1182,13 +1287,13 @@ func (v *KVMConfig) Clear(mask string) {
 		v.Append = nil
 	}
 	if mask == Wildcard || mask == "disks" {
-		v.Disks = nil
+		v.Disks = DiskConfigs{}
 	}
 	if mask == Wildcard || mask == "qemu-append" {
 		v.QemuAppend = nil
 	}
 	if mask == Wildcard || mask == "qemu-override" {
-		v.QemuOverride = nil
+		v.QemuOverride = QemuOverrides{}
 	}
 }
 
@@ -1242,6 +1347,64 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 		fmt.Fprintf(w, "vm config qemu-append %v\n", quoteJoin(v.QemuAppend, " "))
 	}
 	if err := v.QemuOverride.WriteConfig(w); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (v *KVMConfig) ReadConfig(r io.Reader, ns string) error {
+	scanner := bufio.NewScanner(r)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if !strings.HasPrefix(line, "vm config") {
+			continue
+		}
+
+		config := strings.Fields(line)[2:]
+		field := config[0]
+
+		switch field {
+		case "qemu":
+			v.QemuPath = config[1]
+		case "kernel":
+			v.KernelPath = config[1]
+		case "initrd":
+			v.InitrdPath = config[1]
+		case "cdrom":
+			v.CdromPath = config[1]
+		case "migrate":
+			v.MigratePath = config[1]
+		case "cpu":
+			v.CPU = config[1]
+		case "sockets":
+			v.Sockets, _ = strconv.ParseUint(config[1], 10, 64)
+		case "cores":
+			v.Cores, _ = strconv.ParseUint(config[1], 10, 64)
+		case "threads":
+			v.Threads, _ = strconv.ParseUint(config[1], 10, 64)
+		case "machine":
+			v.Machine = config[1]
+		case "serial-ports":
+			v.SerialPorts, _ = strconv.ParseUint(config[1], 10, 64)
+		case "virtio-ports":
+			v.VirtioPorts = config[1]
+		case "vga":
+			v.Vga = config[1]
+		case "append":
+			v.Append = strings.Fields(config[1])
+		case "disks":
+			v.ReadFieldConfig(strings.NewReader(line), "disks", ns)
+		case "qemu-append":
+			v.QemuAppend = strings.Fields(config[1])
+		case "qemu-override":
+			v.ReadFieldConfig(strings.NewReader(line), "qemu-override", ns)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
 		return err
 	}
 

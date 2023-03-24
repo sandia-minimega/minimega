@@ -35,11 +35,12 @@ Should be run with caution.`,
 
 // clean up after an especially bad crash
 // currently this will:
-// 	kill all qemu instances
-//	kill all taps
-//  	kill all containers
-//	remove everything inside of info.BasePath (careful, that's dangerous)
-//  exit()
+//
+//		kill all qemu instances
+//		kill all taps
+//	 	kill all containers
+//		remove everything inside of info.BasePath (careful, that's dangerous)
+//	  exit
 func cliNuke(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// nuke any state we have
 	DestroyNamespace(Wildcard)
