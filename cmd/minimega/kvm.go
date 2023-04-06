@@ -179,6 +179,12 @@ type KVMConfig struct {
 	// Note: this configuration only applies to KVM-based VMs.
 	Disks DiskConfigs
 
+	// If true will use xHCI USB controller. Otherwise will use EHCI.
+	// EHCI does not support USB 3.0, but may be used for backwards compatability.
+	//
+	// Default: true
+	UsbUseXHCI bool
+
 	// Add additional arguments to be passed to the QEMU instance. For example:
 	//
 	// 	vm config qemu-append -serial tcp:localhost:4001
@@ -535,6 +541,7 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "Threads:\t%v\n", vm.Threads)
 	fmt.Fprintf(w, "Sockets:\t%v\n", vm.Sockets)
 	fmt.Fprintf(w, "VGA:\t%v\n", vm.Vga)
+	fmt.Fprintf(w, "Usb Use XHCI:\t%v\n", vm.UsbUseXHCI)
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
@@ -1079,13 +1086,21 @@ func (vm *KvmVM) AddNIC(nic NetConfig) error {
 
 func (vm *KvmVM) Hotplug(f, version, serial string) error {
 	var bus string
+	useXHCI := vm.UsbUseXHCI
 	switch version {
 	case "", "1.1":
 		version = "1.1"
 		bus = "usb-bus.0"
 	case "2.0":
-		bus = "ehci.0"
+		if useXHCI {
+			bus = "xhci.0"
+		} else {
+			bus = "ehci.0"
+		}
 	case "3.0":
+		if !useXHCI {
+			return fmt.Errorf("invalid version: `%v`. VM configured for EHCI instead of XHCI", version)
+		}
 		bus = "xhci.0"
 	default:
 		return fmt.Errorf("invalid version: `%v`", version)
@@ -1292,10 +1307,12 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 
 	// for USB 1.0, creates bus named usb-bus.0
 	args = append(args, "-usb")
-	// for USB 2.0, creates bus named ehci.0
-	args = append(args, "-device", "usb-ehci,id=ehci")
-	// for USB 3.0, creates bus named xhci.0
-	args = append(args, "-device", "qemu-xhci,id=xhci")
+	// create bus for xHCI or EHCI depending on config
+	if vm.UsbUseXHCI {
+		args = append(args, "-device", "qemu-xhci,id=xhci")
+	} else {
+		args = append(args, "-device", "usb-ehci,id=ehci")
+	}
 	// this allows absolute pointers in vnc, and works great on android vms
 	args = append(args, "-device", "usb-tablet,bus=usb-bus.0")
 

@@ -608,6 +608,27 @@ Note: this configuration only applies to KVM-based VMs.
 		}),
 	},
 	{
+		HelpShort: "configures usb-use-xhci",
+		HelpLong: `If true will use xHCI USB controller. Otherwise will use EHCI.
+EHCI does not support USB 3.0, but may be used for backwards compatability.
+
+Default: true
+`,
+		Patterns: []string{
+			"vm config usb-use-xhci [true,false]",
+		},
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.BoolArgs) == 0 {
+				r.Response = strconv.FormatBool(ns.vmConfig.UsbUseXHCI)
+				return nil
+			}
+
+			ns.vmConfig.UsbUseXHCI = c.BoolArgs["true"]
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "configures qemu-append",
 		HelpLong: `Add additional arguments to be passed to the QEMU instance. For example:
 
@@ -905,6 +926,7 @@ Default: empty map
 			"clear vm config <tags,>",
 			"clear vm config <threads,>",
 			"clear vm config <uuid,>",
+			"clear vm config <usb-use-xhci,>",
 			"clear vm config <vcpus,>",
 			"clear vm config <vga,>",
 			"clear vm config <virtio-ports,>",
@@ -1233,6 +1255,9 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	if field == "disks" {
 		return fmt.Sprintf("%v", v.Disks), nil
 	}
+	if field == "usb-use-xhci" {
+		return strconv.FormatBool(v.UsbUseXHCI), nil
+	}
 	if field == "qemu-append" {
 		return fmt.Sprintf("%v", v.QemuAppend), nil
 	}
@@ -1289,6 +1314,9 @@ func (v *KVMConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "disks" {
 		v.Disks = DiskConfigs{}
 	}
+	if mask == Wildcard || mask == "usb-use-xhci" {
+		v.UsbUseXHCI = true
+	}
 	if mask == Wildcard || mask == "qemu-append" {
 		v.QemuAppend = nil
 	}
@@ -1342,6 +1370,9 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 	}
 	if err := v.Disks.WriteConfig(w); err != nil {
 		return err
+	}
+	if v.UsbUseXHCI != true {
+		fmt.Fprintf(w, "vm config usb-use-xhci %t\n", v.UsbUseXHCI)
 	}
 	if len(v.QemuAppend) > 0 {
 		fmt.Fprintf(w, "vm config qemu-append %v\n", quoteJoin(v.QemuAppend, " "))
@@ -1397,6 +1428,8 @@ func (v *KVMConfig) ReadConfig(r io.Reader, ns string) error {
 			v.Append = strings.Fields(config[1])
 		case "disks":
 			v.ReadFieldConfig(strings.NewReader(line), "disks", ns)
+		case "usb-use-xhci":
+			v.UsbUseXHCI, _ = strconv.ParseBool(config[1])
 		case "qemu-append":
 			v.QemuAppend = strings.Fields(config[1])
 		case "qemu-override":
