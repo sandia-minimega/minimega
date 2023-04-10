@@ -98,7 +98,12 @@ func diskSnapshot(src, dst string) error {
 		log.Warn("minimega expects backing images to be in the files directory")
 	}
 
-	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", src, dst)
+	info, err := diskInfo(src)
+	if err != nil {
+		return fmt.Errorf("[image %s] error getting info: %v", src, err)
+	}
+
+	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", src, "-F", info.Format, dst)
 	if err != nil {
 		return fmt.Errorf("[image %s] %v: %v", src, out, err)
 	}

@@ -1293,7 +1293,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, smp)
 
 	args = append(args, "-qmp")
-	args = append(args, "unix:"+filepath.Join(vmPath, "qmp")+",server")
+	args = append(args, "unix:"+filepath.Join(vmPath, "qmp")+",server=on")
 
 	args = append(args, "-vga")
 	if vm.Vga == "" {
@@ -1320,7 +1320,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	// for virtio-serial, look below near the net code
 	for i := uint64(0); i < vm.SerialPorts; i++ {
 		args = append(args, "-chardev")
-		args = append(args, fmt.Sprintf("socket,id=charserial%v,path=%v%v,server,nowait", i, filepath.Join(vmPath, "serial"), i))
+		args = append(args, fmt.Sprintf("socket,id=charserial%v,path=%v%v,server=on,wait=off", i, filepath.Join(vmPath, "serial"), i))
 
 		args = append(args, "-device")
 		args = append(args, fmt.Sprintf("isa-serial,chardev=charserial%v,id=serial%v", i, i))
@@ -1457,7 +1457,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		addVirtioDevice()
 
 		args = append(args, "-chardev")
-		args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%v,server,nowait", filepath.Join(vmPath, "cc")))
+		args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%v,server=on,wait=off", filepath.Join(vmPath, "cc")))
 		args = append(args, "-device")
 		args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserialCC,id=charvserialCC,name=cc", virtioPort))
 	}
@@ -1488,7 +1488,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 			}
 
 			args = append(args, "-chardev")
-			args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%v%v,server,nowait", i, filepath.Join(vmPath, "virtio-serial"), i))
+			args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%v%v,server=on,wait=off", i, filepath.Join(vmPath, "virtio-serial"), i))
 			args = append(args, "-device")
 			args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserial%v,id=charvserial%v,name=%v", virtioPort, i, i, name))
 		}
