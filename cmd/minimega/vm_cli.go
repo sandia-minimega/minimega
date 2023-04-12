@@ -62,6 +62,7 @@ Additional fields are available for KVM-based VMs:
 - serial        : number of serial ports
 - virtio-serial : number of virtio ports
 - vnc_port      : port for VNC shim
+- usb-use-xhci  : usb controller (true = xhci; false = ehci)
 
 Additional fields are available for container-based VMs:
 
