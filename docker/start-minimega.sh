@@ -14,7 +14,7 @@
 : "${MM_CONTEXT:=minimega}"
 : "${MM_LOGLEVEL:=info}"
 : "${MM_LOGFILE:=/var/log/minimega.log}"
-: "${MM_RECOVER:=true}"
+: "${MM_FORCE:=true}"
 : "${MM_RECOVER:=false}"
 
 [[ -f "/etc/default/minimega" ]] && source "/etc/default/minimega"
