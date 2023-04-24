@@ -239,6 +239,24 @@ See "vm start" for a full description of allowable targets.`,
 		Call:    wrapVMTargetCLI(cliVMHotplug),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
 	},
+	{ // vm smartcard
+		HelpShort: "add and remove smartcard devices",
+		HelpLong: `
+Add and remove a smartcard to a launched VM. Only one smartcard is
+supported at a time. To add an emulated smartcard, call vm smartcard
+with the path to the emulated card:
+
+	vm smartcard add foo /cards/fake-smartcard
+
+		`,
+		Patterns: []string{
+			"vm smartcard",
+			"vm smartcard <add,> <vm target> [smartcard_path]",
+			"vm smartcard <remove,> <vm target> [all]",
+		},
+		Call: wrapVMTargetCLI(cliVMSmartcard),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, true),
+	},
 	{ // vm net
 		HelpShort: "add, disconnect, or move network connections",
 		HelpLong: `
@@ -899,6 +917,74 @@ func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	}
 
 	return vm.Migrate(fname)
+}
+
+func cliVMSmartcard(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	target := c.StringArgs["vm"]
+
+	if c.BoolArgs["add"] {
+
+		smartcard_path := c.StringArgs["smartcard_path"]
+
+		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+			if kvm, ok := vm.(*KvmVM); ok {
+				return true, kvm.Smartcard(smartcard_path)
+			}
+
+			return false, nil
+		})
+	} else if c.BoolArgs["remove"] {
+
+		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
+			kvm, ok := vm.(*KvmVM)
+			if !ok {
+				return false, nil
+			}
+
+			if c.BoolArgs["all"] {
+				err := kvm.SmartcardRemoveAll()
+				if wild && err != nil && err.Error() == "no smartcard devices to remove" {
+					// suppress error if more than one target
+					err = nil
+				}
+				return true, err
+			} 
+
+			err := kvm.SmartcardRemove()
+			if wild && err != nil && err.Error() == "no such smartcard device" {
+				// suppress error if more than one target
+				err = nil
+			}
+
+			return true, err
+		})
+	}
+
+	resp.Header = []string{"name", "id", "options"}
+
+	// synchronizes appends to resp.Tabular
+	var mu sync.Mutex
+
+	return ns.VMs.Apply(Wildcard, func(vm VM, wild bool) (bool, error) {
+		kvm, ok := vm.(*KvmVM)
+		if !ok {
+			return false, nil
+		}
+
+		name := vm.GetName()
+		res := kvm.SmartcardInfo()
+
+		mu.Lock()
+		defer mu.Unlock()
+
+		for k, v := range res {
+			resp.Tabular = append(resp.Tabular, []string{
+				name, strconv.Itoa(k), v.Options,
+			})
+		}
+
+		return true, nil
+	})
 }
 
 func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

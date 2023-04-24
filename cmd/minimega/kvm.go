@@ -212,12 +212,19 @@ type vmHotplug struct {
 	Version string
 }
 
+type vmSmartcard struct {
+	Options string
+	Attached bool
+}
+
 type KvmVM struct {
 	*BaseVM   // embed
 	KVMConfig // embed
 
 	// Internal variables
-	hotplug map[int]vmHotplug
+	hotplug   map[int]vmHotplug
+	smartcard vmSmartcard
+	ccid_connected bool
 
 	q qmp.Conn // qmp connection for this vm
 
@@ -1082,6 +1089,83 @@ func (vm *KvmVM) AddNIC(nic NetConfig) error {
 	log.Debugln("qmp device_add response:", r)
 
 	return nil
+}
+
+func (vm *KvmVM) Smartcard(smartcard_path string) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if !vm.ccid_connected {
+		r_ccid, err_ccid := vm.q.CCIDAdd()
+		if err_ccid != nil {
+			return err_ccid 
+		}
+		log.Debugln("ccid add response:", r_ccid)
+		vm.ccid_connected = true
+	}
+
+	if vm.smartcard.Attached {
+		return errors.New("Smartcard already attached. Please remove previous before inserting a new one.")
+	}
+
+
+	r, err := vm.q.SmartcardAdd("smartcard0", smartcard_path)
+	if err != nil {
+		return err
+	}
+
+	log.Debugln("smartcard add response:", r)
+	vm.smartcard = vmSmartcard{smartcard_path, true}
+
+	return nil
+}
+func (vm *KvmVM) SmartcardRemoveAll() error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	err := vm.smartcardRemove()
+
+	return err
+}
+
+func (vm *KvmVM) SmartcardRemove() error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	return vm.smartcardRemove()
+}
+
+func (vm *KvmVM) smartcardRemove() error {
+
+	if !vm.smartcard.Attached {
+		return errors.New("No attached smartcard")
+	}
+
+	resp, err := vm.q.SmartcardRemove("smartcard0")
+	if err != nil {
+		return err
+	}
+
+	log.Debugln("smartcard del response:", resp)
+
+	vm.smartcard.Attached = false 
+
+	return nil
+
+}
+
+// SmartcardInfo returns a deep copy of the VM's smartcard info
+func (vm *KvmVM) SmartcardInfo() map[int]vmSmartcard {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	res := map[int]vmSmartcard{}
+
+	if vm.smartcard.Attached {
+		res[0] = vmSmartcard{vm.smartcard.Options, vm.smartcard.Attached}
+	}
+
+	return res
 }
 
 func (vm *KvmVM) Hotplug(f, version, serial string) error {
