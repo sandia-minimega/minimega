@@ -16,6 +16,7 @@
 : "${MM_LOGFILE:=/var/log/minimega.log}"
 : "${MM_RECOVER:=true}"
 : "${MM_RECOVER:=false}"
+: "${MM_CGROUP:=/sys/fs/cgroup}"
 
 [[ -f "/etc/default/minimega" ]] && source "/etc/default/minimega"
 
@@ -32,4 +33,5 @@
   -degree=${MM_DEGREE} \
   -context=${MM_CONTEXT} \
   -level=${MM_LOGLEVEL} \
-  -logfile=${MM_LOGFILE}
+  -logfile=${MM_LOGFILE} \
+  -cgroup=${MM_CGROUP}
