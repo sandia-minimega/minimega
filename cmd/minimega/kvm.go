@@ -1327,11 +1327,13 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "-device", "usb-tablet,bus=usb-bus.0")
 
 	if vm.TpmInfo.Enable {
-		args = append(args, "-chardev socket,id=chrtpm,server=on,wait=off,path=%v", vm.TpmInfo.Socket)
-		args = append(args, "-tpmdev emulator,id=tpm0,chardev=chrtpm")
-		args = append(args, "-device tpm-tis,tpmdev=tpm0")
+		args = append(args, "-chardev")
+		args = append(args, fmt.Sprintf("socket,id=chrtpm,path=%v,nowait", vm.TpmInfo.Socket))
+		args = append(args, "-tpmdev")
+		args = append(args, "emulator,id=tpm0,chardev=chrtpm")
+		args = append(args, "-device")
+		args = append(args, "tpm-tis,tpmdev=tpm0")
 	}
-
 	// this is non-virtio serial ports
 	// for virtio-serial, look below near the net code
 	for i := uint64(0); i < vm.SerialPorts; i++ {
