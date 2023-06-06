@@ -1,7 +1,9 @@
 # github.com/Harvey-OS/ninep v0.0.0-00010101000000-000000000000 => github.com/jcrussell/ninep v0.0.0-20180619175724-35ad2879c0a3
+## explicit
 github.com/Harvey-OS/ninep/filesystem
 github.com/Harvey-OS/ninep/protocol
 # github.com/anthonynsimon/bild v0.10.1-0.20190311092716-e21126554192
+## explicit
 github.com/anthonynsimon/bild/adjust
 github.com/anthonynsimon/bild/blend
 github.com/anthonynsimon/bild/blur
@@ -13,55 +15,79 @@ github.com/anthonynsimon/bild/math/f64
 github.com/anthonynsimon/bild/parallel
 github.com/anthonynsimon/bild/util
 # github.com/c9s/goprocinfo v0.0.0-20151025191153-19cb9f127a9c
+## explicit
 github.com/c9s/goprocinfo/linux
 # github.com/dutchcoders/goftp v0.0.0-00010101000000-000000000000 => ./packages/github.com/dutchcoders/goftp
+## explicit; go 1.13
 github.com/dutchcoders/goftp
 # github.com/fsnotify/fsnotify v1.5.5-0.20220826001856-69c24b069553
+## explicit; go 1.16
 github.com/fsnotify/fsnotify
 # github.com/goftp/server v0.0.0-00010101000000-000000000000 => ./packages/github.com/goftp/server
+## explicit; go 1.13
 github.com/goftp/server
-# github.com/google/gopacket v1.1.18-0.20190711070436-ce2e696dc0c9
+# github.com/google/gopacket v1.1.19
+## explicit; go 1.12
 github.com/google/gopacket
 github.com/google/gopacket/layers
 github.com/google/gopacket/macs
 github.com/google/gopacket/pcap
 github.com/google/gopacket/pcapgo
 # github.com/jbuchbinder/gopnm v0.0.0-20150223212718-5176c556b9ce
+## explicit
 github.com/jbuchbinder/gopnm
 # github.com/kr/pty v0.0.0-20160716204620-ce7fa45920dc
+## explicit
 github.com/kr/pty
-# github.com/miekg/dns v0.0.0-20160726032027-db96a2b759cd
+# github.com/miekg/dns v1.1.25
+## explicit; go 1.12
 github.com/miekg/dns
 # github.com/nfnt/resize v0.0.0-20160724205520-891127d8d1b5
+## explicit
 github.com/nfnt/resize
 # github.com/peterh/liner v1.0.1-0.20170317030525-88609521dc4b
+## explicit
 github.com/peterh/liner
 # github.com/stargrave/goircd v0.0.0-00010101000000-000000000000 => ./packages/github.com/stargrave/goircd
+## explicit; go 1.13
 github.com/stargrave/goircd
 # github.com/thoj/go-ircevent v0.0.0-00010101000000-000000000000 => ./packages/github.com/thoj/go-ircevent
+## explicit; go 1.13
 github.com/thoj/go-ircevent
 # github.com/twmb/murmur3 v1.1.6
+## explicit; go 1.11
 github.com/twmb/murmur3
 # github.com/ziutek/telnet v0.0.0-20150427115447-49d9be70897f
+## explicit
 github.com/ziutek/telnet
-# golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
+# golang.org/x/crypto v0.1.0
+## explicit; go 1.17
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
 golang.org/x/crypto/chacha20
 golang.org/x/crypto/curve25519
 golang.org/x/crypto/curve25519/internal/field
 golang.org/x/crypto/ed25519
-golang.org/x/crypto/ed25519/internal/edwards25519
+golang.org/x/crypto/internal/alias
 golang.org/x/crypto/internal/poly1305
-golang.org/x/crypto/internal/subtle
 golang.org/x/crypto/ssh
 golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
 golang.org/x/crypto/ssh/terminal
-# golang.org/x/net v0.0.0-20210226172049-e18ecbb05110
+# golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4
+## explicit; go 1.17
+golang.org/x/mod/semver
+# golang.org/x/net v0.7.0
+## explicit; go 1.17
 golang.org/x/net/bpf
+golang.org/x/net/internal/iana
+golang.org/x/net/internal/socket
+golang.org/x/net/ipv4
+golang.org/x/net/ipv6
 golang.org/x/net/websocket
-# golang.org/x/sys v0.0.0-20220825204002-c680a09ffe64
+# golang.org/x/sys v0.5.0
+## explicit; go 1.17
 golang.org/x/sys/cpu
+golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader
 golang.org/x/sys/plan9
 golang.org/x/sys/unix
@@ -70,10 +96,26 @@ golang.org/x/sys/windows/registry
 golang.org/x/sys/windows/svc
 golang.org/x/sys/windows/svc/eventlog
 golang.org/x/sys/windows/svc/mgr
-# golang.org/x/term v0.0.0-20201126162022-7de9c90e9dd1
+# golang.org/x/term v0.5.0
+## explicit; go 1.17
 golang.org/x/term
-# golang.org/x/tools v0.0.0-20180917221912-90fa682c2a6e
+# golang.org/x/tools v0.1.12
+## explicit; go 1.18
 golang.org/x/tools/go/gcexportdata
-golang.org/x/tools/go/internal/cgo
 golang.org/x/tools/go/internal/gcimporter
+golang.org/x/tools/go/internal/packagesdriver
+golang.org/x/tools/go/internal/pkgbits
 golang.org/x/tools/go/packages
+golang.org/x/tools/internal/event
+golang.org/x/tools/internal/event/core
+golang.org/x/tools/internal/event/keys
+golang.org/x/tools/internal/event/label
+golang.org/x/tools/internal/gocommand
+golang.org/x/tools/internal/packagesinternal
+golang.org/x/tools/internal/typeparams
+golang.org/x/tools/internal/typesinternal
+# github.com/Harvey-OS/ninep => github.com/jcrussell/ninep v0.0.0-20180619175724-35ad2879c0a3
+# github.com/dutchcoders/goftp => ./packages/github.com/dutchcoders/goftp
+# github.com/goftp/server => ./packages/github.com/goftp/server
+# github.com/stargrave/goircd => ./packages/github.com/stargrave/goircd
+# github.com/thoj/go-ircevent => ./packages/github.com/thoj/go-ircevent
