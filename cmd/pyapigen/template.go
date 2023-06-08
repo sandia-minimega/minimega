@@ -167,7 +167,7 @@ class minimega(object):
 		if self._namespace is not None:
 			cmd = ['namespace', self._namespace] + cmd
 
-		msg = json.dumps({'Command': ' '.join([str(v) for v in cmd if v])})
+		msg = json.dumps({'Command': ' '.join([str(v) for v in cmd if v is not None])})
 
 		with self._lock:
 			if self.moreResponses:
