@@ -209,6 +209,12 @@ func (iom *IOMeshage) Info(file string) []string {
 // directory, the entire directory will be recursively transferred. If the file
 // already exists on this node, Get will return immediately with no error.
 func (iom *IOMeshage) Get(file string) error {
+	// Short-circuit this entire process if there's only one node in the mesh,
+	// since the only node in the mesh will always have all the files.
+	if len(iom.node.Mesh()) == 1 {
+		return nil
+	}
+
 	var exists bool
 
 	// If this is a file, and it currently exists locally on disk, and we're not
