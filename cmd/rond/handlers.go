@@ -98,6 +98,23 @@ var cliHandlers = []minicli.Handler{
 		}),
 	},
 	{
+		HelpShort: "run a command once",
+		Patterns: []string{
+			"<exec-once,> <command>...",
+			"<bg-once,> <command>...",
+		},
+		Call: wrapCLI(func(c *minicli.Command, resp *minicli.Response) error {
+			rond.NewCommand(&ron.Command{
+				Command:    c.ListArgs["command"],
+				Filter:     filter,
+				Background: c.BoolArgs["bg-once"],
+				Once:       true,
+			})
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "list processes",
 		Patterns: []string{
 			"processes",
@@ -221,8 +238,8 @@ Send one or more files. Supports globs such as:
 		},
 		Call: wrapCLI(func(c *minicli.Command, resp *minicli.Response) error {
 			resp.Header = []string{
-				"id", "command", "responses", "background", "sent", "received",
-				"filter",
+				"id", "command", "responses", "background", "once", "sent",
+				"received", "filter",
 			}
 
 			commands := rond.GetCommands()
@@ -240,6 +257,7 @@ Send one or more files. Supports globs such as:
 					fmt.Sprintf("%v", v.Command),
 					strconv.Itoa(len(v.CheckedIn)),
 					strconv.FormatBool(v.Background),
+					strconv.FormatBool(v.Once),
 					fmt.Sprintf("%v", v.FilesSend),
 					fmt.Sprintf("%v", v.FilesRecv),
 					fmt.Sprintf("%v", v.Filter),
