@@ -232,11 +232,21 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		path = nbdPath + "p" + partition
 
 		// check desired partition exists
-		_, err = os.Stat(path)
-		if err != nil {
-			return fmt.Errorf("[image %s] desired partition %s not found", dst, partition)
-		} else {
+		for i := 1; i <= 5; i++ {
+			_, err = os.Stat(path)
+			if err != nil {
+				err = fmt.Errorf("[image %s] desired partition %s not found", dst, partition)
+
+				time.Sleep(time.Duration(i*100) * time.Millisecond)
+				continue
+			}
+
 			log.Info("desired partition %s found in image %s", partition, dst)
+			break
+		}
+
+		if err != nil {
+			return err
 		}
 	}
 
