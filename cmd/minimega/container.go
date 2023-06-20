@@ -329,7 +329,7 @@ func containerInit() error {
 	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
 
 	for _, cgroup := range cgroups {
-		if err := os.Mkdir(cgroup, 0755); err != nil {
+		if err := os.MkdirAll(cgroup, 0755); err != nil {
 			return fmt.Errorf("cgroup mkdir: %v", err)
 		}
 
