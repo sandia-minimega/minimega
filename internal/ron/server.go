@@ -895,8 +895,12 @@ func (s *Server) sendCommands(uuid string) {
 		Commands: make(map[int]*Command),
 		UUID:     uuid,
 	}
+
 	for k, v := range s.commands {
-		m.Commands[k] = v.Copy()
+		if !v.Once || !v.Sent {
+			m.Commands[k] = v.Copy()
+			v.Sent = true
+		}
 	}
 
 	s.route(m)
