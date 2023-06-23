@@ -9,6 +9,7 @@
 : "${MM_BASE:=/tmp/minimega}"
 : "${MM_FILEPATH:=/tmp/minimega/files}"
 : "${MM_BROADCAST:=255.255.255.255}"
+: "${MM_VLANRANGE:=101-4096}"
 : "${MM_PORT:=9000}"
 : "${MM_DEGREE:=2}"
 : "${MM_CONTEXT:=minimega}"
@@ -29,6 +30,7 @@
   -base=${MM_BASE} \
   -filepath=${MM_FILEPATH} \
   -broadcast=${MM_BROADCAST} \
+  -vlanrange=${MM_VLANRANGE} \
   -port=${MM_PORT} \
   -degree=${MM_DEGREE} \
   -context=${MM_CONTEXT} \
