@@ -855,7 +855,7 @@ func (ns *Namespace) clearCCMount(s string) error {
 
 		if mnt.Path != "" {
 			if err := syscall.Unmount(mnt.Path, 0); err != nil {
-				return err
+				log.Error("unable to unmount %s: %v", mnt.Path, err)
 			}
 		}
 
@@ -868,7 +868,7 @@ func (ns *Namespace) clearCCMount(s string) error {
 
 		// VM is running locally
 		if err := ns.ccServer.DisconnectUFS(uuid); err != nil {
-			return err
+			log.Error("unable to disconnect UFS for %s mount: %v", mnt.Name, err)
 		}
 
 		delete(ns.ccMounts, uuid)
