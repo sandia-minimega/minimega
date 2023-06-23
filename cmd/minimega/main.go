@@ -263,7 +263,7 @@ func main() {
 	}
 
 	if max <= min {
-		log.Fatal("expected min < max")
+		log.Fatal("expected min < max for VLAN range")
 	}
 
 	if err := vlans.SetRange("", min, max); err != nil {
