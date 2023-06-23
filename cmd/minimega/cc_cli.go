@@ -202,7 +202,7 @@ var ccCliSubHandlers = map[string]wrappedCLIFunc{
 	"process":         cliCCProcess,
 	"recv":            cliCCFileRecv,
 	"responses":       cliCCResponses,
-  "exitcode":        cliCCExitCode,
+	"exitcode":        cliCCExitCode,
 	"rtunnel":         cliCCTunnel,
 	"send":            cliCCFileSend,
 	"tunnel":          cliCCTunnel,
