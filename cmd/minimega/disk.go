@@ -283,11 +283,11 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 	}()
 
 	// copy files/folders into mntDir
-	for dst, src := range pairs {
-		dir := filepath.Dir(filepath.Join(mntDir, dst))
+	for target, source := range pairs {
+		dir := filepath.Dir(filepath.Join(mntDir, target))
 		os.MkdirAll(dir, 0775)
 
-		out, err := processWrapper("cp", "-fr", src, filepath.Join(mntDir, dst))
+		out, err := processWrapper("cp", "-fr", source, filepath.Join(mntDir, target))
 		if err != nil {
 			return fmt.Errorf("[image %s] %v: %v", dst, out, err)
 		}
