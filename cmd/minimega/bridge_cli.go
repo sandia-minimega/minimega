@@ -371,15 +371,22 @@ func cliBridge(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 	}
 
 	// Must want to list bridges
-	resp.Header = []string{"bridge", "preexisting", "vlans", "trunks", "tunnels", "config"}
+	resp.Header = []string{"bridge", "preexisting", "vlans", "trunks", "tunnels", "bonds", "config"}
 	resp.Tabular = [][]string{}
 
 	for _, info := range bridges.Info() {
 		vlans := []string{}
-		for k, _ := range info.VLANs {
+
+		for _, k := range info.VLANs {
 			vlans = append(vlans, printVLAN(ns.Name, k))
 		}
+
 		sort.Strings(vlans)
+
+		bonds := []string{}
+		for k, v := range info.Bonds {
+			bonds = append(bonds, fmt.Sprintf("%s (%s)", k, strings.Join(v, " ")))
+		}
 
 		row := []string{
 			info.Name,
@@ -387,8 +394,10 @@ func cliBridge(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 			fmt.Sprintf("%v", vlans),
 			fmt.Sprintf("%v", info.Trunks),
 			fmt.Sprintf("%v", info.Tunnels),
+			fmt.Sprintf("%v", bonds),
 			marshal(info.Config),
 		}
+
 		resp.Tabular = append(resp.Tabular, row)
 	}
 

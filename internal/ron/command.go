@@ -63,6 +63,14 @@ type Command struct {
 	// not used by the server or client.
 	Prefix string
 
+	// Once specifies whether or not this command should only be sent to clients
+	// once, or if it should be sent after client reconnections.
+	Once bool
+
+	// Sent tracks whether or not this command has been sent already. Only used
+	// when Once is enabled.
+	Sent bool
+
 	// plumber connections
 	Stdin  string
 	Stdout string
@@ -128,6 +136,8 @@ func (c *Command) Copy() *Command {
 		PID:        c.PID,
 		KillAll:    c.KillAll,
 		Prefix:     c.Prefix,
+		Once:       c.Once,
+		Sent:       c.Sent,
 		Stdin:      c.Stdin,
 		Stdout:     c.Stdout,
 		Stderr:     c.Stderr,

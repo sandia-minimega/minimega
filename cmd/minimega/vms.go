@@ -474,10 +474,10 @@ func (vms *VMs) Apply(target string, fn vmApplyFunc) error {
 // apply is the fan-out/fan-in method to apply a function to a set of VMs
 // specified by target. Specifically, it:
 //
-// 	1. Expands target to a list of VM names and IDs (or wild)
-// 	2. Invokes fn on all the matching VMs
-// 	3. Collects all the errors from the invoked fns
-// 	4. Records in the log a list of VMs that were not found
+//  1. Expands target to a list of VM names and IDs (or wild)
+//  2. Invokes fn on all the matching VMs
+//  3. Collects all the errors from the invoked fns
+//  4. Records in the log a list of VMs that were not found
 //
 // The fn that is passed in takes two arguments: the VM struct and a boolean
 // specifying whether the invocation was wild or not. The fn returns a boolean

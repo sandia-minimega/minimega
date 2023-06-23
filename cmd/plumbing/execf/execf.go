@@ -34,8 +34,9 @@ func main() {
 
 // Return a slice of strings, split on whitespace, not unlike strings.Fields(),
 // except that quoted fields are grouped.
-// 	Example: a b "c d"
-// 	will return: ["a", "b", "c d"]
+//
+//	Example: a b "c d"
+//	will return: ["a", "b", "c d"]
 func fieldsQuoteEscape(c string, input string) []string {
 	f := strings.Fields(input)
 	var ret []string

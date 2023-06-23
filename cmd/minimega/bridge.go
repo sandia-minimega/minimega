@@ -5,16 +5,19 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"text/tabwriter"
 	"time"
 
 	"github.com/sandia-minimega/minimega/v2/internal/bridge"
+	"github.com/sandia-minimega/minimega/v2/internal/vlans"
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
@@ -26,6 +29,7 @@ const (
 const (
 	DefaultBridge = "mega_bridge"
 	TapFmt        = "mega_tap%v"
+	BondFmt       = "mega_bond%v"
 	TapReapRate   = time.Second
 )
 
@@ -34,7 +38,7 @@ type Tap struct {
 	host bool
 }
 
-var bridges = bridge.NewBridges(DefaultBridge, TapFmt)
+var bridges = bridge.NewBridges(DefaultBridge, TapFmt, BondFmt)
 
 // tapReaperStart periodically calls bridges.ReapTaps
 func tapReaperStart() {
@@ -115,7 +119,12 @@ func hostTapCreate(b, tap string, v int) (string, error) {
 		return "", err
 	}
 
-	return br.CreateHostTap(tap, v)
+	tap, err = br.CreateHostTap(tap, v)
+	if err == nil {
+		mustWrite(filepath.Join(*f_base, "taps"), hostTapInfo())
+	}
+
+	return tap, err
 }
 
 // hostTapList populates resp with information about all the host taps.
@@ -175,7 +184,85 @@ func hostTapDelete(ns *Namespace, s string) error {
 		return nil
 	}
 
-	return delTap(s)
+	err := delTap(s)
+	if err == nil {
+		mustWrite(filepath.Join(*f_base, "taps"), hostTapInfo())
+	}
+
+	return err
+}
+
+func recoverHostTaps() error {
+	f, err := os.Open(filepath.Join(*f_base, "taps"))
+	if err == nil {
+		var (
+			scanner = bufio.NewScanner(f)
+			skip    = true
+		)
+
+		for scanner.Scan() {
+			if skip {
+				// skip first line in file (header data)
+				skip = false
+				continue
+			}
+
+			fields := strings.Fields(scanner.Text())
+
+			if len(fields) != 3 {
+				return fmt.Errorf("expected exactly three columns in taps file: got %d", len(fields))
+			}
+
+			var (
+				bridge = fields[0]
+				tap    = fields[1]
+				alias  = fields[2]
+			)
+
+			br, err := bridges.Get(bridge)
+			if err != nil {
+				return fmt.Errorf("unable to get bridge %s for host tap %s: %w", bridge, tap, err)
+			}
+
+			vlan, err := vlans.GetVLAN("", alias)
+			if err != nil {
+				return fmt.Errorf("unable to get VLAN ID for alias %s on host tap %s: %w", alias, tap, err)
+			}
+
+			br.RecoverTap(tap, "", vlan, true)
+		}
+
+		if err := scanner.Err(); err != nil {
+			return fmt.Errorf("unable to process taps file: %w", err)
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("unable to open taps file: %w", err)
+	}
+
+	return nil
+}
+
+// hostTapInfo returns formatted information about all the host taps.
+func hostTapInfo() string {
+	taps := bridges.HostTaps()
+	if len(taps) == 0 {
+		return ""
+	}
+
+	var o bytes.Buffer
+
+	w := new(tabwriter.Writer)
+	w.Init(&o, 5, 0, 1, ' ', 0)
+
+	fmt.Fprintf(w, "Bridge\tTap\tVLAN\n")
+
+	for _, t := range taps {
+		alias := strings.Fields(vlans.PrintVLAN("", t.VLAN))[0]
+		fmt.Fprintf(w, "%v\t%v\t%v\n", t.Bridge, t.Name, alias)
+	}
+
+	w.Flush()
+	return o.String()
 }
 
 func mirrorDelete(ns *Namespace, name string) error {

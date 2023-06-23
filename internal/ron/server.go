@@ -6,6 +6,7 @@ package ron
 
 import (
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -26,6 +27,8 @@ import (
 )
 
 const PART_SIZE = 1024 * 100
+
+var errClientTooOld = fmt.Errorf("miniccc client too old -- please update")
 
 type Server struct {
 	// UseVMs controls whether ron uses VM callbacks or not (see ron.VM)
@@ -256,8 +259,12 @@ func (s *Server) DialSerial(path, uuid string) error {
 
 			cli, err := s.handshake(conn)
 			if err != nil {
-				log.Debug("handshake failed (due to %v) - retrying", err)
+				if errors.Is(err, errClientTooOld) {
+					log.Error(err.Error())
+					return
+				}
 
+				log.Debug("handshake failed (due to %v) - retrying", err)
 				time.Sleep(CLIENT_RECONNECT_RATE * time.Second)
 
 				continue
@@ -755,7 +762,7 @@ func (s *Server) handshake(conn net.Conn) (*client, error) {
 			}
 		}()
 	} else {
-		log.Warn("client %s is missing message version -- not starting heartbeat", m.Client.UUID)
+		return nil, fmt.Errorf("client %s: %w", m.Client.UUID, errClientTooOld)
 	}
 
 	// TODO: if the client blocks, ron will hang... probably not good
@@ -932,8 +939,12 @@ func (s *Server) sendCommands(uuid string) {
 		Commands: make(map[int]*Command),
 		UUID:     uuid,
 	}
+
 	for k, v := range s.commands {
-		m.Commands[k] = v.Copy()
+		if !v.Once || !v.Sent {
+			m.Commands[k] = v.Copy()
+			v.Sent = true
+		}
 	}
 
 	s.route(m)

@@ -29,6 +29,11 @@ type Bridge struct {
 	// mirrors records the mirror tap names used by captures
 	mirrors map[string]bool
 
+	// bonds tracks bonded interfaces added to the bridge, along with the VLAN the
+	// interface originally belonged to. The bond name is the key to the first map
+	// and the interface name is the key to the second map.
+	bonds map[string]map[string]int
+
 	// captures records the "stop" flags that are set to non-zero values when
 	// we want to stop a capture.
 	captures map[int]capture
@@ -40,9 +45,13 @@ type Bridge struct {
 
 	nf *gonetflow.Netflow
 
-	// nameChan is a reference to the nameChan from the Bridges struct that
+	// tapChan is a reference to the tapChan from the Bridges struct that
 	// this Bridge was created on.
-	nameChan chan string
+	tapChan chan string
+
+	// bondChan is a reference to the bondChan from the Bridges struct that
+	// this Bridge was created on.
+	bondChan chan string
 
 	handle *pcap.Handle
 
@@ -61,6 +70,7 @@ type BridgeInfo struct {
 	Trunks   []string
 	Tunnels  []string
 	Mirrors  []string
+	Bonds    map[string][]string
 	Config   map[string]string
 }
 
@@ -72,6 +82,7 @@ type Tap struct {
 	MAC       string // MAC address
 	Host      bool   // Set when created as a host tap (and, thus, promiscuous)
 	Container bool   // Set when created via CreateContainerTap
+	Bond      string // Bond that the tap belongs to
 	Defunct   bool   // Set when Tap should be reaped
 
 	IP4 string // Snooped IPv4 address
@@ -190,7 +201,7 @@ func (b *Bridge) reapTaps() error {
 
 	for _, tap := range b.taps {
 		// build up the arg string directly for defunct taps
-		if tap.Defunct {
+		if tap.Defunct && tap.Bond == "" {
 			args = append(args, "--", "del-port", b.Name, tap.Name)
 		}
 	}

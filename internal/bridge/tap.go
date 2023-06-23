@@ -12,7 +12,7 @@ import (
 
 // CreateTapName will return the next created tap name from the name channel
 func (b *Bridge) CreateTapName() string {
-	return <-b.nameChan
+	return <-b.tapChan
 }
 
 // CreateTap creates a new tap and adds it to the bridge. mac is the MAC
@@ -29,7 +29,7 @@ func (b *Bridge) CreateTap(tap, mac string, vlan int) (string, error) {
 	b.reapTaps()
 
 	if tap == "" {
-		tap = <-b.nameChan
+		tap = <-b.tapChan
 	}
 
 	var created bool
@@ -63,7 +63,7 @@ func (b *Bridge) CreateHostTap(tap string, lan int) (string, error) {
 	defer bridgeLock.Unlock()
 
 	if tap == "" {
-		tap = <-b.nameChan
+		tap = <-b.tapChan
 	}
 
 	if err := b.createHostTap(tap, lan); err != nil {
@@ -96,6 +96,21 @@ func (b *Bridge) createHostTap(tap string, lan int) error {
 		}
 
 		return err
+	}
+
+	return nil
+}
+
+func (b *Bridge) RecoverTap(tap, mac string, lan int, host bool) error {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	b.taps[tap] = &Tap{
+		Name:   tap,
+		Bridge: b.Name,
+		VLAN:   lan,
+		MAC:    mac,
+		Host:   host,
 	}
 
 	return nil
@@ -146,6 +161,16 @@ func (b *Bridge) addTap(tap, mac string, lan int, host bool) error {
 	return nil
 }
 
+// SetTapQinQ updates the port table in OVS to set the VLAN mode for the given
+// tap to dot1q-tunnel and the outer VLAN tag for the tunnel to the given VLAN
+// ID.
+func (b *Bridge) SetTapQinQ(tap string, outer int) error {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	return ovsSetPortQinQ(tap, outer)
+}
+
 // DestroyTap removes a tap from the bridge and marks it as defunct. See
 // `Bridge.ReapTaps` to clean up defunct taps. If the tap is a mirror, it
 // cleans up the mirror too.
@@ -177,6 +202,19 @@ func (b *Bridge) destroyTap(t string) error {
 		return nil
 	}
 
+	if tap.Bond != "" {
+		bond, ok := b.bonds[tap.Bond]
+		if ok {
+			delete(bond, tap.Name)
+
+			if len(bond) == 0 {
+				if err := b.deleteBond(tap.Bond); err != nil {
+					log.Error("failed to delete empty bond port %v on bridge %v: %v", tap.Bond, b.Name, err)
+				}
+			}
+		}
+	}
+
 	return destroyTap(tap.Name)
 }
 
@@ -188,11 +226,30 @@ func (b *Bridge) RemoveTap(tap string) error {
 
 	log.Info("removing tap from bridge: %v %v", b.Name, tap)
 
-	if err := ovsDelPort(b.Name, tap); err != nil {
-		return err
+	t, ok := b.taps[tap]
+	if !ok {
+		return fmt.Errorf("unknown tap: %v", tap)
+	}
+
+	if t.Bond == "" {
+		if err := ovsDelPort(b.Name, tap); err != nil {
+			return err
+		}
+	} else {
+		bond, ok := b.bonds[t.Bond]
+		if ok {
+			delete(bond, t.Name)
+
+			if len(bond) == 0 {
+				if err := b.deleteBond(t.Bond); err != nil {
+					log.Error("failed to delete empty bond port %v on bridge %v: %v", t.Bond, b.Name, err)
+				}
+			}
+		}
 	}
 
 	delete(b.taps, tap)
+
 	return nil
 }
 

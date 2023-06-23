@@ -283,6 +283,8 @@ func (fb *fbRecorder) Record() {
 	}()
 
 	req := &FramebufferUpdateRequest{}
+	req.Height = fb.Conn.s.Height
+	req.Width = fb.Conn.s.Width
 
 	// fall into a loop issuing periodic fb update requests and dump to file
 	// check if we need to quit

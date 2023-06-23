@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -18,6 +19,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 	"time"
 
@@ -177,6 +179,12 @@ type KVMConfig struct {
 	// Note: this configuration only applies to KVM-based VMs.
 	Disks DiskConfigs
 
+	// If true will use xHCI USB controller. Otherwise will use EHCI.
+	// EHCI does not support USB 3.0, but may be used for backwards compatability.
+	//
+	// Default: true
+	UsbUseXHCI bool
+
 	// Add additional arguments to be passed to the QEMU instance. For example:
 	//
 	// 	vm config qemu-append -serial tcp:localhost:4001
@@ -240,12 +248,84 @@ func (old KVMConfig) Copy() KVMConfig {
 	res := old
 
 	// Make deep copy of slices
-	res.Disks = make([]DiskConfig, len(old.Disks))
+	res.Disks = make(DiskConfigs, len(old.Disks))
 	copy(res.Disks, old.Disks)
 	res.QemuAppend = make([]string, len(old.QemuAppend))
 	copy(res.QemuAppend, old.QemuAppend)
 
 	return res
+}
+
+func (vm *KVMConfig) ReadFieldConfig(r io.Reader, field, namespace string) error {
+	switch field {
+	case "disks":
+		scanner := bufio.NewScanner(r)
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			if !strings.HasPrefix(line, "vm config disks") {
+				continue
+			}
+
+			var ideCount int
+			specs := strings.Fields(line)[3:]
+
+			for _, spec := range specs {
+				disk, err := ParseDiskConfig(spec, false)
+				if err != nil {
+					log.Warnln(err) // ??
+					continue
+				}
+
+				if disk.Interface == "ide" || (disk.Interface == "" && DefaultKVMDiskInterface == "ide") {
+					ideCount += 1
+				}
+
+				// check for disk conflicts in a single VM
+				for _, d := range vm.Disks {
+					if disk.Path == d.Path {
+						log.Warnln(err) // ??
+						continue
+					}
+				}
+
+				vm.Disks = append(vm.Disks, *disk)
+			}
+		}
+
+		if err := scanner.Err(); err != nil {
+			return err
+		}
+
+		return nil
+	case "qemu-override":
+		scanner := bufio.NewScanner(r)
+
+		for scanner.Scan() {
+			line := scanner.Text()
+
+			if !strings.HasPrefix(line, "vm config qemu-override") {
+				continue
+			}
+
+			var (
+				config = strings.Fields(line)[3:]
+				match  = config[0]
+				repl   = config[1]
+			)
+
+			vm.QemuOverride = append(vm.QemuOverride, qemuOverride{Match: match, Repl: repl})
+		}
+
+		if err := scanner.Err(); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	return nil
 }
 
 func NewKVM(name, namespace string, config VMConfig) (*KvmVM, error) {
@@ -285,8 +365,19 @@ func (vm *KvmVM) Copy() VM {
 // Launch a new KVM VM.
 func (vm *KvmVM) Launch() error {
 	defer vm.lock.Unlock()
-
 	return vm.launch()
+}
+
+// Recover an existing KVM VM. This resets the ID and PID for the VM and unlocks
+// the VM (since VMs come pre-locked when created via NewBaseVM).
+func (vm *KvmVM) Recover(id string, pid int) error {
+	// reset ID and PID to match running QEMU KVM config
+	vm.ID, _ = strconv.Atoi(id)
+	vm.Pid = pid
+	vm.instancePath = filepath.Join(*f_base, id)
+
+	vm.lock.Unlock()
+	return nil
 }
 
 // Flush cleans up all resources allocated to the VM which includes all the
@@ -450,6 +541,7 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "Threads:\t%v\n", vm.Threads)
 	fmt.Fprintf(w, "Sockets:\t%v\n", vm.Sockets)
 	fmt.Fprintf(w, "VGA:\t%v\n", vm.Vga)
+	fmt.Fprintf(w, "Usb Use XHCI:\t%v\n", vm.UsbUseXHCI)
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
@@ -687,6 +779,7 @@ func (vm *KvmVM) connectVNC() error {
 
 					// ignore these
 					if strings.Contains(err.Error(), "unknown client-to-server message") {
+						log.Debugln(err)
 						continue
 					}
 
@@ -710,12 +803,24 @@ func (vm *KvmVM) createTapName(bridge string) (string, error) {
 }
 
 // addTap does the work of adding the specified tap associated with a network
-func (vm *KvmVM) addTap(name, bridge, mac string, vlan int) (string, error) {
+func (vm *KvmVM) addTap(name, bridge, mac string, vlan int, qinq bool) (string, error) {
 	br, err := getBridge(bridge)
 	if err != nil {
 		return name, vm.setErrorf("unable to get bridge %v: %v", bridge, err)
 	}
-	return br.CreateTap(name, mac, vlan)
+
+	tap, err := br.CreateTap(name, mac, vlan)
+	if err != nil {
+		return tap, err
+	}
+
+	if qinq {
+		if err := br.SetTapQinQ(tap, vlan); err != nil {
+			return tap, err
+		}
+	}
+
+	return tap, nil
 }
 
 // createTaps does the work of adding any taps if we are associated with
@@ -728,7 +833,7 @@ func (vm *KvmVM) createTaps() error {
 			continue
 		}
 
-		tap, err := vm.addTap("", nic.Bridge, nic.MAC, nic.VLAN)
+		tap, err := vm.addTap("", nic.Bridge, nic.MAC, nic.VLAN, nic.QinQ)
 		if err != nil {
 			return vm.setErrorf("unable to create tap %v: %v", i, err)
 		}
@@ -739,6 +844,32 @@ func (vm *KvmVM) createTaps() error {
 	if len(vm.Networks) > 0 {
 		if err := vm.writeTaps(); err != nil {
 			return vm.setErrorf("unable to write taps: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// createBonds does the work of creating any bonds configured for the VM
+func (vm *KvmVM) createBonds() error {
+	for i := range vm.Bonds {
+		bond := &vm.Bonds[i]
+
+		if bond.created {
+			// bond has already been created, don't need to do it again
+			continue
+		}
+
+		if err := vm.addBond(bond); err != nil {
+			return vm.setErrorf("unable to reate bond %v: %v", i, err)
+		}
+
+		bond.created = true
+	}
+
+	if len(vm.Bonds) > 0 {
+		if err := vm.writeBonds(); err != nil {
+			return vm.setErrorf("unable to write bonds: %v", err)
 		}
 	}
 
@@ -781,6 +912,11 @@ func (vm *KvmVM) launch() error {
 		return err
 	}
 
+	// this MUST be done after vm.createTaps
+	if err := vm.createBonds(); err != nil {
+		return err
+	}
+
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
 
@@ -816,27 +952,7 @@ func (vm *KvmVM) launch() error {
 	// Channel to signal when the process has exited
 	var waitChan = make(chan bool)
 
-	// Create goroutine to wait for process to exit
-	go func() {
-		defer close(waitChan)
-		err := cmd.Wait()
-
-		vm.lock.Lock()
-		defer vm.lock.Unlock()
-
-		// Check if the process quit for some reason other than being killed
-		if err != nil && err.Error() != "signal: killed" {
-			vm.setErrorf("qemu killed: %v %v", err, sErr.String())
-		} else if vm.State != VM_ERROR {
-			// Set to QUIT unless we've already been put into the error state
-			vm.setState(VM_QUIT)
-		}
-
-		// Kill the VNC shim, if it exists
-		if vm.vncShim != nil {
-			vm.vncShim.Close()
-		}
-	}()
+	vm.waitForExit(cmd.Process, waitChan)
 
 	if err := vm.connectQMP(); err != nil {
 		// Failed to connect to qmp so clean up the process
@@ -854,21 +970,59 @@ func (vm *KvmVM) launch() error {
 		return vm.setErrorf("unable to connect to vnc shim: %v", err)
 	}
 
+	vm.waitToKill(cmd.Process, waitChan)
+
+	return nil
+}
+
+func (vm *KvmVM) waitForExit(p *os.Process, wait chan bool) {
+	// Create goroutine to wait for process to exit
+	go func() {
+		defer close(wait)
+		_, err := p.Wait()
+
+		if err != nil && err.Error() == "waitid: no child processes" {
+			for {
+				time.Sleep(1 * time.Second)
+
+				if err = p.Signal(syscall.Signal(0)); err != nil {
+					break
+				}
+			}
+		}
+
+		vm.lock.Lock()
+		defer vm.lock.Unlock()
+
+		// Check if the process quit for some reason other than being killed
+		if err != nil && err.Error() != "signal: killed" {
+			vm.setErrorf("qemu killed: %v", err)
+		} else if vm.State != VM_ERROR {
+			// Set to QUIT unless we've already been put into the error state
+			vm.setState(VM_QUIT)
+		}
+
+		// Kill the VNC shim, if it exists
+		if vm.vncShim != nil {
+			vm.vncShim.Close()
+		}
+	}()
+}
+
+func (vm *KvmVM) waitToKill(p *os.Process, wait chan bool) {
 	// Create goroutine to wait to kill the VM
 	go func() {
 		defer vm.cond.Signal()
 
 		select {
-		case <-waitChan:
+		case <-wait:
 			log.Info("VM %v exited", vm.ID)
 		case <-vm.kill:
 			log.Info("Killing VM %v", vm.ID)
-			cmd.Process.Kill()
-			<-waitChan
+			p.Kill()
+			<-wait
 		}
 	}()
-
-	return nil
 }
 
 func (vm *KvmVM) Connect(cc *ron.Server, reconnect bool) error {
@@ -906,7 +1060,7 @@ func (vm *KvmVM) AddNIC(nic NetConfig) error {
 	nic.Tap, err = vm.createTapName(nic.Bridge)
 	vm.Networks = append(vm.Networks, nic)
 
-	if _, err := vm.addTap(nic.Tap, nic.Bridge, nic.MAC, nic.VLAN); err != nil {
+	if _, err := vm.addTap(nic.Tap, nic.Bridge, nic.MAC, nic.VLAN, nic.QinQ); err != nil {
 		return vm.setErrorf("Unable to add tap %v: %v", nic.Tap, err)
 	}
 
@@ -932,12 +1086,22 @@ func (vm *KvmVM) AddNIC(nic NetConfig) error {
 
 func (vm *KvmVM) Hotplug(f, version, serial string) error {
 	var bus string
+	useXHCI := vm.UsbUseXHCI
 	switch version {
 	case "", "1.1":
 		version = "1.1"
 		bus = "usb-bus.0"
 	case "2.0":
-		bus = "ehci.0"
+		if useXHCI {
+			bus = "xhci.0"
+		} else {
+			bus = "ehci.0"
+		}
+	case "3.0":
+		if !useXHCI {
+			return fmt.Errorf("invalid version: `%v`. VM configured for EHCI instead of XHCI", version)
+		}
+		bus = "xhci.0"
 	default:
 		return fmt.Errorf("invalid version: `%v`", version)
 	}
@@ -1129,7 +1293,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, smp)
 
 	args = append(args, "-qmp")
-	args = append(args, "unix:"+filepath.Join(vmPath, "qmp")+",server")
+	args = append(args, "unix:"+filepath.Join(vmPath, "qmp")+",server=on")
 
 	args = append(args, "-vga")
 	if vm.Vga == "" {
@@ -1143,8 +1307,12 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 
 	// for USB 1.0, creates bus named usb-bus.0
 	args = append(args, "-usb")
-	// for USB 2.0, creates bus named ehci.0
-	args = append(args, "-device", "usb-ehci,id=ehci")
+	// create bus for xHCI or EHCI depending on config
+	if vm.UsbUseXHCI {
+		args = append(args, "-device", "qemu-xhci,id=xhci")
+	} else {
+		args = append(args, "-device", "usb-ehci,id=ehci")
+	}
 	// this allows absolute pointers in vnc, and works great on android vms
 	args = append(args, "-device", "usb-tablet,bus=usb-bus.0")
 
@@ -1152,7 +1320,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	// for virtio-serial, look below near the net code
 	for i := uint64(0); i < vm.SerialPorts; i++ {
 		args = append(args, "-chardev")
-		args = append(args, fmt.Sprintf("socket,id=charserial%v,path=%v%v,server,nowait", i, filepath.Join(vmPath, "serial"), i))
+		args = append(args, fmt.Sprintf("socket,id=charserial%v,path=%v%v,server=on,wait=off", i, filepath.Join(vmPath, "serial"), i))
 
 		args = append(args, "-device")
 		args = append(args, fmt.Sprintf("isa-serial,chardev=charserial%v,id=serial%v", i, i))
@@ -1289,7 +1457,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		addVirtioDevice()
 
 		args = append(args, "-chardev")
-		args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%v,server,nowait", filepath.Join(vmPath, "cc")))
+		args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%v,server=on,wait=off", filepath.Join(vmPath, "cc")))
 		args = append(args, "-device")
 		args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserialCC,id=charvserialCC,name=cc", virtioPort))
 	}
@@ -1320,7 +1488,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 			}
 
 			args = append(args, "-chardev")
-			args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%v%v,server,nowait", i, filepath.Join(vmPath, "virtio-serial"), i))
+			args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%v%v,server=on,wait=off", i, filepath.Join(vmPath, "virtio-serial"), i))
 			args = append(args, "-device")
 			args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserial%v,id=charvserial%v,name=%v", virtioPort, i, i, name))
 		}
@@ -1374,8 +1542,8 @@ func (vm VMConfig) applyQemuOverrides(args []string) []string {
 }
 
 func (c QemuOverrides) WriteConfig(w io.Writer) error {
-	for k, v := range c {
-		if _, err := fmt.Fprintf(w, "vm config qemu-override %v %v\n", k, v); err != nil {
+	for _, o := range c {
+		if _, err := fmt.Fprintf(w, "vm config qemu-override %v %v\n", o.Match, o.Repl); err != nil {
 			return err
 		}
 	}

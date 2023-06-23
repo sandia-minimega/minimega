@@ -8,9 +8,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/ast"
-	"go/build"
 	"go/format"
-	"go/parser"
 	"go/token"
 	"os"
 	"reflect"
@@ -20,6 +18,7 @@ import (
 	"text/template"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
+	"golang.org/x/tools/go/packages"
 )
 
 const Default = "Default: "
@@ -45,7 +44,7 @@ func (f Fields) Less(i, j int) bool { return f[i].Field < f[j].Field }
 
 type Generator struct {
 	types []string
-	pkg   *build.Package
+	pkgs  []*packages.Package
 	buf   bytes.Buffer
 
 	template *template.Template
@@ -79,8 +78,6 @@ func (g *Generator) Format() []byte {
 }
 
 func (g *Generator) Run() error {
-	fs := token.NewFileSet()
-
 	t := template.Must(template.New("header").Parse(headerTemplate))
 	template.Must(t.New("funcs").Parse(funcsTemplate))
 	template.Must(t.New("clear").Parse(clearTemplate))
@@ -94,59 +91,40 @@ func (g *Generator) Run() error {
 
 	g.template = t
 
-	filter := func(f os.FileInfo) bool {
-		// we don't want to parse what we generate
-		return f.Name() != "vmconfiger_cli.go"
-	}
-
-	pkgs, err := parser.ParseDir(fs, g.pkg.Dir, filter, parser.ParseComments)
-	if err != nil {
-		return err
-	}
-
-	if _, ok := pkgs[g.pkg.Name]; !ok {
-		return fmt.Errorf("parsing package did not include %v", g.pkg.Name)
-	}
-
-	if err := checkTypes(g.pkg.Dir, fs, pkgs[g.pkg.Name]); err != nil {
-		return err
-	}
-
-	// Print the header and package clause.
-	g.Execute("header", struct {
-		Args, Package string
-	}{
-		Args:    strings.Join(os.Args[1:], " "),
-		Package: g.pkg.Name,
-	})
-
-	g.fields = map[string][]Field{}
-
-	// go through files in sorted order to make the output more deterministic
-	var files []string
-	for f := range pkgs[g.pkg.Name].Files {
-		files = append(files, f)
-	}
-	sort.Strings(files)
-
-	for _, file := range files {
-		log.Debug("inspecting %v", file)
-		ast.Inspect(pkgs[g.pkg.Name].Files[file], g.handleNode)
-	}
-
-	if len(g.fields) > 0 {
-		var fields Fields
-		for _, f := range g.fields {
-			fields = append(fields, f...)
+	for _, pkg := range g.pkgs {
+		if err := checkTypes(pkg); err != nil {
+			return err
 		}
-		sort.Sort(fields)
-		g.Execute("clear", fields)
-	}
 
-	g.Printf("}\n")
+		// Print the header and package clause.
+		g.Execute("header", struct {
+			Args, Package string
+		}{
+			Args:    strings.Join(os.Args[1:], " "),
+			Package: pkg.Name,
+		})
 
-	if len(g.fields) > 0 {
-		g.Execute("funcs", g.fields)
+		g.fields = map[string][]Field{}
+
+		for _, file := range pkg.Syntax {
+			log.Debug("inspecting %v", file.Name)
+			ast.Inspect(file, g.handleNode)
+		}
+
+		if len(g.fields) > 0 {
+			var fields Fields
+			for _, f := range g.fields {
+				fields = append(fields, f...)
+			}
+			sort.Sort(fields)
+			g.Execute("clear", fields)
+		}
+
+		g.Printf("}\n")
+
+		if len(g.fields) > 0 {
+			g.Execute("funcs", g.fields)
+		}
 	}
 
 	return nil
@@ -217,6 +195,18 @@ func (g *Generator) handleNode(node ast.Node) bool {
 					zero = getDefault(doc, `0`)
 				case "bool":
 					zero = getDefault(doc, `false`)
+				case "BondConfigs":
+					zero = getDefault(doc, `BondConfigs{}`)
+					unhandled = true
+				case "DiskConfigs":
+					zero = getDefault(doc, `DiskConfigs{}`)
+					unhandled = true
+				case "NetConfigs":
+					zero = getDefault(doc, `NetConfigs{}`)
+					unhandled = true
+				case "QemuOverrides":
+					zero = getDefault(doc, `QemuOverrides{}`)
+					unhandled = true
 				default:
 					log.Error("unhandled type: %v", typ)
 					unhandled = true
@@ -302,7 +292,11 @@ func (g *Generator) handleNode(node ast.Node) bool {
 				}
 
 				zero := "nil"
-				if f := strings.Fields(getDefault(doc, "")); len(f) > 0 {
+				d := getDefault(doc, "")
+
+				if d == "empty map" {
+					zero = "make(map[string]string)"
+				} else if f := strings.Fields(d); len(f) > 0 {
 					for i := range f {
 						f[i] = strings.TrimSuffix(f[i], ",")
 					}
@@ -323,6 +317,15 @@ func (g *Generator) handleNode(node ast.Node) bool {
 				g.fields[strctName] = append(g.fields[strctName], f)
 
 				g.Execute("map", f)
+			case *ast.StructType:
+				log.Error("unhandled struct type for %v: %v", name, typ)
+				// always add field, even if we don't generate the handler
+				g.fields[strctName] = append(g.fields[strctName], Field{
+					Field:      name,
+					ConfigName: configName,
+					Doc:        doc,
+					Default:    "nil",
+				})
 			default:
 				log.Error("unhandled type for %v: %v", name, typ)
 				// always add field, even if we don't generate the handler

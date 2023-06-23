@@ -21,7 +21,8 @@ var (
 // CheckOVS runs a simple openvswitch command to test whether openvswitch is
 // running or not.
 func CheckOVS() error {
-	_, err := ovsCmdWrapper([]string{"show"})
+	// _, err := ovsCmdWrapper([]string{"show"})
+	_, err := ovsCmdWrapper([]string{"set", "Open_vSwitch", ".", "other_config:vlan-limit=2"})
 	return err
 }
 
@@ -109,6 +110,21 @@ func ovsDelPort(bridge, tap string) error {
 
 	if _, err := ovsCmdWrapper(args); err != nil {
 		return fmt.Errorf("remove port failed: %v", err)
+	}
+
+	return nil
+}
+
+// ovsSetPortQinQ sets VLAN mode to dot1q-tunnel for OVS port.
+func ovsSetPortQinQ(tap string, outer int) error {
+	args := []string{
+		"set", "port", tap,
+		"vlan_mode=dot1q-tunnel",
+		fmt.Sprintf("tag=%d", outer),
+	}
+
+	if _, err := ovsCmdWrapper(args); err != nil {
+		return fmt.Errorf("configuring port %v as QinQ: %v", tap, err)
 	}
 
 	return nil

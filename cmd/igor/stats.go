@@ -340,7 +340,7 @@ func (stats *Stats) findRes(ru string, rn string, ri int, rs time.Time) *ResData
 	return nil
 }
 
-//Finds out where in the log line is a particular field of interest
+// Finds out where in the log line is a particular field of interest
 func (stats *Stats) calculateVariable(param string, fields []string) (int, bool) {
 	for i := 5; i < len(fields); i++ {
 		if strings.Contains(fields[i], param) {
@@ -350,7 +350,7 @@ func (stats *Stats) calculateVariable(param string, fields []string) (int, bool)
 	return -1, true
 }
 
-//toString of ResData Struct
+// toString of ResData Struct
 func (res *ResData) String() string {
 	var b bytes.Buffer
 	var empty time.Time

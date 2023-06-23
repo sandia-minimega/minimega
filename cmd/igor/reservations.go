@@ -218,16 +218,16 @@ func (r *Reservations) Nodes() map[string][]*Reservation {
 
 // Schedule finds a start time for res in the existing reservations. Options:
 //
-//  * Hosts: If blank, a contiguous block of hosts will be found.
-//  * Duration: set the duration for the reservation
-//  * Start: request scheduling after a given time, zero mean anytime
+//   - Hosts: If blank, a contiguous block of hosts will be found.
+//   - Duration: set the duration for the reservation
+//   - Start: request scheduling after a given time, zero mean anytime
 //
 // Outputs (via res):
 //
-//  * ID: Reservation ID
-//  * Hosts: set to list of hosts
-//  * Start: set to valid start time
-//  * End: set to valid end time
+//   - ID: Reservation ID
+//   - Hosts: set to list of hosts
+//   - Start: set to valid start time
+//   - End: set to valid end time
 //
 // If speculative is true, the reservation is not added to the known
 // reservations

@@ -7,10 +7,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"go/ast"
-	"go/build"
 	"go/importer"
-	"go/token"
 	"go/types"
 	"io/ioutil"
 	"os"
@@ -18,6 +15,7 @@ import (
 	"unicode"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
+	"golang.org/x/tools/go/packages"
 )
 
 var (
@@ -25,7 +23,7 @@ var (
 )
 
 func usage() {
-	fmt.Printf("USAGE: %v [OPTIONS] [DIR]\n", os.Args[0])
+	fmt.Printf("USAGE: %v [OPTIONS]\n", os.Args[0])
 	flag.PrintDefaults()
 }
 
@@ -35,7 +33,7 @@ func main() {
 
 	log.Init()
 
-	if flag.NArg() > 1 {
+	if flag.NArg() > 0 {
 		flag.Usage()
 		os.Exit(1)
 	}
@@ -45,19 +43,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	dir := "."
-	if flag.NArg() == 1 {
-		dir = flag.Arg(0)
-	}
+	config := &packages.Config{Mode: packages.LoadAllSyntax | packages.LoadFiles}
 
-	pkg, err := build.ImportDir(dir, 0)
+	pkgs, err := packages.Load(config, "github.com/sandia-minimega/minimega/v2/cmd/minimega")
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	g := Generator{
 		types: strings.Split(*f_types, ","),
-		pkg:   pkg,
+		pkgs:  pkgs,
 	}
 
 	if err := g.Run(); err != nil {
@@ -67,22 +62,14 @@ func main() {
 	ioutil.WriteFile("vmconfiger_cli.go", g.Format(), 0644)
 }
 
-func checkTypes(dir string, fs *token.FileSet, pkg *ast.Package) error {
-	astFiles := []*ast.File{}
-	for _, v := range pkg.Files {
-		astFiles = append(astFiles, v)
-	}
-
+func checkTypes(pkg *packages.Package) error {
 	config := types.Config{
-		Importer:         importer.Default(),
+		Importer:         importer.ForCompiler(pkg.Fset, "source", nil),
 		IgnoreFuncBodies: true,
 		FakeImportC:      true,
 	}
-	info := &types.Info{
-		Defs: make(map[*ast.Ident]types.Object),
-	}
 
-	_, err := config.Check(dir, fs, astFiles, info)
+	_, err := config.Check(pkg.PkgPath, pkg.Fset, pkg.Syntax, pkg.TypesInfo)
 	if err != nil {
 		return fmt.Errorf("checking package: %v", err)
 	}

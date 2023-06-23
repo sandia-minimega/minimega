@@ -114,13 +114,17 @@ use the default "mega_bridge".
 You can also optionally specify the MAC address of the interface to connect to
 that network. If not specifed, the MAC address will be randomly generated.
 
-Finally, you can also optionally specify a network device for qemu to use
-(which is ignored by containers). By default, "e1000" is used. To see a list of
-valid network devices, from run "qemu-kvm -device help".
+You can also optionally specify a network device for qemu to use (which is
+ignored by containers). By default, "e1000" is used. To see a list of valid
+network devices, from run "qemu-kvm -device help".
+
+Finally, you can also optionally specify whether the interface should be
+configured in "dot1q-tunnel" mode (QinQ) in OVS. If so, the outer VLAN tag will
+be set to the minimega VLAN specified as part of the netspec.
 
 The order is:
 
-	<bridge>,<VLAN>,<MAC>,<driver>
+	<bridge>,<VLAN>,<MAC>,<driver>,<qinq>
 
 Examples:
 
@@ -144,6 +148,10 @@ To specify a specific driver, such as i82559c:
 
 	vm config net 100,i82559c
 
+To specify the use of "dot1q-tunnel" mode with VLAN 105 as the outer VLAN:
+
+	vm config net 105,qinq
+
 If you prefer, you can also use aliases for VLANs:
 
 	vm config net DMZ CORE
@@ -163,6 +171,58 @@ Calling vm config net with no arguments prints the current configuration.`,
 			"vm config networks [netspec]...",
 		},
 		Call: wrapSimpleCLI(cliVMConfigNet),
+	},
+	{ // vm config bonds
+		HelpShort: "specify network bonds for VM",
+		HelpLong: `
+Specify any network interface bonds for the VM. A bond can be comprised of two
+or more network interfaces configured on the VM, and are referenced by interface
+index.
+
+There are three bond modes supported: active-backup, balance-slb, and
+balance-tcp, and three LACP modes supported: active, passive, and off. To
+disable the bond if LACP negotiation fails instead of falling back to
+active-backup mode, provide the 'no-lacp-fallback' option.
+
+Bonds can also be configured in "dot1q-tunnel" mode (QinQ) in OVS with the
+"qinq" option. If configured in "dot1q-tunnel" mode, the outer VLAN tag will be
+set to the VLAN the bonded interfaces originally belonged to. Note that a bond
+will also be configured in "dot1q-tunnel" mode if at least one of the bonded
+interfaces was configured in "dot1q-tunnel" mode, even without the "qinq"
+option.
+
+If not provided, LACP mode will be 'active', LACP fallback will be enabled, QinQ
+will be disabled (unless one of the interfaces being bonded is configured for
+QinQ), and the bond name will be auto generated.
+
+The order is:
+
+	<interface indexes>,<bond mode>,<lacp mode>,<no-lacp-fallback>,<qinq>,<bond name>
+
+where '<interface indexes>' is a comma-separated list of interface indexes. The
+list of interface indexes and the bond mode are always required. The rest of the
+settings are optional, but must remain in the proper order.
+
+Note that if 'no-lacp-fallback' is provided, then the LACP mode must also be
+provided.
+
+Examples:
+
+To create an 'active-backup' bond using interfaces 1 and 2 with LACP set to
+active:
+
+	vm config bond 1,2,active-backup
+
+To create a 'balance-tcp' bond named 'uplink' using interfaces 0 and 1 with LACP
+fallback disabled:
+
+	vm config bond 0,1,balance-tcp,active,no-lacp-fallback,uplink
+
+Calling vm config bonds with no arguments prints the current configuration.`,
+		Patterns: []string{
+			"vm config bonds [bondspec]...",
+		},
+		Call: wrapSimpleCLI(cliVMConfigBond),
 	},
 	{ // vm config qemu-override
 		HelpShort: "override parts of the QEMU launch string",
@@ -253,12 +313,22 @@ func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 		ns.vmConfig.UUID = ""
 
 		// reprocess the network configs from their original input
-		vals := []string{}
+		nets := []string{}
 		for _, nic := range ns.vmConfig.Networks {
-			vals = append(vals, nic.Raw)
+			nets = append(nets, nic.Raw)
 		}
 
-		return ns.processVMNets(vals)
+		if err := ns.processVMNets(nets); err != nil {
+			return err
+		}
+
+		// reprocess the bond configs from their original input
+		bonds := []string{}
+		for _, bond := range ns.vmConfig.Bonds {
+			bonds = append(bonds, bond.Raw)
+		}
+
+		return ns.processVMBonds(bonds)
 	}
 
 	// Print the config
@@ -282,6 +352,15 @@ func cliVMConfigNet(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 	}
 
 	return ns.processVMNets(c.ListArgs["netspec"])
+}
+
+func cliVMConfigBond(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if len(c.ListArgs) == 0 {
+		resp.Response = ns.vmConfig.BondString(ns.Name)
+		return nil
+	}
+
+	return ns.processVMBonds(c.ListArgs["bondspec"])
 }
 
 func cliVMConfigQemuOverride(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

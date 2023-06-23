@@ -44,6 +44,12 @@ COPY --from=gobuilder /minimega/bin/protonuke     /opt/minimega/bin/protonuke
 COPY --from=gobuilder /minimega/bin/protonuke.exe /opt/minimega/bin/protonuke.exe
 COPY --from=gobuilder /minimega/bin/minirouter    /opt/minimega/bin/minirouter
 
+# As the minimega API changes, so does the minimega.py generated file. Given
+# this, let's go ahead and also include the lib directory so we can grab the
+# updated Python package from the Docker image.
+COPY --from=gobuilder /minimega/lib    /opt/minimega/lib
+COPY --from=gobuilder /minimega/README /opt/minimega/lib/README
+
 COPY ./web       /opt/minimega/web
 COPY ./docker/mm /usr/local/bin/mm
 
