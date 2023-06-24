@@ -138,7 +138,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <log,> level <debug,info,warn,error,fatal>",
 
 			"cc <responses,> <id or prefix or all> [raw,]",
-			"cc <exitcode,> <id> <vm name or uuid>",
+			"cc <exitcode,> <id> <vm name, hostname, or uuid>",
 
 			"cc <tunnel,> <vm name or uuid> <src port> <host> <dst port>",
 			"cc <rtunnel,> <src port> <host> <dst port>",
@@ -311,6 +311,9 @@ func cliCCExitCode(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 	}
 
 	vm := c.StringArgs["vm"]
+	if lookup := ns.VMs.FindVM(vm); lookup != nil {
+		vm = lookup.GetUUID()
+	}
 
 	code, err := ns.ccServer.GetExitCode(id, vm)
 	if err != nil {
