@@ -65,6 +65,9 @@ include subdirectories for each client response named by the client's UUID.
 Responses can also be displayed on the command line with the 'responses'
 command.
 
+Responses to executed commands (not backgrounded) will include the command's
+exit code, which can be displayed with the 'exitcode' command.
+
 Filters may be set to limit which clients may execute a posted command.  For
 example, to filter on VMs that are running windows and have a specific IP.
 
@@ -135,6 +138,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <log,> level <debug,info,warn,error,fatal>",
 
 			"cc <responses,> <id or prefix or all> [raw,]",
+			"cc <exitcode,> <id> <vm name, hostname, or uuid>",
 
 			"cc <tunnel,> <vm name or uuid> <src port> <host> <dst port>",
 			"cc <rtunnel,> <src port> <host> <dst port>",
@@ -198,6 +202,7 @@ var ccCliSubHandlers = map[string]wrappedCLIFunc{
 	"process":         cliCCProcess,
 	"recv":            cliCCFileRecv,
 	"responses":       cliCCResponses,
+	"exitcode":        cliCCExitCode,
 	"rtunnel":         cliCCTunnel,
 	"send":            cliCCFileSend,
 	"tunnel":          cliCCTunnel,
@@ -295,6 +300,27 @@ func cliCCResponses(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 		return fmt.Errorf("no such prefix: `%v`", s)
 	}
 
+	return nil
+}
+
+// exit code
+func cliCCExitCode(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	id, err := strconv.Atoi(c.StringArgs["id"])
+	if err != nil {
+		return fmt.Errorf("invalid command ID provided")
+	}
+
+	vm := c.StringArgs["vm"]
+	if lookup := ns.VMs.FindVM(vm); lookup != nil {
+		vm = lookup.GetUUID()
+	}
+
+	code, err := ns.ccServer.GetExitCode(id, vm)
+	if err != nil {
+		return fmt.Errorf("unable to get exit code: %w", err)
+	}
+
+	resp.Response = strconv.Itoa(code)
 	return nil
 }
 
