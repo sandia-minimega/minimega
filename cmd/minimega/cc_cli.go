@@ -141,6 +141,8 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <exitcode,> <id> <vm name, hostname, or uuid>",
 
 			"cc <tunnel,> <vm name or uuid> <src port> <host> <dst port>",
+			"cc <tunnel,> <close,> <vm name or uuid> <id>",
+			"cc <tunnel,> <list,> <vm name, uuid, or all>",
 			"cc <rtunnel,> <src port> <host> <dst port>",
 
 			"cc <delete,> <command,> <id or prefix or all>",
@@ -236,6 +238,85 @@ func cliCC(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 
 // tunnel
 func cliCCTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	v := c.StringArgs["vm"]
+
+	if c.BoolArgs["close"] {
+		vm := ns.FindVM(v)
+		if vm == nil {
+			return vmNotFound(v)
+		}
+
+		id := c.StringArgs["id"]
+		tid, err := strconv.Atoi(id)
+		if err != nil {
+			return fmt.Errorf("invalid format for tunnel ID")
+		}
+
+		if err := ns.ccServer.CloseForward(vm.GetUUID(), tid); err != nil {
+			return err
+		}
+
+		return nil
+	}
+
+	if c.BoolArgs["list"] {
+		// map VM name --> VM UUID
+		vms := make(map[string]string)
+
+		if v == Wildcard {
+			clients := ns.ccServer.GetClients()
+
+			for _, client := range clients {
+				vms[client.Hostname] = client.UUID
+			}
+		} else {
+			vm := ns.FindVM(v)
+			if vm == nil {
+				return vmNotFound(v)
+			}
+
+			vms[v] = vm.GetUUID()
+		}
+
+		var names []string
+		for name := range vms {
+			names = append(names, name)
+		}
+
+		sort.Strings(names)
+
+		resp.Header = []string{"vm", "id", "src port", "dst", "dst port"}
+		resp.Tabular = [][]string{}
+
+		for _, name := range names {
+			forwards, err := ns.ccServer.ListForwards(vms[name])
+			if err != nil {
+				return err
+			}
+
+			var ids []int
+			for id := range forwards {
+				ids = append(ids, id)
+			}
+
+			sort.Ints(ids)
+
+			for _, id := range ids {
+				tokens := strings.Split(forwards[id], ":")
+
+				resp.Tabular = append(resp.Tabular, []string{
+					name,
+					strconv.Itoa(id),
+					tokens[0],
+					tokens[1],
+					tokens[2],
+				})
+			}
+		}
+
+		return nil
+	}
+
 	src, err := strconv.Atoi(c.StringArgs["src"])
 	if err != nil {
 		return fmt.Errorf("non-integer src: %v : %v", c.StringArgs["src"], err)
@@ -248,14 +329,14 @@ func cliCCTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 	host := c.StringArgs["host"]
 
-	v := c.StringArgs["vm"]
-
 	// get the vm uuid
 	vm := ns.FindVM(v)
 	if vm == nil {
 		return vmNotFound(v)
 	}
+
 	log.Debug("got vm: %v %v", vm.GetID(), vm.GetName())
+
 	uuid := vm.GetUUID()
 
 	return ns.ccServer.Forward(uuid, src, host, dst)
