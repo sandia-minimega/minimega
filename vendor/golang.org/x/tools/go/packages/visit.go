@@ -1,3 +1,7 @@
+// Copyright 2018 The Go Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package packages
 
 import (
@@ -24,7 +28,7 @@ func Visit(pkgs []*Package, pre func(*Package) bool, post func(*Package)) {
 				for path := range pkg.Imports {
 					paths = append(paths, path)
 				}
-				sort.Strings(paths) // for determinism
+				sort.Strings(paths) // Imports is a map, this makes visit stable
 				for _, path := range paths {
 					visit(pkg.Imports[path])
 				}
