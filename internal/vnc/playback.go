@@ -133,7 +133,9 @@ func (p *playback) Start(filename string) error {
 		for {
 			msg, err := p.Conn.ReadMessage()
 			if err != nil {
-				log.Error("server to playback error: %v", err)
+				if !p.closed { // if already closed, don't care about error. likely eof
+					log.Error("server to playback error: %v", err)
+				}
 				break
 			}
 
