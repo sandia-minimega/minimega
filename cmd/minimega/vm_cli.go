@@ -63,8 +63,7 @@ Additional fields are available for KVM-based VMs:
 - virtio-serial : number of virtio ports
 - vnc_port      : port for VNC shim
 - usb-use-xhci  : usb controller (true = xhci; false = ehci)
-- use-tpm       : use emulated tpm
-- tpm-socket    : path of emulated tpm socket
+- tpm-socket	: path of emulated tpm socket
 
 Additional fields are available for container-based VMs:
 

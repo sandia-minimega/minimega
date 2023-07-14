@@ -145,7 +145,7 @@ var vmInfo = []string{
 	// kvm fields
 	"vcpus", "disks", "snapshot", "initrd", "kernel", "cdrom", "migrate",
 	"append", "serial-ports", "virtio-ports", "vnc_port", "usb-use-xhci",
-	"use-tpm", "tpm-socket",
+	"tpm-socket",
 	// container fields
 	"filesystem", "hostname", "init", "preinit", "fifo", "volume",
 	"console_port",

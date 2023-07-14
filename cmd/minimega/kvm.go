@@ -185,8 +185,9 @@ type KVMConfig struct {
 	// Default: true
 	UsbUseXHCI bool
 
-	// Optional information for
-	TpmInfo tpmInfo
+	// If specified, will configure VM to use virtual Trusted Platform Module (TPM)
+	// socket at the path provided
+	TpmSocketPath string
 
 	// Add additional arguments to be passed to the QEMU instance. For example:
 	//
@@ -213,11 +214,6 @@ type QemuOverrides []qemuOverride
 type vmHotplug struct {
 	Disk    string
 	Version string
-}
-
-type tpmInfo struct {
-	Enable bool
-	Socket string
 }
 
 type KvmVM struct {
@@ -550,8 +546,7 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "Sockets:\t%v\n", vm.Sockets)
 	fmt.Fprintf(w, "VGA:\t%v\n", vm.Vga)
 	fmt.Fprintf(w, "Usb Use XHCI:\t%v\n", vm.UsbUseXHCI)
-	fmt.Fprintf(w, "Use TPM: \t%v\n", vm.TpmInfo.Enable)
-	fmt.Fprintf(w, "TPM Socket: \t%v\n", vm.TpmInfo.Socket)
+	fmt.Fprintf(w, "TPM Socket: \t%v\n", vm.TpmSocketPath)
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
@@ -1326,9 +1321,9 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	// this allows absolute pointers in vnc, and works great on android vms
 	args = append(args, "-device", "usb-tablet,bus=usb-bus.0")
 
-	if vm.TpmInfo.Enable {
+	if vm.TpmSocketPath != "" {
 		args = append(args, "-chardev")
-		args = append(args, fmt.Sprintf("socket,id=chrtpm,path=%v,nowait", vm.TpmInfo.Socket))
+		args = append(args, fmt.Sprintf("socket,id=chrtpm,path=%v,nowait", vm.TpmSocketPath))
 		args = append(args, "-tpmdev")
 		args = append(args, "emulator,id=tpm0,chardev=chrtpm")
 		args = append(args, "-device")
