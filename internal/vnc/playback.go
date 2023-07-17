@@ -214,6 +214,7 @@ func (p *playback) Stop() error {
 
 	close(p.signal)
 	p.closed = true
+	log.Info("Finished playback on %v", p.ID)
 
 	return nil
 }
@@ -274,6 +275,7 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 		return err
 	}
 	defer f.Close()
+	log.Info("Start playback of %v on %v", f.Name(), v.ID)
 
 	// record that we're reading a new file and update the remaining duration
 	v.addDuration(getDuration(f))
