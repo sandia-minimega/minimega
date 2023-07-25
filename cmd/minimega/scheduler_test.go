@@ -383,7 +383,7 @@ func testScheduleUniformity(N, M int, by hostSortBy) error {
 			names = append(names, strconv.Itoa(i))
 		}
 
-		var nets []NetConfig
+		var nets NetConfigs
 		for j := 0; j < i; j++ {
 			nets = append(nets, NetConfig{})
 		}

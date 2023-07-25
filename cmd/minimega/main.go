@@ -14,11 +14,13 @@ import (
 	"runtime"
 	"runtime/pprof"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/sandia-minimega/minimega/v2/internal/version"
+	"github.com/sandia-minimega/minimega/v2/internal/vlans"
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 	"github.com/sandia-minimega/minimega/v2/pkg/miniclient"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
@@ -39,8 +41,10 @@ var (
 	f_degree      = flag.Uint("degree", 0, "meshage starting degree")
 	f_msaTimeout  = flag.Uint("msa", 10, "meshage MSA timeout")
 	f_broadcastIP = flag.String("broadcast", "255.255.255.255", "meshage broadcast address to use")
+	f_vlanRange   = flag.String("vlanrange", "101-4096", "default VLAN range for namespaces")
 	f_port        = flag.Int("port", 9000, "meshage port to listen on")
 	f_force       = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
+	f_recover     = flag.Bool("recover", false, "attempt to recover from a previously running instance (only if -force is not set)")
 	f_nostdin     = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
 	f_version     = flag.Bool("version", false, "print the version and copyright notices")
 	f_context     = flag.String("context", "minimega", "meshage context for discovery")
@@ -196,13 +200,20 @@ func main() {
 
 	// check for a running instance of minimega
 	if _, err := os.Stat(filepath.Join(*f_base, "minimega")); err == nil {
-		if !*f_force {
-			log.Fatalln("minimega appears to already be running, override with -force")
-		}
-		log.Warn("minimega may already be running, proceed with caution")
+		if *f_force {
+			log.Warn("minimega may already be running, proceed with caution")
 
-		if err := os.Remove(filepath.Join(*f_base, "minimega")); err != nil {
-			log.Fatalln(err)
+			if err := os.Remove(filepath.Join(*f_base, "minimega")); err != nil {
+				log.Fatalln(err)
+			}
+		} else if *f_recover {
+			if err := os.Remove(filepath.Join(*f_base, "minimega")); err != nil {
+				log.Fatalln(err)
+			}
+
+			// an attempt to recover will happen later after the mesh is initialized
+		} else {
+			log.Fatalln("minimega appears to already be running, override with -force")
 		}
 	}
 
@@ -239,9 +250,39 @@ func main() {
 		log.Fatal("unable to setup mesh logging: %v", err)
 	}
 
+	if *f_recover { // has to happen after meshageNode is created
+		if err := recover(); err != nil {
+			log.Fatal("recovery failed: %v", err)
+		}
+	}
+
 	// has to happen after meshageNode is created
 	GetOrCreateNamespace(DefaultNamespace)
 	SetNamespace(DefaultNamespace)
+
+	// set default VLAN range
+	vlanRange := strings.Split(*f_vlanRange, "-")
+	if len(vlanRange) != 2 {
+		log.Fatal("invalid VLAN range provided")
+	}
+
+	min, err := strconv.Atoi(vlanRange[0])
+	if err != nil {
+		log.Fatal("expected integer values for VLAN range")
+	}
+
+	max, err := strconv.Atoi(vlanRange[1])
+	if err != nil {
+		log.Fatal("expected integer values for VLAN range")
+	}
+
+	if max <= min {
+		log.Fatal("expected min < max for VLAN range")
+	}
+
+	if err := vlans.SetRange("", min, max); err != nil {
+		log.Fatal("unable to set default VLAN range to %s: %v", *f_vlanRange, err)
+	}
 
 	commandSocketStart()
 

@@ -62,6 +62,7 @@ Additional fields are available for KVM-based VMs:
 - serial        : number of serial ports
 - virtio-serial : number of virtio ports
 - vnc_port      : port for VNC shim
+- usb-use-xhci  : usb controller (true = xhci; false = ehci)
 
 Additional fields are available for container-based VMs:
 
@@ -670,8 +671,8 @@ func cliClearVMNetBond(ns *Namespace, c *minicli.Command, resp *minicli.Response
 
 	return ns.VMs.Apply(target, func(vm VM, _ bool) (bool, error) {
 		if name == "" { // clear all VM bonds
-			for name := range vm.GetBonds() {
-				if err := vm.ClearBond(name); err != nil {
+			for _, bond := range vm.GetBonds() {
+				if err := vm.ClearBond(bond.Name); err != nil {
 					return true, err
 				}
 			}
@@ -679,6 +680,13 @@ func cliClearVMNetBond(ns *Namespace, c *minicli.Command, resp *minicli.Response
 			if err := vm.ClearBond(name); err != nil {
 				return true, err
 			}
+		}
+
+		log.Info("vm bonds: %v", vm.GetBonds())
+
+		if err := writeVMConfig(vm); err != nil {
+			// don't propagate this error
+			log.Warn("unable to update vm config for %v: %v", vm.GetID(), err)
 		}
 
 		return true, nil
@@ -1074,47 +1082,44 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 		}
 
 		fn = func(vm VM, _ bool) (bool, error) {
+			bond := &BondConfig{
+				Name:       name,
+				Fallback:   !noFallback,
+				QinQ:       qinq,
+				Interfaces: ifaces,
+			}
+
 			if c.BoolArgs["active-backup"] {
+				bond.Mode = "active-backup"
+
 				if c.BoolArgs["active"] {
-					if err := vm.AddBond(name, ifaces, "active-backup", "active", !noFallback, qinq); err != nil {
-						return true, err
-					}
+					bond.LACP = "active"
 				} else if c.BoolArgs["passive"] {
-					if err := vm.AddBond(name, ifaces, "active-backup", "passive", !noFallback, qinq); err != nil {
-						return true, err
-					}
+					bond.LACP = "passive"
 				} else if c.BoolArgs["off"] {
-					if err := vm.AddBond(name, ifaces, "active-backup", "off", !noFallback, qinq); err != nil {
-						return true, err
-					}
+					bond.LACP = "off"
 				} else { // we should never get here...
 					return true, fmt.Errorf("unknown LACP mode specified")
 				}
 			} else if c.BoolArgs["balance-slb"] {
+				bond.Mode = "balance-slb"
+
 				if c.BoolArgs["active"] {
-					if err := vm.AddBond(name, ifaces, "balance-slb", "active", !noFallback, qinq); err != nil {
-						return true, err
-					}
+					bond.LACP = "active"
 				} else if c.BoolArgs["passive"] {
-					if err := vm.AddBond(name, ifaces, "balance-slb", "passive", !noFallback, qinq); err != nil {
-						return true, err
-					}
+					bond.LACP = "passive"
 				} else if c.BoolArgs["off"] {
-					if err := vm.AddBond(name, ifaces, "balance-slb", "off", !noFallback, qinq); err != nil {
-						return true, err
-					}
+					bond.LACP = "off"
 				} else { // we should never get here...
 					return true, fmt.Errorf("unknown LACP mode specified")
 				}
 			} else if c.BoolArgs["balance-tcp"] {
+				bond.Mode = "balance-tcp"
+
 				if c.BoolArgs["active"] {
-					if err := vm.AddBond(name, ifaces, "balance-tcp", "active", !noFallback, qinq); err != nil {
-						return true, err
-					}
+					bond.LACP = "active"
 				} else if c.BoolArgs["passive"] {
-					if err := vm.AddBond(name, ifaces, "balance-tcp", "passive", !noFallback, qinq); err != nil {
-						return true, err
-					}
+					bond.LACP = "passive"
 				} else if c.BoolArgs["off"] {
 					return true, fmt.Errorf("LACP mode must be set to active or passive for balance-tcp bond mode")
 				} else { // we should never get here...
@@ -1124,7 +1129,11 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 				return true, fmt.Errorf("unknown bond mode specified")
 			}
 
-			log.Info("vm networks: %v", vm.GetNetworks())
+			if err := vm.AddBond(bond); err != nil {
+				return true, err
+			}
+
+			log.Info("vm bonds: %v", vm.GetBonds())
 
 			if err := writeVMConfig(vm); err != nil {
 				// don't propagate this error

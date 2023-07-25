@@ -6,6 +6,7 @@ package ron
 
 import (
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -26,6 +27,8 @@ import (
 )
 
 const PART_SIZE = 1024 * 100
+
+var errClientTooOld = fmt.Errorf("miniccc client too old -- please update")
 
 type Server struct {
 	// UseVMs controls whether ron uses VM callbacks or not (see ron.VM)
@@ -256,8 +259,12 @@ func (s *Server) DialSerial(path, uuid string) error {
 
 			cli, err := s.handshake(conn)
 			if err != nil {
-				log.Debug("handshake failed (due to %v) - retrying", err)
+				if errors.Is(err, errClientTooOld) {
+					log.Error(err.Error())
+					return
+				}
 
+				log.Debug("handshake failed (due to %v) - retrying", err)
 				time.Sleep(CLIENT_RECONNECT_RATE * time.Second)
 
 				continue
@@ -359,6 +366,43 @@ func (s *Server) GetProcesses(uuid string) ([]*Process, error) {
 		res = append(res, c.Processes[v])
 	}
 	return res, nil
+}
+
+func (s *Server) GetExitCode(id int, client string) (int, error) {
+	var cid string
+
+	if _, ok := s.clients[client]; ok {
+		cid = client
+	} else {
+		for _, c := range s.clients {
+			if c.Hostname == client {
+				cid = c.UUID
+				break
+			}
+		}
+	}
+
+	if cid == "" {
+		return 0, fmt.Errorf("no client %s", client)
+	}
+
+	path := filepath.Join(s.responsePath(&id), cid, "exitcode")
+
+	if _, err := os.Stat(path); err != nil {
+		return 0, err
+	}
+
+	body, err := ioutil.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+
+	code, err := strconv.Atoi(strings.TrimSpace(string(body)))
+	if err != nil {
+		return 0, err
+	}
+
+	return code, nil
 }
 
 func (s *Server) GetResponse(id int, raw bool) (string, error) {
@@ -718,7 +762,7 @@ func (s *Server) handshake(conn net.Conn) (*client, error) {
 			}
 		}()
 	} else {
-		log.Warn("client %s is missing message version -- not starting heartbeat", m.Client.UUID)
+		return nil, fmt.Errorf("client %s: %w", m.Client.UUID, errClientTooOld)
 	}
 
 	// TODO: if the client blocks, ron will hang... probably not good
@@ -895,8 +939,12 @@ func (s *Server) sendCommands(uuid string) {
 		Commands: make(map[int]*Command),
 		UUID:     uuid,
 	}
+
 	for k, v := range s.commands {
-		m.Commands[k] = v.Copy()
+		if !v.Once || !v.Sent {
+			m.Commands[k] = v.Copy()
+			v.Sent = true
+		}
 	}
 
 	s.route(m)
@@ -1089,10 +1137,18 @@ func (s *Server) responseHandler() {
 			s.commandCheckIn(v.ID, cin.UUID)
 
 			path := filepath.Join(s.responsePath(&v.ID), cin.UUID)
-			err := os.MkdirAll(path, os.FileMode(0770))
-			if err != nil {
+
+			if err := os.MkdirAll(path, os.FileMode(0770)); err != nil {
 				log.Error("could not record response %v for %v: %v", v.ID, cin.UUID, err)
 				continue
+			}
+
+			// generate exitcode file
+			if v.RecordExitCode {
+				err := ioutil.WriteFile(filepath.Join(path, "exitcode"), []byte(strconv.Itoa(v.ExitCode)), os.FileMode(0660))
+				if err != nil {
+					log.Error("could not record exit code %v for %v: %v", v.ID, cin.UUID, err)
+				}
 			}
 
 			// generate stdout and stderr if they exist
@@ -1102,6 +1158,7 @@ func (s *Server) responseHandler() {
 					log.Error("could not record stdout %v for %v: %v", v.ID, cin.UUID, err)
 				}
 			}
+
 			if v.Stderr != "" {
 				err := ioutil.WriteFile(filepath.Join(path, "stderr"), []byte(v.Stderr), os.FileMode(0660))
 				if err != nil {
@@ -1198,6 +1255,10 @@ func (s *Server) getResponses(base string, raw bool) (string, error) {
 		}
 
 		if !info.IsDir() {
+			if strings.HasSuffix(path, "exitcode") {
+				return nil
+			}
+
 			log.Debug("add to response files: %v", path)
 
 			data, err := ioutil.ReadFile(path)

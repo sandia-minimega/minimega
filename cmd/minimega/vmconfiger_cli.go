@@ -3,11 +3,14 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 	"io"
 	"strconv"
+	"strings"
+
+	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 )
 
 var vmconfigerCLIHandlers = []minicli.Handler{
@@ -171,6 +174,8 @@ Commands with the same <key> will overwrite previous volumes:
  /scratch/data2
 
 Note: this configuration only applies to containers.
+
+Default: empty map
 `,
 		Patterns: []string{
 			"vm config volume",
@@ -603,6 +608,27 @@ Note: this configuration only applies to KVM-based VMs.
 		}),
 	},
 	{
+		HelpShort: "configures usb-use-xhci",
+		HelpLong: `If true will use xHCI USB controller. Otherwise will use EHCI.
+EHCI does not support USB 3.0, but may be used for backwards compatability.
+
+Default: true
+`,
+		Patterns: []string{
+			"vm config usb-use-xhci [true,false]",
+		},
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.BoolArgs) == 0 {
+				r.Response = strconv.FormatBool(ns.vmConfig.UsbUseXHCI)
+				return nil
+			}
+
+			ns.vmConfig.UsbUseXHCI = c.BoolArgs["true"]
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "configures qemu-append",
 		HelpLong: `Add additional arguments to be passed to the QEMU instance. For example:
 
@@ -830,6 +856,8 @@ Default: true
 		HelpShort: "configures tags",
 		HelpLong: `Set tags in the same manner as "vm tag". These tags will apply to all
 newly launched VMs.
+
+Default: empty map
 `,
 		Patterns: []string{
 			"vm config tags",
@@ -870,6 +898,7 @@ newly launched VMs.
 			"clear vm config",
 			"clear vm config <append,>",
 			"clear vm config <backchannel,>",
+			"clear vm config <bonds,>",
 			"clear vm config <cpu,>",
 			"clear vm config <cdrom,>",
 			"clear vm config <colocate,>",
@@ -897,6 +926,7 @@ newly launched VMs.
 			"clear vm config <tags,>",
 			"clear vm config <threads,>",
 			"clear vm config <uuid,>",
+			"clear vm config <usb-use-xhci,>",
 			"clear vm config <vcpus,>",
 			"clear vm config <vga,>",
 			"clear vm config <virtio-ports,>",
@@ -946,6 +976,9 @@ func (v *BaseConfig) Info(field string) (string, error) {
 	if field == "networks" {
 		return fmt.Sprintf("%v", v.Networks), nil
 	}
+	if field == "bonds" {
+		return fmt.Sprintf("%v", v.Bonds), nil
+	}
 	if field == "tags" {
 		return fmt.Sprintf("%v", v.Tags), nil
 	}
@@ -979,10 +1012,13 @@ func (v *BaseConfig) Clear(mask string) {
 		v.Backchannel = true
 	}
 	if mask == Wildcard || mask == "networks" {
-		v.Networks = nil
+		v.Networks = NetConfigs{}
+	}
+	if mask == Wildcard || mask == "bonds" {
+		v.Bonds = BondConfigs{}
 	}
 	if mask == Wildcard || mask == "tags" {
-		v.Tags = nil
+		v.Tags = make(map[string]string)
 	}
 }
 
@@ -990,9 +1026,15 @@ func (v *BaseConfig) WriteConfig(w io.Writer) error {
 	if v.UUID != "" {
 		fmt.Fprintf(w, "vm config uuid %v\n", v.UUID)
 	}
-	fmt.Fprintf(w, "vm config vcpus %v\n", v.VCPUs)
-	fmt.Fprintf(w, "vm config memory %v\n", v.Memory)
-	fmt.Fprintf(w, "vm config snapshot %t\n", v.Snapshot)
+	if v.VCPUs != 1 {
+		fmt.Fprintf(w, "vm config vcpus %v\n", v.VCPUs)
+	}
+	if v.Memory != 2048 {
+		fmt.Fprintf(w, "vm config memory %v\n", v.Memory)
+	}
+	if v.Snapshot != true {
+		fmt.Fprintf(w, "vm config snapshot %t\n", v.Snapshot)
+	}
 	if v.Schedule != "" {
 		fmt.Fprintf(w, "vm config schedule %v\n", v.Schedule)
 	}
@@ -1008,8 +1050,57 @@ func (v *BaseConfig) WriteConfig(w io.Writer) error {
 	if err := v.Networks.WriteConfig(w); err != nil {
 		return err
 	}
+	if err := v.Bonds.WriteConfig(w); err != nil {
+		return err
+	}
 	for k, v := range v.Tags {
 		fmt.Fprintf(w, "vm config tags %v %v\n", k, v)
+	}
+
+	return nil
+}
+
+func (v *BaseConfig) ReadConfig(r io.Reader, ns string) error {
+	scanner := bufio.NewScanner(r)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if !strings.HasPrefix(line, "vm config") {
+			continue
+		}
+
+		config := strings.Fields(line)[2:]
+		field := config[0]
+
+		switch field {
+		case "uuid":
+			v.UUID = config[1]
+		case "vcpus":
+			v.VCPUs, _ = strconv.ParseUint(config[1], 10, 64)
+		case "memory":
+			v.Memory, _ = strconv.ParseUint(config[1], 10, 64)
+		case "snapshot":
+			v.Snapshot, _ = strconv.ParseBool(config[1])
+		case "schedule":
+			v.Schedule = config[1]
+		case "colocate":
+			v.Colocate = config[1]
+		case "coschedule":
+			v.Coschedule, _ = strconv.ParseInt(config[1], 10, 64)
+		case "backchannel":
+			v.Backchannel, _ = strconv.ParseBool(config[1])
+		case "networks":
+			v.ReadFieldConfig(strings.NewReader(line), "networks", ns)
+		case "bonds":
+			v.ReadFieldConfig(strings.NewReader(line), "bonds", ns)
+		case "tags":
+			v.Tags[config[1]] = config[2]
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
 	}
 
 	return nil
@@ -1055,7 +1146,7 @@ func (v *ContainerConfig) Clear(mask string) {
 		v.Fifos = 0
 	}
 	if mask == Wildcard || mask == "volume" {
-		v.VolumePaths = nil
+		v.VolumePaths = make(map[string]string)
 	}
 }
 
@@ -1077,6 +1168,42 @@ func (v *ContainerConfig) WriteConfig(w io.Writer) error {
 	}
 	for k, v := range v.VolumePaths {
 		fmt.Fprintf(w, "vm config volume %v %v\n", k, v)
+	}
+
+	return nil
+}
+
+func (v *ContainerConfig) ReadConfig(r io.Reader, ns string) error {
+	scanner := bufio.NewScanner(r)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if !strings.HasPrefix(line, "vm config") {
+			continue
+		}
+
+		config := strings.Fields(line)[2:]
+		field := config[0]
+
+		switch field {
+		case "filesystem":
+			v.FilesystemPath = config[1]
+		case "hostname":
+			v.Hostname = config[1]
+		case "init":
+			v.Init = strings.Fields(config[1])
+		case "preinit":
+			v.Preinit = config[1]
+		case "fifos":
+			v.Fifos, _ = strconv.ParseUint(config[1], 10, 64)
+		case "volume":
+			v.VolumePaths[config[1]] = config[2]
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return err
 	}
 
 	return nil
@@ -1127,6 +1254,9 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	}
 	if field == "disks" {
 		return fmt.Sprintf("%v", v.Disks), nil
+	}
+	if field == "usb-use-xhci" {
+		return strconv.FormatBool(v.UsbUseXHCI), nil
 	}
 	if field == "qemu-append" {
 		return fmt.Sprintf("%v", v.QemuAppend), nil
@@ -1182,13 +1312,16 @@ func (v *KVMConfig) Clear(mask string) {
 		v.Append = nil
 	}
 	if mask == Wildcard || mask == "disks" {
-		v.Disks = nil
+		v.Disks = DiskConfigs{}
+	}
+	if mask == Wildcard || mask == "usb-use-xhci" {
+		v.UsbUseXHCI = true
 	}
 	if mask == Wildcard || mask == "qemu-append" {
 		v.QemuAppend = nil
 	}
 	if mask == Wildcard || mask == "qemu-override" {
-		v.QemuOverride = nil
+		v.QemuOverride = QemuOverrides{}
 	}
 }
 
@@ -1238,10 +1371,73 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 	if err := v.Disks.WriteConfig(w); err != nil {
 		return err
 	}
+	if v.UsbUseXHCI != true {
+		fmt.Fprintf(w, "vm config usb-use-xhci %t\n", v.UsbUseXHCI)
+	}
 	if len(v.QemuAppend) > 0 {
 		fmt.Fprintf(w, "vm config qemu-append %v\n", quoteJoin(v.QemuAppend, " "))
 	}
 	if err := v.QemuOverride.WriteConfig(w); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (v *KVMConfig) ReadConfig(r io.Reader, ns string) error {
+	scanner := bufio.NewScanner(r)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+
+		if !strings.HasPrefix(line, "vm config") {
+			continue
+		}
+
+		config := strings.Fields(line)[2:]
+		field := config[0]
+
+		switch field {
+		case "qemu":
+			v.QemuPath = config[1]
+		case "kernel":
+			v.KernelPath = config[1]
+		case "initrd":
+			v.InitrdPath = config[1]
+		case "cdrom":
+			v.CdromPath = config[1]
+		case "migrate":
+			v.MigratePath = config[1]
+		case "cpu":
+			v.CPU = config[1]
+		case "sockets":
+			v.Sockets, _ = strconv.ParseUint(config[1], 10, 64)
+		case "cores":
+			v.Cores, _ = strconv.ParseUint(config[1], 10, 64)
+		case "threads":
+			v.Threads, _ = strconv.ParseUint(config[1], 10, 64)
+		case "machine":
+			v.Machine = config[1]
+		case "serial-ports":
+			v.SerialPorts, _ = strconv.ParseUint(config[1], 10, 64)
+		case "virtio-ports":
+			v.VirtioPorts = config[1]
+		case "vga":
+			v.Vga = config[1]
+		case "append":
+			v.Append = strings.Fields(config[1])
+		case "disks":
+			v.ReadFieldConfig(strings.NewReader(line), "disks", ns)
+		case "usb-use-xhci":
+			v.UsbUseXHCI, _ = strconv.ParseBool(config[1])
+		case "qemu-append":
+			v.QemuAppend = strings.Fields(config[1])
+		case "qemu-override":
+			v.ReadFieldConfig(strings.NewReader(line), "qemu-override", ns)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
 		return err
 	}
 

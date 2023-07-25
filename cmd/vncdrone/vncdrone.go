@@ -1,30 +1,34 @@
 // vncdrone replays VNC keyboard+mouse recordings (as captured by minimega)
 // Pass it a directory containing recordings; these recroding filenames must
 // follow a strict naming scheme:
-// 	<vm prefix>_<pre,run,post>_<unique name>.kb
+//
+//	<vm prefix>_<pre,run,post>_<unique name>.kb
 //
 // The fields are as follows:
-// 	<vm prefix>: A string that must match the prefix of a VM at runtime.  Only
-// 	files that match to named VMs with the same prefix will be played on that VM.
-// 	For example, "foo_pre_1.kb" will play on VMs named "foobar" and "footothemoo",
-// 	but not "nofoo".
 //
-// 	<pre,run,post>: There are 3 groups of files, all of which are randomized within
-// 	each group. This is to facilitate actions like "login, do work, logout". The
-// 	typical usage for this would be to have a single "pre" file to login to the VM,
-// 	one or more "run" files that would be randomly played (potentially for a long
-// 	time), and then a single "post" file to logout. vncdrone maintains state for
-// 	each VM and only transitions from pre->run->post->pre... which state
-// 	transitions happen. State transitions are randomized, so having multiple files
-// 	in each state group must support being played at random within the group (ie
-// 	return the desktop to a known "steady state").
+//	<vm prefix>: A string that must match the prefix of a VM at runtime.  Only
+//	files that match to named VMs with the same prefix will be played on that VM.
+//	For example, "foo_pre_1.kb" will play on VMs named "foobar" and "footothemoo",
+//	but not "nofoo".
+//
+//	<pre,run,post>: There are 3 groups of files, all of which are randomized within
+//	each group. This is to facilitate actions like "login, do work, logout". The
+//	typical usage for this would be to have a single "pre" file to login to the VM,
+//	one or more "run" files that would be randomly played (potentially for a long
+//	time), and then a single "post" file to logout. vncdrone maintains state for
+//	each VM and only transitions from pre->run->post->pre... which state
+//	transitions happen. State transitions are randomized, so having multiple files
+//	in each state group must support being played at random within the group (ie
+//	return the desktop to a known "steady state").
 //	Special case: If only one "pre" or "post" file exists in their
 //	respective groups, then a state change happens after playing that file
 //	no matter what.
 //
-// 	<unique name>: The rest of the recording's filename.
+//	<unique name>: The rest of the recording's filename.
+//
 // Example usage:
-//         vncdrone -recordings ~/recordings/ -namespace foo
+//
+//	vncdrone -recordings ~/recordings/ -namespace foo
 package main
 
 import (

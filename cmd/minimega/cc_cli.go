@@ -54,10 +54,19 @@ key=value pair. For example:
 	cc exec stderr=foo cat server.log
 	cc background stdin=foo stdout=bar /usr/bin/program
 
+Executed commands can also be marked to be sent to miniccc clients only once.
+This will prevent the command from being sent again if the client restarts (for
+example, after a reboot).
+
+	cc exec-once shutdown -r now
+
 Responses are organized in a structure within <filepath>/miniccc_responses, and
 include subdirectories for each client response named by the client's UUID.
 Responses can also be displayed on the command line with the 'responses'
 command.
+
+Responses to executed commands (not backgrounded) will include the command's
+exit code, which can be displayed with the 'exitcode' command.
 
 Filters may be set to limit which clients may execute a posted command.  For
 example, to filter on VMs that are running windows and have a specific IP.
@@ -118,7 +127,9 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <send,> <file>...",
 			"cc <recv,> <file>...",
 			"cc <exec,> <command>...",
+			"cc <exec-once,> <command>...",
 			"cc <background,> <command>...",
+			"cc <background-once,> <command>...",
 
 			"cc <process,> <list,> <vm name, uuid or all>",
 			"cc <process,> <kill,> <pid or all>",
@@ -127,6 +138,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <log,> level <debug,info,warn,error,fatal>",
 
 			"cc <responses,> <id or prefix or all> [raw,]",
+			"cc <exitcode,> <id> <vm name, hostname, or uuid>",
 
 			"cc <tunnel,> <vm name or uuid> <src port> <host> <dst port>",
 			"cc <rtunnel,> <src port> <host> <dst port>",
@@ -177,22 +189,25 @@ See "help cc" for more information.`,
 
 // Functions pointers to the various handlers for the subcommands
 var ccCliSubHandlers = map[string]wrappedCLIFunc{
-	"background": cliCCBackground,
-	"clients":    cliCCClients,
-	"commands":   cliCCCommand,
-	"delete":     cliCCDelete,
-	"exec":       cliCCExec,
-	"filter":     cliCCFilter,
-	"log":        cliCCLog,
-	"prefix":     cliCCPrefix,
-	"process":    cliCCProcess,
-	"recv":       cliCCFileRecv,
-	"responses":  cliCCResponses,
-	"rtunnel":    cliCCTunnel,
-	"send":       cliCCFileSend,
-	"tunnel":     cliCCTunnel,
-	"listen":     cliCCListen,
-	"test-conn":  cliCCTestConn,
+	"background":      cliCCBackground,
+	"background-once": cliCCBackgroundOnce,
+	"clients":         cliCCClients,
+	"commands":        cliCCCommand,
+	"delete":          cliCCDelete,
+	"exec":            cliCCExec,
+	"exec-once":       cliCCExecOnce,
+	"filter":          cliCCFilter,
+	"log":             cliCCLog,
+	"prefix":          cliCCPrefix,
+	"process":         cliCCProcess,
+	"recv":            cliCCFileRecv,
+	"responses":       cliCCResponses,
+	"exitcode":        cliCCExitCode,
+	"rtunnel":         cliCCTunnel,
+	"send":            cliCCFileSend,
+	"tunnel":          cliCCTunnel,
+	"listen":          cliCCListen,
+	"test-conn":       cliCCTestConn,
 }
 
 func cliCC(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -285,6 +300,27 @@ func cliCCResponses(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 		return fmt.Errorf("no such prefix: `%v`", s)
 	}
 
+	return nil
+}
+
+// exit code
+func cliCCExitCode(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	id, err := strconv.Atoi(c.StringArgs["id"])
+	if err != nil {
+		return fmt.Errorf("invalid command ID provided")
+	}
+
+	vm := c.StringArgs["vm"]
+	if lookup := ns.VMs.FindVM(vm); lookup != nil {
+		vm = lookup.GetUUID()
+	}
+
+	code, err := ns.ccServer.GetExitCode(id, vm)
+	if err != nil {
+		return fmt.Errorf("unable to get exit code: %w", err)
+	}
+
+	resp.Response = strconv.Itoa(code)
 	return nil
 }
 
@@ -457,6 +493,23 @@ func cliCCBackground(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 	return nil
 }
 
+// background-once (just exec with background==true)
+func cliCCBackgroundOnce(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
+
+	cmd := &ron.Command{
+		Once:       true,
+		Background: true,
+		Command:    command,
+		Stdin:      stdin,
+		Stdout:     stdout,
+		Stderr:     stderr,
+	}
+
+	resp.Data = ns.NewCommand(cmd)
+	return nil
+}
+
 func cliCCProcessKill(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// kill all processes
 	if c.StringArgs["pid"] == Wildcard {
@@ -492,6 +545,22 @@ func cliCCExec(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
 
 	cmd := &ron.Command{
+		Command: command,
+		Stdin:   stdin,
+		Stdout:  stdout,
+		Stderr:  stderr,
+	}
+
+	resp.Data = ns.NewCommand(cmd)
+	return nil
+}
+
+// exec-once
+func cliCCExecOnce(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
+
+	cmd := &ron.Command{
+		Once:    true,
 		Command: command,
 		Stdin:   stdin,
 		Stdout:  stdout,
@@ -626,7 +695,7 @@ func cliCCClients(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 // command
 func cliCCCommand(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{
-		"id", "prefix", "command", "responses", "background",
+		"id", "prefix", "command", "responses", "background", "once",
 		"sent", "received", "connectivity", "level", "filter",
 	}
 	resp.Tabular = [][]string{}
@@ -648,6 +717,7 @@ func cliCCCommand(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 			fmt.Sprintf("%v", v.Command),
 			strconv.Itoa(len(v.CheckedIn)),
 			strconv.FormatBool(v.Background),
+			strconv.FormatBool(v.Once),
 			fmt.Sprintf("%v", v.FilesSend),
 			fmt.Sprintf("%v", v.FilesRecv),
 		}

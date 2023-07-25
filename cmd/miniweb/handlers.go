@@ -200,7 +200,8 @@ func filesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // screenshotHandler handles the following URLs via vmHandler:
-//   /vm/<name>/screenshot.png
+//
+//	/vm/<name>/screenshot.png
 func screenshotHandler(w http.ResponseWriter, r *http.Request, name string) {
 	log.Info("screenshotHandler handler: %v", r.URL.Path)
 
@@ -258,8 +259,9 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request, name string) {
 }
 
 // connectHandler handles the following URLs via vmHandler:
-//   /vm/<name>/connect/
-//   /vm/<name>/connect/ws
+//
+//	/vm/<name>/connect/
+//	/vm/<name>/connect/ws
 func connectHandler(w http.ResponseWriter, r *http.Request, name string) {
 	log.Info("connect request: %v", r.URL.Path)
 
@@ -315,12 +317,13 @@ func connectHandler(w http.ResponseWriter, r *http.Request, name string) {
 }
 
 // vmHandler handles the following URLs:
-//   /vm/<name>/connect/
-//   /vm/<name>/connect/ws
-//   /vm/<name>/screenshot.png
-//   POST /vm/<name>/start
-//   POST /vm/<name>/stop
-//   POST /vm/<name>/kill
+//
+//	/vm/<name>/connect/
+//	/vm/<name>/connect/ws
+//	/vm/<name>/screenshot.png
+//	POST /vm/<name>/start
+//	POST /vm/<name>/stop
+//	POST /vm/<name>/kill
 func vmHandler(w http.ResponseWriter, r *http.Request) {
 	log.Info("vm request: %v", r.URL.Path)
 
@@ -363,9 +366,10 @@ func vmHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // vmsHandler handles the following URLs:
-//   /vms/info.json
-//   /vms/top.json
-//   /vms/new
+//
+//	/vms/info.json
+//	/vms/top.json
+//	/vms/new
 func vmsHandler(w http.ResponseWriter, r *http.Request) {
 	log.Info("vms request: %v", r.URL)
 
@@ -437,9 +441,10 @@ func vmsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // tabularHandler handles the following URLs:
-//   /vlans.json
-//   /hosts.json
-//   /namespaces.json
+//
+//	/vlans.json
+//	/hosts.json
+//	/namespaces.json
 func tabularHandler(w http.ResponseWriter, r *http.Request) {
 	cmd := NewCommand(r)
 
@@ -462,9 +467,10 @@ func tabularHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // consoleHandler handles the following URLs:
-//   /console
-//   /console/<pid>/ws
-//   /console/<pid>/size
+//
+//	/console
+//	/console/<pid>/ws
+//	/console/<pid>/size
 //
 // Must have -console=true to enable.
 func consoleHandler(w http.ResponseWriter, r *http.Request) {
@@ -559,18 +565,20 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 // commandHandler handles the following URLs:
-//   /command
+//
+//	/command
 //
 // Example usage:
-//   curl 'http://localhost:9001/command' -d '{
-//	"command": "vm info"
-//   }'
 //
-//   curl 'http://localhost:9001/command' -d '{
-//	"command": "vm info",
-//	"columns": ["name", "hostname"],
-//	"filters": ["state=building"]
-//   }'
+//	  curl 'http://localhost:9001/command' -d '{
+//		"command": "vm info"
+//	  }'
+//
+//	  curl 'http://localhost:9001/command' -d '{
+//		"command": "vm info",
+//		"columns": ["name", "hostname"],
+//		"filters": ["state=building"]
+//	  }'
 //
 // Must have -console=true to enable.
 func commandHandler(w http.ResponseWriter, r *http.Request) {
