@@ -185,6 +185,10 @@ type KVMConfig struct {
 	// Default: true
 	UsbUseXHCI bool
 
+	// If specified, will configure VM to use virtual Trusted Platform Module (TPM)
+	// socket at the path provided
+	TpmSocketPath string
+
 	// Add additional arguments to be passed to the QEMU instance. For example:
 	//
 	// 	vm config qemu-append -serial tcp:localhost:4001
@@ -542,6 +546,7 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "Sockets:\t%v\n", vm.Sockets)
 	fmt.Fprintf(w, "VGA:\t%v\n", vm.Vga)
 	fmt.Fprintf(w, "Usb Use XHCI:\t%v\n", vm.UsbUseXHCI)
+	fmt.Fprintf(w, "TPM Socket: \t%v\n", vm.TpmSocketPath)
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
@@ -1316,6 +1321,14 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	// this allows absolute pointers in vnc, and works great on android vms
 	args = append(args, "-device", "usb-tablet,bus=usb-bus.0")
 
+	if vm.TpmSocketPath != "" {
+		args = append(args, "-chardev")
+		args = append(args, fmt.Sprintf("socket,id=chrtpm,path=%v,nowait", vm.TpmSocketPath))
+		args = append(args, "-tpmdev")
+		args = append(args, "emulator,id=tpm0,chardev=chrtpm")
+		args = append(args, "-device")
+		args = append(args, "tpm-tis,tpmdev=tpm0")
+	}
 	// this is non-virtio serial ports
 	// for virtio-serial, look below near the net code
 	for i := uint64(0); i < vm.SerialPorts; i++ {

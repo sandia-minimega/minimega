@@ -629,6 +629,28 @@ Default: true
 		}),
 	},
 	{
+		HelpShort: "configures tpm-socket",
+		HelpLong: `If specified, will configure VM to use virtual Trusted Platform Module (TPM)
+socket at the path provided
+`,
+		Patterns: []string{
+			"vm config tpm-socket [value]",
+		},
+
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = ns.vmConfig.TpmSocketPath
+				return nil
+			}
+
+			v := checkPath(c.StringArgs["value"])
+
+			ns.vmConfig.TpmSocketPath = v
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "configures qemu-append",
 		HelpLong: `Add additional arguments to be passed to the QEMU instance. For example:
 
@@ -925,6 +947,7 @@ Default: empty map
 			"clear vm config <sockets,>",
 			"clear vm config <tags,>",
 			"clear vm config <threads,>",
+			"clear vm config <tpm-socket,>",
 			"clear vm config <uuid,>",
 			"clear vm config <usb-use-xhci,>",
 			"clear vm config <vcpus,>",
@@ -1258,6 +1281,9 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	if field == "usb-use-xhci" {
 		return strconv.FormatBool(v.UsbUseXHCI), nil
 	}
+	if field == "tpm-socket" {
+		return v.TpmSocketPath, nil
+	}
 	if field == "qemu-append" {
 		return fmt.Sprintf("%v", v.QemuAppend), nil
 	}
@@ -1317,6 +1343,9 @@ func (v *KVMConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "usb-use-xhci" {
 		v.UsbUseXHCI = true
 	}
+	if mask == Wildcard || mask == "tpm-socket" {
+		v.TpmSocketPath = ""
+	}
 	if mask == Wildcard || mask == "qemu-append" {
 		v.QemuAppend = nil
 	}
@@ -1374,6 +1403,9 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 	if v.UsbUseXHCI != true {
 		fmt.Fprintf(w, "vm config usb-use-xhci %t\n", v.UsbUseXHCI)
 	}
+	if v.TpmSocketPath != "" {
+		fmt.Fprintf(w, "vm config tpm-socket %v\n", v.TpmSocketPath)
+	}
 	if len(v.QemuAppend) > 0 {
 		fmt.Fprintf(w, "vm config qemu-append %v\n", quoteJoin(v.QemuAppend, " "))
 	}
@@ -1430,6 +1462,8 @@ func (v *KVMConfig) ReadConfig(r io.Reader, ns string) error {
 			v.ReadFieldConfig(strings.NewReader(line), "disks", ns)
 		case "usb-use-xhci":
 			v.UsbUseXHCI, _ = strconv.ParseBool(config[1])
+		case "tpm-socket":
+			v.TpmSocketPath = config[1]
 		case "qemu-append":
 			v.QemuAppend = strings.Fields(config[1])
 		case "qemu-override":
