@@ -20,11 +20,11 @@
 ## shell sleep 10
 
 ## cc commands
-id   | prefix | command             | responses | background | sent | received | level | filter
-1    |        | [echo hello, world] | 1         | false      | []   | []       |       | name=foo
-2    |        | [echo hello, world] | 1         | false      | []   | []       |       | state=RUNNING
-3    |        | [echo hello, world] | 1         | false      | []   | []       |       | type=container
-4    |        | [echo hello, world] | 1         | false      | []   | []       |       | name=foo && state=RUNNING && type=container
+id   | prefix | command             | responses | background | once  | sent | received | connectivity | level | filter
+1    |        | [echo hello, world] | 1         | false      | false | []   | []       |              |       | name=foo
+2    |        | [echo hello, world] | 1         | false      | false | []   | []       |              |       | state=RUNNING
+3    |        | [echo hello, world] | 1         | false      | false | []   | []       |              |       | type=container
+4    |        | [echo hello, world] | 1         | false      | false | []   | []       |              |       | type=container && name=foo && state=RUNNING
 
 ## # check responses
 ## cc responses all

@@ -1,5 +1,5 @@
 ## # Shouldn't have any files
-## file list /minitest
+## .columns dir,name,size file list /minitest
 
 ## # Create files to glob
 ## shell mkdir /tmp/minimega/files/minitest
@@ -15,7 +15,7 @@
 ## shell touch /tmp/minimega/files/minitest/foo3/c.txt
 
 ## # Test list
-## file list /minitest/foo*
+## .columns dir,name,size file list /minitest/foo*
 dir  | name                 | size
      | minitest/foo1/a.txt  | 0
      | minitest/foo1/a.txt2 | 0
@@ -24,23 +24,23 @@ dir  | name                 | size
      | minitest/foo3/a.txt  | 0
      | minitest/foo3/b.txt  | 0
      | minitest/foo3/c.txt  | 0
-## file list /minitest/*/a.txt
+## .columns dir,name,size file list /minitest/*/a.txt
 dir  | name                | size
      | minitest/foo1/a.txt | 0
      | minitest/foo2/a.txt | 0
      | minitest/foo3/a.txt | 0
-## file list /minitest/*/b.txt
+## .columns dir,name,size file list /minitest/*/b.txt
 dir  | name                | size
      | minitest/foo2/b.txt | 0
      | minitest/foo3/b.txt | 0
-## file list /minitest/*/c.txt
+## .columns dir,name,size file list /minitest/*/c.txt
 dir  | name                | size
      | minitest/foo3/c.txt | 0
-## file list /minitest/foo1/a.*
+## .columns dir,name,size file list /minitest/foo1/a.*
 dir  | name                 | size
      | minitest/foo1/a.txt  | 0
      | minitest/foo1/a.txt2 | 0
-## file list /minitest/foo3/*.txt
+## .columns dir,name,size file list /minitest/foo3/*.txt
 dir  | name                | size
      | minitest/foo3/a.txt | 0
      | minitest/foo3/b.txt | 0
@@ -48,7 +48,7 @@ dir  | name                | size
 
 ## # Test deletion
 ## file delete /minitest/*/c.txt
-## file list /minitest/foo*
+## .columns dir,name,size file list /minitest/foo*
 dir  | name                 | size
      | minitest/foo1/a.txt  | 0
      | minitest/foo1/a.txt2 | 0
@@ -57,18 +57,18 @@ dir  | name                 | size
      | minitest/foo3/a.txt  | 0
      | minitest/foo3/b.txt  | 0
 ## file delete /minitest/*/b.txt
-## file list /minitest/foo*
+## .columns dir,name,size file list /minitest/foo*
 dir  | name                 | size
      | minitest/foo1/a.txt  | 0
      | minitest/foo1/a.txt2 | 0
      | minitest/foo2/a.txt  | 0
      | minitest/foo3/a.txt  | 0
 ## file delete /minitest/*/a.txt
-## file list /minitest/foo*
+## .columns dir,name,size file list /minitest/foo*
 dir  | name                 | size
      | minitest/foo1/a.txt2 | 0
 ## file delete /minitest/foo*
-## file list /minitest/
+## .columns dir,name,size file list /minitest/
 
 ## # Clean up
 ## file delete /minitest
