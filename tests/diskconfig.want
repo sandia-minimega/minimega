@@ -272,6 +272,7 @@ Threads:             0
 Sockets:             0
 VGA:                 std
 Usb Use XHCI:        true
+TPM Socket:          
 
 Container configuration:
 Filesystem Path: 
