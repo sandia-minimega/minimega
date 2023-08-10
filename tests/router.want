@@ -1,6 +1,6 @@
 ## # router interfaces
 ## vm config net 100 200
-## vm config filesystem $images/minirouterfs
+## vm config filesystem $images/uminirouterfs
 ## vm launch container vm0
 ## vm start all
 ## router vm0 interface 0 1.2.3.4/24
@@ -428,18 +428,17 @@ route del default
 ## cc exec nslookup bar.com 1.2.3.4
 ## shell sleep 30
 ## cc response all raw
-Server:		1.2.3.4
-Address:	1.2.3.4#53
+Server:    1.2.3.4
+Address 1: 1.2.3.4
 
-Name:	foo.com
-Address: 1.1.1.1
+Name:      foo.com
+Address 1: 1.1.1.1
 
+Server:    1.2.3.4
+Address 1: 1.2.3.4
 
-Server:		1.2.3.4
-Address:	1.2.3.4#53
-
-Name:	bar.com
-Address: 2.2.2.2
+Name:      bar.com
+Address 1: 2.2.2.2
 
 ## # router advertisements
 ## router vm0 interface 0 2001:1::1/64

@@ -1,6 +1,6 @@
 # router interfaces
 vm config net 100 200
-vm config filesystem $images/minirouterfs
+vm config filesystem $images/uminirouterfs
 vm launch container vm0
 vm start all
 router vm0 interface 0 1.2.3.4/24
