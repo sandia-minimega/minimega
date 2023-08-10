@@ -1,7 +1,6 @@
 ## # Shouldn't have any files
-## file list /minitest
+## .columns dir,name,size file list /minitest
 ## file get /minitest/foo
-E: get /minitest/foo: file not found
 
 ## # Create files in directory
 ## shell mkdir /tmp/minimega/files/minitest
@@ -9,7 +8,7 @@ E: get /minitest/foo: file not found
 ## shell touch /tmp/minimega/files/minitest/bar
 
 ## # See if files are there
-## file list /minitest
+## .columns dir,name,size file list /minitest
 dir  | name         | size
      | minitest/bar | 0
      | minitest/foo | 0
@@ -18,11 +17,11 @@ dir  | name         | size
 
 ## # Try to delete the files
 ## file delete /minitest/foo
-## file list /minitest
+## .columns dir,name,size file list /minitest
 dir  | name         | size
      | minitest/bar | 0
 ## file delete /minitest/bar
-## file list /minitest
+## .columns dir,name,size file list /minitest
 
 ## # Clean up
 ## file delete /minitest

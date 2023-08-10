@@ -1,5 +1,5 @@
 # Shouldn't have any files
-file list /minitest
+.columns dir,name,size file list /minitest
 
 # Create files to glob
 shell mkdir /tmp/minimega/files/minitest
@@ -15,22 +15,22 @@ shell touch /tmp/minimega/files/minitest/foo3/b.txt
 shell touch /tmp/minimega/files/minitest/foo3/c.txt
 
 # Test list
-file list /minitest/foo*
-file list /minitest/*/a.txt
-file list /minitest/*/b.txt
-file list /minitest/*/c.txt
-file list /minitest/foo1/a.*
-file list /minitest/foo3/*.txt
+.columns dir,name,size file list /minitest/foo*
+.columns dir,name,size file list /minitest/*/a.txt
+.columns dir,name,size file list /minitest/*/b.txt
+.columns dir,name,size file list /minitest/*/c.txt
+.columns dir,name,size file list /minitest/foo1/a.*
+.columns dir,name,size file list /minitest/foo3/*.txt
 
 # Test deletion
 file delete /minitest/*/c.txt
-file list /minitest/foo*
+.columns dir,name,size file list /minitest/foo*
 file delete /minitest/*/b.txt
-file list /minitest/foo*
+.columns dir,name,size file list /minitest/foo*
 file delete /minitest/*/a.txt
-file list /minitest/foo*
+.columns dir,name,size file list /minitest/foo*
 file delete /minitest/foo*
-file list /minitest/
+.columns dir,name,size file list /minitest/
 
 # Clean up
 file delete /minitest

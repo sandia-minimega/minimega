@@ -11,20 +11,20 @@
 id	match	replacement
 
 Before overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=unsafe -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=unsafe -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 After overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=unsafe -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=unsafe -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 ## vm config snapshot false
 ## vm config qemu-override
 id	match	replacement
 
 Before overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 After overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 ## # interface specified, no cache mode specified
 ## vm config disk foo.qcow2,virtio
@@ -34,20 +34,20 @@ After overrides:
 id	match	replacement
 
 Before overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=unsafe -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=unsafe -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 After overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=unsafe -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=unsafe -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 ## vm config snapshot false
 ## vm config qemu-override
 id	match	replacement
 
 Before overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 After overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 ## # no interface specified, cache mode specified
 ## vm config disk foo.qcow2,writeback
@@ -57,20 +57,20 @@ After overrides:
 id	match	replacement
 
 Before overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 After overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 ## vm config snapshot false
 ## vm config qemu-override
 id	match	replacement
 
 Before overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 After overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=writeback -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 ## # both interface and cache mode specified, 
 ## vm config disk foo.qcow2,virtio,none
@@ -79,20 +79,20 @@ After overrides:
 id	match	replacement
 
 Before overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=none -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=none -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 After overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=none -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=none -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 ## vm config snapshot false
 ## vm config qemu-override
 id	match	replacement
 
 Before overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=none -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=none -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 After overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=none -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=virtio,cache=none -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 ## # ahci interface
 ## vm config disk foo.qcow2,ahci,none
@@ -100,10 +100,10 @@ After overrides:
 id	match	replacement
 
 Before overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -device ahci,id=ahci -device ide-drive,drive=ahci-drive-0,bus=ahci.0 -drive id=ahci-drive-0,file=/tmp/minimega/files/foo.qcow2,media=disk,if=none,cache=none -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -device ahci,id=ahci -device ide-drive,drive=ahci-drive-0,bus=ahci.0 -drive id=ahci-drive-0,file=/tmp/minimega/files/foo.qcow2,media=disk,if=none,cache=none -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 After overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -device ahci,id=ahci -device ide-drive,drive=ahci-drive-0,bus=ahci.0 -drive id=ahci-drive-0,file=/tmp/minimega/files/foo.qcow2,media=disk,if=none,cache=none -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -device ahci,id=ahci -device ide-drive,drive=ahci-drive-0,bus=ahci.0 -drive id=ahci-drive-0,file=/tmp/minimega/files/foo.qcow2,media=disk,if=none,cache=none -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 ## # multiple disks, mixed ahci/not
 ## vm config disk foo.qcow2,ide,none bar.qcow2,ahci,writeback baz.qcow2,virtio,writeback qux.qcow2,ahci,directsync
@@ -111,10 +111,10 @@ After overrides:
 id	match	replacement
 
 Before overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=none -device ahci,id=ahci -device ide-drive,drive=ahci-drive-0,bus=ahci.0 -drive id=ahci-drive-0,file=/tmp/minimega/files/bar.qcow2,media=disk,if=none,cache=writeback -drive file=/tmp/minimega/files/baz.qcow2,media=disk,if=virtio,cache=writeback -device ide-drive,drive=ahci-drive-1,bus=ahci.1 -drive id=ahci-drive-1,file=/tmp/minimega/files/qux.qcow2,media=disk,if=none,cache=directsync -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=none -device ahci,id=ahci -device ide-drive,drive=ahci-drive-0,bus=ahci.0 -drive id=ahci-drive-0,file=/tmp/minimega/files/bar.qcow2,media=disk,if=none,cache=writeback -drive file=/tmp/minimega/files/baz.qcow2,media=disk,if=virtio,cache=writeback -device ide-drive,drive=ahci-drive-1,bus=ahci.1 -drive id=ahci-drive-1,file=/tmp/minimega/files/qux.qcow2,media=disk,if=none,cache=directsync -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 After overrides:
--name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server -vga std -rtc clock=vm,base=utc -usb -device usb-ehci,id=ehci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=none -device ahci,id=ahci -device ide-drive,drive=ahci-drive-0,bus=ahci.0 -drive id=ahci-drive-0,file=/tmp/minimega/files/bar.qcow2,media=disk,if=none,cache=writeback -drive file=/tmp/minimega/files/baz.qcow2,media=disk,if=virtio,cache=writeback -device ide-drive,drive=ahci-drive-1,bus=ahci.1 -drive id=ahci-drive-1,file=/tmp/minimega/files/qux.qcow2,media=disk,if=none,cache=directsync -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server,nowait -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
+-name 0 -m 2048 -nographic -vnc unix:vnc -smp 1 -qmp unix:qmp,server=on -vga std -rtc clock=vm,base=utc -usb -device qemu-xhci,id=xhci -device usb-tablet,bus=usb-bus.0 -pidfile qemu.pid -k en-us -cpu host -net none -S -drive media=cdrom -drive file=/tmp/minimega/files/foo.qcow2,media=disk,if=ide,cache=none -device ahci,id=ahci -device ide-drive,drive=ahci-drive-0,bus=ahci.0 -drive id=ahci-drive-0,file=/tmp/minimega/files/bar.qcow2,media=disk,if=none,cache=writeback -drive file=/tmp/minimega/files/baz.qcow2,media=disk,if=virtio,cache=writeback -device ide-drive,drive=ahci-drive-1,bus=ahci.1 -drive id=ahci-drive-1,file=/tmp/minimega/files/qux.qcow2,media=disk,if=none,cache=directsync -device pci-bridge,id=pci.1,chassis_nr=1 -device virtio-serial-pci,id=virtio-serial0,bus=pci.1,addr=0x1 -chardev socket,id=charvserialCC,path=cc,server=on,wait=off -device virtserialport,bus=virtio-serial0.0,chardev=charvserialCC,id=charvserialCC,name=cc -uuid
 
 ## # launching
 ## clear vm config
@@ -245,6 +245,7 @@ VM configuration:
 Memory:           2048
 VCPUs:            1
 Networks:         []
+Bonds:            []
 Snapshot:         true
 UUID:             
 Schedule host:    
@@ -270,6 +271,8 @@ Cores:               0
 Threads:             0
 Sockets:             0
 VGA:                 std
+Usb Use XHCI:        true
+TPM Socket:          
 
 Container configuration:
 Filesystem Path: 

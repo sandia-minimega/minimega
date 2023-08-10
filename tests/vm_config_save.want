@@ -3,6 +3,7 @@ VM configuration:
 Memory:           2048
 VCPUs:            1
 Networks:         []
+Bonds:            []
 Snapshot:         true
 UUID:             
 Schedule host:    
@@ -28,6 +29,8 @@ Cores:               0
 Threads:             0
 Sockets:             0
 VGA:                 std
+Usb Use XHCI:        true
+TPM Socket:          
 
 Container configuration:
 Filesystem Path: 
@@ -48,6 +51,7 @@ VM configuration:
 Memory:           1024
 VCPUs:            4
 Networks:         [10,b4:b6:76:69:68:68]
+Bonds:            []
 Snapshot:         true
 UUID:             9131e2a3-ad6b-4f38-b5ba-5ff2b19e32dc
 Schedule host:    
@@ -73,6 +77,8 @@ Cores:               0
 Threads:             0
 Sockets:             0
 VGA:                 std
+Usb Use XHCI:        true
+TPM Socket:          
 
 Container configuration:
 Filesystem Path: 
@@ -90,6 +96,7 @@ VM configuration:
 Memory:           2048
 VCPUs:            1
 Networks:         []
+Bonds:            []
 Snapshot:         true
 UUID:             
 Schedule host:    
@@ -115,6 +122,8 @@ Cores:               0
 Threads:             0
 Sockets:             0
 VGA:                 std
+Usb Use XHCI:        true
+TPM Socket:          
 
 Container configuration:
 Filesystem Path: 
@@ -129,6 +138,7 @@ VM configuration:
 Memory:           1024
 VCPUs:            4
 Networks:         [10,b4:b6:76:69:68:68]
+Bonds:            []
 Snapshot:         true
 UUID:             9131e2a3-ad6b-4f38-b5ba-5ff2b19e32dc
 Schedule host:    
@@ -154,6 +164,8 @@ Cores:               0
 Threads:             0
 Sockets:             0
 VGA:                 std
+Usb Use XHCI:        true
+TPM Socket:          
 
 Container configuration:
 Filesystem Path: 
