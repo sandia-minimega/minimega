@@ -3,7 +3,7 @@
 
 ## vm config filesystem $images/minicccfs
 ## vm config uuid 9e73ce1b-b93d-4594-8577-80d773b1fbb9
-## vm config memory 512
+## vm config memory 1024
 ## vm launch container foo
 ## vm start all
 
@@ -36,11 +36,11 @@ aa559b4e3523a6c931f08f4df52d58f2  /tmp/miniccc/files/cc_io.bigfile
 
 ## shell sleep 20s
 ## cc commands
-id   | prefix | command                                   | responses | background | once  | sent            | received                           | level | filter
-1    |        | []                                        | 1         | false      | false | [cc_io.bigfile] | []                                 |       | 
-2    |        | [du -sb /tmp/miniccc/files/cc_io.bigfile] | 1         | false      | false | []              | []                                 |       | 
-3    |        | [md5sum /tmp/miniccc/files/cc_io.bigfile] | 1         | false      | false | []              | []                                 |       | 
-4    |        | []                                        | 1         | false      | false | []              | [/tmp/miniccc/files/cc_io.bigfile] |       |
+id   | prefix | command                                   | responses | background | once  | sent            | received                           | connectivity | level | filter
+1    |        | []                                        | 1         | false      | false | [cc_io.bigfile] | []                                 |              |       | 
+2    |        | [du -sb /tmp/miniccc/files/cc_io.bigfile] | 1         | false      | false | []              | []                                 |              |       | 
+3    |        | [md5sum /tmp/miniccc/files/cc_io.bigfile] | 1         | false      | false | []              | []                                 |              |       | 
+4    |        | []                                        | 1         | false      | false | []              | [/tmp/miniccc/files/cc_io.bigfile] |              |       |
 
 ## # sanity check
 ## shell du -sb /tmp/minimega/files/cc_io.bigfile
