@@ -6,6 +6,7 @@ package ron
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -121,8 +122,13 @@ func (f *Filter) String() string {
 	if f.MAC != "" {
 		res = append(res, "mac="+f.MAC)
 	}
-	for k, v := range f.Tags {
-		res = append(res, fmt.Sprintf("%v=%v", k, v))
+	keys := make([]string, 0, len(f.Tags))
+	for k := range f.Tags {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		res = append(res, fmt.Sprintf("%v=%v", k, f.Tags[k]))
 	}
 
 	return strings.Join(res, " && ")
