@@ -116,8 +116,8 @@ Named Static Routes:
 defaultroute
 	0.0.0.0/0	2.0.0.2
 foobar
-	11.0.0.0/24
 	10.0.0.0/24
+	11.0.0.0/24
 
 Log:
 ## clear router routerA route static 11.0.0.0/24 foobar
