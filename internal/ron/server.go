@@ -253,7 +253,7 @@ func (s *Server) DialSerial(path, uuid string) error {
 
 			conn, err := dial(path)
 			if err != nil {
-				log.Error("dialing serial port %v failed: %v", path, err)
+				log.Debug("dialing serial port %v failed: %v", path, err)
 				return
 			}
 

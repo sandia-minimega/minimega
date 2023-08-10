@@ -1037,11 +1037,9 @@ func (vm *KvmVM) Connect(cc *ron.Server, reconnect bool) error {
 
 	if !reconnect {
 		cc.RegisterVM(vm)
-
-		return cc.DialSerial(vm.path("cc"), vm.GetUUID())
 	}
 
-	return nil
+	return cc.DialSerial(vm.path("cc"), vm.GetUUID())
 }
 
 func (vm *KvmVM) Disconnect(cc *ron.Server) error {
