@@ -108,7 +108,7 @@ minimega instance:
 		Patterns: []string{
 			"capture <netflow,> <bridge,> <bridge> <filename>",
 			"capture <netflow,> <bridge,> <bridge> <tcp,udp> <hostname:port>",
-			"capture <netflow,> <delete,> bridge <name>",
+			"capture <netflow,> <delete,> bridge <bridge>",
 			"capture <netflow,> <timeout,> [timeout in seconds]",
 			"capture <pcap,> bridge <bridge> <filename>",
 			"capture <pcap,> <delete,> bridge <bridge>",
