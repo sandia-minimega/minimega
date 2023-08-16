@@ -47,7 +47,7 @@ info include:
 - ip         : IPv4 address
 - ip6        : IPv6 address
 - bandwidth  : stats regarding bandwidth usage
-- qos        : quality-of-service contraints on network interfaces
+- qos        : quality-of-service constraints on network interfaces
 - tags       : any additional information attached to the VM
 
 Additional fields are available for KVM-based VMs:
@@ -110,7 +110,7 @@ naming scheme:
 
 Note: VM names cannot be integers or reserved words (e.g. "all").
 
-Users may specify a saved config explicity rather than use the current one, for
+Users may specify a saved config explicitly rather than use the current one, for
 example:
 
 	vm config save endpoint
@@ -250,7 +250,7 @@ To add a network connection, you can specify the same options as you do when you
 connections via vm config when launching VMs. See "vm config net" for more details.
 
 You will need to specify the VLAN of which the interface is a member. Optionally, you may
-specify the brige the interface will be connected on. You may also specify a MAC address for
+specify the bridge the interface will be connected on. You may also specify a MAC address for
 the interface. Finally, you may also specify the network device for qemu to use. By default,
 "e1000" is used. The order is:
 

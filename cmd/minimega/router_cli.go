@@ -35,7 +35,7 @@ router takes a number of subcommands:
   using DHCP. The interface field is an integer index of the interface defined
   with 'vm config net'. You could also specify if that interface will be a
   loopback interface For example, to configure the second interface of the
-  router with a static IP and a loopback witha  different IP:
+  router with a static IP and a loopback with a different IP:
 
 	vm config net 100 200
 	# ...
@@ -90,20 +90,20 @@ router takes a number of subcommands:
   Neighbor ip address and AS, and what networks need to be advertised
 
   For example, local router is in AS 100 with an ip 10.0.0.1 and bgp peer is in AS 200 with an ip of 20.0.0.1
-  and you want to advterise network 10.0.0.0/24:
+  and you want to advertise network 10.0.0.0/24:
 
 	router foo route static 10.0.0.0/24 0 foo_out
 	router foo bgp bar local 10.0.0.1 100
 	router foo bgp bar neighbor 20.0.0.1 200
 	router foo bgp bar export filter foo_out
 
-  You can set up route reflection for BGP by ussing the rrclient command for that process.
+  You can set up route reflection for BGP by using the rrclient command for that process.
   By using the command it indicates that the peer is a bgp client:
 
 	router foo bgp bar rrclient
 
-- 'rid': Sets the 32 bit router ID for the router. Typically this ID is unqiue
-  across the orginizations network and is used for various routing protocols ie OSPF
+- 'rid': Sets the 32 bit router ID for the router. Typically this ID is unique
+  across the organization's network and is used for various routing protocols ie OSPF
 
 	router foo rid 1.1.1.1
 
