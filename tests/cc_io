@@ -3,7 +3,7 @@ background dd if=/dev/zero of=/tmp/minimega/files/cc_io.bigfile bs=1M count=512
 
 vm config filesystem $images/minicccfs
 vm config uuid 9e73ce1b-b93d-4594-8577-80d773b1fbb9
-vm config memory 1024
+vm config memory 512
 vm launch container foo
 vm start all
 
