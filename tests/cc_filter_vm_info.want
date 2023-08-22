@@ -24,7 +24,7 @@ id   | prefix | command             | responses | background | once  | sent | re
 1    |        | [echo hello, world] | 1         | false      | false | []   | []       |              |       | name=foo
 2    |        | [echo hello, world] | 1         | false      | false | []   | []       |              |       | state=RUNNING
 3    |        | [echo hello, world] | 1         | false      | false | []   | []       |              |       | type=container
-4    |        | [echo hello, world] | 1         | false      | false | []   | []       |              |       | type=container && name=foo && state=RUNNING
+4    |        | [echo hello, world] | 1         | false      | false | []   | []       |              |       | name=foo && state=RUNNING && type=container
 
 ## # check responses
 ## cc responses all

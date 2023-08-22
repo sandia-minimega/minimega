@@ -1,7 +1,7 @@
 ## # static routes
 ## clear cc responses
-## vm config filesystem $images/minirouterfs
-## vm config preinit $images/minirouterfs/preinit
+## vm config filesystem $images/uminirouterfs
+## vm config preinit $images/uminirouterfs/preinit
 ## vm config net a b
 ## vm launch container routerA
 ## vm config net b c
@@ -196,10 +196,10 @@ Log:
 ## cc exec route -n
 ## clear cc filter
 ## cc filter hostname=vmA
-## cc exec bash -c 'ping -c 4 3.0.0.3 | grep -o "4 packets transmitted, 4 received"'
+## cc exec sh -c 'ping -c 4 3.0.0.3 | grep -o "4 packets transmitted, 4 packets received"'
 ## clear cc filter
 ## cc filter hostname=vmB
-## cc exec bash -c 'ping -c 4 1.0.0.3 | grep -o "4 packets transmitted, 4 received"'
+## cc exec sh -c 'ping -c 4 1.0.0.3 | grep -o "4 packets transmitted, 4 packets received"'
 ## clear cc filter
 ## shell sleep 10
 ## cc responses 13 raw
@@ -215,7 +215,7 @@ Destination     Gateway         Genmask         Flags Metric Ref    Use Iface
 2.0.0.0         0.0.0.0         255.255.255.0   U     0      0        0 veth0
 3.0.0.0         0.0.0.0         255.255.255.0   U     0      0        0 veth1
 ## cc responses 15 raw
-4 packets transmitted, 4 received
+4 packets transmitted, 4 packets received
 ## cc responses 16 raw
-4 packets transmitted, 4 received
+4 packets transmitted, 4 packets received
 

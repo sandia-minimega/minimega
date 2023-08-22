@@ -38,6 +38,7 @@ cp `which ip` uminirouterfs/sbin
 cp `which dnsmasq` uminirouterfs/usr/sbin
 cp `which bird` uminirouterfs/usr/sbin
 cp `which bird6` uminirouterfs/usr/sbin
+cp `which birdc` uminirouterfs/usr/sbin
 
 go run ../ldd.go uminirouterfs/miniccc uminirouterfs
 go run ../ldd.go uminirouterfs/minirouter uminirouterfs
@@ -46,6 +47,7 @@ go run ../ldd.go uminirouterfs/sbin/ip uminirouterfs
 go run ../ldd.go uminirouterfs/usr/sbin/dnsmasq uminirouterfs
 go run ../ldd.go uminirouterfs/usr/sbin/bird uminirouterfs
 go run ../ldd.go uminirouterfs/usr/sbin/bird6 uminirouterfs
+go run ../ldd.go uminirouterfs/usr/sbin/birdc uminirouterfs
 
 # scripts that dhclient depends on
 cp `which dhclient-script` uminirouterfs/sbin
