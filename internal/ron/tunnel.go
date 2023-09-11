@@ -33,6 +33,38 @@ func (s *Server) Forward(uuid string, source int, host string, dest int) error {
 	return c.tunnel.Forward(source, host, dest)
 }
 
+func (s *Server) ListForwards(uuid string) (map[int]string, error) {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	c, ok := s.clients[uuid]
+	if !ok {
+		return nil, fmt.Errorf("no such client: %v", uuid)
+	}
+
+	if c.tunnel == nil {
+		return nil, fmt.Errorf("tunnel has not been initialized for %v", uuid)
+	}
+
+	return c.tunnel.ListForwards(), nil
+}
+
+func (s *Server) CloseForward(uuid string, id int) error {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	c, ok := s.clients[uuid]
+	if !ok {
+		return fmt.Errorf("no such client: %v", uuid)
+	}
+
+	if c.tunnel == nil {
+		return fmt.Errorf("tunnel has not been initialized for %v", uuid)
+	}
+
+	return c.tunnel.CloseForward(id)
+}
+
 // Reverse creates a reverse tunnel from guest->host. It is possible to have
 // multiple clients create a reverse tunnel simultaneously. filter allows
 // specifying which clients to have create the tunnel.

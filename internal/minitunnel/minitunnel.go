@@ -11,6 +11,7 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"strings"
 	"sync"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
@@ -27,14 +28,16 @@ const (
 	FORWARD
 )
 
-var errClosing = "use of closed network connection"
-
 type Tunnel struct {
 	transport io.ReadWriteCloser // underlying transport
-	enc       *gob.Encoder
-	dec       *gob.Decoder
-	quit      chan bool // tell the message pump to quit
-	chans     chans
+
+	enc   *gob.Encoder
+	dec   *gob.Decoder
+	quit  chan bool // tell the message pump to quit
+	chans chans
+
+	forwardIDs chan int
+	forwards   map[int]*forward
 
 	sendLock sync.Mutex
 }
@@ -82,11 +85,22 @@ func ListenAndServe(transport io.ReadWriteCloser) error {
 
 	t := &Tunnel{
 		transport: transport,
-		enc:       enc,
-		dec:       dec,
-		quit:      make(chan bool),
-		chans:     makeChans(),
+
+		enc:   enc,
+		dec:   dec,
+		quit:  make(chan bool),
+		chans: makeChans(),
+
+		forwardIDs: make(chan int),
+		forwards:   make(map[int]*forward),
 	}
+
+	// start a goroutine to generate forward IDs for us
+	go func() {
+		for id := 1; ; id++ {
+			t.forwardIDs <- id
+		}
+	}()
 
 	go t.mux()
 	return nil
@@ -97,10 +111,14 @@ func ListenAndServe(transport io.ReadWriteCloser) error {
 func Dial(transport io.ReadWriteCloser) (*Tunnel, error) {
 	t := &Tunnel{
 		transport: transport,
-		enc:       gob.NewEncoder(transport),
-		dec:       gob.NewDecoder(transport),
-		quit:      make(chan bool),
-		chans:     makeChans(),
+
+		enc:   gob.NewEncoder(transport),
+		dec:   gob.NewDecoder(transport),
+		quit:  make(chan bool),
+		chans: makeChans(),
+
+		forwardIDs: make(chan int),
+		forwards:   make(map[int]*forward),
 	}
 
 	handshake := &tunnelMessage{
@@ -121,6 +139,13 @@ func Dial(transport io.ReadWriteCloser) (*Tunnel, error) {
 		return nil, fmt.Errorf("did not receive handshake ack: %v", handshake)
 	}
 
+	// start a goroutine to generate forward IDs for us
+	go func() {
+		for id := 1; ; id++ {
+			t.forwardIDs <- id
+		}
+	}()
+
 	// start the message mux
 	go t.mux()
 
@@ -137,6 +162,7 @@ func (t *Tunnel) Forward(source int, host string, dest int) error {
 	if err != nil {
 		return err
 	}
+
 	go t.forward(ln, source, host, dest)
 	return nil
 }
@@ -173,18 +199,32 @@ func (t *Tunnel) Reverse(source int, host string, dest int) error {
 
 // listen on source port and start new remote connections for every Accept()
 func (t *Tunnel) forward(ln net.Listener, source int, host string, dest int) {
+	f := t.newForward(ln, source, host, dest)
+
+	t.sendLock.Lock()
+	t.forwards[f.fid] = f
+	t.sendLock.Unlock()
+
 	go func() {
 		<-t.quit
-		ln.Close()
+		f.close()
+
+		t.sendLock.Lock()
+		delete(t.forwards, f.fid)
+		t.sendLock.Unlock()
 	}()
 
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			log.Errorln(err)
+			if !strings.Contains(err.Error(), "use of closed network connection") {
+				log.Errorln(err)
+			}
+
 			return
 		}
 
+		f.addConnection(conn)
 		go t.createTunnel(conn, host, dest)
 	}
 }
@@ -264,7 +304,9 @@ func (t *Tunnel) transfer(in chan *tunnelMessage, conn net.Conn, TID int) {
 	}
 
 	if err != io.EOF {
-		log.Errorln(err)
+		if !strings.Contains(err.Error(), "use of closed network connection") {
+			log.Errorln(err)
+		}
 
 		m := &tunnelMessage{
 			Type:  CLOSED,
