@@ -97,6 +97,11 @@ without arguments displays the existing mounts. Users can use "clear cc mount"
 to unmount the filesystem of one or all VMs. This should be done before killing
 or stopping the VM ("clear namespace <name>" will handle this automatically).
 
+"cc tunnel" allows users to tunnel TCP connections to a local port through a VM
+to a remote port. The local port will be created on the minimega cluster host
+that the tunneling VM is running on. The remote port can be on the same VM or on
+a different VM the tunneling VM has network access to.
+
 "cc test-conn" allows users to test network connectivity from a guest to the
 given IP or domain name and port. The wait timeout should be specified as a Go
 duration string (e.g. 5s, 1m). If "udp" is used, a "base64 udp packet" that will
