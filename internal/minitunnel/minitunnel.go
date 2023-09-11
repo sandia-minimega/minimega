@@ -11,6 +11,7 @@ import (
 	"io"
 	"math/rand"
 	"net"
+	"strings"
 	"sync"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
@@ -216,7 +217,10 @@ func (t *Tunnel) forward(ln net.Listener, source int, host string, dest int) {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			log.Errorln(err)
+			if !strings.Contains(err.Error(), "use of closed network connection") {
+				log.Errorln(err)
+			}
+
 			return
 		}
 
@@ -300,7 +304,9 @@ func (t *Tunnel) transfer(in chan *tunnelMessage, conn net.Conn, TID int) {
 	}
 
 	if err != io.EOF {
-		log.Errorln(err)
+		if !strings.Contains(err.Error(), "use of closed network connection") {
+			log.Errorln(err)
+		}
 
 		m := &tunnelMessage{
 			Type:  CLOSED,
