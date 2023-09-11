@@ -272,7 +272,12 @@ func cliCCTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 			clients := ns.ccServer.GetClients()
 
 			for _, client := range clients {
-				vms[client.Hostname] = client.UUID
+				vm := ns.FindVM(client.UUID)
+				if vm == nil {
+					return vmNotFound(client.UUID)
+				}
+
+				vms[vm.GetName()] = client.UUID
 			}
 		} else {
 			vm := ns.FindVM(v)
