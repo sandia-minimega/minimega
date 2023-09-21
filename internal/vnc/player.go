@@ -120,9 +120,15 @@ func (p *Player) PlaybackString(id, rhost, str string) error {
 		if err != nil {
 			return fmt.Errorf("character has no keysym mapping: %c", char)
 		}
+		shift := requiresShift(keysym)
+		if shift {
+			f.WriteString("0:KeyEvent,true,Shift_L\n")
+		}
 		f.WriteString(fmt.Sprintf("0:KeyEvent,true,%s\n", keysym))
 		f.WriteString(fmt.Sprintf("0:KeyEvent,false,%s\n", keysym))
-
+		if shift {
+			f.WriteString("0:KeyEvent,false,Shift_L\n")
+		}
 	}
 	if err := f.Close(); err != nil {
 		return err

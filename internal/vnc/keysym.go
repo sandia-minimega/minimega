@@ -33,3 +33,8 @@ func xStringToKeysym(s string) (uint32, error) {
 
 	return uint32(0), fmt.Errorf("unknown key: `%s`", s)
 }
+
+func requiresShift(s string) bool {
+	_, ok := shiftedKeysyms[s]
+	return ok
+}
