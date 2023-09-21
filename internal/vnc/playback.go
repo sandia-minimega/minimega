@@ -209,10 +209,12 @@ func (p *playback) Stop() error {
 	defer p.Unlock()
 
 	if p.closed {
-		return errors.New("playback has already stopped")
+		log.Info("playback has already stopped for %v", p.ID)
+		return nil
 	}
 
 	close(p.signal)
+	close(p.done)
 	p.closed = true
 	log.Info("Finished playback on %v", p.ID)
 
