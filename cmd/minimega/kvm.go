@@ -772,6 +772,11 @@ func (vm *KvmVM) connectVNC() error {
 				for {
 					msg, err := vnc.ReadClientMessage(tee)
 					if err == nil {
+						// for cut text, send text immediately as string
+						if cut, ok := msg.(*vnc.ClientCutText); ok {
+							log.Info("sending text for ClientCutText: %s", cut.Text)
+							ns.Player.PlaybackString(vm.Name, vm.vncShim.Addr().String(), string(cut.Text))
+						}
 						ns.Recorder.Route(vm.GetName(), msg)
 						continue
 					}
