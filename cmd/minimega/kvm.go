@@ -189,6 +189,12 @@ type KVMConfig struct {
 	// socket at the path provided
 	TpmSocketPath string
 
+	// Enables bidirectional copy paste instead of basic pasting into VM.
+	// Requries QEMU 6.1+ with qemu-vdagent chardev and for qemu-guest-agent to be installed on VM.
+	//
+	// Default: false
+	BidirectionalCopyPaste bool
+
 	// Add additional arguments to be passed to the QEMU instance. For example:
 	//
 	// 	vm config qemu-append -serial tcp:localhost:4001
@@ -546,6 +552,7 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "Sockets:\t%v\n", vm.Sockets)
 	fmt.Fprintf(w, "VGA:\t%v\n", vm.Vga)
 	fmt.Fprintf(w, "Usb Use XHCI:\t%v\n", vm.UsbUseXHCI)
+	fmt.Fprintf(w, "Bidirectional Copy Paste:\t%v\n", vm.BidirectionalCopyPaste)
 	fmt.Fprintf(w, "TPM Socket: \t%v\n", vm.TpmSocketPath)
 	w.Flush()
 	fmt.Fprintln(&o)
@@ -772,8 +779,8 @@ func (vm *KvmVM) connectVNC() error {
 				for {
 					msg, err := vnc.ReadClientMessage(tee)
 					if err == nil {
-						// for cut text, send text immediately as string
-						if cut, ok := msg.(*vnc.ClientCutText); ok {
+						// for cut text, send text immediately as string if not bi-directional
+						if cut, ok := msg.(*vnc.ClientCutText); ok && !vm.BidirectionalCopyPaste {
 							log.Info("sending text for ClientCutText: %s", cut.Text)
 							ns.Player.PlaybackString(vm.Name, vm.vncShim.Addr().String(), string(cut.Text))
 						}
@@ -1478,6 +1485,15 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%v,server=on,wait=off", filepath.Join(vmPath, "cc")))
 		args = append(args, "-device")
 		args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserialCC,id=charvserialCC,name=cc", virtioPort))
+	}
+
+	if vm.BidirectionalCopyPaste {
+		addVirtioDevice()
+
+		args = append(args, "-chardev")
+		args = append(args, "qemu-vdagent,id=vdagent,clipboard=on")
+		args = append(args, "-device")
+		args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=vdagent,name=com.redhat.spice.0", virtioPort))
 	}
 
 	if vm.VirtioPorts != "" {

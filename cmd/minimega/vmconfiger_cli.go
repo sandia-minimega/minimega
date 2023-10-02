@@ -651,6 +651,27 @@ socket at the path provided
 		}),
 	},
 	{
+		HelpShort: "configures bidirectional-copy-paste",
+		HelpLong: `Enables bidirectional copy paste instead of basic pasting into VM.
+Requries QEMU 6.1+ with qemu-vdagent chardev and for qemu-guest-agent to be installed on VM.
+
+Default: false
+`,
+		Patterns: []string{
+			"vm config bidirectional-copy-paste [true,false]",
+		},
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.BoolArgs) == 0 {
+				r.Response = strconv.FormatBool(ns.vmConfig.BidirectionalCopyPaste)
+				return nil
+			}
+
+			ns.vmConfig.BidirectionalCopyPaste = c.BoolArgs["true"]
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "configures qemu-append",
 		HelpLong: `Add additional arguments to be passed to the QEMU instance. For example:
 
@@ -920,6 +941,7 @@ Default: empty map
 			"clear vm config",
 			"clear vm config <append,>",
 			"clear vm config <backchannel,>",
+			"clear vm config <bidirectional-copy-paste,>",
 			"clear vm config <bonds,>",
 			"clear vm config <cpu,>",
 			"clear vm config <cdrom,>",
@@ -1284,6 +1306,9 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	if field == "tpm-socket" {
 		return v.TpmSocketPath, nil
 	}
+	if field == "bidirectional-copy-paste" {
+		return strconv.FormatBool(v.BidirectionalCopyPaste), nil
+	}
 	if field == "qemu-append" {
 		return fmt.Sprintf("%v", v.QemuAppend), nil
 	}
@@ -1346,6 +1371,9 @@ func (v *KVMConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "tpm-socket" {
 		v.TpmSocketPath = ""
 	}
+	if mask == Wildcard || mask == "bidirectional-copy-paste" {
+		v.BidirectionalCopyPaste = false
+	}
 	if mask == Wildcard || mask == "qemu-append" {
 		v.QemuAppend = nil
 	}
@@ -1406,6 +1434,9 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 	if v.TpmSocketPath != "" {
 		fmt.Fprintf(w, "vm config tpm-socket %v\n", v.TpmSocketPath)
 	}
+	if v.BidirectionalCopyPaste != false {
+		fmt.Fprintf(w, "vm config bidirectional-copy-paste %t\n", v.BidirectionalCopyPaste)
+	}
 	if len(v.QemuAppend) > 0 {
 		fmt.Fprintf(w, "vm config qemu-append %v\n", quoteJoin(v.QemuAppend, " "))
 	}
@@ -1464,6 +1495,8 @@ func (v *KVMConfig) ReadConfig(r io.Reader, ns string) error {
 			v.UsbUseXHCI, _ = strconv.ParseBool(config[1])
 		case "tpm-socket":
 			v.TpmSocketPath = config[1]
+		case "bidirectional-copy-paste":
+			v.BidirectionalCopyPaste, _ = strconv.ParseBool(config[1])
 		case "qemu-append":
 			v.QemuAppend = strings.Fields(config[1])
 		case "qemu-override":

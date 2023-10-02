@@ -116,7 +116,7 @@ func (p *Player) PlaybackString(id, rhost, str string) error {
 		if char < 0x20 || char >= unicode.MaxASCII {
 			return fmt.Errorf("unknown non-ascii character: %c", char)
 		}
-		keysym, err := xKeysymToString(uint32(char));
+		keysym, err := xKeysymToString(uint32(char))
 		if err != nil {
 			return fmt.Errorf("character has no keysym mapping: %c", char)
 		}
@@ -138,7 +138,7 @@ func (p *Player) PlaybackString(id, rhost, str string) error {
 
 	// remove file when playback is done
 	go func() {
-		<- pb.done
+		<-pb.done
 		if err := os.Remove(f.Name()); err != nil {
 			log.Warn("Failed to delete temp file %s used for playback", f.Name())
 		}
