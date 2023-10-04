@@ -190,7 +190,7 @@ type KVMConfig struct {
 	TpmSocketPath string
 
 	// Enables bidirectional copy paste instead of basic pasting into VM.
-	// Requries QEMU 6.1+ with qemu-vdagent chardev and for qemu-guest-agent to be installed on VM.
+	// Requries QEMU 6.1+ compiled with spice and for spice-vdagent to be installed on VM.
 	//
 	// Default: false
 	BidirectionalCopyPaste bool
