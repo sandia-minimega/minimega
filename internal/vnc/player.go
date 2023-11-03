@@ -106,6 +106,10 @@ func (p *Player) Playback(id, rhost, filename string) error {
 }
 
 func (p *Player) PlaybackString(id, rhost, str string) error {
+	if len(str) == 0 {
+		return nil
+	}
+
 	f, err := os.CreateTemp("", "mm_vnc_")
 	if err != nil {
 		return err

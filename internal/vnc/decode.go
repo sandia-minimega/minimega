@@ -54,6 +54,9 @@ func ReadClientMessage(r io.Reader) (interface{}, error) {
 		msg = msg2
 	case TypeClientCutText:
 		msg2 := &ClientCutText{_ClientCutText: *msg.(*_ClientCutText)}
+		if msg2.Length < 0 {
+			msg2.Length = -msg2.Length
+		}
 		msg2.Text = make([]uint8, msg2.Length)
 
 		err = binary.Read(r, binary.BigEndian, &msg2.Text)

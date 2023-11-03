@@ -87,7 +87,7 @@ type PointerEvent struct {
 
 type _ClientCutText struct {
 	_      [3]byte // Padding
-	Length uint32  // Length of Text
+	Length int32   // Length of Text. Signed for extended pseudo-encoding
 }
 
 // See RFC 6143 Section 7.5.6
@@ -186,7 +186,7 @@ func (m *PointerEvent) Write(w io.Writer) error {
 
 func (m *ClientCutText) Write(w io.Writer) error {
 	// Ensure length is set correctly
-	m.Length = uint32(len(m.Text))
+	m.Length = int32(len(m.Text))
 
 	if err := writeMessage(w, TypeClientCutText, m._ClientCutText); err != nil {
 		return err
