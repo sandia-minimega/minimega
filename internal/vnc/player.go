@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"os"
 	"sync"
-	"unicode"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
@@ -116,13 +115,9 @@ func (p *Player) PlaybackString(id, rhost, str string) error {
 	}
 
 	for _, char := range str {
-		// ascii 0x20 - 07E map directly to keysym values
-		if char < 0x20 || char >= unicode.MaxASCII {
-			return fmt.Errorf("unknown non-ascii character: %c", char)
-		}
-		keysym, err := xKeysymToString(uint32(char))
+		keysym, err := asciiCharToKeysymString(char)
 		if err != nil {
-			return fmt.Errorf("character has no keysym mapping: %c", char)
+			return err
 		}
 		shift := requiresShift(keysym)
 		if shift {
