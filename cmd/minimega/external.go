@@ -25,6 +25,9 @@ var (
 	MIN_OVS     = []int{1, 11}
 	// MIN_KERNEL for Overlayfs
 	MIN_KERNEL = []int{3, 18}
+
+	// feature requirements
+	MIN_QEMU_COPY_PASTE = []int{6, 1}
 )
 
 // externalDependencies contains all the external programs that minimega
@@ -253,6 +256,22 @@ func checkVersion(name string, min []int, versionFn func() ([]int, error)) error
 
 	// must match or exceed
 	return nil
+}
+
+// checks that qemu has the chardev `required`
+func checkQemuChardev(required string) error {
+	out, err := processWrapper("kvm", "-chardev", "help")
+	if err != nil {
+		return fmt.Errorf("check qemu chardev failed: %v", err)
+	}
+
+	fields := strings.Split(out, "\n")
+	for _, f := range fields {
+		if strings.TrimSpace(f) == required {
+			return nil
+		}
+	}
+	return fmt.Errorf("qemu does not have required chardev: %v", required)
 }
 
 // lsModule returns true if the specified module is in the `lsmod` output

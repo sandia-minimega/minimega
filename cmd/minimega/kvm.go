@@ -190,7 +190,7 @@ type KVMConfig struct {
 	TpmSocketPath string
 
 	// Enables bidirectional copy paste instead of basic pasting into VM.
-	// Requries QEMU 6.1+ compiled with spice and for spice-vdagent to be installed on VM.
+	// Requires QEMU 6.1+ compiled with qemu-vdagent chardev and for spice-vdagent to be installed on VM.
 	//
 	// Default: false
 	BidirectionalCopyPaste bool
@@ -941,6 +941,17 @@ func (vm *KvmVM) launch() error {
 	var sErr bytes.Buffer
 
 	vmConfig := VMConfig{BaseConfig: vm.BaseConfig, KVMConfig: vm.KVMConfig}
+
+	// if using bidirectionalCopyPaste, error out if dependencies aren't met
+	if vmConfig.BidirectionalCopyPaste {
+		if err := checkVersion("qemu", MIN_QEMU_COPY_PASTE, qemuVersion); err != nil {
+			return fmt.Errorf("bidirectional-copy-paste not supported. Please disable: %v", err)
+		}
+		if err := checkQemuChardev("qemu-vdagent"); err != nil {
+			return fmt.Errorf("bidirectional-copy-paste not supported. Please disable: %v", err)
+		}
+	}
+
 	args := vmConfig.qemuArgs(vm.ID, vm.instancePath)
 	args = vmConfig.applyQemuOverrides(args)
 	log.Debug("final qemu args: %#v", args)
