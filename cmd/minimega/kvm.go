@@ -189,6 +189,12 @@ type KVMConfig struct {
 	// socket at the path provided
 	TpmSocketPath string
 
+	// Enables bidirectional copy paste instead of basic pasting into VM.
+	// Requires QEMU 6.1+ compiled with qemu-vdagent chardev and for spice-vdagent to be installed on VM.
+	//
+	// Default: false
+	BidirectionalCopyPaste bool
+
 	// Add additional arguments to be passed to the QEMU instance. For example:
 	//
 	// 	vm config qemu-append -serial tcp:localhost:4001
@@ -546,6 +552,7 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "Sockets:\t%v\n", vm.Sockets)
 	fmt.Fprintf(w, "VGA:\t%v\n", vm.Vga)
 	fmt.Fprintf(w, "Usb Use XHCI:\t%v\n", vm.UsbUseXHCI)
+	fmt.Fprintf(w, "Bidirectional Copy Paste:\t%v\n", vm.BidirectionalCopyPaste)
 	fmt.Fprintf(w, "TPM Socket: \t%v\n", vm.TpmSocketPath)
 	w.Flush()
 	fmt.Fprintln(&o)
@@ -772,6 +779,14 @@ func (vm *KvmVM) connectVNC() error {
 				for {
 					msg, err := vnc.ReadClientMessage(tee)
 					if err == nil {
+						// for cut text, send text immediately as string if not bi-directional
+						if cut, ok := msg.(*vnc.ClientCutText); ok && !vm.BidirectionalCopyPaste {
+							log.Info("sending text for ClientCutText: %s", cut.Text)
+							err = ns.Player.PlaybackString(vm.Name, vm.vncShim.Addr().String(), string(cut.Text))
+							if err != nil {
+								log.Warnln(err)
+							}
+						}
 						ns.Recorder.Route(vm.GetName(), msg)
 						continue
 					}
@@ -926,6 +941,17 @@ func (vm *KvmVM) launch() error {
 	var sErr bytes.Buffer
 
 	vmConfig := VMConfig{BaseConfig: vm.BaseConfig, KVMConfig: vm.KVMConfig}
+
+	// if using bidirectionalCopyPaste, error out if dependencies aren't met
+	if vmConfig.BidirectionalCopyPaste {
+		if err := checkVersion("qemu", MIN_QEMU_COPY_PASTE, qemuVersion); err != nil {
+			return fmt.Errorf("bidirectional-copy-paste not supported. Please disable: %v", err)
+		}
+		if err := checkQemuChardev("qemu-vdagent"); err != nil {
+			return fmt.Errorf("bidirectional-copy-paste not supported. Please disable: %v", err)
+		}
+	}
+
 	args := vmConfig.qemuArgs(vm.ID, vm.instancePath)
 	args = vmConfig.applyQemuOverrides(args)
 	log.Debug("final qemu args: %#v", args)
@@ -1473,6 +1499,15 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%v,server=on,wait=off", filepath.Join(vmPath, "cc")))
 		args = append(args, "-device")
 		args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserialCC,id=charvserialCC,name=cc", virtioPort))
+	}
+
+	if vm.BidirectionalCopyPaste {
+		addVirtioDevice()
+
+		args = append(args, "-chardev")
+		args = append(args, "qemu-vdagent,id=vdagent,clipboard=on")
+		args = append(args, "-device")
+		args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=vdagent,name=com.redhat.spice.0", virtioPort))
 	}
 
 	if vm.VirtioPorts != "" {

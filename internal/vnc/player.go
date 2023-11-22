@@ -6,6 +6,7 @@ package vnc
 
 import (
 	"fmt"
+	"os"
 	"sync"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
@@ -99,29 +100,71 @@ func (p *Player) reap() {
 // Creates a new VNC connection, the initial playback reader, and starts the
 // vnc playback
 func (p *Player) Playback(id, rhost, filename string) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	// clear out any old playbacks
-	p.reap()
-
-	return p.playback(id, rhost, filename)
+	_, err := p.playback(id, rhost, filename)
+	return err
 }
 
-func (p *Player) playback(id, rhost, filename string) error {
-	// Is this playback already running?
-	if _, ok := p.m[id]; ok {
-		return fmt.Errorf("kb playback %v already playing", id)
+func (p *Player) PlaybackString(id, rhost, str string) error {
+	if len(str) == 0 {
+		return nil
 	}
 
-	pb, err := newPlayback(id, rhost)
+	f, err := os.CreateTemp("", "mm_vnc_")
 	if err != nil {
 		return err
 	}
 
+	for _, char := range str {
+		keysym, err := asciiCharToKeysymString(char)
+		if err != nil {
+			return err
+		}
+		shift := requiresShift(keysym)
+		if shift {
+			f.WriteString("0:KeyEvent,true,Shift_L\n")
+		}
+		f.WriteString(fmt.Sprintf("0:KeyEvent,true,%s\n", keysym))
+		f.WriteString(fmt.Sprintf("0:KeyEvent,false,%s\n", keysym))
+		if shift {
+			f.WriteString("0:KeyEvent,false,Shift_L\n")
+		}
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+
+	pb, err := p.playback(id, rhost, f.Name())
+
+	// remove file when playback is done
+	go func() {
+		<-pb.done
+		if err := os.Remove(f.Name()); err != nil {
+			log.Warn("Failed to delete temp file %s used for playback", f.Name())
+		}
+	}()
+
+	return err
+}
+
+func (p *Player) playback(id, rhost, filename string) (*playback, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	// clear out any old playbacks
+	p.reap()
+
+	// Is this playback already running?
+	if _, ok := p.m[id]; ok {
+		return nil, fmt.Errorf("kb playback %v already playing", id)
+	}
+
+	pb, err := newPlayback(id, rhost)
+	if err != nil {
+		return nil, err
+	}
+
 	p.m[pb.ID] = pb
 
-	return pb.Start(filename)
+	return pb, pb.Start(filename)
 }
 
 func (p *Player) Inject(id, rhost, s string) error {
@@ -157,7 +200,8 @@ func (p *Player) Inject(id, rhost, s string) error {
 	case *LoadFileEvent:
 		// This is an injected LoadFile event without a running playback. This is
 		// equivalent to starting a new vnc playback.
-		return p.playback(id, rhost, e.File)
+		_, err := p.playback(id, rhost, e.File)
+		return err
 	case *WaitForItEvent:
 		return fmt.Errorf("unhandled inject event for non-running playback: %T", e)
 	default:

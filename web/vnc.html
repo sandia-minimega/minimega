@@ -6,6 +6,9 @@
     3. Preventing the `_qemuExtKeyEventSupported` flag from getting set to true in `core/rfb.js`
        This flag is used to upgrade key event messages to a new format, but vnc recording/playback
        does not support the newer format
+    4. Preventing the `_clipboardServerCapabilitiesFormats` flags from getting set in `core/rfb.js`.
+       These flags represent support for the extended clipboard pseudo-encoding which minimega does
+       not support
 -->
 <!DOCTYPE html>
 <html lang="en" class="noVNC_loading">

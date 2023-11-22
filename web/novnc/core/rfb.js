@@ -1885,7 +1885,8 @@ export default class RFB extends EventTargetMixin {
 
                     // Check if format flag is set.
                     if ((formats & index)) {
-                        this._clipboardServerCapabilitiesFormats[index] = true;
+                        // MINIMEGA EDIT: minimega vnc shim doesn't support extended clipboard, so don't store formats
+                        // this._clipboardServerCapabilitiesFormats[index] = true;
                         // We don't send unsolicited clipboard, so we
                         // ignore the size
                         this._sock.rQshift32();

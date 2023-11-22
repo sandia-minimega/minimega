@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
@@ -64,6 +65,7 @@ below.
 #: This is an example of a vnc playback comment`,
 		Patterns: []string{
 			"vnc <play,> <vm target> <filename>",
+			"vnc <type,> <vm target> <str>...",
 			"vnc <stop,> <vm target>",
 			"vnc <pause,> <vm target>",
 			"vnc <continue,> <vm target>",
@@ -126,6 +128,8 @@ func cliVNCPlay(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 		switch {
 		case c.BoolArgs["play"]:
 			return true, ns.Player.Playback(id, rhost, fname)
+		case c.BoolArgs["type"]:
+			return true, ns.Player.PlaybackString(id, rhost, strings.Join(c.ListArgs["str"], " "))
 		case c.BoolArgs["stop"]:
 			return true, ns.Player.Stop(id)
 		case c.BoolArgs["inject"]:
