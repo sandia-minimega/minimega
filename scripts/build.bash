@@ -66,10 +66,9 @@ $ROOT_DIR/bin/pyapigen -out $ROOT_DIR/lib/minimega.py $ROOT_DIR/bin/minimega
 # If python is installed, build a source distribution for the
 # minimega Python bindings.
 py_path=$(command -v python3)
-if [ -z "$py_path " ]; then
+if [ -z "$py_path" ]; then
     py_path=$(command -v python)
 fi
-
 if [ ! -z "$py_path" ]; then
     echo "BUILD PYTHON DIST"
     cp $ROOT_DIR/README $ROOT_DIR/lib/
