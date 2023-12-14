@@ -28,9 +28,12 @@ cp -r $MM/LICENSES $DOCS/
 
 echo COPIED FILES
 
+# substitute version for control file
 source $MM/VERSION
 sed -e 's/${version}/'"$VERSION"'/g' minimega/DEBIAN/control.base > minimega/DEBIAN/control
 
 echo BUILDING PACKAGE...
 (cd $SCRIPT_DIR && fakeroot dpkg-deb -b minimega)
+rm minimega/DEBIAN/control
 echo DONE
+
