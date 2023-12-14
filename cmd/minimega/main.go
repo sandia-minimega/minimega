@@ -116,7 +116,7 @@ func main() {
 	}
 
 	if *f_version {
-		fmt.Println("minimega", version.Revision, version.Date)
+		fmt.Println("minimega", version.Version, version.Revision, version.Date)
 		fmt.Println(version.Copyright)
 		os.Exit(0)
 	}

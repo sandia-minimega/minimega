@@ -365,7 +365,7 @@ func cliDebug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 }
 
 func cliVersion(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	resp.Response = fmt.Sprintf("minimega %v %v", version.Revision, version.Date)
+	resp.Response = fmt.Sprintf("minimega %v %v %v", version.Version, version.Revision, version.Date)
 	return nil
 }
 

@@ -6,12 +6,14 @@ ROOT_DIR="$( cd ${SCRIPT_DIR}/.. && pwd )"
 . $SCRIPT_DIR/env.bash
 
 # set the version from the repo
-VERSION=`git --git-dir $ROOT_DIR/.git rev-parse HEAD`
+source $ROOT_DIR/VERSION
+REVISION=`git --git-dir $ROOT_DIR/.git rev-parse HEAD`
 DATE=`date --rfc-3339=date`
 echo "package version
 
 var (
-	Revision = \"$VERSION\"
+    Version  = \"$VERSION\"
+	Revision = \"$REVISION\"
 	Date     = \"$DATE\"
 )" > $ROOT_DIR/internal/version/version.go
 
@@ -63,12 +65,20 @@ $ROOT_DIR/bin/pyapigen -out $ROOT_DIR/lib/minimega.py $ROOT_DIR/bin/minimega
 
 # If python is installed, build a source distribution for the
 # minimega Python bindings.
-if [ -x "$(command -v python)" ]; then
+py_path=$(command -v python3)
+if [ -z "$py_path " ]; then
+    py_path=$(command -v python)
+fi
+
+if [ ! -z "$py_path" ]; then
+    echo "BUILD PYTHON DIST"
     cp $ROOT_DIR/README $ROOT_DIR/lib/
+    cp $ROOT_DIR/VERSION $ROOT_DIR/lib/
     pushd $ROOT_DIR/lib
-    python setup.py --quiet sdist
+    $py_path setup.py --quiet sdist
     popd
     rm $ROOT_DIR/lib/README
+    rm $ROOT_DIR/lib/VERSION
 fi
 
 unset GOOS

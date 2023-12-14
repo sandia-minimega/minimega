@@ -1,0 +1,11 @@
+Package: minimega
+Version: ${version}
+Section: utils
+Priority: extra
+Architecture: amd64
+Depends: qemu-kvm, qemu-utils, openvswitch-switch, dnsmasq, dosfstools, ntfs-3g, libpcap-dev
+Maintainer: Arthur Hernandez <aherna4@sandia.gov>, Jacob Davis <jacdavi@sandia.gov>
+Description: a distributed VM management tool.
+ minimega is a tool for launching and managing virtual machines. It can run on
+ your laptop or distributed across a cluster. minimega is fast, easy to deploy,
+ and can scale to run on massive clusters with virtually no setup.
