@@ -19,15 +19,15 @@ require (
 	github.com/thoj/go-ircevent v0.0.0-00010101000000-000000000000
 	github.com/twmb/murmur3 v1.1.6
 	github.com/ziutek/telnet v0.0.0-20150427115447-49d9be70897f
-	golang.org/x/crypto v0.14.0
+	golang.org/x/crypto v0.17.0
 	golang.org/x/net v0.17.0
-	golang.org/x/sys v0.13.0
+	golang.org/x/sys v0.15.0
 	golang.org/x/tools v0.1.12
 )
 
 require (
 	golang.org/x/mod v0.6.0-dev.0.20220419223038-86c51ed26bb4 // indirect
-	golang.org/x/term v0.13.0 // indirect
+	golang.org/x/term v0.15.0 // indirect
 )
 
 replace github.com/Harvey-OS/ninep => github.com/jcrussell/ninep v0.0.0-20180619175724-35ad2879c0a3
