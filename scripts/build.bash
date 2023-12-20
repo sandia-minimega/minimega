@@ -12,7 +12,7 @@ DATE=`date --rfc-3339=date`
 echo "package version
 
 var (
-    Version  = \"$VERSION\"
+	Version  = \"$VERSION\"
 	Revision = \"$REVISION\"
 	Date     = \"$DATE\"
 )" > $ROOT_DIR/internal/version/version.go
