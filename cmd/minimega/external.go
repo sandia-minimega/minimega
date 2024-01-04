@@ -66,7 +66,7 @@ var externalCLIHandlers = []minicli.Handler{
 		HelpLong: `
 minimega maintains a list of external packages that it depends on, such as
 qemu. Calling check will attempt to find each of these executables in the
-avaiable path and check to make sure they meet the minimum version
+available path and check to make sure they meet the minimum version
 requirements. Returns errors for all missing executables and all minimum
 versions not met.`,
 		Patterns: []string{

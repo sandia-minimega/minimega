@@ -112,7 +112,7 @@ interface will be connected on. If the bridge name is omitted, minimega will
 use the default "mega_bridge".
 
 You can also optionally specify the MAC address of the interface to connect to
-that network. If not specifed, the MAC address will be randomly generated.
+that network. If not specified, the MAC address will be randomly generated.
 
 You can also optionally specify a network device for qemu to use (which is
 ignored by containers). By default, "e1000" is used. To see a list of valid

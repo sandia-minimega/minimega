@@ -88,7 +88,7 @@ Users can also filter by any column in "vm info" using a similar syntax:
 	cc filter name=server
 	cc filter vlan=DMZ
 
-"vm info" columns take precedance over tags when both define the same key.
+"vm info" columns take precedence over tags when both define the same key.
 
 "cc mount" allows direct access to a guest's filesystem over the command and
 control connection. When given a VM uuid or name and a path, the VM's

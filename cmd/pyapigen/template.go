@@ -61,7 +61,7 @@ except NameError:
 def connect(path='/tmp/minimega/minimega', raise_errors=True, debug=False, namespace=None):
 	'''
 	Connect to the minimega instance with UNIX socket at <path> and return a
-	new minimega API object. See help(minimega.minimega) for an explaination of
+	new minimega API object. See help(minimega.minimega) for an explanation of
 	the other parameters.
 	'''
 	mm = minimega(path, raise_errors, debug, namespace)
