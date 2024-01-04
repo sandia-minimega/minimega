@@ -1,10 +1,11 @@
-import os
-import shutil
 from distutils.core import setup
 
 
 with open("README", "r") as readme_file:
     readme_content = readme_file.read()
+
+with open("VERSION", "r") as version_file:
+    version = version_file.read().split('=')[1].strip()
 
 setup(
     name='minimega',
@@ -14,7 +15,7 @@ setup(
     long_description=readme_content,
     license="GPLv3",
     url="https://minimega.org",
-    version="2.7",
+    version=version,
     py_modules=["minimega"],
     classifiers=[
         "Development Status :: 5 - Production/Stable",

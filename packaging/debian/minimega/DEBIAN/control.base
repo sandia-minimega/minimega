@@ -1,5 +1,5 @@
 Package: minimega
-Version: 2.8
+Version: ${version}
 Section: utils
 Priority: extra
 Architecture: amd64

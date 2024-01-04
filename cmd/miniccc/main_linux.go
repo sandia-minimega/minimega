@@ -50,7 +50,7 @@ func main() {
 	flag.Parse()
 
 	if *f_version {
-		fmt.Println("miniccc", version.Revision, version.Date)
+		fmt.Println("miniccc", version.Version, version.Revision, version.Date)
 		fmt.Println(version.Copyright)
 		os.Exit(0)
 	}
