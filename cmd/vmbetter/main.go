@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	f_debian_mirror = flag.String("mirror", "http://mirrors.ocf.berkeley.edu/debian", "path to the debian mirror to use")
+	f_debian_mirror = flag.String("mirror", "http://ftp.us.debian.org/debian", "path to the debian mirror to use")
 	f_noclean       = flag.Bool("noclean", false, "do not remove build directory")
 	f_stage1        = flag.Bool("1", false, "stop after stage one, and copy build files to <config>_stage1")
 	f_stage2        = flag.String("2", "", "complete stage 2 from an existing stage 1 directory")
