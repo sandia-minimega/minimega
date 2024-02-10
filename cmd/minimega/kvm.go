@@ -781,10 +781,12 @@ func (vm *KvmVM) connectVNC() error {
 					if err == nil {
 						// for cut text, send text immediately as string if not bi-directional
 						if cut, ok := msg.(*vnc.ClientCutText); ok && !vm.BidirectionalCopyPaste {
-							log.Info("sending text for ClientCutText: %s", cut.Text)
-							err = ns.Player.PlaybackString(vm.Name, vm.vncShim.Addr().String(), string(cut.Text))
-							if err != nil {
-								log.Warnln(err)
+							if cut.Length > 0 {
+								log.Info("sending text for ClientCutText: %s", cut.Text)
+								err = ns.Player.PlaybackString(vm.Name, vm.vncShim.Addr().String(), string(cut.Text))
+								if err != nil {
+									log.Warnln(err)
+								}
 							}
 						}
 						ns.Recorder.Route(vm.GetName(), msg)
@@ -988,8 +990,8 @@ func (vm *KvmVM) launch() error {
 	if err := vm.connectQMP(); err != nil {
 		// Failed to connect to qmp so clean up the process
 		cmd.Process.Kill()
-
-		return vm.setErrorf("unable to connect to qmp socket: %v", err)
+		// Qemu stderr likely contains reason
+		return vm.setErrorf("unable to connect to qmp socket: %v. qemu output: %v", err, sErr.String())
 	}
 
 	go vm.qmpLogger()
@@ -1349,7 +1351,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 
 	if vm.TpmSocketPath != "" {
 		args = append(args, "-chardev")
-		args = append(args, fmt.Sprintf("socket,id=chrtpm,path=%v,nowait", vm.TpmSocketPath))
+		args = append(args, fmt.Sprintf("socket,id=chrtpm,path=%v", vm.TpmSocketPath))
 		args = append(args, "-tpmdev")
 		args = append(args, "emulator,id=tpm0,chardev=chrtpm")
 		args = append(args, "-device")
