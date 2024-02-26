@@ -6,15 +6,6 @@ WORKDIR /minimega/
 
 COPY . .
 
-# COPY ./.git     ./.git
-# COPY ./scripts  ./scripts
-# COPY ./cmd      ./cmd
-# COPY ./pkg      ./pkg
-# COPY ./internal ./internal
-# COPY ./packages ./packages
-# COPY ./go.mod   ./go.mod
-# COPY ./go.sum   ./go.sum
-
 RUN ./scripts/all.bash
 
 
@@ -47,8 +38,9 @@ COPY --from=gobuilder /minimega/bin/minirouter    /opt/minimega/bin/minirouter
 # As the minimega API changes, so does the minimega.py generated file. Given
 # this, let's go ahead and also include the lib directory so we can grab the
 # updated Python package from the Docker image.
-COPY --from=gobuilder /minimega/lib    /opt/minimega/lib
-COPY --from=gobuilder /minimega/README /opt/minimega/lib/README
+COPY --from=gobuilder /minimega/lib     /opt/minimega/lib
+COPY --from=gobuilder /minimega/README  /opt/minimega/lib/README
+COPY --from=gobuilder /minimega/VERSION /opt/minimega/lib/VERSION
 
 COPY ./web       /opt/minimega/web
 COPY ./docker/mm /usr/local/bin/mm
