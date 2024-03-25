@@ -218,7 +218,7 @@ func (q *Conn) BlockdevEject(device string, force bool) error {
 	}
 	v := <-q.messageSync
 	if !success(v) {
-		return errors.New("eject")
+		return fmt.Errorf("eject failed: %v", v)
 	}
 	return nil
 }
@@ -228,10 +228,10 @@ func (q *Conn) BlockdevChange(device, path string) error {
 		return ERR_READY
 	}
 	s := map[string]interface{}{
-		"execute": "change",
+		"execute": "blockdev-change-medium",
 		"arguments": map[string]interface{}{
-			"device": device,
-			"target": path,
+			"device":   device,
+			"filename": path,
 		},
 	}
 	err := q.write(s)
@@ -240,7 +240,7 @@ func (q *Conn) BlockdevChange(device, path string) error {
 	}
 	v := <-q.messageSync
 	if !success(v) {
-		return errors.New("change")
+		return fmt.Errorf("change failed: %v", v)
 	}
 	return nil
 }
