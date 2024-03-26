@@ -646,7 +646,7 @@ func cliVMTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 
 func cliClearVMTag(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// Get the specified tag name or use Wildcard if not provided
-	key, ok := c.StringArgs["key"]
+	key, ok := c.StringArgs["tag"]
 	if !ok {
 		key = Wildcard
 	}

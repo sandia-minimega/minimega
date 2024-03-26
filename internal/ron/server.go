@@ -735,7 +735,7 @@ func (s *Server) handshake(conn net.Conn) (*client, error) {
 	c.Namespace = namespace
 
 	if m.Client.Version != version.Revision {
-		log.Warn("mismatched miniccc version: %v", m.Client.Version)
+		log.Warn("mismatched miniccc version on %v: %v", m.Client.Hostname, m.Client.Version)
 	}
 
 	if majorVersion(m.Version) > 0 {

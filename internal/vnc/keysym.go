@@ -47,7 +47,7 @@ func asciiCharToKeysymString(c rune) (string, error) {
 	}
 	keysym, err := xKeysymToString(uint32(c))
 	if err != nil {
-		return "uint32(0)", fmt.Errorf("character has no keysym mapping: %c", c)
+		return "uint32(0)", fmt.Errorf("character has no keysym mapping: %c [%x]", c, c)
 	}
 	return keysym, nil
 }
