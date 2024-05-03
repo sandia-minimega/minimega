@@ -1,3 +1,7 @@
+# To specify an alternate base image: --build-arg BASE_IMAGE="some/other/image:tag"
+ARG BASE_IMAGE="ubuntu:20.04"
+
+# -- go builder --
 FROM golang:1.18.2 AS gobuilder
 
 RUN apt-get update && apt-get install -y libpcap-dev
@@ -9,14 +13,32 @@ COPY . .
 RUN ./scripts/all.bash
 
 
-FROM ubuntu:22.04
+# -- minimega image --
+FROM ${BASE_IMAGE}
 
-RUN apt update && apt install -y \
-  dnsmasq iproute2 isc-dhcp-client \
-  libpcap-dev ntfs-3g openssh-client \
-  openvswitch-switch qemu-kvm qemu-utils \
+# General image metadata
+# Reference: https://github.com/opencontainers/image-spec/blob/main/annotations.md
+ARG BUILD_TIME
+ARG MM_VERSION
+ARG MM_COMMIT
+LABEL org.opencontainers.image.created="${BUILD_TIME}" \
+  org.opencontainers.image.authors="minimega dev team <minimega-dev@sandia.gov>" \
+  org.opencontainers.image.documentation="https://www.sandia.gov/minimega/" \
+  org.opencontainers.image.source="https://github.com/sandia-minimega/minimega" \
+  org.opencontainers.image.version="${MM_VERSION}" \
+  org.opencontainers.image.revision="${MM_COMMIT}" \
+  org.opencontainers.image.vendor="Sandia National Laboratories" \
+  org.opencontainers.image.licenses="GPL-3.0-only" \
+  org.opencontainers.image.title="minimega" \
+  org.opencontainers.image.description="minimega is a tool for launching and managing virtual machines"
+
+RUN apt-get update \
+  && apt-get install -y \
+    dnsmasq iproute2 isc-dhcp-client \
+    libpcap-dev ntfs-3g openssh-client \
+    openvswitch-switch qemu-kvm qemu-utils \
   && apt autoremove -y \
-  && apt clean -y\
+  && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/* \
   && rm -rf /var/cache/apt/archives/*
 
