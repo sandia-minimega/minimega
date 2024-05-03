@@ -4,6 +4,7 @@ ARG BASE_IMAGE="ubuntu:20.04"
 # -- go builder --
 FROM golang:1.18.2 AS gobuilder
 
+ENV DEBIAN_FRONTEND="noninteractive"
 RUN apt-get update && apt-get install -y libpcap-dev
 
 WORKDIR /minimega/
@@ -31,6 +32,8 @@ LABEL org.opencontainers.image.created="${BUILD_TIME}" \
   org.opencontainers.image.licenses="GPL-3.0-only" \
   org.opencontainers.image.title="minimega" \
   org.opencontainers.image.description="minimega is a tool for launching and managing virtual machines"
+
+ENV DEBIAN_FRONTEND="noninteractive"
 
 RUN apt-get update \
   && apt-get install -y \
