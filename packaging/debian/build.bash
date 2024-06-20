@@ -19,7 +19,7 @@ mkdir -p $DST/misc
 cp -r $MM/misc/daemon $DST/misc/
 cp -r $MM/misc/vmbetter_configs $DST/misc/
 mkdir -p $DST/web
-cp -r $MM/web $DST/web/
+cp -r $MM/web $DST/
 
 DOCS=$SCRIPT_DIR/minimega/usr/share/doc/minimega
 mkdir -p $DOCS

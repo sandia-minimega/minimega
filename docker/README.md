@@ -100,7 +100,7 @@ MM_LOGFILE=/var/log/minimega.log
 By default, the following values are set for miniweb:
 
 ```
-MINIWEB_ROOT=/opt/minimega/misc/web
+MINIWEB_ROOT=/opt/minimega/web
 MINIWEB_HOST=0.0.0.0
 MINIWEB_PORT=9001
 ```
