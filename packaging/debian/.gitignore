@@ -1,3 +1,4 @@
 minimega.deb
 minimega/opt
 minimega/usr
+minimega/DEBIAN/control
