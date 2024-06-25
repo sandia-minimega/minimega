@@ -363,15 +363,16 @@ You can also specify the maximum dimension:
 	{ // vm snapshot
 		HelpShort: "write VM state and disk to file",
 		HelpLong: `
-Write VM state (migrate) and disk to file, which can later be booted with 'vm config
-migrate ...' and 'vm config disk ...', respectively.
+Write VM disk to file, which can later be booted with
+'vm config disk ...'.
 
-Saved migrate and disk files are written to the files directory as specified with
--filepath. On success, a call to snapshot a VM will return immediately. You can
+Saved disk files are written to the files directory as specified with
+<filename>. Multiple disks will be handled automatically by appending a unique value.
+On success, a call to snapshot a VM will return immediately. You can
 check the status of in-flight snapshots by invoking vm snapshot with no arguments.`,
 		Patterns: []string{
 			"vm snapshot",
-			"vm snapshot <vm name> <state filename> <disk filename>",
+			"vm snapshot <vm name> <filename>",
 		},
 		Call:    wrapVMTargetCLI(cliVMSnapshot),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
@@ -379,11 +380,13 @@ check the status of in-flight snapshots by invoking vm snapshot with no argument
 	{ // vm migrate
 		HelpShort: "write VM state to disk",
 		HelpLong: `
-Migrate runtime state of a VM to disk, which can later be booted with vm config
-migrate.
+Migrate runtime state of a VM to disk, which can later be booted with 'vm config
+migrate ...' and 'vm config disk ...', respectively. The migrate file may have a 
+dependency with the corresponding disk snapshot image.
 
-Migration files are written to the files directory as specified with -filepath.
-On success, a call to migrate a VM will return immediately. You can check the
+Migration and disk files are written to the files directory as specified with <filename>.
+Migrate file will have .migrate appended to filename, while drive(s) will hold filename
+provided. On success, a call to migrate a VM will return immediately. You can check the
 status of in-flight migrations by invoking vm migrate with no arguments.`,
 		Patterns: []string{
 			"vm migrate",
@@ -820,7 +823,7 @@ func cliVMSnapshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 	}
 
 	// save disk
-	filename := c.StringArgs["disk"]
+	filename := c.StringArgs["filename"]
 
 	if !filepath.IsAbs(filename) {
 		filename = filepath.Join(*f_iomBase, filename)
@@ -838,22 +841,7 @@ func cliVMSnapshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 		return err
 	}
 
-	// save state
-	filename = c.StringArgs["state"]
-
-	if !filepath.IsAbs(filename) {
-		filename = filepath.Join(*f_iomBase, filename)
-	}
-
-	if _, err := os.Stat(filepath.Dir(filename)); os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
-
-	return vm.Migrate(filename)
+	return nil
 }
 
 func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -884,10 +872,10 @@ func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return err
 	}
 
+	//save disk (a migrate file is often useless without the state of the drive)
 	fname := c.StringArgs["filename"]
 
 	if !filepath.IsAbs(fname) {
-		// TODO: should we write to the VM directory instead?
 		fname = filepath.Join(*f_iomBase, fname)
 	}
 
@@ -898,6 +886,16 @@ func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	} else if err != nil {
 		return err
 	}
+
+	//Saving disk
+	if err := vm.Save(fname); err != nil {
+		return err
+	}
+	
+	//Saving memory/migrate
+	fname = fmt.Sprintf("%s.migrate", fname)
+
+	log.Info("Migrating to file %s", fname)
 
 	return vm.Migrate(fname)
 }

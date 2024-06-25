@@ -593,28 +593,33 @@ func (vm *KvmVM) Save(filename string) error {
 	json.Unmarshal(rString, &v)
 
 	// find the device name
-	var device string
+	var device []string
 	for _, dev := range v {
 		if dev.Inserted != nil {
 			if strings.HasPrefix(dev.Inserted.File, fp) {
-				device = dev.Device
-				break
+				device = append(device, dev.Device)
 			}
 		}
 	}
 
-	err = vm.q.SaveDisk(filename, device)
-	if err != nil {
-		return err
-	}
-
-	// wait for drive-backup to finish
-	for {
-		if r, _ := vm.q.QueryBlockJobs(); len(r) == 0 {
-			break
+	for d, devi := range device {
+		if d > 0 {
+			filename = fmt.Sprintf("%s.%s",filename,strconv.Itoa(d))
+			//Appending drive number if there are multiple drives.
 		}
-		time.Sleep(time.Second * 1)
-	}
+		log.Info("Saving disk %s to %s", devi, filename)
+
+		if err := vm.q.SaveDisk(filename, devi); err != nil {
+			return err
+		}
+
+		// wait for drive-backup to finish
+		for {
+			if r, _ := vm.q.QueryBlockJobs(); len(r) == 0 {
+				break
+			}
+			time.Sleep(time.Second * 1)
+		}
 
 	return err
 }
