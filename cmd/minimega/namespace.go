@@ -913,7 +913,7 @@ func SetNamespace(name string) error {
 		return errors.New("namespace name cannot be the empty string")
 	}
 
-	log.Info("setting active namespace: %v", name)
+	log.Debug("setting active namespace: %v", name)
 
 	if name == namespace {
 		return fmt.Errorf("already in namespace: %v", name)
@@ -929,7 +929,7 @@ func RevertNamespace(old, curr *Namespace) {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
 
-	log.Info("reverting to namespace: %v", old)
+	log.Debug("reverting to namespace: %v", old)
 
 	// This is very odd and should *never* happen unless something has gone
 	// horribly wrong.
