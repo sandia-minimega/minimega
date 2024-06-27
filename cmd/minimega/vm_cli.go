@@ -891,7 +891,7 @@ func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	if err := vm.Save(fname); err != nil {
 		return err
 	}
-	
+
 	//Saving memory/migrate
 	fname = fmt.Sprintf("%s.migrate", fname)
 

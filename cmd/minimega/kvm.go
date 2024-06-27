@@ -604,7 +604,7 @@ func (vm *KvmVM) Save(filename string) error {
 
 	for d, devi := range device {
 		if d > 0 {
-			filename = fmt.Sprintf("%s.%s",filename,strconv.Itoa(d))
+			filename = fmt.Sprintf("%s.%s", filename, strconv.Itoa(d))
 			//Appending drive number if there are multiple drives.
 		}
 		log.Info("Saving disk %s to %s", devi, filename)
@@ -620,6 +620,7 @@ func (vm *KvmVM) Save(filename string) error {
 			}
 			time.Sleep(time.Second * 1)
 		}
+	}
 
 	return err
 }
