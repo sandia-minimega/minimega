@@ -1,0 +1,24 @@
+#!/usr/bin/make -f
+#export DH_VERBOSE=1
+
+MM=".."
+DST="debian/tmp/opt/minimega"
+DOCS="debian/tmp/usr/share/doc/minimega"
+
+%:
+	dh $@ --with systemd --parallel
+
+override_dh_prep:
+	dh_prep
+	mkdir -p $(DST)
+	cp -r $(MM)/bin $(DST)/
+	cp -r $(MM)/doc $(DST)/
+	cp -r $(MM)/lib $(DST)/
+	mkdir -p $(DST)/misc
+	cp -r $(MM)/misc/daemon $(DST)/misc/
+	cp -r $(MM)/misc/vmbetter_configs $(DST)/misc/
+	mkdir -p $(DST)/web
+	cp -r $(MM)/web $(DST)/web/
+	mkdir -p $(DOCS)
+	cp $(MM)/LICENSE $(DOCS)/
+	cp -r $(MM)/LICENSES $(DOCS)/
