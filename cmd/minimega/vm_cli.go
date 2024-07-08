@@ -361,26 +361,25 @@ You can also specify the maximum dimension:
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // vm snapshot
-		HelpShort: "write VM state and disk to file",
+		HelpShort: "create a new snapshot for the VM",
 		HelpLong: `
-Write VM disk to file, which can later be booted with
+Creates a point-in-time snapshot for the VM. This snapshot is backed by the original image and contains any changes
+since boot. The snapshot can later be used with
 'vm config disk ...'.
 
 Saved disk files are written to the files directory as specified with
 <filename>. Multiple disks will be handled automatically by appending a unique value.
-On success, a call to snapshot a VM will return immediately. You can
-check the status of in-flight snapshots by invoking vm snapshot with no arguments.`,
+On success, a call to snapshot a VM will return immediately.`,
 		Patterns: []string{
-			"vm snapshot",
 			"vm snapshot <vm name> <filename>",
 		},
 		Call:    wrapVMTargetCLI(cliVMSnapshot),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // vm migrate
-		HelpShort: "write VM state to disk",
+		HelpShort: "write VM state and disk to file",
 		HelpLong: `
-Migrate runtime state of a VM to disk, which can later be booted with 'vm config
+Migrate runtime state and disk of a VM to files, which can later be booted with 'vm config
 migrate ...' and 'vm config disk ...', respectively. The migrate file may have a 
 dependency with the corresponding disk snapshot image.
 
@@ -795,28 +794,6 @@ func cliVMScreenshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 }
 
 func cliVMSnapshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	if _, ok := c.StringArgs["vm"]; !ok { // report current status
-		resp.Header = []string{"id", "name", "status", "complete (%)"}
-
-		for _, vm := range ns.FindKvmVMs() {
-			status, complete, err := vm.QueryMigrate()
-			if err != nil {
-				return err
-			}
-			if status == "" {
-				continue
-			}
-
-			resp.Tabular = append(resp.Tabular, []string{
-				fmt.Sprintf("%v", vm.GetID()),
-				vm.GetName(),
-				status,
-				fmt.Sprintf("%.2f", complete)})
-		}
-
-		return nil
-	}
-
 	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
 	if err != nil {
 		return err
