@@ -141,10 +141,11 @@ you can get without restarting minimega. Restarting minimega is preferable.`,
 		},
 		Call: wrapSimpleCLI(cliClearAll),
 	},
-	{ // filepath
-		HelpShort: "prints arguments used ",
+	{ // args
+		HelpShort: "display arguments used ",
 		HelpLong: `
-Prints the arguments used to launch minimega`,
+Displays the CLI arguments minimega is using to run. 
+If an argument was not set by CLI, the default value is displayed.`,
 		Patterns: []string{
 			"args",
 		},
