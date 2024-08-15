@@ -7,6 +7,7 @@ package main
 import (
 	"bufio"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"math"
@@ -139,6 +140,16 @@ you can get without restarting minimega. Restarting minimega is preferable.`,
 			"clear all",
 		},
 		Call: wrapSimpleCLI(cliClearAll),
+	},
+	{ // args
+		HelpShort: "display arguments used",
+		HelpLong: `
+Displays the CLI arguments minimega is using to run. 
+If an argument was not set by CLI, the default value is displayed.`,
+		Patterns: []string{
+			"args",
+		},
+		Call: wrapSimpleCLI(cliPrintArgs),
 	},
 }
 
@@ -400,4 +411,15 @@ func cliClearAll(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	}
 
 	return consume(runCommands(cmds...))
+}
+
+func cliPrintArgs(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	var header, values []string
+	flag.VisitAll(func(f *flag.Flag) {
+		header = append(header, f.Name)
+		values = append(values, f.Value.String())
+	})
+	resp.Header = header
+	resp.Tabular = [][]string{values}
+	return nil
 }
