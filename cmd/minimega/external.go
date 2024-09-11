@@ -40,10 +40,11 @@ var externalDependencies = map[string]bool{
 	"ip":        true, // used in bridge_cli.go
 	"scp":       true, // used in deploy.go
 	"ssh":       true, // used in deploy.go
-	"cp":        true, // used in disk.go
-	"qemu-img":  true, // used in disk.go
-	"ntfs-3g":   true, // used in disk.go
-	"blockdev":  true, // used in disk.go
+	"cp":        true, // used in disk_cli.go
+	"lsof":      true, // used in disk_cli.go
+	"qemu-img":  true, // used in disk_cli.go
+	"ntfs-3g":   true, // used in disk_cli.go
+	"blockdev":  true, // used in disk_cli.go
 	"ovs-vsctl": true, // used in external.go
 	"taskset":   true, // used in optimize.go
 	"tar":       true, // used in cli.go

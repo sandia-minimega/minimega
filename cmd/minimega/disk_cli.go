@@ -5,13 +5,15 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
-	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -30,10 +32,12 @@ const (
 )
 
 type DiskInfo struct {
+	Name        string
 	Format      string
-	VirtualSize string
-	DiskSize    string
+	VirtualSize int64
+	DiskSize    int64
 	BackingFile string
+	InUse       bool
 }
 
 var diskCLIHandlers = []minicli.Handler{
@@ -86,9 +90,14 @@ be in the files directory.`,
 			"disk <snapshot,> <image> [dst image]",
 			"disk <inject,> <image> files <files like /path/to/src:/path/to/dst>...",
 			"disk <inject,> <image> options <options> files <files like /path/to/src:/path/to/dst>...",
-			"disk <info,> <image>",
 		},
 		Call: wrapSimpleCLI(cliDisk),
+	},
+	{
+		HelpShort: "provides info about a disk",
+		HelpLong:  "Provides information about a disk such as format, size, and backing file.",
+		Patterns:  []string{"disk info <image> [recursive,]"},
+		Call:      wrapSimpleCLI(cliDiskInfo),
 	},
 }
 
@@ -115,36 +124,98 @@ func diskSnapshot(src, dst string) error {
 func diskInfo(image string) (DiskInfo, error) {
 	info := DiskInfo{}
 
-	out, err := processWrapper("qemu-img", "info", image)
+	out, err := processWrapper("qemu-img", "info", image, "--output=json")
 	if err != nil {
 		return info, fmt.Errorf("[image %s] %v: %v", image, out, err)
 	}
 
-	regex := regexp.MustCompile(`.*\(actual path: (.*)\)`)
+	jsonOut := map[string]interface{}{}
+	err = json.Unmarshal([]byte(out), &jsonOut)
 
-	for _, line := range strings.Split(out, "\n") {
-		parts := strings.SplitN(line, ": ", 2)
-		if len(parts) != 2 {
-			continue
+	if err != nil {
+		return info, fmt.Errorf("[image %s] %v", image, err)
+	}
+
+	info, err = parseQemuImg(jsonOut)
+
+	if err != nil {
+		return info, fmt.Errorf("[image %s] %v", image, err)
+	}
+
+	return info, nil
+}
+
+// diskChainInfo returns info about this disk and all backing disks
+func diskChainInfo(image string) ([]DiskInfo, error) {
+	infos := []DiskInfo{}
+
+	out, err := processWrapper("qemu-img", "info", image, "--output=json", "--backing-chain")
+	if err != nil {
+		return infos, fmt.Errorf("[image %s] %v: %v", image, out, err)
+	}
+
+	jsonOut := []map[string]interface{}{}
+	err = json.Unmarshal([]byte(out), &jsonOut)
+
+	if err != nil || len(jsonOut) == 0 {
+		return infos, fmt.Errorf("[image %s] %v", image, err)
+	}
+
+	for _, d := range jsonOut {
+		info, err := parseQemuImg(d)
+		if err != nil {
+			return infos, fmt.Errorf("[image %s] %v", image, err)
 		}
 
-		switch parts[0] {
-		case "file format":
-			info.Format = parts[1]
-		case "virtual size":
-			info.VirtualSize = parts[1]
-		case "disk size":
-			info.DiskSize = parts[1]
-		case "backing file":
-			// In come cases, `qemu-img info` includes the actual absolute path for
-			// the backing image. We want to use that, if present.
-			if match := regex.FindStringSubmatch(parts[1]); match != nil {
-				info.BackingFile = match[1]
-			} else {
-				info.BackingFile = parts[1]
-			}
+		infos = append(infos, info)
+	}
+
+	return infos, nil
+}
+
+func parseQemuImg(j map[string]interface{}) (DiskInfo, error) {
+	info := DiskInfo{}
+	var err error
+
+	val, ok := j["filename"]
+	if !ok {
+		return info, fmt.Errorf("missing key 'filename'")
+	}
+	info.Name = val.(string)
+
+	val, ok = j["format"]
+	if !ok {
+		return info, fmt.Errorf("missing key 'format'")
+	}
+	info.Format = val.(string)
+
+	val, ok = j["virtual-size"]
+	if !ok {
+		return info, fmt.Errorf("missing key 'virtual-size'")
+	}
+	info.VirtualSize = int64(val.(float64))
+
+	val, ok = j["actual-size"]
+	if !ok {
+		return info, fmt.Errorf("missing key 'actual-size'")
+	}
+	info.DiskSize = int64(val.(float64))
+
+	if backing, ok := j["full-backing-filename"]; ok {
+		info.BackingFile = backing.(string)
+	} else if backing, ok = j["backing-filename"]; ok {
+		info.BackingFile = backing.(string)
+	}
+
+	out, err := processWrapper("lsof", "-t", info.Name)
+	if err != nil {
+		// lsof exits with 1 if no results
+		if _, ok := err.(*exec.ExitError); !ok {
+			return info, err
+
 		}
 	}
+	info.InUse = len(out) > 0
 
 	return info, nil
 }
@@ -387,19 +458,35 @@ func cliDisk(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 		}
 
 		return diskCreate(format, image, size)
-	} else if c.BoolArgs["info"] {
-		info, err := diskInfo(image)
-		if err != nil {
-			return err
-		}
-
-		resp.Header = []string{"image", "format", "virtualsize", "disksize", "backingfile"}
-		resp.Tabular = append(resp.Tabular, []string{
-			image, info.Format, info.VirtualSize, info.DiskSize, info.BackingFile,
-		})
-
-		return nil
 	}
 
 	return unreachable()
+}
+
+func cliDiskInfo(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	image := filepath.Clean(c.StringArgs["image"])
+	resp.Header = []string{"image", "format", "virtualsize", "disksize", "backingfile", "inuse"}
+
+	infos := []DiskInfo{}
+	var err error
+
+	if c.BoolArgs["recursive"] {
+		infos, err = diskChainInfo(image)
+	} else {
+		var info DiskInfo
+		info, err = diskInfo(image)
+		infos = append(infos, info)
+	}
+
+	if err != nil {
+		return err
+	}
+
+	for _, info := range infos {
+		resp.Tabular = append(resp.Tabular, []string{
+			info.Name, info.Format, humanReadableBytes(info.VirtualSize), humanReadableBytes(info.DiskSize), info.BackingFile, strconv.FormatBool(info.InUse),
+		})
+	}
+
+	return nil
 }
