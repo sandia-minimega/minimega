@@ -5,55 +5,22 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
-	"time"
 
-	"github.com/sandia-minimega/minimega/v2/internal/nbd"
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
-// #include "linux/fs.h"
-import "C"
-
-const (
-	INJECT_COMMAND = iota
-	GET_BACKING_IMAGE_COMMAND
-)
-
-type DiskInfo struct {
-	Name        string
-	Format      string
-	VirtualSize int64
-	DiskSize    int64
-	BackingFile string
-	InUse       bool
-}
-
 var diskCLIHandlers = []minicli.Handler{
 	{ // disk
-		HelpShort: "manipulate qcow disk images image",
+		HelpShort: "creates a new image 'dst' backed by 'image",
 		HelpLong: `
-Manipulate qcow disk images. Supports creating new images, snapshots of
-existing images, and injecting one or more files into an existing image.
-
-Example of creating a new disk:
-
-	disk create qcow2 foo.qcow2 100G
-
-The size argument is the size in bytes, or using optional suffixes "k"
-(kilobyte), "M" (megabyte), "G" (gigabyte), "T" (terabyte).
-
 Example of taking a snapshot of a disk:
 
 	disk snapshot windows7.qc2 window7_miniccc.qc2
@@ -62,6 +29,28 @@ If the destination name is omitted, a name will be randomly generated and the
 snapshot will be stored in the 'files' directory. Snapshots are always created
 in the 'files' directory.
 
+Disk image paths are always relative to the 'files' directory. Users may also
+use absolute paths if desired. The backing images for snapshots should always
+be in the files directory.`,
+		Patterns: []string{"disk snapshot <image> [dst image]"},
+		Call:     wrapSimpleCLI(cliDiskSnapshot),
+	},
+	{
+		HelpShort: "creates a new disk",
+		HelpLong: `
+Example of creating a new disk:
+
+	disk create qcow2 foo.qcow2 100G
+
+The size argument is the size in bytes, or using optional suffixes "k"
+(kilobyte), "M" (megabyte), "G" (gigabyte), "T" (terabyte).		
+		`,
+		Patterns: []string{"disk create <qcow2,raw> <image name> <size>"},
+		Call:     wrapSimpleCLI(cliDiskCreate),
+	},
+	{
+		HelpShort: "injects files into a disk",
+		HelpLong: `
 To inject files into an image:
 
 	disk inject window7_miniccc.qc2 files "miniccc":"Program Files/miniccc"
@@ -80,18 +69,13 @@ was directly written to the disk (this is highly unusual):
 You can optionally specify mount arguments to use with inject. Multiple options
 should be quoted. For example:
 
-	disk inject foo.qcow2 options "-t fat -o offset=100" files foo:bar
-
-Disk image paths are always relative to the 'files' directory. Users may also
-use absolute paths if desired. The backing images for snapshots should always
-be in the files directory.`,
+	disk inject foo.qcow2 options "-t fat -o offset=100" files foo:bar		
+		`,
 		Patterns: []string{
-			"disk <create,> <qcow2,raw> <image name> <size>",
-			"disk <snapshot,> <image> [dst image]",
-			"disk <inject,> <image> files <files like /path/to/src:/path/to/dst>...",
-			"disk <inject,> <image> options <options> files <files like /path/to/src:/path/to/dst>...",
+			"disk inject <image> files <files like /path/to/src:/path/to/dst>...",
+			"disk inject <image> options <options> files <files like /path/to/src:/path/to/dst>...",
 		},
-		Call: wrapSimpleCLI(cliDisk),
+		Call: wrapSimpleCLI(cliDiskInject),
 	},
 	{
 		HelpShort: "provides info about a disk",
@@ -101,276 +85,14 @@ be in the files directory.`,
 	},
 }
 
-// diskSnapshot creates a new image, dst, using src as the backing image.
-func diskSnapshot(src, dst string) error {
-	if !strings.HasPrefix(src, *f_iomBase) {
-		log.Warn("minimega expects backing images to be in the files directory")
+func getImage(c *minicli.Command) string {
+	image := filepath.Clean(c.StringArgs["image"])
+
+	// Ensure that relative paths are always relative to /files/
+	if !filepath.IsAbs(image) {
+		image = path.Join(*f_iomBase, image)
 	}
-
-	info, err := diskInfo(src)
-	if err != nil {
-		return fmt.Errorf("[image %s] error getting info: %v", src, err)
-	}
-
-	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", src, "-F", info.Format, dst)
-	if err != nil {
-		return fmt.Errorf("[image %s] %v: %v", src, out, err)
-	}
-
-	return nil
-}
-
-// diskInfo return information about the disk.
-func diskInfo(image string) (DiskInfo, error) {
-	info := DiskInfo{}
-
-	out, err := processWrapper("qemu-img", "info", image, "--output=json")
-	if err != nil {
-		return info, fmt.Errorf("[image %s] %v: %v", image, out, err)
-	}
-
-	jsonOut := map[string]interface{}{}
-	err = json.Unmarshal([]byte(out), &jsonOut)
-
-	if err != nil {
-		return info, fmt.Errorf("[image %s] %v", image, err)
-	}
-
-	info, err = parseQemuImg(jsonOut)
-
-	if err != nil {
-		return info, fmt.Errorf("[image %s] %v", image, err)
-	}
-
-	return info, nil
-}
-
-// diskChainInfo returns info about this disk and all backing disks
-func diskChainInfo(image string) ([]DiskInfo, error) {
-	infos := []DiskInfo{}
-
-	out, err := processWrapper("qemu-img", "info", image, "--output=json", "--backing-chain")
-	if err != nil {
-		return infos, fmt.Errorf("[image %s] %v: %v", image, out, err)
-	}
-
-	jsonOut := []map[string]interface{}{}
-	err = json.Unmarshal([]byte(out), &jsonOut)
-
-	if err != nil || len(jsonOut) == 0 {
-		return infos, fmt.Errorf("[image %s] %v", image, err)
-	}
-
-	for _, d := range jsonOut {
-		info, err := parseQemuImg(d)
-		if err != nil {
-			return infos, fmt.Errorf("[image %s] %v", image, err)
-		}
-
-		infos = append(infos, info)
-	}
-
-	return infos, nil
-}
-
-func parseQemuImg(j map[string]interface{}) (DiskInfo, error) {
-	info := DiskInfo{}
-	var err error
-
-	val, ok := j["filename"]
-	if !ok {
-		return info, fmt.Errorf("missing key 'filename'")
-	}
-	info.Name = val.(string)
-
-	val, ok = j["format"]
-	if !ok {
-		return info, fmt.Errorf("missing key 'format'")
-	}
-	info.Format = val.(string)
-
-	val, ok = j["virtual-size"]
-	if !ok {
-		return info, fmt.Errorf("missing key 'virtual-size'")
-	}
-	info.VirtualSize = int64(val.(float64))
-
-	val, ok = j["actual-size"]
-	if !ok {
-		return info, fmt.Errorf("missing key 'actual-size'")
-	}
-	info.DiskSize = int64(val.(float64))
-
-	if backing, ok := j["full-backing-filename"]; ok {
-		info.BackingFile = backing.(string)
-	} else if backing, ok = j["backing-filename"]; ok {
-		info.BackingFile = backing.(string)
-	}
-
-	out, err := processWrapper("lsof", "-t", info.Name)
-	if err != nil {
-		// lsof exits with 1 if no results
-		if _, ok := err.(*exec.ExitError); !ok {
-			return info, err
-
-		}
-	}
-	info.InUse = len(out) > 0
-
-	return info, nil
-}
-
-// diskCreate creates a new disk image, dst, of given size/format.
-func diskCreate(format, dst, size string) error {
-	out, err := processWrapper("qemu-img", "create", "-f", format, dst, size)
-	if err != nil {
-		log.Error("diskCreate: %v", out)
-		return err
-	}
-	return nil
-}
-
-// diskInject injects files into a disk image. dst/partition specify the image
-// and the partition number, pairs is the dst, src filepaths. options can be
-// used to supply mount arguments.
-func diskInject(dst, partition string, pairs map[string]string, options []string) error {
-	// Load nbd
-	if err := nbd.Modprobe(); err != nil {
-		return err
-	}
-
-	// create a tmp mount point
-	mntDir, err := ioutil.TempDir(*f_base, "dstImg")
-	if err != nil {
-		return err
-	}
-	log.Debug("temporary mount point: %v", mntDir)
-	defer func() {
-		if err := os.Remove(mntDir); err != nil {
-			log.Error("rm mount dir failed: %v", err)
-		}
-	}()
-
-	nbdPath, err := nbd.ConnectImage(dst)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := nbd.DisconnectDevice(nbdPath); err != nil {
-			log.Error("nbd disconnect failed: %v", err)
-		}
-	}()
-
-	path := nbdPath
-
-	f, err := os.Open(nbdPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	// decide whether to mount partition or raw disk
-	if partition != "none" {
-		// keep rereading partitions and waiting for them to show up for a bit
-		timeoutTime := time.Now().Add(5 * time.Second)
-		for i := 1; ; i++ {
-			if time.Now().After(timeoutTime) {
-				return fmt.Errorf("[image %s] no partitions found on image", dst)
-			}
-
-			// tell kernel to reread partitions
-			syscall.Syscall(syscall.SYS_IOCTL, f.Fd(), C.BLKRRPART, 0)
-
-			_, err = os.Stat(nbdPath + "p1")
-			if err == nil {
-				log.Info("partitions detected after %d attempt(s)", i)
-				break
-			}
-
-			time.Sleep(100 * time.Millisecond)
-		}
-
-		// default to first partition if there is only one partition
-		if partition == "" {
-			_, err = os.Stat(nbdPath + "p2")
-			if err == nil {
-				return fmt.Errorf("[image %s] please specify a partition; multiple found", dst)
-			}
-
-			partition = "1"
-		}
-
-		path = nbdPath + "p" + partition
-
-		// check desired partition exists
-		for i := 1; i <= 5; i++ {
-			_, err = os.Stat(path)
-			if err != nil {
-				err = fmt.Errorf("[image %s] desired partition %s not found", dst, partition)
-
-				time.Sleep(time.Duration(i*100) * time.Millisecond)
-				continue
-			}
-
-			log.Info("desired partition %s found in image %s", partition, dst)
-			break
-		}
-
-		if err != nil {
-			return err
-		}
-	}
-
-	// we use mount(8), because the mount syscall (mount(2)) requires we
-	// populate the fstype field, which we don't know
-	args := []string{"mount"}
-	if len(options) != 0 {
-		args = append(args, options...)
-		args = append(args, path, mntDir)
-	} else {
-		args = []string{"mount", "-w", path, mntDir}
-	}
-	log.Debug("mount args: %v", args)
-
-	_, err = processWrapper(args...)
-	if err != nil {
-		// check that ntfs-3g is installed
-		_, err = processWrapper("ntfs-3g", "--version")
-		if err != nil {
-			log.Error("ntfs-3g not found, ntfs images unwriteable")
-		}
-
-		// mount with ntfs-3g
-		out, err := processWrapper("mount", "-o", "ntfs-3g", path, mntDir)
-		if err != nil {
-			log.Error("failed to mount partition")
-			return fmt.Errorf("[image %s] %v: %v", dst, out, err)
-		}
-	}
-	defer func() {
-		if err := syscall.Unmount(mntDir, 0); err != nil {
-			log.Error("unmount failed: %v", err)
-		}
-	}()
-
-	// copy files/folders into mntDir
-	for target, source := range pairs {
-		dir := filepath.Dir(filepath.Join(mntDir, target))
-		os.MkdirAll(dir, 0775)
-
-		out, err := processWrapper("cp", "-fr", source, filepath.Join(mntDir, target))
-		if err != nil {
-			return fmt.Errorf("[image %s] %v: %v", dst, out, err)
-		}
-	}
-
-	// explicitly flush buffers
-	out, err := processWrapper("blockdev", "--flushbufs", path)
-	if err != nil {
-		return fmt.Errorf("[image %s] unable to flush: %v %v", dst, out, err)
-	}
-
-	return nil
+	return image
 }
 
 // parseInjectPairs parses a list of strings containing src:dst pairs into a
@@ -399,68 +121,62 @@ func parseInjectPairs(files []string) (map[string]string, error) {
 	return pairs, nil
 }
 
-func cliDisk(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	image := filepath.Clean(c.StringArgs["image"])
+func cliDiskInject(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	image := getImage(c)
+	var partition string
 
-	// Ensure that relative paths are always relative to /files/
-	if !filepath.IsAbs(image) {
-		image = path.Join(*f_iomBase, image)
+	if strings.Contains(image, ":") {
+		parts := strings.Split(image, ":")
+		if len(parts) != 2 {
+			return errors.New("found way too many ':'s, expected <path/to/image>:<partition>")
+		}
+
+		image, partition = parts[0], parts[1]
 	}
-	log.Debug("image: %v", image)
 
-	if c.BoolArgs["snapshot"] {
-		dst := c.StringArgs["dst"]
+	options := fieldsQuoteEscape("\"", c.StringArgs["options"])
+	log.Debug("got options: %v", options)
 
-		if dst == "" {
-			f, err := ioutil.TempFile(*f_iomBase, "snapshot")
-			if err != nil {
-				return errors.New("could not create a dst image")
-			}
+	pairs, err := parseInjectPairs(c.ListArgs["files"])
+	if err != nil {
+		return err
+	}
 
-			dst = f.Name()
-			resp.Response = dst
-		} else if strings.Contains(dst, "/") {
-			return errors.New("dst image must filename without path")
-		} else {
-			dst = path.Join(*f_iomBase, dst)
-		}
+	return diskInject(image, partition, pairs, options)
+}
 
-		log.Debug("destination image: %v", dst)
+func cliDiskCreate(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	image := getImage(c)
+	size := c.StringArgs["size"]
+	format := "raw"
+	if _, ok := c.BoolArgs["qcow2"]; ok {
+		format = "qcow2"
+	}
 
-		return diskSnapshot(image, dst)
-	} else if c.BoolArgs["inject"] {
-		var partition string
+	return diskCreate(format, image, size)
+}
 
-		if strings.Contains(image, ":") {
-			parts := strings.Split(image, ":")
-			if len(parts) != 2 {
-				return errors.New("found way too many ':'s, expected <path/to/image>:<partition>")
-			}
+func cliDiskSnapshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	image := getImage(c)
+	dst := c.StringArgs["dst"]
 
-			image, partition = parts[0], parts[1]
-		}
-
-		options := fieldsQuoteEscape("\"", c.StringArgs["options"])
-		log.Debug("got options: %v", options)
-
-		pairs, err := parseInjectPairs(c.ListArgs["files"])
+	if dst == "" {
+		f, err := ioutil.TempFile(*f_iomBase, "snapshot")
 		if err != nil {
-			return err
+			return errors.New("could not create a dst image")
 		}
 
-		return diskInject(image, partition, pairs, options)
-	} else if c.BoolArgs["create"] {
-		size := c.StringArgs["size"]
-
-		format := "raw"
-		if _, ok := c.BoolArgs["qcow2"]; ok {
-			format = "qcow2"
-		}
-
-		return diskCreate(format, image, size)
+		dst = f.Name()
+		resp.Response = dst
+	} else if strings.Contains(dst, "/") {
+		return errors.New("dst image must filename without path")
+	} else {
+		dst = path.Join(*f_iomBase, dst)
 	}
 
-	return unreachable()
+	log.Debug("destination image: %v", dst)
+
+	return diskSnapshot(image, dst)
 }
 
 func cliDiskInfo(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
