@@ -66,11 +66,11 @@ should be quoted. For example:
 	},
 	{
 		HelpShort: "provides info about a disk",
-		HelpLong:  `
+		HelpLong: `
 Provides information about a disk such as format, virtual/actual size, and backing file.
 The 'recursive' flag can be set to print out full details for all backing images.`,
-		Patterns:  []string{"disk info <image> [recursive,]"},
-		Call:      wrapSimpleCLI(cliDiskInfo),
+		Patterns: []string{"disk info <image> [recursive,]"},
+		Call:     wrapSimpleCLI(cliDiskInfo),
 	},
 	{
 		HelpShort: "creates a new disk 'dst' backed by 'image'",
