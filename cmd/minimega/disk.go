@@ -3,10 +3,9 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -44,9 +43,12 @@ func diskInfo(image string) (DiskInfo, error) {
 	}
 
 	info, err = parseQemuImg(jsonOut)
-
 	if err != nil {
 		return info, fmt.Errorf("[image %s] %v", image, err)
+	}
+	info.InUse, err = checkDiskInUse(image)
+	if err != nil {
+		return info, fmt.Errorf("could not check if image in use: %w", err)
 	}
 
 	return info, nil
@@ -73,6 +75,10 @@ func diskChainInfo(image string) ([]DiskInfo, error) {
 		if err != nil {
 			return infos, fmt.Errorf("[image %s] %v", image, err)
 		}
+		info.InUse, err = checkDiskInUse(image)
+		if err != nil {
+			return infos, fmt.Errorf("could not check if image in use: %w", err)
+		}
 
 		infos = append(infos, info)
 	}
@@ -82,7 +88,6 @@ func diskChainInfo(image string) ([]DiskInfo, error) {
 
 func parseQemuImg(j map[string]interface{}) (DiskInfo, error) {
 	info := DiskInfo{}
-	var err error
 
 	val, ok := j["filename"]
 	if !ok {
@@ -114,17 +119,21 @@ func parseQemuImg(j map[string]interface{}) (DiskInfo, error) {
 		info.BackingFile = backing.(string)
 	}
 
-	out, err := processWrapper("fuser", info.Name)
-	if err != nil {
-		// lsof exits with 1 if no results
-		if _, ok := err.(*exec.ExitError); !ok {
-			return info, err
-
-		}
-	}
-	info.InUse = len(out) > 0
-
 	return info, nil
+}
+
+func checkDiskInUse(path string) (bool, error) {
+	var stat syscall.Stat_t
+	if err := syscall.Stat(path, &stat); err != nil {
+		return false, fmt.Errorf("error stating file: %w", err)
+	}
+
+	locks, err := os.ReadFile("/proc/locks")
+	if err != nil {
+		return false, fmt.Errorf("error reading /proc/locks: %w", err)
+	}
+
+	return strings.Contains(string(locks), strconv.FormatUint(stat.Ino, 10)), nil
 }
 
 // diskCreate creates a new disk image, dst, of given size/format.
@@ -197,7 +206,7 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 	}
 
 	// create a tmp mount point
-	mntDir, err := ioutil.TempDir(*f_base, "dstImg")
+	mntDir, err := os.MkdirTemp(*f_base, "dstImg")
 	if err != nil {
 		return err
 	}
