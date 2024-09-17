@@ -7,7 +7,7 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"path"
 	"path/filepath"
 	"strconv"
@@ -66,7 +66,9 @@ should be quoted. For example:
 	},
 	{
 		HelpShort: "provides info about a disk",
-		HelpLong:  "Provides information about a disk such as format, size, and backing file.",
+		HelpLong:  `
+Provides information about a disk such as format, virtual/actual size, and backing file.
+The 'recursive' flag can be set to print out full details for all backing images.`,
 		Patterns:  []string{"disk info <image> [recursive,]"},
 		Call:      wrapSimpleCLI(cliDiskInfo),
 	},
@@ -217,7 +219,7 @@ func cliDiskSnapshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 	dst := c.StringArgs["dst"]
 
 	if dst == "" {
-		f, err := ioutil.TempFile(*f_iomBase, "snapshot")
+		f, err := os.CreateTemp(*f_iomBase, "snapshot")
 		if err != nil {
 			return errors.New("could not create a dst image")
 		}
