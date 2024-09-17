@@ -18,26 +18,11 @@ import (
 )
 
 var diskCLIHandlers = []minicli.Handler{
-	{ // disk
-		HelpShort: "creates a new image 'dst' backed by 'image",
-		HelpLong: `
-Example of taking a snapshot of a disk:
-
-	disk snapshot windows7.qc2 window7_miniccc.qc2
-
-If the destination name is omitted, a name will be randomly generated and the
-snapshot will be stored in the 'files' directory. Snapshots are always created
-in the 'files' directory.
-
-Disk image paths are always relative to the 'files' directory. Users may also
-use absolute paths if desired. The backing images for snapshots should always
-be in the files directory.`,
-		Patterns: []string{"disk snapshot <image> [dst image]"},
-		Call:     wrapSimpleCLI(cliDiskSnapshot),
-	},
 	{
 		HelpShort: "creates a new disk",
 		HelpLong: `
+Creates a new qcow2 or raw disk of the specified size.
+
 Example of creating a new disk:
 
 	disk create qcow2 foo.qcow2 100G
@@ -51,6 +36,8 @@ The size argument is the size in bytes, or using optional suffixes "k"
 	{
 		HelpShort: "injects files into a disk",
 		HelpLong: `
+Injects files into a disk.
+
 To inject files into an image:
 
 	disk inject window7_miniccc.qc2 files "miniccc":"Program Files/miniccc"
@@ -82,6 +69,75 @@ should be quoted. For example:
 		HelpLong:  "Provides information about a disk such as format, size, and backing file.",
 		Patterns:  []string{"disk info <image> [recursive,]"},
 		Call:      wrapSimpleCLI(cliDiskInfo),
+	},
+	{
+		HelpShort: "creates a new disk 'dst' backed by 'image'",
+		HelpLong: `
+Creates a new qcow2 image 'dst' backed by 'image'.
+
+Example of taking a snapshot of a disk:
+
+	disk snapshot windows7.qc2 window7_miniccc.qc2
+
+If the destination name is omitted, a name will be randomly generated and the
+snapshot will be stored in the 'files' directory. Snapshots are always created
+in the 'files' directory.
+
+Disk image paths are always relative to the 'files' directory. Users may also
+use absolute paths if desired. The backing images for snapshots should always
+be in the files directory.`,
+		Patterns: []string{"disk snapshot <image> [dst image]"},
+		Call:     wrapSimpleCLI(cliDiskSnapshot),
+	},
+	{
+		HelpShort: "rebases the disk onto a different backing image",
+		HelpLong: `
+Rebases the image 'image' onto a new backing file 'backing'.
+Using 'rebase' will write any differences between the original backing file and the new backing file to 'image'.
+
+		disk rebase myimage.qcow2 base.qcow2
+
+Alternatively, 'set-backing' can be used to change the backing file pointer without any changes to the images.
+
+		disk set-backing myimage.qcow2 base.qcow2
+
+The 'backing' argument can be omitted, causing all backing data to be written to 'image' making it independent.
+
+		disk rebase myimage.qcow2`,
+		Patterns: []string{
+			"disk <rebase,> <image> [backing file]",
+			"disk <set-backing,> <image> [backing file]",
+		},
+		Call: wrapSimpleCLI(cliDiskRebase),
+	},
+	{
+		HelpShort: "commits the contents of the disk to its backing file",
+		HelpLong: `
+Commits the contents of 'image' to its backing file. 
+'image' is left unchanged, but may be deleted if not needed.
+Example of committing:
+
+	disk commit myimage.qcow2`,
+		Patterns: []string{"disk commit <image>"},
+		Call:     wrapSimpleCLI(cliDiskCommit),
+	},
+	{
+		HelpShort: "resizes a disk",
+		HelpLong: `
+Changes the size of a disk.
+IMPORTANT: Before shrinking an image, ensure changes have been made within the VM's OS to reduce the filesystem.
+Similarly, changes in the VM's OS will be required to grow the file system after increasing the disk size.
+
+The size argument is the size in bytes, or using optional suffixes "k"
+(kilobyte), "M" (megabyte), "G" (gigabyte), "T" (terabyte).		
+It can be given as an absolute value or a relative +/- offset.
+
+Examples:
+
+	disk resize myimage.qcow2 50G
+	disk resize myimage.qcow2 +512M`,
+		Patterns: []string{"disk resize <image> <size>"},
+		Call:     wrapSimpleCLI(cliDiskResize),
 	},
 }
 
@@ -168,9 +224,7 @@ func cliDiskSnapshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 
 		dst = f.Name()
 		resp.Response = dst
-	} else if strings.Contains(dst, "/") {
-		return errors.New("dst image must filename without path")
-	} else {
+	} else if path.IsAbs(dst) {
 		dst = path.Join(*f_iomBase, dst)
 	}
 
@@ -205,4 +259,26 @@ func cliDiskInfo(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	}
 
 	return nil
+}
+
+func cliDiskRebase(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	image := getImage(c)
+
+	backingFile, ok := c.StringArgs["backing"]
+	if !ok {
+		backingFile = ""
+	}
+	_, unsafe := c.BoolArgs["set-backing"]
+	return diskRebase(image, backingFile, unsafe)
+}
+
+func cliDiskCommit(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	image := getImage(c)
+	return diskCommit(image)
+}
+
+func cliDiskResize(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	image := getImage(c)
+	size := c.StringArgs["size"]
+	return diskResize(image, size)
 }

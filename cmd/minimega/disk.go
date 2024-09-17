@@ -27,25 +27,6 @@ type DiskInfo struct {
 	InUse       bool
 }
 
-// diskSnapshot creates a new image, dst, using src as the backing image.
-func diskSnapshot(src, dst string) error {
-	if !strings.HasPrefix(src, *f_iomBase) {
-		log.Warn("minimega expects backing images to be in the files directory")
-	}
-
-	info, err := diskInfo(src)
-	if err != nil {
-		return fmt.Errorf("[image %s] error getting info: %v", src, err)
-	}
-
-	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", src, "-F", info.Format, dst)
-	if err != nil {
-		return fmt.Errorf("[image %s] %v: %v", src, out, err)
-	}
-
-	return nil
-}
-
 // diskInfo return information about the disk.
 func diskInfo(image string) (DiskInfo, error) {
 	info := DiskInfo{}
@@ -153,6 +134,56 @@ func diskCreate(format, dst, size string) error {
 		log.Error("diskCreate: %v", out)
 		return err
 	}
+	return nil
+}
+
+// diskSnapshot creates a new image, dst, using src as the backing image.
+func diskSnapshot(src, dst string) error {
+	if !strings.HasPrefix(src, *f_iomBase) {
+		log.Warn("minimega expects backing images to be in the files directory")
+	}
+
+	info, err := diskInfo(src)
+	if err != nil {
+		return fmt.Errorf("[image %s] error getting info: %v", src, err)
+	}
+
+	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", src, "-F", info.Format, dst)
+	if err != nil {
+		return fmt.Errorf("[image %s] %v: %v", src, out, err)
+	}
+
+	return nil
+}
+
+func diskCommit(image string) error {
+	out, err := processWrapper("qemu-img", "commit", "-d", "qcow2", image)
+	if err != nil {
+		return fmt.Errorf("[image %s] %v: %v", image, out, err)
+	}
+
+	return nil
+}
+
+func diskRebase(image, backing string, unsafe bool) error {
+	args := []string{"qemu-img", "rebase", "-b", backing, image}
+	if unsafe {
+		args = append(args, "-u")
+	}
+	out, err := processWrapper(args...)
+	if err != nil {
+		return fmt.Errorf("[image %s] %v: %v", image, out, err)
+	}
+
+	return nil
+}
+
+func diskResize(image, size string) error {
+	out, err := processWrapper("qemu-img", "resize", "--shrink", image, size)
+	if err != nil {
+		return fmt.Errorf("[image %s] %v: %v", image, out, err)
+	}
+
 	return nil
 }
 
