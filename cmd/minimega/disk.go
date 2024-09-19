@@ -166,7 +166,7 @@ func diskSnapshot(src, dst string) error {
 }
 
 func diskCommit(image string) error {
-	out, err := processWrapper("qemu-img", "commit", "-d", "qcow2", image)
+	out, err := processWrapper("qemu-img", "commit", "-d", image)
 	if err != nil {
 		return fmt.Errorf("[image %s] %v: %v", image, out, err)
 	}
@@ -176,6 +176,13 @@ func diskCommit(image string) error {
 
 func diskRebase(image, backing string, unsafe bool) error {
 	args := []string{"qemu-img", "rebase", "-b", backing, image}
+	if backing != "" {
+		backingInfo, err := diskInfo(backing)
+		if err != nil {
+			return fmt.Errorf("[image %s] error getting info for backing file: %v", image, err)
+		}
+		args = append(args, "-F", backingInfo.Format)
+	}
 	if unsafe {
 		args = append(args, "-u")
 	}

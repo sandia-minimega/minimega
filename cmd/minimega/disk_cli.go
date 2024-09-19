@@ -226,7 +226,7 @@ func cliDiskSnapshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 
 		dst = f.Name()
 		resp.Response = dst
-	} else if path.IsAbs(dst) {
+	} else if !path.IsAbs(dst) {
 		dst = path.Join(*f_iomBase, dst)
 	}
 
@@ -236,7 +236,7 @@ func cliDiskSnapshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 }
 
 func cliDiskInfo(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	image := filepath.Clean(c.StringArgs["image"])
+	image := getImage(c)
 	resp.Header = []string{"image", "format", "virtualsize", "disksize", "backingfile", "inuse"}
 
 	infos := []DiskInfo{}
@@ -269,6 +269,8 @@ func cliDiskRebase(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 	backingFile, ok := c.StringArgs["backing"]
 	if !ok {
 		backingFile = ""
+	} else if !filepath.IsAbs(backingFile) {
+		backingFile = path.Join(*f_iomBase, backingFile)
 	}
 	_, unsafe := c.BoolArgs["set-backing"]
 	return diskRebase(image, backingFile, unsafe)
