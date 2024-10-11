@@ -60,6 +60,18 @@ func diskChainInfo(image string) ([]DiskInfo, error) {
 
 	out, err := processWrapper("qemu-img", "info", image, "--output=json", "--backing-chain")
 	if err != nil {
+		// qemu-img returns nothing if it has an error reading a backing image. Instead fall back to just this
+		// image
+		if strings.Contains(out, "Could not open") && !strings.Contains(out, image) {
+			log.Warn(fmt.Sprintf("[image %s] returning just image details. Error getting backing image details: %v",
+				image, out))
+			single, err2 := diskInfo(image)
+			if err2 != nil {
+				return infos, err2
+			}
+			infos = append(infos, single)
+			return infos, nil
+		}
 		return infos, fmt.Errorf("[image %s] %v: %v", image, out, err)
 	}
 
