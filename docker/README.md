@@ -117,3 +117,10 @@ Docker when starting the container or by binding a file to
 > networking is used (not host networking), then the `ports` section in your
 > `docker-compose.yml` or `-p` arguments to `docker run` will need to be updated
 > to the new value(s) specified.
+
+Additional values can be appended to the minimega command by using:
+
+```
+MM_APPEND="-hashfiles -headnode=foo1"
+```
+
