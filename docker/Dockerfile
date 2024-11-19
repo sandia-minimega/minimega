@@ -1,5 +1,5 @@
 # To specify an alternate base image: --build-arg BASE_IMAGE="some/other/image:tag"
-ARG BASE_IMAGE="ubuntu:20.04"
+ARG BASE_IMAGE="ubuntu:22.04"
 
 # -- go builder --
 FROM golang:1.18.2 AS gobuilder

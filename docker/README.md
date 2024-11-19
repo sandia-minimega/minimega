@@ -4,6 +4,8 @@
 
 Follow the official installation instructions: [Install Docker Engine](https://docs.docker.com/engine/install/)
 
+For development purposes, it maybe helpful to add your user to the `docker` group: `sudo usermod -aG docker $USER`
+
 
 ## Build the minimega Docker image
 
@@ -53,14 +55,14 @@ The container runs the `start-minimega.sh` script as PID 1, which takes care of 
 
 # Using Docker Compose
 
-If you followed the [Docker installation instructions](https://docs.docker.com/engine/install/), then `docker compose` should already be installed. If it's not, then install it: `sudo apt install docker-compose-plugin`
+If you followed the [Docker installation instructions](https://docs.docker.com/engine/install/), then `docker compose` should already be installed. Verify this by running `docker compose version`.  If it's not, then install it: `sudo apt install docker-compose-plugin`
 
 Start the minimega Docker container with Docker Compose:
 
 ```bash
 cd docker/
 docker compose up -d
-docker compose logs -f
+docker compose logs -f  # CTRL+C to stop following logs
 ```
 
 
@@ -78,6 +80,8 @@ EOF
 
 source ~/.bash_aliases
 ```
+
+On Ubuntu, `~/.bash_aliases` should be auto-sourced by `~/.profile` or `~/.bashrc` on login, so the source command is only needed to load them into current session.
 
 ## minimega and miniweb configuration
 
@@ -120,7 +124,6 @@ Docker when starting the container or by binding a file to
 
 Additional values can be appended to the minimega command by using:
 
-```
+```shell
 MM_APPEND="-hashfiles -headnode=foo1"
 ```
-
