@@ -78,14 +78,21 @@ should be quoted. For example:
 
 	disk inject foo.qcow2 options "-t fat -o offset=100" files foo:bar
 
+To delete files or directories from an image, the src should be specified
+as "-DELETE-", with dst being the file or directory to delete from the image.
+For example:
+
+	disk inject window7_miniccc.qc2 files "-DELETE-":"Program Files/miniccc.exe"
+	disk inject window7_miniccc.qc2 files "-DELETE-":"Users/Administrator/Documents/TestDir"
+
 Disk image paths are always relative to the 'files' directory. Users may also
 use absolute paths if desired. The backing images for snapshots should always
 be in the files directory.`,
 		Patterns: []string{
 			"disk <create,> <qcow2,raw> <image name> <size>",
 			"disk <snapshot,> <image> [dst image]",
-			"disk <inject,> <image> files <files like /path/to/src:/path/to/dst>...",
-			"disk <inject,> <image> options <options> files <files like /path/to/src:/path/to/dst>...",
+			"disk <inject,> <image> files <files like /path/to/src|-DELETE-:/path/to/dst>...",
+			"disk <inject,> <image> options <options> files <files like /path/to/src:/path/to/dst>",
 			"disk <info,> <image>",
 		},
 		Call: wrapSimpleCLI(cliDisk),
@@ -282,14 +289,22 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		}
 	}()
 
-	// copy files/folders into mntDir
+	// copy files/folders into mntDir. If src matches the keyword
+	// '-DELETE-', delete the dst from mntDir.
 	for target, source := range pairs {
-		dir := filepath.Dir(filepath.Join(mntDir, target))
-		os.MkdirAll(dir, 0775)
+		if source == "-DELETE-" {
+			err := os.RemoveAll(filepath.Join(mntDir, target))
+			if err != nil {
+				return fmt.Errorf("[image %s] error deleting '%s': %v", dst, target, err)
+			}
+		} else {
+			dir := filepath.Dir(filepath.Join(mntDir, target))
+			os.MkdirAll(dir, 0775)
 
-		out, err := processWrapper("cp", "-fr", source, filepath.Join(mntDir, target))
-		if err != nil {
-			return fmt.Errorf("[image %s] %v: %v", dst, out, err)
+			out, err := processWrapper("cp", "-fr", source, filepath.Join(mntDir, target))
+			if err != nil {
+				return fmt.Errorf("[image %s] %v: %v", dst, out, err)
+			}
 		}
 	}
 
