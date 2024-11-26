@@ -9,6 +9,11 @@ echo "BUILDING MINIMEGA..."
 (cd $MM && ./scripts/build.bash && ./scripts/doc.bash)
 echo "DONE BUILDING"
 
+
+# substitute version for control file
+source $MM/VERSION
+sed -i -e 's/${version}/'"$VERSION"'/g' rpmbuild/SPECS/minimega.spec
+
 echo "PREPARING FOR BUILDING RPM..."
 mkdir -p rpmbuild/BUILD
 mkdir -p rpmbuild/RPMS

@@ -3,7 +3,7 @@
 %define _build_id_links none
 
 Name:          minimega
-Version:       2.9
+Version:       ${version}
 Release:       1%{?dist}
 Summary:       A distributed VM management tool.
 License:       GPLv3
