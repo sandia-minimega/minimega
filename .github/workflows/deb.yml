@@ -1,4 +1,4 @@
-name: RPM Build
+name: DEB Build
 on: push
 
 jobs:
@@ -10,7 +10,7 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y dh-systemd dnsmasq iproute2 isc-dhcp-client libpcap-dev ntfs-3g openssh-client openvswitch-switch qemu-kvm qemu-utils
+        sudo apt-get install -y debhelper dnsmasq iproute2 isc-dhcp-client libpcap-dev ntfs-3g openssh-client openvswitch-switch qemu-kvm qemu-utils
 
     - name: Build Deb package
       id: deb
