@@ -11,8 +11,8 @@ echo DONE BUILDING
 # substitute version for control file
 source $MM/VERSION
 DATE=$(date -R)
-sed -e 's/${version}/'"$VERSION"'/g' changelog.base > changelog.out
-sed -e 's/${date}/'"$DATE"'/g' changelog.out > changelog
+sed -e 's/${version}/'"$VERSION"'/g' $SCRIPT_DIR/changelog.base > $SCRIPT_DIR/changelog.out
+sed -e 's/${date}/'"$DATE"'/g' $SCRIPT_DIR/changelog.out > $SCRIPT_DIR/changelog
 rm changelog.out
 cp $MM/misc/daemon/minimega.service .
 
