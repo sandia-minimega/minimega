@@ -12,7 +12,7 @@ echo "DONE BUILDING"
 
 # substitute version for control file
 source $MM/VERSION
-sed -i -e 's/${version}/'"$VERSION"'/g' rpmbuild/SPECS/minimega.spec
+sed -i -e 's/${version}/'"$VERSION"'/g' $SCRIPT_DIR/rpmbuild/SPECS/minimega.spec
 
 echo "PREPARING FOR BUILDING RPM..."
 mkdir -p rpmbuild/BUILD
