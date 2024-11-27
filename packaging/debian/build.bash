@@ -13,7 +13,7 @@ source $MM/VERSION
 DATE=$(date -R)
 sed -e 's/${version}/'"$VERSION"'/g' $SCRIPT_DIR/changelog.base > $SCRIPT_DIR/changelog.out
 sed -e 's/${date}/'"$DATE"'/g' $SCRIPT_DIR/changelog.out > $SCRIPT_DIR/changelog
-rm changelog.out
+rm $SCRIPT_DIR/changelog.out
 cp $MM/misc/daemon/minimega.service .
 
 echo BUILDING PACKAGE...
