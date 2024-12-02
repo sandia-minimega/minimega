@@ -125,9 +125,8 @@ func parseQemuImg(j map[string]interface{}) (DiskInfo, error) {
 	}
 	info.DiskSize = int64(val.(float64))
 
-	if backing, ok := j["full-backing-filename"]; ok {
-		info.BackingFile = backing.(string)
-	} else if backing, ok = j["backing-filename"]; ok {
+	// may be absolute or relative depending on creation. Want which it is to be shown to user
+	if backing, ok := j["backing-filename"]; ok {
 		info.BackingFile = backing.(string)
 	}
 
@@ -169,7 +168,12 @@ func diskSnapshot(src, dst string) error {
 		return fmt.Errorf("[image %s] error getting info: %v", src, err)
 	}
 
-	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", src, "-F", info.Format, dst)
+	relSrc, err := filepath.Rel(filepath.Dir(dst), src)
+	if err != nil {
+		return fmt.Errorf("[image %s] error getting src relative to dst: %v", src, err)
+	}
+
+	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", relSrc, "-F", info.Format, dst)
 	if err != nil {
 		return fmt.Errorf("[image %s] %v: %v", src, out, err)
 	}
@@ -187,7 +191,15 @@ func diskCommit(image string) error {
 }
 
 func diskRebase(image, backing string, unsafe bool) error {
-	args := []string{"qemu-img", "rebase", "-b", backing, image}
+	if !strings.HasPrefix(backing, *f_iomBase) {
+		log.Warn("minimega expects backing images to be in the files directory")
+	}
+	relBacking, err := filepath.Rel(filepath.Dir(image), backing)
+	if err != nil {
+		return fmt.Errorf("[image %s] error getting backing relative to dst: %v", backing, err)
+	}
+
+	args := []string{"qemu-img", "rebase", "-b", relBacking, image}
 	if backing != "" {
 		backingInfo, err := diskInfo(backing)
 		if err != nil {

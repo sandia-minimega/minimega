@@ -85,9 +85,8 @@ If the destination name is omitted, a name will be randomly generated and the
 snapshot will be stored in the 'files' directory. Snapshots are always created
 in the 'files' directory.
 
-Disk image paths are always relative to the 'files' directory. Users may also
-use absolute paths if desired. The backing images for snapshots should always
-be in the files directory.`,
+Users may use paths relative to the 'files' directory or absolute paths for inputs; 
+however, the backing path will always be relative to the new image.`,
 		Patterns: []string{"disk snapshot <image> [dst image]"},
 		Call:     wrapSimpleCLI(cliDiskSnapshot),
 	},
@@ -105,7 +104,10 @@ Alternatively, 'set-backing' can be used to change the backing file pointer with
 
 The 'backing' argument can be omitted, causing all backing data to be written to 'image' making it independent.
 
-		disk rebase myimage.qcow2`,
+		disk rebase myimage.qcow2
+		
+Users may use paths relative to the 'files' directory or absolute paths for inputs; 
+however, the backing path will always be relative to the rebased image.`,
 		Patterns: []string{
 			"disk <rebase,> <image> [backing file]",
 			"disk <set-backing,> <image> [backing file]",
