@@ -16,6 +16,12 @@ AutoReqProv: no
 
 Provides:      minimega = 1%{?dist}
 Provides:      minimega(x86-64) = 1%{?dist}
+
+# Conditional dependencies based on EPEL installation
+%if 0%{?epel}
+Requires:      ntfs-3g
+%endif
+
 Requires:      /bin/bash
 Requires:      /bin/sh
 Requires:      /usr/bin/env
@@ -23,7 +29,6 @@ Requires:      qemu-img
 Requires:      qemu-kvm
 Requires:      qemu-kvm-common
 Requires:      dnsmasq
-Requires:      ntfs-3g
 Requires:      dosfstools
 Requires:      net-tools
 Requires:      libpcap
@@ -36,6 +41,8 @@ Requires(post): /bin/sh
 minimega is a tool for launching and managing virtual machines. It can run on
 your laptop or distributed across a cluster. minimega is fast, easy to deploy,
 and can scale to run on massive clusters with virtually no setup.
+
+**Note:** This package requires the EPEL repository to be enabled, as it depends on the `ntfs-3g` package, which is only available in EPEL.
 
 %build
 MM="../../../../"
