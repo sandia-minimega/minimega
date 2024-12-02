@@ -17,11 +17,6 @@ AutoReqProv: no
 Provides:      minimega = 1%{?dist}
 Provides:      minimega(x86-64) = 1%{?dist}
 
-# Conditional dependencies based on EPEL installation
-%if 0%{?epel}
-Requires:      ntfs-3g
-%endif
-
 Requires:      /bin/bash
 Requires:      /bin/sh
 Requires:      /usr/bin/env
@@ -31,6 +26,7 @@ Requires:      qemu-kvm-common
 Requires:      dnsmasq
 Requires:      dosfstools
 Requires:      net-tools
+Requires:      ntfs-3g
 Requires:      libpcap
 Requires:      openssl-devel
 Requires(post): /bin/sh
@@ -103,12 +99,6 @@ fi
 #! /bin/sh
 
 set -e
-
-# Check if the ntfs-3g package is installed
-if ! rpm -q ntfs-3g >/dev/null 2>&1; then
-    echo "WARNING: The 'ntfs-3g' package is required but is not installed."
-    echo "Please enable the EPEL repository and install 'ntfs-3g' before using minimega."
-fi
 
 if ! id -u minimega >/dev/null 2>&1; then
     echo "Adding minimega user."
