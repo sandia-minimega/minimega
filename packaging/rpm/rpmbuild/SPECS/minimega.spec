@@ -104,6 +104,12 @@ fi
 
 set -e
 
+# Check if the ntfs-3g package is installed
+if ! rpm -q ntfs-3g >/dev/null 2>&1; then
+    echo "WARNING: The 'ntfs-3g' package is required but is not installed."
+    echo "Please enable the EPEL repository and install 'ntfs-3g' before using minimega."
+fi
+
 if ! id -u minimega >/dev/null 2>&1; then
     echo "Adding minimega user."
     useradd --system --no-create-home --home-dir /run/minimega minimega
