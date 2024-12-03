@@ -10,8 +10,8 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
-      - name: Get short SHA
-        id: short
+      - name: Get metadata
+        id: build_metadata
         run: |
           echo "::set-output name=sha::$(git rev-parse --short HEAD)"
           echo "::set-output name=branch::$(echo ${GITHUB_REF#refs/heads/})"
@@ -25,15 +25,15 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build container image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
           build-args: |
             MM_COMMIT=${{ github.sha }}
-            MM_VERSION=${{ steps.short.outputs.mmversion }}
-            BUILD_TIME=$${ steps.short.outputs.buildtime }}
+            MM_VERSION=${{ steps.build_metadata.outputs.mmversion }}
+            BUILD_TIME=$${ steps.build_metadata.outputs.buildtime }}
           push: true
           tags: |
-            ghcr.io/${{ steps.short.outputs.repolowercase }}/minimega:${{ steps.short.outputs.sha }}
-            ghcr.io/${{ steps.short.outputs.repolowercase }}/minimega:${{ steps.short.outputs.branch }}
+            ghcr.io/${{ steps.build_metadata.outputs.repolowercase }}/minimega:${{ steps.build_metadata.outputs.sha }}
+            ghcr.io/${{ steps.build_metadata.outputs.repolowercase }}/minimega:${{ steps.build_metadata.outputs.branch }}
