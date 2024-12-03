@@ -74,6 +74,7 @@ docker compose logs -f  # CTRL+C to stop following logs
 cat <<EOF >> ~/.bash_aliases
 alias mm='docker exec -it minimega minimega -e'
 alias mminfo='mm .columns name,state,ip,snapshot,cc_active vm info'
+alias mmsum='mm .columns name,state,cc_active,uuid vm info summary'
 alias minimega='docker exec -it minimega minimega'
 alias ovs-vsctl='docker exec -it minimega ovs-vsctl'
 EOF
