@@ -33,7 +33,7 @@ var (
 // externalDependencies contains all the external programs that minimega
 // invokes. We check for the existence of these on startup and on `check`.
 var externalDependencies = map[string]bool{
-	"dnsmasq":   true, // used in mulitple
+	"dnsmasq":   true, // used in multiple
 	"kvm":       true, // used in multiple
 	"mount":     true, // used in multiple
 	"dhclient":  true, // used in bridge_cli.go
