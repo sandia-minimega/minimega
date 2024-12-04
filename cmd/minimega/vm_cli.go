@@ -361,29 +361,31 @@ You can also specify the maximum dimension:
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // vm snapshot
-		HelpShort: "write VM state and disk to file",
+		HelpShort: "create a new snapshot for the VM",
 		HelpLong: `
-Write VM state (migrate) and disk to file, which can later be booted with 'vm config
-migrate ...' and 'vm config disk ...', respectively.
+Creates a point-in-time snapshot for the VM. This snapshot is backed by the original image and contains any changes
+since boot. The snapshot can later be used with
+'vm config disk ...'.
 
-Saved migrate and disk files are written to the files directory as specified with
--filepath. On success, a call to snapshot a VM will return immediately. You can
-check the status of in-flight snapshots by invoking vm snapshot with no arguments.`,
+Saved disk files are written to the files directory as specified with
+<filename>. Multiple disks will be handled automatically by appending a unique value.
+On success, a call to snapshot a VM will return immediately.`,
 		Patterns: []string{
-			"vm snapshot",
-			"vm snapshot <vm name> <state filename> <disk filename>",
+			"vm snapshot <vm name> <filename>",
 		},
 		Call:    wrapVMTargetCLI(cliVMSnapshot),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // vm migrate
-		HelpShort: "write VM state to disk",
+		HelpShort: "write VM state and disk to file",
 		HelpLong: `
-Migrate runtime state of a VM to disk, which can later be booted with vm config
-migrate.
+Migrate runtime state and disk of a VM to files, which can later be booted with 'vm config
+migrate ...' and 'vm config disk ...', respectively. The migrate file may have a 
+dependency with the corresponding disk snapshot image.
 
-Migration files are written to the files directory as specified with -filepath.
-On success, a call to migrate a VM will return immediately. You can check the
+Migration and disk files are written to the files directory as specified with <filename>.
+Migrate file will have .migrate appended to filename, while drive(s) will hold filename
+provided. On success, a call to migrate a VM will return immediately. You can check the
 status of in-flight migrations by invoking vm migrate with no arguments.`,
 		Patterns: []string{
 			"vm migrate",
@@ -792,35 +794,13 @@ func cliVMScreenshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 }
 
 func cliVMSnapshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	if _, ok := c.StringArgs["vm"]; !ok { // report current status
-		resp.Header = []string{"id", "name", "status", "complete (%)"}
-
-		for _, vm := range ns.FindKvmVMs() {
-			status, complete, err := vm.QueryMigrate()
-			if err != nil {
-				return err
-			}
-			if status == "" {
-				continue
-			}
-
-			resp.Tabular = append(resp.Tabular, []string{
-				fmt.Sprintf("%v", vm.GetID()),
-				vm.GetName(),
-				status,
-				fmt.Sprintf("%.2f", complete)})
-		}
-
-		return nil
-	}
-
 	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
 	if err != nil {
 		return err
 	}
 
 	// save disk
-	filename := c.StringArgs["disk"]
+	filename := c.StringArgs["filename"]
 
 	if !filepath.IsAbs(filename) {
 		filename = filepath.Join(*f_iomBase, filename)
@@ -838,22 +818,7 @@ func cliVMSnapshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 		return err
 	}
 
-	// save state
-	filename = c.StringArgs["state"]
-
-	if !filepath.IsAbs(filename) {
-		filename = filepath.Join(*f_iomBase, filename)
-	}
-
-	if _, err := os.Stat(filepath.Dir(filename)); os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
-
-	return vm.Migrate(filename)
+	return nil
 }
 
 func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -884,10 +849,10 @@ func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return err
 	}
 
+	//save disk (a migrate file is often useless without the state of the drive)
 	fname := c.StringArgs["filename"]
 
 	if !filepath.IsAbs(fname) {
-		// TODO: should we write to the VM directory instead?
 		fname = filepath.Join(*f_iomBase, fname)
 	}
 
@@ -898,6 +863,16 @@ func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	} else if err != nil {
 		return err
 	}
+
+	//Saving disk
+	if err := vm.Save(fname); err != nil {
+		return err
+	}
+
+	//Saving memory/migrate
+	fname = fmt.Sprintf("%s.migrate", fname)
+
+	log.Info("Migrating to file %s", fname)
 
 	return vm.Migrate(fname)
 }
