@@ -1,0 +1,30 @@
+[Unit]
+Description="minimega Emulytics Daemon"
+Documentation=https://www.sandia.gov/minimega
+Wants=openvswitch-switch.service
+
+[Install]
+WantedBy=default.target
+
+[Service]
+Type=simple
+# Kill mode settings
+KillMode=control-group
+TimeoutStopSec=5
+Restart=on-success
+# Setting ulimit and environment variables
+LimitNOFILE=1024000
+LimitNPROC=4096000
+EnvironmentFile=/etc/minimega/minimega.conf
+# Pre Start script
+ExecStartPre=/bin/mkdir -p /etc/minimega/saved_vms/
+ExecStartPre=/bin/mkdir -p ${MM_RUN_PATH}
+# Starting minimega
+ExecStart=/usr/bin/minimega -nostdin=${MM_DAEMON} -force=${MM_FORCE} -recover=${MM_RECOVER} -base=${MM_BASE} -filepath=${MM_FILEPATH} -broadcast=${MM_BROADCAST} -vlanrange=${MM_VLANRANGE} -port=${MM_PORT} -degree=${MM_DEGREE} -context=${MM_CONTEXT} -level=${MM_LOGLEVEL} -logfile=${MM_LOGFILE} -cgroup=${MM_CGROUP} -panic=${MM_PANIC} -msa=${MM_MSA}
+# After start options
+ExecStartPost=/bin/sleep 1
+ExecStartPost=/bin/chgrp -R minimega ${MM_RUN_PATH}
+ExecStartPost=/bin/chmod -R g=u ${MM_RUN_PATH}
+ExecStartPost=/bin/chmod g+s ${MM_RUN_PATH} ${MM_RUN_PATH}/minimega
+# Post stop instructions
+ExecStopPost=/bin/rm -f ${MM_RUN_PATH}/minimega

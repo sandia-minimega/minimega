@@ -8,32 +8,18 @@ echo BUILDING MINIMEGA...
 (cd $MM && ./scripts/build.bash && ./scripts/doc.bash)
 echo DONE BUILDING
 
-echo COPYING FILES...
-
-DST=$SCRIPT_DIR/minimega/opt/minimega
-mkdir -p $DST
-cp -r $MM/bin $DST/
-cp -r $MM/doc $DST/
-cp -r $MM/lib $DST/
-mkdir -p $DST/misc
-cp -r $MM/misc/daemon $DST/misc/
-cp -r $MM/misc/vmbetter_configs $DST/misc/
-mkdir -p $DST/web
-cp -r $MM/web $DST/web/
-
-DOCS=$SCRIPT_DIR/minimega/usr/share/doc/minimega
-mkdir -p $DOCS
-cp $MM/LICENSE $DOCS/
-cp -r $MM/LICENSES $DOCS/
-
-echo COPIED FILES
-
 # substitute version for control file
 source $MM/VERSION
-sed -e 's/${version}/'"$VERSION"'/g' minimega/DEBIAN/control.base > minimega/DEBIAN/control
+DATE=$(date -R)
+sed -e 's/${version}/'"$VERSION"'/g' $SCRIPT_DIR/changelog.base > $SCRIPT_DIR/changelog.out
+sed -e 's/${date}/'"$DATE"'/g' $SCRIPT_DIR/changelog.out > $SCRIPT_DIR/changelog
+rm $SCRIPT_DIR/changelog.out
+cp $MM/misc/daemon/minimega.service .
 
 echo BUILDING PACKAGE...
-(cd $SCRIPT_DIR && fakeroot dpkg-deb -b minimega)
-rm minimega/DEBIAN/control
+
+
+(cd $SCRIPT_DIR/.. && dpkg-buildpackage --no-sign -b)
+rm $SCRIPT_DIR/changelog
 echo DONE
 

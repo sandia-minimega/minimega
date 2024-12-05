@@ -1,0 +1,8 @@
+../../../bin /opt/minimega/
+../../../doc /opt/minimega/
+../../../lib /opt/minimega/
+../../../misc/daemon /opt/minimega/misc/
+../../../misc/vmbetter_configs /opt/minimega/misc/
+../../../web /opt/minimega/
+../../../LICENSE /usr/share/doc/minimega/
+../../../LICENSES /usr/share/doc/minimega/
