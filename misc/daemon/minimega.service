@@ -20,7 +20,7 @@ EnvironmentFile=/etc/minimega/minimega.conf
 ExecStartPre=/bin/mkdir -p /etc/minimega/saved_vms/
 ExecStartPre=/bin/mkdir -p ${MM_RUN_PATH}
 # Starting minimega
-ExecStart=/usr/bin/minimega -base=${MM_RUN_PATH} -filepath=${MM_FILEPATH} -degree=${MM_MESH_DEGREE} -nostdin=${MM_DAEMON} -context=${MM_CONTEXT} -port=${MM_PORT} -level=${MM_LOG_LEVEL} -logfile=${MM_LOG_FILE} &
+ExecStart=/usr/bin/minimega -nostdin=${MM_DAEMON} -force=${MM_FORCE} -recover=${MM_RECOVER} -base=${MM_BASE} -filepath=${MM_FILEPATH} -broadcast=${MM_BROADCAST} -vlanrange=${MM_VLANRANGE} -port=${MM_PORT} -degree=${MM_DEGREE} -context=${MM_CONTEXT} -level=${MM_LOGLEVEL} -logfile=${MM_LOGFILE} -cgroup=${MM_CGROUP} -panic=${MM_PANIC} -msa=${MM_MSA}
 # After start options
 ExecStartPost=/bin/sleep 1
 ExecStartPost=/bin/chgrp -R minimega ${MM_RUN_PATH}
