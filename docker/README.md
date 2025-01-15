@@ -1,12 +1,13 @@
-# minimega docker
+# minimega Docker
 
-### Install docker
+## Install Docker
 
-```bash
-sudo apt-get install docker.io
-```
+Follow the official installation instructions: [Install Docker Engine](https://docs.docker.com/engine/install/)
 
-### Build the minimega docker image
+For development purposes, it maybe helpful to add your user to the `docker` group: `sudo usermod -aG docker $USER`
+
+
+## Build the minimega Docker image
 
 > NOTE: Currently, only minimega, miniweb, miniccc, minirouter, and protonuke
 > will exist in the minimega docker image. If you need additional binaries, add
@@ -17,9 +18,12 @@ sudo apt-get install docker.io
 
 ```bash
 docker build -t minimega -f docker/Dockerfile .
+
+# Ensure the build was successful
+docker run -it minimega /opt/minimega/bin/minimega --version
 ```
 
-### Start the minimega docker container
+## Start the minimega Docker container
 
 > NOTE: The additional privileges and system mounts (e.g. /dev) are required for
 > the openvswitch process to run inside the container and to allow minimega to
@@ -46,47 +50,45 @@ docker run -d \
   minimega
 ```
 
-The container runs the `start-minimega.sh` script as PID 1, which takes care of
-starting openvswitch, miniweb, and finally minimega. This means the minimega
-logs will be available in the container logs via Docker.
+The container runs the `start-minimega.sh` script as PID 1, which takes care of starting openvswitch, miniweb, and finally minimega. This means the minimega logs will be available in the container logs via Docker (`docker logs minimega`).
 
----
 
-# Using docker-compose
+# Using Docker Compose
 
-### Install docker-compose
+If you followed the [Docker installation instructions](https://docs.docker.com/engine/install/), then `docker compose` should already be installed. Verify this by running `docker compose version`.  If it's not, then install it: `sudo apt install docker-compose-plugin`
 
-```bash
-VERSION=`git ls-remote https://github.com/docker/compose | grep refs/tags | grep -oP "[0-9]+\.[0-9][0-9]+\.[0-9]+$" | sort | tail -n 1`
-sudo curl -ksL "https://github.com/docker/compose/releases/download/${VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-```
-
-### Start the minimega docker container
+Start the minimega Docker container with Docker Compose:
 
 ```bash
-docker-compose up -d
+cd docker/
+docker compose up -d
+docker compose logs -f  # CTRL+C to stop following logs
 ```
 
----
 
 # Extras
 
-### Convenience aliases
+## Convenience aliases
 
 ```bash
 cat <<EOF >> ~/.bash_aliases
-alias minimega='docker exec -it minimega minimega '
+alias mm='docker exec -it minimega minimega -e'
+alias mminfo='mm .columns name,state,ip,snapshot,cc_active vm info'
+alias mmsum='mm .columns name,state,cc_active,uuid vm info summary'
+alias minimega='docker exec -it minimega minimega'
 alias ovs-vsctl='docker exec -it minimega ovs-vsctl'
 EOF
+
 source ~/.bash_aliases
 ```
 
-### minimega and miniweb configuration
+On Ubuntu, `~/.bash_aliases` should be auto-sourced by `~/.profile` or `~/.bashrc` on login, so the source command is only needed to load them into current session.
+
+## minimega and miniweb configuration
 
 By default, the following values are set for minimega:
 
-```
+```shell
 MM_BASE=/tmp/minimega
 MM_FILEPATH=/tmp/minimega/files
 MM_BROADCAST=255.255.255.255
@@ -95,11 +97,14 @@ MM_DEGREE=2
 MM_CONTEXT=minimega
 MM_LOGLEVEL=info
 MM_LOGFILE=/var/log/minimega.log
+MM_FORCE=true
+MM_RECOVER=false
+MM_CGROUP=/sys/fs/cgroup
 ```
 
 By default, the following values are set for miniweb:
 
-```
+```shell
 MINIWEB_ROOT=/opt/minimega/misc/web
 MINIWEB_HOST=0.0.0.0
 MINIWEB_PORT=9001
@@ -120,7 +125,6 @@ Docker when starting the container or by binding a file to
 
 Additional values can be appended to the minimega command by using:
 
-```
+```shell
 MM_APPEND="-hashfiles -headnode=foo1"
 ```
-
