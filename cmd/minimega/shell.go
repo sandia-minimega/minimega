@@ -148,6 +148,7 @@ func (bp BackgroundProcess) ToTabular() []string {
 	}
 	return []string{
 		strconv.FormatInt(int64(bp.ID), 10),
+		strconv.FormatInt(int64(bp.Command.Process.Pid), 10),
 		strconv.FormatBool(bp.Running),
 		errorsString,
 		bp.TimeStart.Format("Jan 02 15:04:05 MST"),
@@ -165,7 +166,7 @@ var (
 	backgroundProcesses           = make(map[int]*BackgroundProcess)
 	backgroundProcessNextID   int = 1
 
-	backgroundProcessTableHeader = []string{"ID", "RUNNING", "ERROR", "TIME_START", "TIME_END", "COMMAND"}
+	backgroundProcessTableHeader = []string{"ID", "PID", "RUNNING", "ERROR", "TIME_START", "TIME_END", "COMMAND"}
 )
 
 type BackgroundWriter struct {
