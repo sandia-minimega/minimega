@@ -7,4 +7,4 @@ sudo apt install rpm
 ```
 
 Once that is installed, run ``build.bash`` to create a new package.
-The package will be placed in ``minimega/packaging/rpm/rpmbuild/RPMS``.
+The package will be placed in minimega's top level directory.
