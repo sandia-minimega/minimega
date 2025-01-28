@@ -18,5 +18,6 @@ mkdir -p rpmbuild/SRPMS
 
 echo "BUILDING PACKAGE..."
 (cd $SCRIPT_DIR && rpmbuild --define "_topdir $SCRIPT_DIR/rpmbuild" -bb rpmbuild/SPECS/minimega.spec)
-mv $SCRIPT_DIR/rpmbuild/RPMS/*.rpm ../
+mv $SCRIPT_DIR/rpmbuild/RPMS/*.rpm $SCRIPT_DIR/../../
+rm -rf $SCRIPT_DIR/rpmbuild/SPECS/minimega.spec
 echo "DONE"
