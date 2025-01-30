@@ -6,7 +6,7 @@ DST="debian/tmp/opt/minimega"
 DOCS="debian/tmp/usr/share/doc/minimega"
 
 %:
-	dh $@ --with systemd --parallel
+	dh $@ --with systemd --no-start --parallel
 
 override_dh_prep:
 	dh_prep
