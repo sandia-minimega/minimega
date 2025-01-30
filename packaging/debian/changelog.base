@@ -1,0 +1,5 @@
+minimega (${version}) stable; urgency=low
+
+  * Release minimega version ${version}.
+
+ -- Minimega-Dev <Minimega-Dev@sandia.gov>  ${date}
