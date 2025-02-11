@@ -20,27 +20,6 @@ FROM ${BASE_IMAGE}
 # General image metadata
 # Reference: https://github.com/opencontainers/image-spec/blob/main/annotations.md
 ARG MM_VERSION
-# LABEL org.opencontainers.image.authors="minimega dev team <minimega-dev@sandia.gov>" \
-#   org.opencontainers.image.documentation="https://www.sandia.gov/minimega/" \
-#   org.opencontainers.image.vendor="Sandia National Laboratories" \
-#   org.opencontainers.image.licenses="GPL-3.0-only" \
-
-
-#   "Labels": {
-#     "org.opencontainers.image.authors": "minimega dev team \u003cminimega-dev@sandia.gov\u003e",
-#     "org.opencontainers.image.created": "2025-02-11T16:13:37.952Z",
-#     "org.opencontainers.image.description": "FIREWHEEL is an experiment orchestration tool that assists a user in building and controlling, repeatable experiments of distributed network systems at any scale.",
-#     "org.opencontainers.image.documentation": "https://www.sandia.gov/minimega/",
-#     "org.opencontainers.image.licenses": "NOASSERTION",
-#     "org.opencontainers.image.ref.name": "ubuntu",
-#     "org.opencontainers.image.revision": "bbb41714d4b4c428a7d45acee07dae2430c5bff4",
-#     "org.opencontainers.image.source": "https://github.com/sdelliot/firewheel",
-#     "org.opencontainers.image.title": "firewheel",
-#     "org.opencontainers.image.url": "https://github.com/sdelliot/firewheel",
-#     "org.opencontainers.image.vendor": "Sandia National Laboratories",
-#     "org.opencontainers.image.version": "feat-dockerize"
-# }
-# },
 
 ENV DEBIAN_FRONTEND="noninteractive"
 
