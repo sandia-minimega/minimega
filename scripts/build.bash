@@ -71,12 +71,12 @@ if [ -z "$py_path" ]; then
 fi
 if [ ! -z "$py_path" ]; then
     echo "BUILD PYTHON DIST"
-    cp $ROOT_DIR/README $ROOT_DIR/lib/
+    cp $ROOT_DIR/README.md $ROOT_DIR/lib/
     cp $ROOT_DIR/VERSION $ROOT_DIR/lib/
     pushd $ROOT_DIR/lib
     $py_path setup.py --quiet sdist
     popd
-    rm $ROOT_DIR/lib/README
+    rm $ROOT_DIR/lib/README.md
     rm $ROOT_DIR/lib/VERSION
 fi
 
