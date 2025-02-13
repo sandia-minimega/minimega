@@ -17,6 +17,12 @@ jobs:
           # list of Docker images to use as base name for tags
           images: |
             ghcr.io/${{ github.repository }}
+          labels: |
+            org.opencontainers.image.vendor=Sandia National Laboratories
+            org.opencontainers.image.authors=minimega dev team <minimega-dev@sandia.gov>
+            org.opencontainers.image.documentation=https://www.sandia.gov/minimega/
+            org.opencontainers.image.description=minimega is a tool for launching and managing virtual machines
+            org.opencontainers.image.licenses=GPL-3.0
           # generate Docker tags based on the following events/attributes
           tags: |
             type=ref,event=branch

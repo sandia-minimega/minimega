@@ -17,13 +17,6 @@ RUN ./scripts/all.bash
 # -- minimega image --
 FROM ${BASE_IMAGE}
 
-# General image metadata
-# Reference: https://github.com/opencontainers/image-spec/blob/main/annotations.md
-LABEL org.opencontainers.image.authors="minimega dev team <minimega-dev@sandia.gov>" \
-  org.opencontainers.image.documentation="https://www.sandia.gov/minimega/" \
-  org.opencontainers.image.vendor="Sandia National Laboratories" \
-  org.opencontainers.image.description="minimega is a tool for launching and managing virtual machines"
-
 ENV DEBIAN_FRONTEND="noninteractive"
 
 RUN apt-get update \
