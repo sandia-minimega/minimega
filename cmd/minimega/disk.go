@@ -78,6 +78,14 @@ should be quoted. For example:
 
 	disk inject foo.qcow2 options "-t fat -o offset=100" files foo:bar
 
+To delete files or directories from an image, specify the delete keyword
+before listing the files or directories to delete from the image, separated by
+a comma. For example:
+
+	disk inject window7_miniccc.qc2 delete files "Program Files/miniccc.exe"
+	disk inject window7_miniccc.qc2 delete files "Users/Administrator/Documents/TestDir"
+	disk inject window7_miniccc.qc2 delete files "foo.txt,Temp/bar.zip"
+
 Disk image paths are always relative to the 'files' directory. Users may also
 use absolute paths if desired. The backing images for snapshots should always
 be in the files directory.`,
@@ -85,7 +93,9 @@ be in the files directory.`,
 			"disk <create,> <qcow2,raw> <image name> <size>",
 			"disk <snapshot,> <image> [dst image]",
 			"disk <inject,> <image> files <files like /path/to/src:/path/to/dst>...",
-			"disk <inject,> <image> options <options> files <files like /path/to/src:/path/to/dst>...",
+			"disk <inject,> <image> <delete,> files <files like /path/to/src,/path/to/src>...",
+			"disk <inject,> <image> <options,> <options> files <files like /path/to/src:/path/to/dst>",
+			"disk <inject,> <image> <options,> <options> <delete,> files <files like /path/to/src,/path/to/src>",
 			"disk <info,> <image>",
 		},
 		Call: wrapSimpleCLI(cliDisk),
@@ -159,10 +169,12 @@ func diskCreate(format, dst, size string) error {
 	return nil
 }
 
-// diskInject injects files into a disk image. dst/partition specify the image
-// and the partition number, pairs is the dst, src filepaths. options can be
-// used to supply mount arguments.
-func diskInject(dst, partition string, pairs map[string]string, options []string) error {
+// diskInject injects files into or deletes files from a disk image.
+// dst/partition specify the image and the partition number. for injecting
+// files, pairs is the dst/src filepaths. for deleting files, paths is the
+// comma-separated list of filepaths to delete. options can be used to supply
+// mount arguments.
+func diskInject(dst, partition string, pairs map[string]string, options []string, delete bool, paths []string) error {
 	// Load nbd
 	if err := nbd.Modprobe(); err != nil {
 		return err
@@ -282,14 +294,29 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		}
 	}()
 
-	// copy files/folders into mntDir
-	for target, source := range pairs {
-		dir := filepath.Dir(filepath.Join(mntDir, target))
-		os.MkdirAll(dir, 0775)
+	if delete {
+		// delete the file paths from mntDir.
+		for _, path := range paths {
+			mntPath := filepath.Join(mntDir, path)
+			if _, err := os.Stat(mntPath); os.IsNotExist(err) {
+				log.Warn("[image %s] path does not exist to delete: %v", dst, path)
+			} else {
+				err := os.RemoveAll(mntPath)
+				if err != nil {
+					return fmt.Errorf("[image %s] error deleting '%s': %v", dst, path, err)
+				}
+			}
+		}
+	} else {
+		// copy files/folders into mntDir
+		for target, source := range pairs {
+			dir := filepath.Dir(filepath.Join(mntDir, target))
+			os.MkdirAll(dir, 0775)
 
-		out, err := processWrapper("cp", "-fr", source, filepath.Join(mntDir, target))
-		if err != nil {
-			return fmt.Errorf("[image %s] %v: %v", dst, out, err)
+			out, err := processWrapper("cp", "-fr", source, filepath.Join(mntDir, target))
+			if err != nil {
+				return fmt.Errorf("[image %s] %v: %v", dst, out, err)
+			}
 		}
 	}
 
@@ -326,6 +353,43 @@ func parseInjectPairs(files []string) (map[string]string, error) {
 	}
 
 	return pairs, nil
+}
+
+// parseFiles parses the files argument passed into the 'disk inject ...'
+// command. if options are used, the files argument gets turned into a
+// minicli.Command StringArg, otherwise it gets turned into a ListArg.
+// this function returns either a paths string slice if 'delete' is part
+// of the original command, or a pairs string map.
+func parseFiles(files interface{}, delete bool) (map[string]string, []string, error) {
+	var pairs map[string]string
+	var paths []string
+	var err error
+	switch v := files.(type) {
+	case []string:
+		if delete {
+			if sliceContainsString(v, ",") {
+				paths = strings.Split(v[0], ",")
+			} else {
+				paths = []string{v[0]} // single file
+			}
+		} else {
+			pairs, err = parseInjectPairs(v)
+		}
+	case string:
+		if delete {
+			if strings.Contains(v, ",") {
+				paths = strings.Split(v, ",")
+			} else {
+				paths = []string{v} // single file
+			}
+		} else {
+			pairs, err = parseInjectPairs([]string{v})
+		}
+	default:
+		return nil, nil, errors.New("error parsing files: unknown type")
+	}
+
+	return pairs, paths, err
 }
 
 func cliDisk(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -369,15 +433,24 @@ func cliDisk(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 			image, partition = parts[0], parts[1]
 		}
 
+		delete := strings.Contains(c.Original, " delete files ")
+
 		options := fieldsQuoteEscape("\"", c.StringArgs["options"])
 		log.Debug("got options: %v", options)
 
-		pairs, err := parseInjectPairs(c.ListArgs["files"])
+		var files interface{}
+		if _, ok := c.StringArgs["options"]; !ok {
+			files = c.ListArgs["files"]
+		} else {
+			files = c.StringArgs["files"]
+		}
+
+		pairs, paths, err := parseFiles(files, delete)
 		if err != nil {
 			return err
 		}
 
-		return diskInject(image, partition, pairs, options)
+		return diskInject(image, partition, pairs, options, delete, paths)
 	} else if c.BoolArgs["create"] {
 		size := c.StringArgs["size"]
 
