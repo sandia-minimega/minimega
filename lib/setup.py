@@ -1,7 +1,7 @@
 from setuptools import setup
 
 
-with open("README", "r") as readme_file:
+with open("README.md", "r") as readme_file:
     readme_content = readme_file.read()
 
 with open("VERSION", "r") as version_file:

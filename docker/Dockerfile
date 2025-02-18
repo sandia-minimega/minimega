@@ -64,7 +64,7 @@ COPY --from=gobuilder /minimega/bin/minirouter    /opt/minimega/bin/minirouter
 # this, let's go ahead and also include the lib directory so we can grab the
 # updated Python package from the Docker image.
 COPY --from=gobuilder /minimega/lib     /opt/minimega/lib
-COPY --from=gobuilder /minimega/README  /opt/minimega/lib/README
+COPY --from=gobuilder /minimega/README.md  /opt/minimega/lib/README.md
 COPY --from=gobuilder /minimega/VERSION /opt/minimega/lib/VERSION
 
 COPY ./web       /opt/minimega/web
