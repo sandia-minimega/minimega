@@ -17,22 +17,6 @@ RUN ./scripts/all.bash
 # -- minimega image --
 FROM ${BASE_IMAGE}
 
-# General image metadata
-# Reference: https://github.com/opencontainers/image-spec/blob/main/annotations.md
-ARG BUILD_TIME
-ARG MM_VERSION
-ARG MM_COMMIT
-LABEL org.opencontainers.image.created="${BUILD_TIME}" \
-  org.opencontainers.image.authors="minimega dev team <minimega-dev@sandia.gov>" \
-  org.opencontainers.image.documentation="https://www.sandia.gov/minimega/" \
-  org.opencontainers.image.source="https://github.com/sandia-minimega/minimega" \
-  org.opencontainers.image.version="${MM_VERSION}" \
-  org.opencontainers.image.revision="${MM_COMMIT}" \
-  org.opencontainers.image.vendor="Sandia National Laboratories" \
-  org.opencontainers.image.licenses="GPL-3.0-only" \
-  org.opencontainers.image.title="minimega" \
-  org.opencontainers.image.description="minimega is a tool for launching and managing virtual machines"
-
 ENV DEBIAN_FRONTEND="noninteractive"
 
 RUN apt-get update \
