@@ -133,7 +133,7 @@ var nsCliHandlers = map[string]minicli.CLIFunc{
 	"schedule":   wrapSimpleCLI(cliNamespaceSchedule),
 	"bridge":     wrapSimpleCLI(cliNamespaceBridge),
 	"del-bridge": wrapSimpleCLI(cliNamespaceDelBridge),
-	"save":   cliNamespaceSave,
+	"save":       cliNamespaceSave,
 	"run":        cliNamespaceRun,
 }
 
