@@ -66,7 +66,7 @@ Display or modify the active namespace.
   - status  : display scheduling status
 - bridge    : create a bridge, defaults to GRE mesh between hosts
 - del-bridge: destroy a bridge
-- snapshot  : take a snapshot of namespace or print snapshot progress
+- save  : Save all VMs in the namespace or print save progress
 - run       : run a command on all nodes in the namespace
 `,
 		Patterns: []string{
@@ -87,7 +87,7 @@ Display or modify the active namespace.
 			"ns <schedule,> <status,>",
 			"ns <bridge,> <bridge> [vxlan,gre]",
 			"ns <del-bridge,> <bridge>",
-			"ns <snapshot,> [name]",
+			"ns <save,> [name]",
 			"ns <run,> (command)",
 		},
 		Call: cliNS,
@@ -133,7 +133,7 @@ var nsCliHandlers = map[string]minicli.CLIFunc{
 	"schedule":   wrapSimpleCLI(cliNamespaceSchedule),
 	"bridge":     wrapSimpleCLI(cliNamespaceBridge),
 	"del-bridge": wrapSimpleCLI(cliNamespaceDelBridge),
-	"snapshot":   cliNamespaceSnapshot,
+	"save":   cliNamespaceSave,
 	"run":        cliNamespaceRun,
 }
 
@@ -502,7 +502,7 @@ func cliNamespaceDelBridge(ns *Namespace, c *minicli.Command, resp *minicli.Resp
 	return consume(runCommands(cmds...))
 }
 
-func cliNamespaceSnapshot(c *minicli.Command, respChan chan<- minicli.Responses) {
+func cliNamespaceSave(c *minicli.Command, respChan chan<- minicli.Responses) {
 	ns := GetNamespace()
 
 	resp := &minicli.Response{Host: hostname}
@@ -550,8 +550,8 @@ func cliNamespaceSnapshot(c *minicli.Command, respChan chan<- minicli.Responses)
 		return
 	}
 
-	// start new snapshot
-	if err := ns.Snapshot(c.StringArgs["name"]); err != nil {
+	// start new ns save
+	if err := ns.Save(c.StringArgs["name"]); err != nil {
 		resp.Error = err.Error()
 	}
 
