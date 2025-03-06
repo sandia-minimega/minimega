@@ -706,7 +706,7 @@ func (n *Namespace) Save(dir string) error {
 	var useIOM bool
 	if !filepath.IsAbs(dir) {
 		useIOM = true
-		dir = filepath.Join(*f_iomBase, "saves", dir)
+		dir = filepath.Join(*f_iomBase, "saved", dir)
 	}
 
 	if _, err := os.Stat(dir); err == nil {

@@ -66,7 +66,7 @@ Display or modify the active namespace.
   - status  : display scheduling status
 - bridge    : create a bridge, defaults to GRE mesh between hosts
 - del-bridge: destroy a bridge
-- save  : Save all VMs in the namespace or print save progress
+- save      : Save all VMs in the namespace or print save progress
 - run       : run a command on all nodes in the namespace
 `,
 		Patterns: []string{
