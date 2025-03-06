@@ -809,12 +809,10 @@ func cliVMSave(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		return err
 	}
 
+	fname := c.StringArgs["filename"]
 	if c.StringArgs["filename"] == "" {
 		// Default to the VM name
 		fname := filepath.Join("saved", vm.GetName())
-	} else {
-		// Passed in path
-		fname := c.StringArgs["filename"]
 	}
 
 	if !filepath.IsAbs(fname) {
