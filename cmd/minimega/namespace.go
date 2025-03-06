@@ -741,9 +741,10 @@ func (n *Namespace) Save(dir string) error {
 		// only save KVMs
 		if vm.GetType() == KVM {
 			// save all vms
+			vmDst := filepath.Join(dir, vm.GetName())
 			stateDst := filepath.Join(dir, vm.GetName()) + ".state"
 			diskDst := filepath.Join(dir, vm.GetName()) + ".hdd"
-			cmd = minicli.MustCompilef("vm save %q %v %v", vm.GetName(), stateDst, diskDst)
+			cmd = minicli.MustCompilef("vm save %q %v %v", vm.GetName(), vmDst)
 			cmd.Record = false
 
 			respChan = runCommands(cmd)
