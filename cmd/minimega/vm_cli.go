@@ -373,7 +373,9 @@ State files will have ".state" appended to filename, while drive(s) will have ".
 filename provided. If no filename is provided, the state and disk image will be saved in the default
 "files" directory within the "saved" directory.
 On success, a call to 'vm save' a VM will return immediately. You can check the
-status of in-flight saves by invoking 'vm save' with no arguments.`,
+status of in-flight saves by invoking 'vm save' with no arguments.
+
+Note: This will overwrite any prior saved files.`,
 		Patterns: []string{
 			"vm save",
 			"vm save <vm name>",
