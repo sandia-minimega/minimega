@@ -360,38 +360,22 @@ You can also specify the maximum dimension:
 		Call:    wrapVMTargetCLI(cliVMScreenshot),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
-	{ // vm snapshot
-		HelpShort: "create a new snapshot for the VM",
+	{ // vm save
+		HelpShort: "write VM state (e.g., memory) and disk to file",
 		HelpLong: `
-Creates a point-in-time snapshot for the VM. This snapshot is backed by the original image and contains any changes
-since boot. The snapshot can later be used with
-'vm config disk ...'.
-
-Saved disk files are written to the files directory as specified with
-<filename>. Multiple disks will be handled automatically by appending a unique value.
-On success, a call to snapshot a VM will return immediately.`,
-		Patterns: []string{
-			"vm snapshot <vm name> <filename>",
-		},
-		Call:    wrapVMTargetCLI(cliVMSnapshot),
-		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
-	},
-	{ // vm migrate
-		HelpShort: "write VM state and disk to file",
-		HelpLong: `
-Migrate runtime state and disk of a VM to files, which can later be booted with 'vm config
-migrate ...' and 'vm config disk ...', respectively. The migrate file may have a 
+Save runtime state and disk of a VM to files, which can later be booted with 'vm config
+state ...' and 'vm config disk ...', respectively. The state file will likely have a 
 dependency with the corresponding disk snapshot image.
 
-Migration and disk files are written to the files directory as specified with <filename>.
-Migrate file will have .migrate appended to filename, while drive(s) will hold filename
-provided. On success, a call to migrate a VM will return immediately. You can check the
-status of in-flight migrations by invoking vm migrate with no arguments.`,
+State/RAM and disk files are written to the files directory as specified with <filename>.
+State files will have ".state" appended to filename, while drive(s) will hold filename
+provided. On success, a call to 'vm save' a VM will return immediately. You can check the
+status of in-flight saves by invoking 'vm save' with no arguments.`,
 		Patterns: []string{
-			"vm migrate",
-			"vm migrate <vm name> <filename>",
+			"vm save",
+			"vm save <vm name> <filename>",
 		},
-		Call:    wrapVMTargetCLI(cliVMMigrate),
+		Call:    wrapVMTargetCLI(cliVMSave),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // vm cdrom
@@ -793,36 +777,8 @@ func cliVMScreenshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 	return nil
 }
 
-func cliVMSnapshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
-	if err != nil {
-		return err
-	}
-
-	// save disk
-	filename := c.StringArgs["filename"]
-
-	if !filepath.IsAbs(filename) {
-		filename = filepath.Join(*f_iomBase, filename)
-	}
-
-	if _, err := os.Stat(filepath.Dir(filename)); os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
-
-	if err := vm.Save(filename); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	if _, ok := c.StringArgs["vm"]; !ok { // report current migrations
+func cliVMSave(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if _, ok := c.StringArgs["vm"]; !ok { // report current status of saved VMs
 		resp.Header = []string{"id", "name", "status", "complete (%)"}
 
 		for _, vm := range ns.FindKvmVMs() {
@@ -849,7 +805,7 @@ func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return err
 	}
 
-	//save disk (a migrate file is often useless without the state of the drive)
+	//save disk (a state file is often useless without the state of the drive)
 	fname := c.StringArgs["filename"]
 
 	if !filepath.IsAbs(fname) {
@@ -869,10 +825,10 @@ func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return err
 	}
 
-	//Saving memory/migrate
-	fname = fmt.Sprintf("%s.migrate", fname)
+	//Saving memory/state
+	fname = fmt.Sprintf("%s.state", fname)
 
-	log.Info("Migrating to file %s", fname)
+	log.Info("Saving state to file %s", fname)
 
 	return vm.Migrate(fname)
 }
