@@ -367,12 +367,16 @@ Save runtime state and disk of a VM to files, which can later be booted with 'vm
 state ...' and 'vm config disk ...', respectively. The state file will likely have a 
 dependency with the corresponding disk snapshot image.
 
-State/RAM and disk files are written to the files directory as specified with <filename>.
-State files will have ".state" appended to filename, while drive(s) will hold filename
-provided. On success, a call to 'vm save' a VM will return immediately. You can check the
+State/RAM and disk files are written to the files directory based on the name of the VM
+or as specified with <filename>.
+State files will have ".state" appended to filename, while drive(s) will have ".hdd" appended to the
+filename provided. If no filename is provided, the state and disk image will be saved in the default
+"files" directory within the "saved" directory.
+On success, a call to 'vm save' a VM will return immediately. You can check the
 status of in-flight saves by invoking 'vm save' with no arguments.`,
 		Patterns: []string{
 			"vm save",
+			"vm save <vm name>",
 			"vm save <vm name> <filename>",
 		},
 		Call:    wrapVMTargetCLI(cliVMSave),
@@ -805,8 +809,13 @@ func cliVMSave(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		return err
 	}
 
-	//save disk (a state file is often useless without the state of the drive)
-	fname := c.StringArgs["filename"]
+	if c.StringArgs["filename"] == "" {
+		// Default to the VM name
+		fname := filepath.Join("saved", vm.GetName())
+	} else {
+		// Passed in path
+		fname := c.StringArgs["filename"]
+	}
 
 	if !filepath.IsAbs(fname) {
 		fname = filepath.Join(*f_iomBase, fname)
@@ -820,17 +829,19 @@ func cliVMSave(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		return err
 	}
 
-	//Saving disk
-	if err := vm.Save(fname); err != nil {
+	// Saving disk
+	disk_name = fmt.Sprintf("%s.hdd", fname)
+	log.Info("Saving disk to file %s", disk_namev)
+	if err := vm.Save(disk_name); err != nil {
 		return err
 	}
 
-	//Saving memory/state
-	fname = fmt.Sprintf("%s.state", fname)
+	// Saving memory/state
+	state_name = fmt.Sprintf("%s.state", fname)
 
-	log.Info("Saving state to file %s", fname)
+	log.Info("Saving state to file %s", state_name)
 
-	return vm.Migrate(fname)
+	return vm.Migrate(state_name)
 }
 
 func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
