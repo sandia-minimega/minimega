@@ -812,7 +812,7 @@ func cliVMSave(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 	fname := c.StringArgs["filename"]
 	if c.StringArgs["filename"] == "" {
 		// Default to the VM name
-		fname := filepath.Join("saved", vm.GetName())
+		fname = filepath.Join("saved", vm.GetName())
 	}
 
 	if !filepath.IsAbs(fname) {
@@ -829,7 +829,7 @@ func cliVMSave(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 
 	// Saving disk
 	disk_name := fmt.Sprintf("%s.hdd", fname)
-	log.Info("Saving disk to file %s", disk_namev)
+	log.Info("Saving disk to file %s", disk_name)
 	if err := vm.Save(disk_name); err != nil {
 		return err
 	}
