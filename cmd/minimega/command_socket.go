@@ -30,7 +30,7 @@ func commandSocketStart() {
 				log.Error("commandSocketStart: accept: %v", err)
 				continue
 			}
-			log.Infoln("client connected")
+			log.Debugln("client connected")
 
 			go commandSocketHandle(conn)
 		}
@@ -185,7 +185,7 @@ func commandSocketHandle(c net.Conn) {
 
 	// finally, log the error, if there was one
 	if err == nil || err == io.EOF {
-		log.Infoln("command client disconnected")
+		log.Debugln("command client disconnected")
 	} else if err != nil && strings.Contains(err.Error(), "write: broken pipe") {
 		log.Infoln("command client disconnected without waiting for responses")
 	} else if err != nil {
