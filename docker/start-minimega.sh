@@ -18,6 +18,7 @@
 : "${MM_FORCE:=true}"
 : "${MM_RECOVER:=false}"
 : "${MM_CGROUP:=/sys/fs/cgroup}"
+: "${MM_APPEND:=}"
 
 [[ -f "/etc/default/minimega" ]] && source "/etc/default/minimega"
 
@@ -36,4 +37,5 @@
   -context=${MM_CONTEXT} \
   -level=${MM_LOGLEVEL} \
   -logfile=${MM_LOGFILE} \
-  -cgroup=${MM_CGROUP}
+  -cgroup=${MM_CGROUP} \
+  ${MM_APPEND}

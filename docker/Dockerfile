@@ -1,5 +1,10 @@
+# To specify an alternate base image: --build-arg BASE_IMAGE="some/other/image:tag"
+ARG BASE_IMAGE="ubuntu:22.04"
+
+# -- go builder --
 FROM golang:1.18.2 AS gobuilder
 
+ENV DEBIAN_FRONTEND="noninteractive"
 RUN apt-get update && apt-get install -y libpcap-dev
 
 WORKDIR /minimega/
@@ -9,14 +14,18 @@ COPY . .
 RUN ./scripts/all.bash
 
 
-FROM ubuntu:22.04
+# -- minimega image --
+FROM ${BASE_IMAGE}
 
-RUN apt update && apt install -y \
-  dnsmasq iproute2 isc-dhcp-client \
-  libpcap-dev ntfs-3g openssh-client \
-  openvswitch-switch qemu-kvm qemu-utils \
+ENV DEBIAN_FRONTEND="noninteractive"
+
+RUN apt-get update \
+  && apt-get install -y \
+    dnsmasq iproute2 isc-dhcp-client \
+    libpcap-dev ntfs-3g openssh-client \
+    openvswitch-switch qemu-kvm qemu-utils \
   && apt autoremove -y \
-  && apt clean -y\
+  && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/* \
   && rm -rf /var/cache/apt/archives/*
 
@@ -39,7 +48,7 @@ COPY --from=gobuilder /minimega/bin/minirouter    /opt/minimega/bin/minirouter
 # this, let's go ahead and also include the lib directory so we can grab the
 # updated Python package from the Docker image.
 COPY --from=gobuilder /minimega/lib     /opt/minimega/lib
-COPY --from=gobuilder /minimega/README  /opt/minimega/lib/README
+COPY --from=gobuilder /minimega/README.md  /opt/minimega/lib/README.md
 COPY --from=gobuilder /minimega/VERSION /opt/minimega/lib/VERSION
 
 COPY ./web       /opt/minimega/web
