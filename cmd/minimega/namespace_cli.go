@@ -508,7 +508,7 @@ func cliNamespaceSave(c *minicli.Command, respChan chan<- minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
 	if _, ok := c.StringArgs["name"]; !ok {
-		cmd := minicli.MustCompile(".columns status vm migrate")
+		cmd := minicli.MustCompile(".columns status vm save")
 
 		var err error
 

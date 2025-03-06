@@ -57,7 +57,7 @@ Additional fields are available for KVM-based VMs:
 - disk          : disk image
 - kernel        : kernel image
 - initrd        : initrd image
-- migrate       : qemu migration image
+- save          : info about if the VM was saved
 - pid           : pid of qemu process
 - serial        : number of serial ports
 - virtio-serial : number of virtio ports

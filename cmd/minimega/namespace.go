@@ -699,7 +699,7 @@ func (n *Namespace) processVMBonds(vals []string) error {
 }
 
 // Save creates a snapshot of a namespace so that it can be restored later.
-// Both a state file (migrate) and hard disk file (disk) are created for each
+// Both a state file and hard disk file (disk) are created for each
 // VM in the namespace. If dir is not an absolute path, it will be a
 // subdirectory of iomBase.
 func (n *Namespace) Save(dir string) error {
