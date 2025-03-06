@@ -828,14 +828,14 @@ func cliVMSave(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 	}
 
 	// Saving disk
-	disk_name = fmt.Sprintf("%s.hdd", fname)
+	disk_name := fmt.Sprintf("%s.hdd", fname)
 	log.Info("Saving disk to file %s", disk_namev)
 	if err := vm.Save(disk_name); err != nil {
 		return err
 	}
 
 	// Saving memory/state
-	state_name = fmt.Sprintf("%s.state", fname)
+	state_name := fmt.Sprintf("%s.state", fname)
 
 	log.Info("Saving state to file %s", state_name)
 
