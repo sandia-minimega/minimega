@@ -724,7 +724,7 @@ func (n *Namespace) Save(dir string) error {
 	defer f.Close()
 
 	fmt.Fprintf(f, "namespace %q\n\n", n.Name)
-	fmt.Fprintf(f, "ns queuing %v\n\n", n.QueueVMs)
+	fmt.Fprintf(f, "ns queueing %v\n\n", n.QueueVMs)
 
 	// pause all vms
 	var respChan <-chan minicli.Responses
@@ -814,7 +814,7 @@ func (n *Namespace) Save(dir string) error {
 	}
 
 	if n.QueueVMs {
-		// This is needed in case queuing is enabled within the namespace
+		// This is needed in case queueing is enabled within the namespace
 		// for which VMs will be queued for launching until "vm launch"
 		// is called with no additional arguments.
 		fmt.Fprintf(f, "vm launch\n")
