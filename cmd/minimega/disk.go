@@ -113,6 +113,25 @@ func diskSnapshot(src, dst string) error {
 		return fmt.Errorf("[image %s] error getting info: %v", src, err)
 	}
 
+	// If there is a backing file, than we should not try to create a new
+	// snapshot. Rather we will log a message and copy that previous backing file
+	// to the new destination. Both preserving the original backing file, and the
+	// disk used with the backing file.
+	if info.BackingFile != "" {
+		// We first will ensure that the backing file exists
+		if _, err := os.Stat(info.BackingFile); os.IsNotExist(err) {
+			return fmt.Errorf("[image %s] backing file does not exist: %s", src, info.BackingFile)
+		}
+
+		// Now we can copy the backing file to the destination
+		out, err := processWrapper("cp", src, dst)
+		if err != nil {
+			return fmt.Errorf("[image %s] error copying to destination: %v: %v", src, out, err)
+		}
+		log.Info("Copied existing snapshot file from %s to %s", src, dst)
+		return nil
+	}
+
 	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", src, "-F", info.Format, dst)
 	if err != nil {
 		return fmt.Errorf("[image %s] %v: %v", src, out, err)
