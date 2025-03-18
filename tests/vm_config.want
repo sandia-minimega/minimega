@@ -36,12 +36,12 @@ E: strconv.ParseUint: parsing "foo": invalid syntax
 /tmp/minimega/files/foo
 ## clear vm config kernel
 ## vm config kernel
-## vm config migrate
-## vm config migrate foo
-## vm config migrate
+## vm config state
+## vm config state foo
+## vm config state
 /tmp/minimega/files/foo
-## clear vm config migrate
-## vm config migrate
+## clear vm config state
+## vm config state
 ## vm config uuid
 ## vm config uuid foo
 ## vm config uuid

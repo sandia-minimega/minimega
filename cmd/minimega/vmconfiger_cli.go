@@ -1335,7 +1335,7 @@ func (v *KVMConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "cdrom" {
 		v.CdromPath = ""
 	}
-	if mask == Wildcard || mask == "migrate" {
+	if mask == Wildcard || mask == "state" {
 		v.MigratePath = ""
 	}
 	if mask == Wildcard || mask == "cpu" {

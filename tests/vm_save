@@ -1,3 +1,7 @@
+# Create disk image
+disk create qcow2 foo.qcow2 512M
+vm config disk foo.qcow2
+
 # Launch a VM to save
 vm launch kvm foo
 
