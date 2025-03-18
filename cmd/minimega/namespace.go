@@ -761,21 +761,45 @@ func (n *Namespace) Save(dir string) error {
 			}
 
 			// override the state and disk paths;
-			// skip disk if using kernel/initrd or cdrom as boot device
-			disks, _ := vm.Info("disks")
+			disks, err := vm.Info("disks")
+			if err != nil {
+				return err
+			}
+			var diskConfigs DiskConfigs
+			// Parse the disk configuration and update the disk path
+			// This will skip disks if using kernel/initrd or CDROM as boot device
+			if disks != "" {
+				diskSpecs := strings.Split(disks, " ")
+				for index, spec := range diskSpecs {
+					diskConfig, err := ParseDiskConfig(spec, false)
+					if err != nil {
+						return err
+					}
+
+					// This assumes that the first disk should be replaced with the
+					// newly saved disk. All other disks will remain unchanged.
+					if index == 0 {
+						if useIOM {
+							rel, _ := filepath.Rel(*f_iomBase, diskDst)
+							diskConfig.Path = fmt.Sprintf("file:%v", rel)
+						} else {
+							diskConfig.Path = diskDst
+						}
+					}
+
+					diskConfigs = append(diskConfigs, *diskConfig)
+				}
+			}
+
 			if useIOM {
 				rel, _ := filepath.Rel(*f_iomBase, stateDst)
 				fmt.Fprintf(f, "vm config state file:%v\n", rel)
-				if disks != "" {
-					rel, _ = filepath.Rel(*f_iomBase, diskDst)
-					fmt.Fprintf(f, "vm config disk file:%v\n", rel)
-				}
 			} else {
 				fmt.Fprintf(f, "vm config state %v\n", stateDst)
-				if disks != "" {
-					fmt.Fprintf(f, "vm config disk %v\n", diskDst)
-				}
 			}
+
+			fmt.Fprintf(f, "vm config disks %s\n", diskConfigs.String())
+
 		} else if vm.GetType() == CONTAINER {
 			log.Warn("Skipping save for container: %q\n", vm.GetName())
 			fmt.Fprintf(f, "clear vm config\n")
