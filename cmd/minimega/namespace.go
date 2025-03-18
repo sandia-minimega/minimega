@@ -813,7 +813,6 @@ func (n *Namespace) Save(dir string) error {
 		fmt.Fprintf(f, "vm launch %v %q\n\n", vm.GetType(), vm.GetName())
 	}
 
-
 	if n.QueueVMs {
 		// This is needed in case queuing is enabled within the namespace
 		// for which VMs will be queued for launching until "vm launch"
