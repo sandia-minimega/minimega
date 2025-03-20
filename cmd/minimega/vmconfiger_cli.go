@@ -1273,7 +1273,7 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	if field == "cdrom" {
 		return v.CdromPath, nil
 	}
-	if field == "state" || field == "migrate"{
+	if field == "state" || field == "migrate" {
 		return v.MigratePath, nil
 	}
 	if field == "cpu" {
