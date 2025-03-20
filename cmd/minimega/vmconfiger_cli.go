@@ -321,8 +321,10 @@ and unrelated disk (or cdrom) is discouraged.
 Use 'vm save' to generate state images from running VMs.
 
 Note: this configuration only applies to KVM-based VMs.
+The 'migrate' command is deprecated and an alias for 'state'.
 `,
 		Patterns: []string{
+			"vm config migrate [value]",
 			"vm config state [value]",
 		},
 
@@ -961,6 +963,7 @@ Default: empty map
 			"clear vm config <machine,>",
 			"clear vm config <memory,>",
 			"clear vm config <state,>",
+			"clear vm config <migrate,>",
 			"clear vm config <networks,>",
 			"clear vm config <preinit,>",
 			"clear vm config <qemu-append,>",
@@ -1270,7 +1273,7 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	if field == "cdrom" {
 		return v.CdromPath, nil
 	}
-	if field == "state" {
+	if field == "state" || field == "migrate"{
 		return v.MigratePath, nil
 	}
 	if field == "cpu" {
@@ -1335,7 +1338,7 @@ func (v *KVMConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "cdrom" {
 		v.CdromPath = ""
 	}
-	if mask == Wildcard || mask == "state" {
+	if mask == Wildcard || mask == "state" || mask == "migrate" {
 		v.MigratePath = ""
 	}
 	if mask == Wildcard || mask == "cpu" {
@@ -1473,6 +1476,8 @@ func (v *KVMConfig) ReadConfig(r io.Reader, ns string) error {
 		case "cdrom":
 			v.CdromPath = config[1]
 		case "state":
+			v.MigratePath = config[1]
+		case "migrate":
 			v.MigratePath = config[1]
 		case "cpu":
 			v.CPU = config[1]

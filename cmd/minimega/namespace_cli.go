@@ -66,6 +66,7 @@ Display or modify the active namespace.
   - status  : display scheduling status
 - bridge    : create a bridge, defaults to GRE mesh between hosts
 - del-bridge: destroy a bridge
+- snapshot  : **DEPRECATED**: Use 'ns save'
 - save      : Save all VMs in the namespace or print save progress
 - run       : run a command on all nodes in the namespace
 `,
@@ -87,6 +88,7 @@ Display or modify the active namespace.
 			"ns <schedule,> <status,>",
 			"ns <bridge,> <bridge> [vxlan,gre]",
 			"ns <del-bridge,> <bridge>",
+			"ns <snapshot,> [name]",
 			"ns <save,> [name]",
 			"ns <run,> (command)",
 		},
@@ -133,6 +135,7 @@ var nsCliHandlers = map[string]minicli.CLIFunc{
 	"schedule":   wrapSimpleCLI(cliNamespaceSchedule),
 	"bridge":     wrapSimpleCLI(cliNamespaceBridge),
 	"del-bridge": wrapSimpleCLI(cliNamespaceDelBridge),
+	"snapshot":   cliNamespaceSave,
 	"save":       cliNamespaceSave,
 	"run":        cliNamespaceRun,
 }

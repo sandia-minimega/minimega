@@ -384,6 +384,36 @@ Note: This will overwrite any prior saved files.`,
 		Call:    wrapVMTargetCLI(cliVMSave),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
+	{ // **DEPRECATED** vm snapshot
+		HelpShort: "**DEPRECATED**: Use 'vm save' - write VM state and disk to file",
+		HelpLong: `
+**DEPRECATED**: Use 'vm save' - Write VM state (migrate) and disk to file, which can later be booted with 'vm config
+migrate ...' and 'vm config disk ...', respectively.
+Saved migrate and disk files are written to the files directory as specified with
+-filepath. On success, a call to snapshot a VM will return immediately. You can
+check the status of in-flight snapshots by invoking vm snapshot with no arguments.`,
+		Patterns: []string{
+			"vm snapshot",
+			"vm snapshot <vm name> <state filename> <disk filename>",
+		},
+		Call:    wrapVMTargetCLI(cliVMSave),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
+	},
+	{ // **DEPRECATED** vm migrate
+		HelpShort: "**DEPRECATED**: Use 'vm save' - write VM state to disk",
+		HelpLong: `
+**DEPRECATED**: Use 'vm save' - Migrate runtime state of a VM to disk, which can later
+be booted with vm config migrate.
+Migration files are written to the files directory as specified with -filepath.
+On success, a call to migrate a VM will return immediately. You can check the
+status of in-flight migrations by invoking vm migrate with no arguments.`,
+		Patterns: []string{
+			"vm migrate",
+			"vm migrate <vm name> <filename>",
+		},
+		Call:    wrapVMTargetCLI(cliVMSave),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
+	},
 	{ // vm cdrom
 		HelpShort: "eject or change an active VM's cdrom",
 		HelpLong: `
