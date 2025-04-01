@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -227,10 +228,12 @@ func diskResize(image, size string) error {
 	return nil
 }
 
-// diskInject injects files into a disk image. dst/partition specify the image
-// and the partition number, pairs is the dst, src filepaths. options can be
-// used to supply mount arguments.
-func diskInject(dst, partition string, pairs map[string]string, options []string) error {
+// diskInject injects files into or deletes files from a disk image.
+// dst/partition specify the image and the partition number. for injecting
+// files, pairs is the dst/src filepaths. for deleting files, paths is the
+// comma-separated list of filepaths to delete. options can be used to supply
+// mount arguments.
+func diskInject(dst, partition string, pairs map[string]string, options []string, delete bool, paths []string) error {
 	// Load nbd
 	if err := nbd.Modprobe(); err != nil {
 		return err
@@ -350,14 +353,29 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		}
 	}()
 
-	// copy files/folders into mntDir
-	for target, source := range pairs {
-		dir := filepath.Dir(filepath.Join(mntDir, target))
-		os.MkdirAll(dir, 0775)
+	if delete {
+		// delete the file paths from mntDir.
+		for _, path := range paths {
+			mntPath := filepath.Join(mntDir, path)
+			if _, err := os.Stat(mntPath); os.IsNotExist(err) {
+				log.Warn("[image %s] path does not exist to delete: %v", dst, path)
+			} else {
+				err := os.RemoveAll(mntPath)
+				if err != nil {
+					return fmt.Errorf("[image %s] error deleting '%s': %v", dst, path, err)
+				}
+			}
+		}
+	} else {
+		// copy files/folders into mntDir
+		for target, source := range pairs {
+			dir := filepath.Dir(filepath.Join(mntDir, target))
+			os.MkdirAll(dir, 0775)
 
-		out, err := processWrapper("cp", "-fr", source, filepath.Join(mntDir, target))
-		if err != nil {
-			return fmt.Errorf("[image %s] %v: %v", dst, out, err)
+			out, err := processWrapper("cp", "-fr", source, filepath.Join(mntDir, target))
+			if err != nil {
+				return fmt.Errorf("[image %s] %v: %v", dst, out, err)
+			}
 		}
 	}
 
@@ -368,4 +386,67 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 	}
 
 	return nil
+}
+
+// parseInjectPairs parses a list of strings containing src:dst pairs into a
+// map of where the dst is the key and src is the value. We build the map this
+// way so that one source file can be written to multiple destinations and so
+// that we can detect and return an error if the user tries to inject two files
+// with the same destination.
+func parseInjectPairs(files []string) (map[string]string, error) {
+	pairs := map[string]string{}
+
+	// parse inject pairs
+	for _, arg := range files {
+		parts := strings.Split(arg, ":")
+		if len(parts) != 2 {
+			return nil, errors.New("malformed command; expected src:dst pairs")
+		}
+
+		if pairs[parts[1]] != "" {
+			return nil, fmt.Errorf("destination appears twice: `%v`", parts[1])
+		}
+
+		pairs[parts[1]] = parts[0]
+		log.Debug("inject pair: %v, %v", parts[0], parts[1])
+	}
+
+	return pairs, nil
+}
+
+// parseFiles parses the files argument passed into the 'disk inject ...'
+// command. if options are used, the files argument gets turned into a
+// minicli.Command StringArg, otherwise it gets turned into a ListArg.
+// this function returns either a paths string slice if 'delete' is part
+// of the original command, or a pairs string map.
+func parseFiles(files interface{}, delete bool) (map[string]string, []string, error) {
+	var pairs map[string]string
+	var paths []string
+	var err error
+	switch v := files.(type) {
+	case []string:
+		if delete {
+			if sliceContainsString(v, ",") {
+				paths = strings.Split(v[0], ",")
+			} else {
+				paths = []string{v[0]} // single file
+			}
+		} else {
+			pairs, err = parseInjectPairs(v)
+		}
+	case string:
+		if delete {
+			if strings.Contains(v, ",") {
+				paths = strings.Split(v, ",")
+			} else {
+				paths = []string{v} // single file
+			}
+		} else {
+			pairs, err = parseInjectPairs([]string{v})
+		}
+	default:
+		return nil, nil, errors.New("error parsing files: unknown type")
+	}
+
+	return pairs, paths, err
 }

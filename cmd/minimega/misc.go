@@ -126,6 +126,16 @@ func randomMac() string {
 	return mac
 }
 
+// Return true if any string in a string slice contains str
+func sliceContainsString(slice []string, str string) bool {
+	for _, s := range slice {
+		if strings.Contains(s, str) {
+			return true
+		}
+	}
+	return false
+}
+
 // Return a slice of strings, split on whitespace, not unlike strings.Fields(),
 // except that quoted fields are grouped.
 //

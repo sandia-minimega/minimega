@@ -1,0 +1,25 @@
+name: RPM Build
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Install Dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y rpm dnsmasq iproute2 isc-dhcp-client libpcap-dev ntfs-3g openssh-client openvswitch-switch qemu-kvm qemu-utils
+
+    - name: Build RPM package
+      id: rpm
+      run: |
+        chmod +x ./packaging/rpm/build.bash
+        ./packaging/rpm/build.bash
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4.0.0
+      with:
+        name: minimega-rpm
+        path: ./packaging/rpm/rpmbuild/RPMS/*

@@ -11,3 +11,8 @@ fi
 
 chown -R minimega:minimega /usr/share/doc/minimega
 chown -R minimega:minimega /opt/minimega
+chown -R minimega:minimega /etc/minimega
+
+# Symlink all binaries
+
+#DEBHELPER#

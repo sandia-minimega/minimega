@@ -1,0 +1,5 @@
+opt/minimega/bin/minimega usr/bin/minimega
+opt/minimega/bin/miniweb usr/bin/miniweb
+opt/minimega/bin/protonuke usr/bin/protonuke
+opt/minimega/misc/daemon/minimega.conf /etc/minimega/minimega.conf
+

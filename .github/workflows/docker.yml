@@ -9,24 +9,39 @@ jobs:
       contents: read
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v2
-      - name: Get short SHA
-        id: short
-        run: |
-          echo "::set-output name=sha::$(git rev-parse --short HEAD)"
-          echo "::set-output name=branch::$(echo ${GITHUB_REF#refs/heads/})"
+        uses: actions/checkout@v4
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # list of Docker images to use as base name for tags
+          images: |
+            ghcr.io/${{ github.repository }}
+          labels: |
+            org.opencontainers.image.vendor=Sandia National Laboratories
+            org.opencontainers.image.authors=minimega dev team <minimega-dev@sandia.gov>
+            org.opencontainers.image.documentation=https://www.sandia.gov/minimega/
+            org.opencontainers.image.description=minimega is a tool for launching and managing virtual machines
+            org.opencontainers.image.licenses=GPL-3.0
+          # generate Docker tags based on the following events/attributes
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix=,suffix=,format=short
       - name: Log in to GitHub Docker Registry
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build container image
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
           push: true
-          tags: |
-            ghcr.io/${{ github.repository }}/minimega:${{ steps.short.outputs.sha }}
-            ghcr.io/${{ github.repository }}/minimega:${{ steps.short.outputs.branch }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}

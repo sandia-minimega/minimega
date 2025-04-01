@@ -6,7 +6,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -56,11 +55,21 @@ was directly written to the disk (this is highly unusual):
 You can optionally specify mount arguments to use with inject. Multiple options
 should be quoted. For example:
 
-	disk inject foo.qcow2 options "-t fat -o offset=100" files foo:bar		
+	disk inject foo.qcow2 options "-t fat -o offset=100" files foo:bar
+
+To delete files or directories from an image, specify the delete keyword
+before listing the files or directories to delete from the image, separated by
+a comma. For example:
+
+	disk inject window7_miniccc.qc2 delete files "Program Files/miniccc.exe"
+	disk inject window7_miniccc.qc2 delete files "Users/Administrator/Documents/TestDir"
+	disk inject window7_miniccc.qc2 delete files "foo.txt,Temp/bar.zip"
 		`,
 		Patterns: []string{
-			"disk inject <image> files <files like /path/to/src:/path/to/dst>...",
-			"disk inject <image> options <options> files <files like /path/to/src:/path/to/dst>...",
+			"disk <inject,> <image> files <files like /path/to/src:/path/to/dst>...",
+			"disk <inject,> <image> <delete,> files <files like /path/to/src,/path/to/src>...",
+			"disk <inject,> <image> <options,> <options> files <files like /path/to/src:/path/to/dst>",
+			"disk <inject,> <image> <options,> <options> <delete,> files <files like /path/to/src,/path/to/src>",
 		},
 		Call: wrapSimpleCLI(cliDiskInject),
 	},
@@ -155,32 +164,6 @@ func getImage(c *minicli.Command) string {
 	return image
 }
 
-// parseInjectPairs parses a list of strings containing src:dst pairs into a
-// map of where the dst is the key and src is the value. We build the map this
-// way so that one source file can be written to multiple destinations and so
-// that we can detect and return an error if the user tries to inject two files
-// with the same destination.
-func parseInjectPairs(files []string) (map[string]string, error) {
-	pairs := map[string]string{}
-
-	// parse inject pairs
-	for _, arg := range files {
-		parts := strings.Split(arg, ":")
-		if len(parts) != 2 {
-			return nil, errors.New("malformed command; expected src:dst pairs")
-		}
-
-		if pairs[parts[1]] != "" {
-			return nil, fmt.Errorf("destination appears twice: `%v`", parts[1])
-		}
-
-		pairs[parts[1]] = parts[0]
-		log.Debug("inject pair: %v, %v", parts[0], parts[1])
-	}
-
-	return pairs, nil
-}
-
 func cliDiskInject(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	image := getImage(c)
 	var partition string
@@ -194,15 +177,24 @@ func cliDiskInject(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 		image, partition = parts[0], parts[1]
 	}
 
+	delete := strings.Contains(c.Original, " delete files ")
+
 	options := fieldsQuoteEscape("\"", c.StringArgs["options"])
 	log.Debug("got options: %v", options)
 
-	pairs, err := parseInjectPairs(c.ListArgs["files"])
+	var files interface{}
+	if _, ok := c.StringArgs["options"]; !ok {
+		files = c.ListArgs["files"]
+	} else {
+		files = c.StringArgs["files"]
+	}
+
+	pairs, paths, err := parseFiles(files, delete)
 	if err != nil {
 		return err
 	}
 
-	return diskInject(image, partition, pairs, options)
+	return diskInject(image, partition, pairs, options, delete, paths)
 }
 
 func cliDiskCreate(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
