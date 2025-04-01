@@ -50,9 +50,12 @@ func main() {
 	log.Debug("using doc template: %v", *f_template)
 
 	// invoke minimega and get the doc json
-	doc, err := exec.Command(*f_bin, "-cli").Output()
+	cmd := exec.Command(*f_bin, "-cli")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	doc, err := cmd.Output()
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatal("error running `minimega -cli`: %s: %s", err, stderr.String())
 	}
 	log.Debug("got doc: %v", string(doc))
 

@@ -223,6 +223,21 @@ func quoteJoin(s []string, sep string) string {
 	return strings.Join(s2, sep)
 }
 
+// converts a byte count to a human-readable string in IEC format
+func humanReadableBytes(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB",
+		float64(b)/float64(div), "KMGTPE"[exp])
+}
+
 // convert a src ppm image to a dst png image, resizing to a largest dimension
 // max if max != 0
 func ppmToPng(src []byte, max int) ([]byte, error) {
