@@ -211,7 +211,7 @@ func iomHelper(file, updatee string) (string, error) {
 		file := filepath.Clean(info.BackingFile)
 
 		if !strings.HasPrefix(file, *f_iomBase) {
-			return "", fmt.Errorf("cannot fetch backing image from outside files directory: %v", file)
+			file = filepath.Join(filepath.Dir(dst), file)
 		}
 
 		file, err = filepath.Rel(*f_iomBase, file)
