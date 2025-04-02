@@ -698,19 +698,19 @@ func (n *Namespace) processVMBonds(vals []string) error {
 	return nil
 }
 
-// Snapshot creates a snapshot of a namespace so that it can be restored later.
-// Both a state file (migrate) and hard disk file (disk) are created for each
+// Save creates a snapshot of a namespace so that it can be restored later.
+// Both a state file and hard disk file (disk) are created for each
 // VM in the namespace. If dir is not an absolute path, it will be a
 // subdirectory of iomBase.
-func (n *Namespace) Snapshot(dir string) error {
+func (n *Namespace) Save(dir string) error {
 	var useIOM bool
 	if !filepath.IsAbs(dir) {
 		useIOM = true
-		dir = filepath.Join(*f_iomBase, "snapshots", dir)
+		dir = filepath.Join(*f_iomBase, "saved", dir)
 	}
 
 	if _, err := os.Stat(dir); err == nil {
-		return errors.New("snapshot with this name already exists")
+		return errors.New("saved VM with this name already exists")
 	}
 
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -724,6 +724,7 @@ func (n *Namespace) Snapshot(dir string) error {
 	defer f.Close()
 
 	fmt.Fprintf(f, "namespace %q\n\n", n.Name)
+	fmt.Fprintf(f, "ns queueing %v\n\n", n.QueueVMs)
 
 	// pause all vms
 	var respChan <-chan minicli.Responses
@@ -738,12 +739,13 @@ func (n *Namespace) Snapshot(dir string) error {
 	}
 
 	for _, vm := range globalVMs(n) {
-		// only snapshot KVMs
+		// only save KVMs
 		if vm.GetType() == KVM {
-			// snapshot all vms
-			stateDst := filepath.Join(dir, vm.GetName()) + ".migrate"
+			// save all vms
+			vmDst := filepath.Join(dir, vm.GetName())
+			stateDst := filepath.Join(dir, vm.GetName()) + ".state"
 			diskDst := filepath.Join(dir, vm.GetName()) + ".hdd"
-			cmd = minicli.MustCompilef("vm snapshot %q %v %v", vm.GetName(), stateDst, diskDst)
+			cmd = minicli.MustCompilef("vm save %q %v", vm.GetName(), vmDst)
 			cmd.Record = false
 
 			respChan = runCommands(cmd)
@@ -759,24 +761,48 @@ func (n *Namespace) Snapshot(dir string) error {
 				return err
 			}
 
-			// override the migrate and disk paths;
-			// skip disk if using kernel/initrd or cdrom as boot device
-			disks, _ := vm.Info("disks")
-			if useIOM {
-				rel, _ := filepath.Rel(*f_iomBase, stateDst)
-				fmt.Fprintf(f, "vm config migrate file:%v\n", rel)
-				if disks != "" {
-					rel, _ = filepath.Rel(*f_iomBase, diskDst)
-					fmt.Fprintf(f, "vm config disk file:%v\n", rel)
-				}
-			} else {
-				fmt.Fprintf(f, "vm config migrate %v\n", stateDst)
-				if disks != "" {
-					fmt.Fprintf(f, "vm config disk %v\n", diskDst)
+			// override the state and disk paths;
+			disks, err := vm.Info("disks")
+			if err != nil {
+				return err
+			}
+			var diskConfigs DiskConfigs
+			// Parse the disk configuration and update the disk path
+			// This will skip disks if using kernel/initrd or CDROM as boot device
+			if disks != "" {
+				diskSpecs := strings.Split(disks, " ")
+				for index, spec := range diskSpecs {
+					diskConfig, err := ParseDiskConfig(spec, false)
+					if err != nil {
+						return err
+					}
+
+					// This assumes that the first disk should be replaced with the
+					// newly saved disk. All other disks will remain unchanged.
+					if index == 0 {
+						if useIOM {
+							rel, _ := filepath.Rel(*f_iomBase, diskDst)
+							diskConfig.Path = fmt.Sprintf("file:%v", rel)
+						} else {
+							diskConfig.Path = diskDst
+						}
+					}
+
+					diskConfigs = append(diskConfigs, *diskConfig)
 				}
 			}
+
+			if useIOM {
+				rel, _ := filepath.Rel(*f_iomBase, stateDst)
+				fmt.Fprintf(f, "vm config state file:%v\n", rel)
+			} else {
+				fmt.Fprintf(f, "vm config state %v\n", stateDst)
+			}
+
+			fmt.Fprintf(f, "vm config disks %s\n", diskConfigs.String())
+
 		} else if vm.GetType() == CONTAINER {
-			log.Warn("Skipping snapshot for container: %q\n", vm.GetName())
+			log.Warn("Skipping save for container: %q\n", vm.GetName())
 			fmt.Fprintf(f, "clear vm config\n")
 
 			if err := vm.WriteConfig(f); err != nil {
@@ -787,9 +813,14 @@ func (n *Namespace) Snapshot(dir string) error {
 		fmt.Fprintf(f, "vm launch %v %q\n\n", vm.GetType(), vm.GetName())
 	}
 
+	if n.QueueVMs {
+		// This is needed in case queueing is enabled within the namespace
+		// for which VMs will be queued for launching until "vm launch"
+		// is called with no additional arguments.
+		fmt.Fprintf(f, "vm launch\n")
+	}
 	fmt.Fprintf(f, "vm start all\n")
-	// the snapshot process saves the VMs in a paused state, so do a stop/start
-	fmt.Fprintf(f, "# the snapshot process saves the VMs in a paused state, so do a stop/start\n")
+	fmt.Fprintf(f, "# the save process saves the VMs in a paused state, so do a stop/start\n")
 	fmt.Fprintf(f, "shell sleep 10\n")
 	fmt.Fprintf(f, "vm stop all\n")
 	fmt.Fprintf(f, "vm start all\n")
@@ -913,7 +944,7 @@ func SetNamespace(name string) error {
 		return errors.New("namespace name cannot be the empty string")
 	}
 
-	log.Info("setting active namespace: %v", name)
+	log.Debug("setting active namespace: %v", name)
 
 	if name == namespace {
 		return fmt.Errorf("already in namespace: %v", name)
@@ -929,7 +960,7 @@ func RevertNamespace(old, curr *Namespace) {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
 
-	log.Info("reverting to namespace: %v", old)
+	log.Debug("reverting to namespace: %v", old)
 
 	// This is very odd and should *never* happen unless something has gone
 	// horribly wrong.

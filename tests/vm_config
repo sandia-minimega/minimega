@@ -25,11 +25,11 @@ vm config kernel foo
 vm config kernel
 clear vm config kernel
 vm config kernel
-vm config migrate
-vm config migrate foo
-vm config migrate
-clear vm config migrate
-vm config migrate
+vm config state
+vm config state foo
+vm config state
+clear vm config state
+vm config state
 vm config uuid
 vm config uuid foo
 vm config uuid

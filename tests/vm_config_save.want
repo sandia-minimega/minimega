@@ -12,7 +12,7 @@ Backchannel:      true
 Tags:             {}
 
 KVM configuration:
-Migrate Path:        
+State Path:        
 Disks:               []
 CDROM Path:          
 Kernel Path:         
@@ -57,7 +57,7 @@ Backchannel:      true
 Tags:             {}
 
 KVM configuration:
-Migrate Path:        
+State Path:        
 Disks:               []
 CDROM Path:          
 Kernel Path:         
@@ -99,7 +99,7 @@ Backchannel:      true
 Tags:             {}
 
 KVM configuration:
-Migrate Path:        
+State Path:        
 Disks:               []
 CDROM Path:          
 Kernel Path:         
@@ -138,7 +138,7 @@ Backchannel:      true
 Tags:             {}
 
 KVM configuration:
-Migrate Path:        
+State Path:        
 Disks:               []
 CDROM Path:          
 Kernel Path:         
