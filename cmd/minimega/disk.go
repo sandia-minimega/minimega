@@ -192,25 +192,27 @@ func diskCommit(image string) error {
 }
 
 func diskRebase(image, backing string, unsafe bool) error {
-	if !strings.HasPrefix(backing, *f_iomBase) {
-		log.Warn("minimega expects backing images to be in the files directory")
-	}
-	relBacking, err := filepath.Rel(filepath.Dir(image), backing)
-	if err != nil {
-		return fmt.Errorf("[image %s] error getting backing relative to dst: %v", backing, err)
-	}
-
-	args := []string{"qemu-img", "rebase", "-b", relBacking, image}
+	args := []string{"qemu-img", "rebase"}
 	if backing != "" {
+		if !strings.HasPrefix(backing, *f_iomBase) {
+			log.Warn("minimega expects backing images to be in the files directory")
+		}
+		relBacking, err := filepath.Rel(filepath.Dir(image), backing)
+		if err != nil {
+			return fmt.Errorf("[image %s] error getting backing relative to dst: %v", backing, err)
+		}
 		backingInfo, err := diskInfo(backing)
 		if err != nil {
 			return fmt.Errorf("[image %s] error getting info for backing file: %v", image, err)
 		}
-		args = append(args, "-F", backingInfo.Format)
+		args = append(args, "-b", relBacking, "-F", backingInfo.Format)
+	} else { // rebase as independent image
+		args = append(args, "-b", "")
 	}
 	if unsafe {
 		args = append(args, "-u")
 	}
+	args = append(args, image)
 	out, err := processWrapper(args...)
 	if err != nil {
 		return fmt.Errorf("[image %s] %v: %v", image, out, err)
