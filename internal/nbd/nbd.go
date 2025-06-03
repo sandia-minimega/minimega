@@ -79,8 +79,8 @@ func GetDevice() (string, error) {
 			continue
 		}
 
-		// check whether a pid exists for the current nbd
-		_, err = os.Stat(filepath.Join("/sys/block", dev, "pid"))
+		// check whether a socket exists for the current nbd
+		_, err = os.Stat(filepath.Join("/var/lock", "qemu-nbd-"+dev))
 		if err != nil {
 			log.Debug("found available nbd: " + dev)
 			nbdPath = filepath.Join("/dev", dev)
