@@ -596,7 +596,7 @@ func (vm *KvmVM) Save(filename string) error {
 	var device []string
 	for _, dev := range v {
 		if dev.Inserted != nil {
-			if strings.HasPrefix(dev.Inserted.File, fp) {
+			if strings.Contains(dev.Inserted.File, fp) {
 				device = append(device, dev.Device)
 			}
 		}
