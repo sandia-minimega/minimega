@@ -460,7 +460,7 @@ func (vm *KvmVM) Stop() error {
 	defer vm.lock.Unlock()
 
 	if vm.Name == "vince" {
-		return errors.New("vince is unstoppable")
+		log.Warn("vince is unstoppable")
 	}
 
 	if vm.State != VM_RUNNING {
