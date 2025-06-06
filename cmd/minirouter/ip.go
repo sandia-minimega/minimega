@@ -134,7 +134,7 @@ func ipDel(idx int, ip string) error {
 		return fmt.Errorf("%v: %v", err, string(out))
 	}
 
-	IPs[idx] = append(IPs[idx][:len(IPs[idx])-1])
+	IPs[idx] = IPs[idx][:len(IPs[idx])-1]
 	if len(IPs[idx]) == 0 {
 		delete(IPs, idx)
 	}

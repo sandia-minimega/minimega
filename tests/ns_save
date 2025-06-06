@@ -1,0 +1,44 @@
+# Enter the matrix
+namespace matrix
+
+# Create disk image
+disk create qcow2 morpheus.qcow2 512M
+
+# Launch some VMs to save
+vm config disk morpheus.qcow2
+vm launch kvm neo[1-2]
+vm config vcpus 2
+vm config memory 2048
+vm launch kvm trinity
+clear vm config
+# Launch a VM without a disk
+vm launch kvm mouse
+
+# Copy the matrix
+ns save matrix
+
+# Check that the save completed after a quick nap
+shell sleep 1
+.column name,status vm save
+
+# Check for the files on disk
+.filter name=saved/matrix/launch.mm .column dir,name file list saved/matrix/
+.filter name=saved/matrix/neo1.state .column dir,name file list saved/matrix/
+.filter name=saved/matrix/neo1.hdd .column dir,name file list saved/matrix/
+.filter name=saved/matrix/neo2.state .column dir,name file list saved/matrix/
+.filter name=saved/matrix/neo2.hdd .column dir,name file list saved/matrix/
+.filter name=saved/matrix/trinity.state .column dir,name file list saved/matrix/
+.filter name=saved/matrix/trinity.hdd .column dir,name file list saved/matrix/
+.filter name=saved/matrix/mouse.state .column dir,name file list saved/matrix/
+# mouse died :(
+.filter name=saved/matrix/mouse.hdd .column dir,name file list saved/matrix/
+
+# Check for VM state
+.column name,state vm info
+
+# Clean up
+file delete morpheus.qcow2
+file delete saved/matrix/
+
+# Escape the matrix
+clear namespace matrix

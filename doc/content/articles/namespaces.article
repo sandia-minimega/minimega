@@ -285,33 +285,34 @@ segment of the mesh, we created the `ns`run` API. This API runs the subcommand
 on all nodes in the namespace including the head node, if it is part of the
 namespace.
 
-** Snapshot
+** Save
 
-The `ns`snapshot` API can be used to take a full snapshot of a running
+The `ns`save` API can be used to take a full experiment snapshot of a running
 experiment. This API first pauses all VMs in the experiment and then calls
-`vm`snapshot` on each VM to capture both its memory and disk state as separate
+`vm`save` on each VM to capture both its memory and disk state as separate
 files. In addition, the command records a minimega script to relaunch the
-running VMs using the saved disk and memory files via the `vm`config`migrate`
+running VMs using the saved disk and memory files via the `vm`config`state`
 and `vm`config`disk` APIs. This snapshot capability will work for both KVM and
 container type VMs. For KVMs without a disk (kernel/initrd), only the memory
 state is saved. For containers, no state is saved -- the vm config is simply
 copied to the relaunch script.
 
-The state files and relaunch script are saved in a user-specified subdirectory:
+The state files and relaunch script are saved in a user-specified subdirectory
+where <name> is the passed in name of the saved experiment:
 
-    <minimega filepath>/snapshots/<name>/vm1.hdd
-    <minimega filepath>/snapshots/<name>/vm1.migrate
-    <minimega filepath>/snapshots/<name>/vm2.hdd
-    <minimega filepath>/snapshots/<name>/vm2.migrate
+    <minimega filepath>/saved/<name>/vm1.hdd
+    <minimega filepath>/saved/<name>/vm1.state
+    <minimega filepath>/saved/<name>/vm2.hdd
+    <minimega filepath>/saved/<name>/vm2.state
     ...
-    <minimega filepath>/snapshots/<name>/launch.mm
+    <minimega filepath>/saved/<name>/launch.mm
 
 Notes: This command will block until VMs have completed the disk save portion
 of the snapshot. After that, the memory save portion will continue to run in
 the background until finished. Progress can be monitored by running
-`ns`snapshot` or `vm`snapshot` without arguments. This command does not
-restart any VMs after the snapshot, so they will be left in a paused state. The
-snapshotted experiment can be restarted using the `read` command and passing it
+`ns`save` or `vm`save` without arguments. This command does not
+restart any VMs after it completes, so they will be left in a paused state. The
+saved experiment can be restarted using the `read` command and passing it
 the generated minimega script.
 
 Warning: The process of saving both disk and memory state for an entire

@@ -175,6 +175,7 @@ func diskSnapshot(src, dst string) error {
 	}
 
 	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", relSrc, "-F", info.Format, dst)
+
 	if err != nil {
 		return fmt.Errorf("[image %s] %v: %v", src, out, err)
 	}

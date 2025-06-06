@@ -148,10 +148,10 @@
           "examples": [],
           "pattern": "^(.*)$"
         },
-        "migrate": {
-          "$id": "#/properties/hardware/properties/migrate",
+        "state": {
+          "$id": "#/properties/hardware/properties/state",
           "type": "string",
-          "title": "migrate",
+          "title": "state",
           "examples": [],
           "pattern": "^(.*)$"
         },

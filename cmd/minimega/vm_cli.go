@@ -57,7 +57,7 @@ Additional fields are available for KVM-based VMs:
 - disk          : disk image
 - kernel        : kernel image
 - initrd        : initrd image
-- migrate       : qemu migration image
+- save          : info about if the VM was saved
 - pid           : pid of qemu process
 - serial        : number of serial ports
 - virtio-serial : number of virtio ports
@@ -360,12 +360,35 @@ You can also specify the maximum dimension:
 		Call:    wrapVMTargetCLI(cliVMScreenshot),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
-	{ // vm snapshot
-		HelpShort: "write VM state and disk to file",
+	{ // vm save
+		HelpShort: "write VM state (e.g., memory) and disk to file",
 		HelpLong: `
-Write VM state (migrate) and disk to file, which can later be booted with 'vm config
-migrate ...' and 'vm config disk ...', respectively.
+Save runtime state and disk of a VM to files, which can later be booted with 'vm config
+state ...' and 'vm config disk ...', respectively. The state file will likely have a 
+dependency with the corresponding disk snapshot image.
 
+State/RAM and disk files are written to the files directory based on the name of the VM
+or as specified with <filename>.
+State files will have ".state" appended to filename, while drive(s) will have ".hdd" appended to the
+filename provided. If no filename is provided, the state and disk image will be saved in the default
+"files" directory within the "saved" directory.
+On success, a call to 'vm save' a VM will return immediately. You can check the
+status of in-flight saves by invoking 'vm save' with no arguments.
+
+Note: This will overwrite any prior saved files.`,
+		Patterns: []string{
+			"vm save",
+			"vm save <vm name>",
+			"vm save <vm name> <filename>",
+		},
+		Call:    wrapVMTargetCLI(cliVMSave),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
+	},
+	{ // **DEPRECATED** vm snapshot
+		HelpShort: "**DEPRECATED**: Use 'vm save' - write VM state and disk to file",
+		HelpLong: `
+**DEPRECATED**: Use 'vm save' - Write VM state (migrate) and disk to file, which can later be booted with 'vm config
+migrate ...' and 'vm config disk ...', respectively.
 Saved migrate and disk files are written to the files directory as specified with
 -filepath. On success, a call to snapshot a VM will return immediately. You can
 check the status of in-flight snapshots by invoking vm snapshot with no arguments.`,
@@ -373,15 +396,14 @@ check the status of in-flight snapshots by invoking vm snapshot with no argument
 			"vm snapshot",
 			"vm snapshot <vm name> <state filename> <disk filename>",
 		},
-		Call:    wrapVMTargetCLI(cliVMSnapshot),
+		Call:    wrapVMTargetCLI(cliVMSave),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
-	{ // vm migrate
-		HelpShort: "write VM state to disk",
+	{ // **DEPRECATED** vm migrate
+		HelpShort: "**DEPRECATED**: Use 'vm save' - write VM state to disk",
 		HelpLong: `
-Migrate runtime state of a VM to disk, which can later be booted with vm config
-migrate.
-
+**DEPRECATED**: Use 'vm save' - Migrate runtime state of a VM to disk, which can later
+be booted with vm config migrate.
 Migration files are written to the files directory as specified with -filepath.
 On success, a call to migrate a VM will return immediately. You can check the
 status of in-flight migrations by invoking vm migrate with no arguments.`,
@@ -389,7 +411,7 @@ status of in-flight migrations by invoking vm migrate with no arguments.`,
 			"vm migrate",
 			"vm migrate <vm name> <filename>",
 		},
-		Call:    wrapVMTargetCLI(cliVMMigrate),
+		Call:    wrapVMTargetCLI(cliVMSave),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // vm cdrom
@@ -791,73 +813,8 @@ func cliVMScreenshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 	return nil
 }
 
-func cliVMSnapshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	if _, ok := c.StringArgs["vm"]; !ok { // report current status
-		resp.Header = []string{"id", "name", "status", "complete (%)"}
-
-		for _, vm := range ns.FindKvmVMs() {
-			status, complete, err := vm.QueryMigrate()
-			if err != nil {
-				return err
-			}
-			if status == "" {
-				continue
-			}
-
-			resp.Tabular = append(resp.Tabular, []string{
-				fmt.Sprintf("%v", vm.GetID()),
-				vm.GetName(),
-				status,
-				fmt.Sprintf("%.2f", complete)})
-		}
-
-		return nil
-	}
-
-	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
-	if err != nil {
-		return err
-	}
-
-	// save disk
-	filename := c.StringArgs["disk"]
-
-	if !filepath.IsAbs(filename) {
-		filename = filepath.Join(*f_iomBase, filename)
-	}
-
-	if _, err := os.Stat(filepath.Dir(filename)); os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
-
-	if err := vm.Save(filename); err != nil {
-		return err
-	}
-
-	// save state
-	filename = c.StringArgs["state"]
-
-	if !filepath.IsAbs(filename) {
-		filename = filepath.Join(*f_iomBase, filename)
-	}
-
-	if _, err := os.Stat(filepath.Dir(filename)); os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
-			return err
-		}
-	} else if err != nil {
-		return err
-	}
-
-	return vm.Migrate(filename)
-}
-
-func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	if _, ok := c.StringArgs["vm"]; !ok { // report current migrations
+func cliVMSave(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if _, ok := c.StringArgs["vm"]; !ok { // report current status of saved VMs
 		resp.Header = []string{"id", "name", "status", "complete (%)"}
 
 		for _, vm := range ns.FindKvmVMs() {
@@ -885,9 +842,12 @@ func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	}
 
 	fname := c.StringArgs["filename"]
+	if c.StringArgs["filename"] == "" {
+		// Default to the VM name
+		fname = filepath.Join("saved", vm.GetName())
+	}
 
 	if !filepath.IsAbs(fname) {
-		// TODO: should we write to the VM directory instead?
 		fname = filepath.Join(*f_iomBase, fname)
 	}
 
@@ -899,7 +859,19 @@ func cliVMMigrate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return err
 	}
 
-	return vm.Migrate(fname)
+	// Saving disk
+	disk_name := fmt.Sprintf("%s.hdd", fname)
+	log.Info("Saving disk to file %s", disk_name)
+	if err := vm.Save(disk_name); err != nil {
+		return err
+	}
+
+	// Saving memory/state
+	state_name := fmt.Sprintf("%s.state", fname)
+
+	log.Info("Saving state to file %s", state_name)
+
+	return vm.Migrate(state_name)
 }
 
 func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

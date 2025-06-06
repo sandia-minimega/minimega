@@ -74,10 +74,10 @@
             ]
         },
         {
-            "name": "migrate",
+            "name": "state",
             "path": "hardware",
             "args": [
-                "migrate"
+                "state"
             ]
         },
         {
