@@ -42,7 +42,7 @@ preferably the head node. It has many flags, seen here:
 	  -passwords string
 			password file for auth
 	  -root string
-			base path for web files (default "misc/web")
+			base path for web files (default "web")
 	  -v    log on stderr (default true)
 	  -verbose
 			log on stderr (default true)

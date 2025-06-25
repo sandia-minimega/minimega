@@ -16,6 +16,6 @@ usage: miniweb [option]...
   -passwords string
     	password file for auth
   -root string
-    	base path for web files (default "misc/web")
+    	base path for web files (default "web")
   -v, -verbose
     	log on stderr (default true)
