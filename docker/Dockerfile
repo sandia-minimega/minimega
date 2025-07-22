@@ -17,7 +17,8 @@ RUN ./scripts/all.bash
 # -- minimega image --
 FROM ${BASE_IMAGE}
 
-ENV DEBIAN_FRONTEND="noninteractive"
+ENV DEBIAN_FRONTEND="noninteractive" \
+    PATH="$PATH:/opt/minimega/bin"
 
 RUN apt-get update \
   && apt-get install -y \
