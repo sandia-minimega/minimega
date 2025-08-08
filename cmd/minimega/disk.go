@@ -275,7 +275,7 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 	// decide whether to mount partition or raw disk
 	if partition != "none" {
 		// keep rereading partitions and waiting for them to show up for a bit
-		timeoutTime := time.Now().Add(5 * time.Second)
+		timeoutTime := time.Now().Add(10 * time.Second)
 		for i := 1; ; i++ {
 			if time.Now().After(timeoutTime) {
 				return fmt.Errorf("[image %s] no partitions found on image", dst)
