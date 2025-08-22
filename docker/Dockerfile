@@ -25,7 +25,7 @@ RUN apt-get update \
     dnsmasq iproute2 isc-dhcp-client \
     libpcap-dev ntfs-3g openssh-client \
     openvswitch-switch qemu-kvm qemu-utils \
-    iptables \
+    iptables ffmpeg \
   && apt autoremove -y \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/* \
