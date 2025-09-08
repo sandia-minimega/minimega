@@ -40,7 +40,7 @@ echo "BUILD PACKAGES (linux)"
 for i in ${DIRECTORY_ARRAY[@]}; do
     for j in `ls $i | grep -v plumbing`; do
         echo $j
-        go install $i/$j
+        go install -ldflags="-s -w" $i/$j
         if [[ $? != 0 ]]; then
             exit 1
         fi
@@ -52,7 +52,7 @@ echo "BUILD PACKAGES (windows)"
 for i in ${DIRECTORY_ARRAY[@]}; do
     for j in `ls $i | grep -E "protonuke|miniccc"`; do
         echo $j
-        GOOS=windows go build -o $ROOT_DIR/bin/$j.exe $i/$j
+        GOOS=windows go build -ldflags="-s -w" -o $ROOT_DIR/bin/$j.exe $i/$j
         if [[ $? != 0 ]]; then
             exit 1
         fi
