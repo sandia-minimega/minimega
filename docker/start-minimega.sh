@@ -20,7 +20,33 @@
 : "${MM_CGROUP:=/sys/fs/cgroup}"
 : "${MM_APPEND:=}"
 
+: "${OVS_HOST_IFACE:=}"
+
 [[ -f "/etc/default/minimega" ]] && source "/etc/default/minimega"
+
+# Use OVS_HOST_IFACE env variable to auto add a host Ethernet interface(s) to an
+# OVS bridge. Note that the OVS bridge to add the interface(s) to must be
+# specified. The format of the value is "<bridge>:<port>[,<port>,...]".
+#
+# Single Interface Example (where bridge name is "phenix"): OVS_HOST_IFACE=phenix:eth0
+# Multi Interface Example (where bridge name is "phenix"): OVS_HOST_IFACE=phenix:eth0,eth1,eth2
+
+if [[ -v "${OVS_HOST_IFACE}" ]]; then
+  iface=(${OVS_HOST_IFACE//:/ })
+
+  if [[ -n "${iface[0]}" ]]; then
+    /usr/bin/ovs-vsctl --may-exist add-br ${iface[0]}
+    ip link set dev ${iface[0]} up
+  fi
+
+  if [[ -n "${iface[1]}" ]]; then
+    ports=(${iface[1]//,/ })
+
+    for port in "${ports[@]}"; do
+      /usr/bin/ovs-vsctl --may-exist add-port ${iface[0]} ${port}
+    done
+  fi
+fi
 
 /opt/minimega/bin/miniweb -root=${MINIWEB_ROOT} -addr=${MINIWEB_HOST}:${MINIWEB_PORT} &
 
