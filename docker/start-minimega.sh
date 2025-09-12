@@ -31,7 +31,7 @@
 # Single Interface Example (where bridge name is "phenix"): OVS_HOST_IFACE=phenix:eth0
 # Multi Interface Example (where bridge name is "phenix"): OVS_HOST_IFACE=phenix:eth0,eth1,eth2
 
-if [[ -v "${OVS_HOST_IFACE}" ]]; then
+if [[ -v "OVS_HOST_IFACE" ]]; then
   iface=(${OVS_HOST_IFACE//:/ })
 
   if [[ -n "${iface[0]}" ]]; then
