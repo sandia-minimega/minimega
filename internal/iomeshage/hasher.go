@@ -42,7 +42,7 @@ func (iom *IOMeshage) startHasher() {
 					return
 				}
 
-				if ignoreDirectory(event.Name) {
+				if ignoreDirectory(event.Name) || isLink(event.Name) {
 					continue
 				}
 
@@ -115,11 +115,7 @@ func (iom *IOMeshage) startHasher() {
 	// This loop is only run once at startup, and creates a new goroutine for
 	// each existing file that needs to be hashed.
 	for _, info := range files {
-		if ignoreDirectory(info.Path) {
-			continue
-		}
-
-		if info.Size == 0 {
+		if ignoreDirectory(info.Path) || isLink(info.Path) || info.Size == 0 {
 			continue
 		}
 
@@ -165,11 +161,18 @@ func (iom *IOMeshage) startHasher() {
 	<-make(chan struct{})
 }
 
-// hashFile generates a Murmur3 hash for the file at the given path.
+// hashFile takes a filepath, resolves symlinks, and returns a murmur3 hash.
 func hashFile(path string) (string, error) {
-	file, err := os.Open(path)
+	// Resolve the symbolic link to the actual file path.
+	// This ensures we hash the content of the target file, not the link itself.
+	realPath, err := filepath.EvalSymlinks(path)
 	if err != nil {
-		return "", fmt.Errorf("opening file %s for hashing: %w", path, err)
+		return "", fmt.Errorf("error resolving symlink for %s: %w", path, err)
+	}
+
+	file, err := os.Open(realPath)
+	if err != nil {
+		return "", fmt.Errorf("opening file %s for hashing: %w", realPath, err)
 	}
 
 	defer file.Close()
@@ -182,7 +185,11 @@ func hashFile(path string) (string, error) {
 
 	hash := fmt.Sprintf("%x", hasher.Sum(nil))
 
-	log.Debug("hashing %s (%s) took %s", path, hash, time.Since(start))
+	if realPath != path {
+		log.Debug("hashing %s (via symlink %s) took %s", realPath, path, time.Since(start))
+	} else {
+		log.Debug("hashing %s took %s", path, time.Since(start))
+	}
 
 	return hash, nil
 }
@@ -197,4 +204,14 @@ func ignoreDirectory(path string) bool {
 	}
 
 	return false
+}
+
+// isLink checks to see if the given path is a symbolic link.
+func isLink(path string) bool {
+	fileInfo, err := os.Lstat(path)
+	if err != nil {
+		return false
+	}
+
+	return fileInfo.Mode()&os.ModeSymlink != 0
 }
