@@ -49,10 +49,16 @@ func dial() error {
 			})
 		}
 
-		// write magic bytes
-		if err == nil {
-			_, err = io.WriteString(client.conn, "RON")
+		// Handle any errors with client initialization before we attempt to read 
+		// from the client below. Attempt another connection if there's any errors.
+		if err != nil {
+			log.Error("%v, retries = %v", err, i)
+			time.Sleep(15 * time.Second)
+			continue
 		}
+
+		// write magic bytes
+		_, err = io.WriteString(client.conn, "RON")
 
 		err = timeout(ron.CLIENT_RECONNECT_RATE*time.Second, func() (err error) {
 			// read until we see the magic bytes back
