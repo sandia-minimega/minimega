@@ -49,7 +49,7 @@ func dial() error {
 			})
 		}
 
-		// Handle any errors with client initialization before we attempt to read 
+		// Handle any errors with client initialization before we attempt to read
 		// from the client below. Attempt another connection if there's any errors.
 		if err != nil {
 			log.Error("%v, retries = %v", err, i)
