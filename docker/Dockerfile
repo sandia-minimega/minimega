@@ -32,8 +32,8 @@ RUN apt-get update \
   && rm -rf /var/cache/apt/archives/*
 
 # Copy all binaries, including tools such as vmbetter, rfbplay and vncdrone
-# While this includes some tools like minitest that generally aren't 
-# needed in a deployment, the disk utilization difference is minimal, 
+# While this includes some tools like minitest that generally aren't
+# needed in a deployment, the disk utilization difference is minimal,
 # and ensures any future tools get included in the Docker image.
 COPY --from=gobuilder /minimega/bin/ /opt/minimega/bin/
 
