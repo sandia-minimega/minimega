@@ -20,7 +20,7 @@ setup(
     project_urls={
         "homepage": "https://www.sandia.gov/minimega/",
         "repository": "https://github.com/sandia-minimega/minimega",
-        "changelog": "https://www.sandia.gov/minimega/minimega-2-9-release-notes/",
+        "changelog": "https://github.com/sandia-minimega/minimega/releases/",
         "documentation": "https://www.sandia.gov/minimega/using-minimega/",
         "issues": "https://github.com/sandia-minimega/minimega/issues",
     },
