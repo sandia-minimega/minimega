@@ -947,7 +947,8 @@ func SetNamespace(name string) error {
 	log.Debug("setting active namespace: %v", name)
 
 	if name == namespace {
-		return fmt.Errorf("already in namespace: %v", name)
+		log.Info("already in namespace: %v", name)
+		return nil
 	}
 
 	namespace = name
