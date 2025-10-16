@@ -179,6 +179,14 @@ type KVMConfig struct {
 	// Note: this configuration only applies to KVM-based VMs.
 	Disks DiskConfigs
 
+	// Only snapshot the first disk. When enabled, only the first disk will have a
+	// temporary snapshot created.
+	//
+	// Note: this configuration only applies to KVM-based VMs.
+	//
+	// Default: false
+	SnapshotFirstDiskOnly bool
+
 	// If true will use xHCI USB controller. Otherwise will use EHCI.
 	// EHCI does not support USB 3.0, but may be used for backwards compatibility.
 	//
@@ -537,6 +545,7 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintln(&o, "KVM configuration:")
 	fmt.Fprintf(w, "State Path:\t%v\n", vm.MigratePath)
 	fmt.Fprintf(w, "Disks:\t%v\n", vm.DiskString(namespace))
+	fmt.Fprintf(w, "Snapshot First Disk Only:\t%v\n", vm.SnapshotFirstDiskOnly)
 	fmt.Fprintf(w, "CDROM Path:\t%v\n", vm.CdromPath)
 	fmt.Fprintf(w, "Kernel Path:\t%v\n", vm.KernelPath)
 	fmt.Fprintf(w, "Initrd Path:\t%v\n", vm.InitrdPath)
@@ -920,12 +929,14 @@ func (vm *KvmVM) launch() error {
 		// Create a snapshot of each disk image
 		if vm.Snapshot {
 			for i, d := range vm.Disks {
-				dst := vm.path(fmt.Sprintf("disk-%v.qcow2", i))
-				if err := diskSnapshot(d.Path, dst); err != nil {
-					return vm.setErrorf("unable to snapshot %v: %v", d, err)
-				}
+				if i == 0 || (i > 0 && !vm.SnapshotFirstDiskOnly) {
+					dst := vm.path(fmt.Sprintf("disk-%v.qcow2", i))
+					if err := diskSnapshot(d.Path, dst); err != nil {
+						return vm.setErrorf("unable to snapshot %v: %v", d, err)
+					}
 
-				vm.Disks[i].SnapshotPath = dst
+					vm.Disks[i].SnapshotPath = dst
+				}
 			}
 		}
 
