@@ -15,14 +15,12 @@ import (
 )
 
 const (
-	BIRD_CONFIG  = "/etc/bird.conf"
-	BIRD6_CONFIG = "/etc/bird6.conf"
+	BIRD_CONFIG = "/etc/bird.conf"
 )
 
 type Bird struct {
 	Static      map[string]string
 	NamedStatic map[string]map[string]string
-	Static6     map[string]string
 	OSPF        map[string]*OSPF
 	BGP         map[string]*BGP
 	RouterID    string
@@ -32,7 +30,6 @@ type Bird struct {
 var (
 	birdData *Bird
 	birdCmd  *exec.Cmd
-	bird6Cmd *exec.Cmd
 	birdID   string
 )
 
@@ -74,14 +71,13 @@ func init() {
 	birdData = &Bird{
 		Static:      make(map[string]string),
 		NamedStatic: make(map[string]map[string]string),
-		Static6:     make(map[string]string),
 		OSPF:        make(map[string]*OSPF),
 		BGP:         make(map[string]*BGP),
 		RouterID:    birdID,
 		ExportOSPF:  false,
 	}
-
 }
+
 func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 	defer func() {
 		r <- nil
@@ -91,7 +87,6 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 		birdData = &Bird{
 			Static:      make(map[string]string),
 			NamedStatic: make(map[string]map[string]string),
-			Static6:     make(map[string]string),
 			OSPF:        make(map[string]*OSPF),
 			BGP:         make(map[string]*BGP),
 			RouterID:    birdID,
@@ -107,19 +102,15 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 			nh = ""
 		}
 
-		if isIPv4(nh) || nh == "" {
-			if name == "null" && nh != "" {
-				birdData.Static[network] = nh
-			} else {
-				if birdData.NamedStatic[name] == nil {
-					birdData.NamedStatic[name] = make(map[string]string)
-				}
-				birdData.NamedStatic[name][network] = nh
+		if name == "null" && nh == "" {
+			log.Warnln("skipping unnamed static route: next hop not provided")
+		} else if name == "null" {
+			birdData.Static[network] = nh
+		} else {
+			if birdData.NamedStatic[name] == nil {
+				birdData.NamedStatic[name] = make(map[string]string)
 			}
-		} else if isIPv6(nh) {
-			if name == "null" {
-				birdData.Static6[network] = nh
-			}
+			birdData.NamedStatic[name][network] = nh
 		}
 	} else if c.BoolArgs["ospf"] {
 		area := c.StringArgs["area"]
@@ -200,7 +191,7 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 }
 
 func birdConfig() {
-	log.Debugln("bird: Setting preparing template")
+	log.Debugln("bird: preparing template")
 	t, err := template.New("bird").Parse(birdTmpl)
 	if err != nil {
 		log.Errorln(err)
@@ -215,22 +206,6 @@ func birdConfig() {
 	}
 	log.Debugln("bird: executing template")
 	err = t.Execute(f, birdData)
-	if err != nil {
-		log.Errorln(err)
-		return
-	}
-
-	// Now, IPv6
-	f, err = os.Create(BIRD6_CONFIG)
-	if err != nil {
-		log.Errorln(err)
-		return
-	}
-
-	// Weird hack: copy birdData and move Static6
-	// into Static so we can use the same template
-	bd2 := &Bird{Static: birdData.Static6, OSPF: birdData.OSPF, RouterID: birdData.RouterID}
-	err = t.Execute(f, bd2)
 	if err != nil {
 		log.Errorln(err)
 		return
@@ -256,26 +231,6 @@ func birdRestart() {
 	if err != nil {
 		log.Errorln(err)
 		birdCmd = nil
-	}
-
-	if bird6Cmd != nil {
-		err := bird6Cmd.Process.Kill()
-		if err != nil {
-			log.Errorln(err)
-			return
-		}
-		_, err = bird6Cmd.Process.Wait()
-		if err != nil {
-			log.Errorln(err)
-			return
-		}
-	}
-
-	bird6Cmd = exec.Command("bird6", "-f", "-s", "/bird6.sock", "-P", "/bird6.pid", "-c", BIRD6_CONFIG)
-	err = bird6Cmd.Start()
-	if err != nil {
-		log.Errorln(err)
-		bird6Cmd = nil
 	}
 }
 
@@ -344,16 +299,24 @@ var birdTmpl = `
 router id {{ .RouterID }};
 
 protocol kernel {
-        scan time 60;
-        import none;
-        export all;   # Actually insert routes into the kernel routing table
+  scan time 60;
+
+  ipv4 {
+    import none;
+    export all;   # Actually insert routes into the kernel routing table
+  };
+
+  ipv6 {
+    import none;
+    export all;   # Actually insert routes into the kernel routing table
+  };
 }
 
 # The Device protocol is not a real routing protocol. It doesn't generate any
 # routes and it only serves as a module for getting information about network
 # interfaces from the kernel.
 protocol device {
-        scan time 60;
+  scan time 60;
 }
 
 {{ $DOSTATIC := len .Static }}
@@ -372,7 +335,14 @@ protocol static {
 #Named static routes
 {{ range $name, $network := .NamedStatic }}
 protocol static static_{{$name}}{
-	import all;
+  ipv4 {
+    import all;
+  };
+
+  ipv6 {
+    import all;
+  };
+
 {{ range $net, $nh := $network }}
 	{{ if ne $nh "" }}
 	route {{ $net }} via {{ $nh }};
@@ -387,18 +357,34 @@ protocol static static_{{$name}}{
 {{ $DOOSPF := len .OSPF }}
 {{ if ne $DOOSPF 0 }}
 protocol ospf {
-	import all;
-	{{ if .ExportOSPF}}
-	export filter {
-		{{ range $v := .OSPF }}
-		{{ range $f , $options := $v.Filternetworks }}
-		if proto = "static_{{ $f }}" then
-			accept;
-		{{ end }}
+	ipv4 {
+		import all;
+		{{ if .ExportOSPF}}
+		export filter {
+			{{ range $v := .OSPF }}
+			{{ range $f , $options := $v.Filternetworks }}
+			if proto = "static_{{ $f }}" then
+				accept;
+			{{ end }}
+			{{ end }}
+		};
 		{{ end }}
 	};
-	{{ end }}
-{{ range $v := .OSPF }}
+
+	ipv6 {
+		import all;
+		{{ if .ExportOSPF}}
+		export filter {
+			{{ range $v := .OSPF }}
+			{{ range $f , $options := $v.Filternetworks }}
+			if proto = "static_{{ $f }}" then
+				accept;
+			{{ end }}
+			{{ end }}
+		};
+		{{ end }}
+	};
+  {{ range $v := .OSPF }}
 	area {{ $v.Area }} {
 		{{ $DONETWORK := len $v.Prefixes }}
 		{{ if ne $DONETWORK 0 }}
@@ -416,7 +402,7 @@ protocol ospf {
 		};
 		{{ end }}
 	};
-{{ end }}
+  {{ end }}
 }
 {{ end }}
 
@@ -425,20 +411,35 @@ protocol ospf {
 
 {{ range $v := .BGP }}
 protocol bgp {{ $v.ProcessName }} {
-	import all;
 	local {{ $v.LocalIP }} as {{ $v.LocalAS }};
 	neighbor {{ $v.NeighborIP }} as {{ $v.NeighborAS }};
 	{{ if $v.RouteReflector }}
 	rr client;
 	{{ end }}
-	{{ $EXPORT := len .ExportNetworks }}
-	{{ if ne $EXPORT 0 }}
-	export filter {
-		if {{$v.GenerateFilter}} then
-			accept;
-		else reject;
+
+	ipv4 {
+	  import all;
+		{{ $EXPORT := len .ExportNetworks }}
+		{{ if ne $EXPORT 0 }}
+		export filter {
+			if {{$v.GenerateFilter}} then
+				accept;
+			else reject;
+		};
+		{{ end }}
 	};
-	{{ end }}
+
+	ipv6 {
+	  import all;
+		{{ $EXPORT := len .ExportNetworks }}
+		{{ if ne $EXPORT 0 }}
+		export filter {
+			if {{$v.GenerateFilter}} then
+				accept;
+			else reject;
+		};
+		{{ end }}
+	};
 }
 {{ end }}
 {{ end }}
