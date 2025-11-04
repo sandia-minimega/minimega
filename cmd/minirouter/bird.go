@@ -321,7 +321,7 @@ protocol kernel kernel_ipv4 {
     export all;   # Actually insert routes into the kernel routing table
   };
 
-	learn;
+  learn;
 }
 
 protocol kernel kernel_ipv6 {
@@ -332,7 +332,7 @@ protocol kernel kernel_ipv6 {
     export all;   # Actually insert routes into the kernel routing table
   };
 
-	learn;
+  learn;
 }
 
 # The Device protocol is not a real routing protocol. It doesn't generate any
@@ -346,14 +346,14 @@ protocol device {
 {{ if ne $DOSTATIC 0 }}
 #static routes
 protocol static static_ipv4 {
-	check link;
+  check link;
 
   ipv4 {
     import all;
   };
 
 {{ range $network, $nh := .Static4 }}
-	route {{ $network }} via {{ $nh }};
+  route {{ $network }} via {{ $nh }};
 {{ end }}
 }
 {{ end }}
@@ -362,14 +362,14 @@ protocol static static_ipv4 {
 {{ if ne $DOSTATIC 0 }}
 #static routes
 protocol static static_ipv6 {
-	check link;
+  check link;
 
   ipv6 {
     import all;
   };
 
 {{ range $network, $nh := .Static6 }}
-	route {{ $network }} via {{ $nh }};
+  route {{ $network }} via {{ $nh }};
 {{ end }}
 }
 {{ end }}
@@ -379,7 +379,7 @@ protocol static static_ipv6 {
 #Named IPv4 static routes
 {{ range $name, $network := .NamedStatic4 }}
 protocol static static_{{$name}}_ipv4 {
-	check link;
+  check link;
 
   ipv4 {
     import all;
@@ -387,9 +387,9 @@ protocol static static_{{$name}}_ipv4 {
 
 {{ range $net, $nh := $network }}
 	{{ if ne $nh "" }}
-	route {{ $net }} via {{ $nh }};
+  route {{ $net }} via {{ $nh }};
 	{{ else }}
-	route {{ $net }} reject;
+  route {{ $net }} reject;
 	{{ end }}
 {{ end }}
 }
@@ -401,7 +401,7 @@ protocol static static_{{$name}}_ipv4 {
 #Named IPv6 static routes
 {{ range $name, $network := .NamedStatic6 }}
 protocol static static_{{$name}}_ipv6 {
-	check link;
+  check link;
 
   ipv6 {
     import all;
@@ -409,9 +409,9 @@ protocol static static_{{$name}}_ipv6 {
 
 {{ range $net, $nh := $network }}
 	{{ if ne $nh "" }}
-	route {{ $net }} via {{ $nh }};
+  route {{ $net }} via {{ $nh }};
 	{{ else }}
-	route {{ $net }} reject;
+  route {{ $net }} reject;
 	{{ end }}
 {{ end }}
 }
