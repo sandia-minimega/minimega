@@ -313,7 +313,7 @@ var birdTmpl = `
 
 router id {{ .RouterID }};
 
-protocol kernel_ipv4 {
+protocol kernel kernel_ipv4 {
   scan time 60;
 
   ipv4 {
@@ -324,7 +324,7 @@ protocol kernel_ipv4 {
 	learn;
 }
 
-protocol kernel_ipv6 {
+protocol kernel kernel_ipv6 {
   scan time 60;
 
   ipv6 {
@@ -345,7 +345,7 @@ protocol device {
 {{ $DOSTATIC := len .Static4 }}
 {{ if ne $DOSTATIC 0 }}
 #static routes
-protocol static_ipv4 {
+protocol static static_ipv4 {
 	check link;
 
   ipv4 {
@@ -361,7 +361,7 @@ protocol static_ipv4 {
 {{ $DOSTATIC := len .Static6 }}
 {{ if ne $DOSTATIC 0 }}
 #static routes
-protocol static_ipv6 {
+protocol static static_ipv6 {
 	check link;
 
   ipv6 {
