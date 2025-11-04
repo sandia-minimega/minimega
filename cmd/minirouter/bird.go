@@ -19,12 +19,14 @@ const (
 )
 
 type Bird struct {
-	Static      map[string]string
-	NamedStatic map[string]map[string]string
-	OSPF        map[string]*OSPF
-	BGP         map[string]*BGP
-	RouterID    string
-	ExportOSPF  bool
+	Static4      map[string]string
+	Static6      map[string]string
+	NamedStatic4 map[string]map[string]string
+	NamedStatic6 map[string]map[string]string
+	OSPF         map[string]*OSPF
+	BGP          map[string]*BGP
+	RouterID     string
+	ExportOSPF   bool
 }
 
 var (
@@ -69,12 +71,14 @@ func init() {
 	})
 	birdID = getRouterID()
 	birdData = &Bird{
-		Static:      make(map[string]string),
-		NamedStatic: make(map[string]map[string]string),
-		OSPF:        make(map[string]*OSPF),
-		BGP:         make(map[string]*BGP),
-		RouterID:    birdID,
-		ExportOSPF:  false,
+		Static4:      make(map[string]string),
+		Static6:      make(map[string]string),
+		NamedStatic4: make(map[string]map[string]string),
+		NamedStatic6: make(map[string]map[string]string),
+		OSPF:         make(map[string]*OSPF),
+		BGP:          make(map[string]*BGP),
+		RouterID:     birdID,
+		ExportOSPF:   false,
 	}
 }
 
@@ -85,11 +89,13 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 	log.Debugln("bird: Parsing command")
 	if c.BoolArgs["flush"] {
 		birdData = &Bird{
-			Static:      make(map[string]string),
-			NamedStatic: make(map[string]map[string]string),
-			OSPF:        make(map[string]*OSPF),
-			BGP:         make(map[string]*BGP),
-			RouterID:    birdID,
+			Static4:      make(map[string]string),
+			Static6:      make(map[string]string),
+			NamedStatic4: make(map[string]map[string]string),
+			NamedStatic6: make(map[string]map[string]string),
+			OSPF:         make(map[string]*OSPF),
+			BGP:          make(map[string]*BGP),
+			RouterID:     birdID,
 		}
 	} else if c.BoolArgs["commit"] {
 		birdConfig()
@@ -105,12 +111,21 @@ func handleBird(c *minicli.Command, r chan<- minicli.Responses) {
 		if name == "null" && nh == "" {
 			log.Warnln("skipping unnamed static route: next hop not provided")
 		} else if name == "null" {
-			birdData.Static[network] = nh
-		} else {
-			if birdData.NamedStatic[name] == nil {
-				birdData.NamedStatic[name] = make(map[string]string)
+			if isIPv4(nh) {
+				birdData.Static4[network] = nh
+			} else if isIPv6(nh) {
+				birdData.Static6[network] = nh
 			}
-			birdData.NamedStatic[name][network] = nh
+		} else if isIPv4(nh) {
+			if birdData.NamedStatic4[name] == nil {
+				birdData.NamedStatic4[name] = make(map[string]string)
+			}
+			birdData.NamedStatic4[name][network] = nh
+		} else if isIPv6(nh) {
+			if birdData.NamedStatic6[name] == nil {
+				birdData.NamedStatic6[name] = make(map[string]string)
+			}
+			birdData.NamedStatic6[name][network] = nh
 		}
 	} else if c.BoolArgs["ospf"] {
 		area := c.StringArgs["area"]
@@ -298,7 +313,7 @@ var birdTmpl = `
 
 router id {{ .RouterID }};
 
-protocol kernel {
+protocol kernel_ipv4 {
   scan time 60;
 
   ipv4 {
@@ -306,10 +321,18 @@ protocol kernel {
     export all;   # Actually insert routes into the kernel routing table
   };
 
+	learn;
+}
+
+protocol kernel_ipv6 {
+  scan time 60;
+
   ipv6 {
     import none;
     export all;   # Actually insert routes into the kernel routing table
   };
+
+	learn;
 }
 
 # The Device protocol is not a real routing protocol. It doesn't generate any
@@ -319,25 +342,66 @@ protocol device {
   scan time 60;
 }
 
-{{ $DOSTATIC := len .Static }}
+{{ $DOSTATIC := len .Static4 }}
 {{ if ne $DOSTATIC 0 }}
 #static routes
-protocol static {
+protocol static_ipv4 {
 	check link;
-{{ range $network, $nh := .Static }}
+
+  ipv4 {
+    import all;
+  };
+
+{{ range $network, $nh := .Static4 }}
 	route {{ $network }} via {{ $nh }};
 {{ end }}
 }
 {{ end }}
 
-{{ $DOSTATIC := len .NamedStatic }}
+{{ $DOSTATIC := len .Static6 }}
 {{ if ne $DOSTATIC 0 }}
-#Named static routes
-{{ range $name, $network := .NamedStatic }}
-protocol static static_{{$name}}{
+#static routes
+protocol static_ipv6 {
+	check link;
+
+  ipv6 {
+    import all;
+  };
+
+{{ range $network, $nh := .Static6 }}
+	route {{ $network }} via {{ $nh }};
+{{ end }}
+}
+{{ end }}
+
+{{ $DOSTATIC := len .NamedStatic4 }}
+{{ if ne $DOSTATIC 0 }}
+#Named IPv4 static routes
+{{ range $name, $network := .NamedStatic4 }}
+protocol static static_{{$name}}_ipv4 {
+	check link;
+
   ipv4 {
     import all;
   };
+
+{{ range $net, $nh := $network }}
+	{{ if ne $nh "" }}
+	route {{ $net }} via {{ $nh }};
+	{{ else }}
+	route {{ $net }} reject;
+	{{ end }}
+{{ end }}
+}
+{{ end }}
+{{ end }}
+
+{{ $DOSTATIC := len .NamedStatic6 }}
+{{ if ne $DOSTATIC 0 }}
+#Named IPv6 static routes
+{{ range $name, $network := .NamedStatic6 }}
+protocol static static_{{$name}}_ipv6 {
+	check link;
 
   ipv6 {
     import all;
@@ -371,19 +435,6 @@ protocol ospf {
 		{{ end }}
 	};
 
-	ipv6 {
-		import all;
-		{{ if .ExportOSPF}}
-		export filter {
-			{{ range $v := .OSPF }}
-			{{ range $f , $options := $v.Filternetworks }}
-			if proto = "static_{{ $f }}" then
-				accept;
-			{{ end }}
-			{{ end }}
-		};
-		{{ end }}
-	};
   {{ range $v := .OSPF }}
 	area {{ $v.Area }} {
 		{{ $DONETWORK := len $v.Prefixes }}
@@ -418,18 +469,6 @@ protocol bgp {{ $v.ProcessName }} {
 	{{ end }}
 
 	ipv4 {
-	  import all;
-		{{ $EXPORT := len .ExportNetworks }}
-		{{ if ne $EXPORT 0 }}
-		export filter {
-			if {{$v.GenerateFilter}} then
-				accept;
-			else reject;
-		};
-		{{ end }}
-	};
-
-	ipv6 {
 	  import all;
 		{{ $EXPORT := len .ExportNetworks }}
 		{{ if ne $EXPORT 0 }}
