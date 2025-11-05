@@ -51,7 +51,7 @@ This will print the available options for miniweb
 
 Assuming minimega is located in /opt/bin/minimega, use:
 
- $ ./miniweb -root /opt/misc/web -console -base /opt &
+ $ ./miniweb -root /opt/web -console -base /opt &
 
 - miniweb supports per-path authentication so that users can be limited to specific namespaces or VMs.
 
