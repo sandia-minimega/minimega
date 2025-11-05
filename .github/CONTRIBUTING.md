@@ -30,14 +30,14 @@ Thank you for your interest in contributing to minimega! We welcome contribution
         ```bash
         git fetch upstream
         ```
-    * Merge the changes from the upstream main branch into your local main branch
+    * Merge the changes from the upstream master branch into your local master branch
         ```bash
-        git checkout main
-        git merge upstream/main
+        git checkout master
+        git merge upstream/master
         ```
-    * Push the updated main branch to your forked repository
+    * Push the updated master branch to your forked repository
         ```bash
-        git push origin main
+        git push origin master
         ```
 
 ## How to Contribute
@@ -117,4 +117,4 @@ We welcome suggestions for improvements! Please open an issue to discuss your id
 5. **Open a Pull Request**: Go to the original repository and open a [pull request](https://github.com/sandia-minimega/minimega/pulls). Provide a clear description of your changes and reference any related issues.
 
 ## License
-By contributing to this project, you agree that your contributions will be licensed under the [GNU](https://github.com/sandia-minimega/minimega/blob/master/LICENSE) License.
+By contributing to this project, you agree that your contributions will be licensed under the [GNU General Public License v3.0](https://github.com/sandia-minimega/minimega/blob/master/LICENSE) License.
