@@ -38,7 +38,6 @@ func diskInfo(image string) (DiskInfo, error) {
 
 	jsonOut := map[string]interface{}{}
 	err = json.Unmarshal([]byte(out), &jsonOut)
-
 	if err != nil {
 		return info, fmt.Errorf("[image %s] %v", image, err)
 	}
@@ -169,13 +168,18 @@ func diskSnapshot(src, dst string) error {
 		return fmt.Errorf("[image %s] error getting info: %v", src, err)
 	}
 
-	relSrc, err := filepath.Rel(filepath.Dir(dst), src)
-	if err != nil {
-		return fmt.Errorf("[image %s] error getting src relative to dst: %v", src, err)
+	backing := src
+
+	if !*f_absSnapshot {
+		var err error
+
+		backing, err = filepath.Rel(filepath.Dir(dst), src)
+		if err != nil {
+			return fmt.Errorf("[image %s] error getting src backing image relative to dst: %v", src, err)
+		}
 	}
 
-	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", relSrc, "-F", info.Format, dst)
-
+	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", backing, "-F", info.Format, dst)
 	if err != nil {
 		return fmt.Errorf("[image %s] %v: %v", src, out, err)
 	}
@@ -194,26 +198,39 @@ func diskCommit(image string) error {
 
 func diskRebase(image, backing string, unsafe bool) error {
 	args := []string{"qemu-img", "rebase"}
+
 	if backing != "" {
 		if !strings.HasPrefix(backing, *f_iomBase) {
 			log.Warn("minimega expects backing images to be in the files directory")
 		}
-		relBacking, err := filepath.Rel(filepath.Dir(image), backing)
-		if err != nil {
-			return fmt.Errorf("[image %s] error getting backing relative to dst: %v", backing, err)
+
+		parent := backing
+
+		if !*f_absSnapshot {
+			var err error
+
+			parent, err = filepath.Rel(filepath.Dir(image), backing)
+			if err != nil {
+				return fmt.Errorf("[image %s] error getting parent backing relative to dst: %v", backing, err)
+			}
 		}
+
 		backingInfo, err := diskInfo(backing)
 		if err != nil {
 			return fmt.Errorf("[image %s] error getting info for backing file: %v", image, err)
 		}
-		args = append(args, "-b", relBacking, "-F", backingInfo.Format)
+
+		args = append(args, "-b", parent, "-F", backingInfo.Format)
 	} else { // rebase as independent image
 		args = append(args, "-b", "")
 	}
+
 	if unsafe {
 		args = append(args, "-u")
 	}
+
 	args = append(args, image)
+
 	out, err := processWrapper(args...)
 	if err != nil {
 		return fmt.Errorf("[image %s] %v: %v", image, out, err)
@@ -373,7 +390,7 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		// copy files/folders into mntDir
 		for target, source := range pairs {
 			dir := filepath.Dir(filepath.Join(mntDir, target))
-			os.MkdirAll(dir, 0775)
+			os.MkdirAll(dir, 0o775)
 
 			out, err := processWrapper("cp", "-fr", source, filepath.Join(mntDir, target))
 			if err != nil {

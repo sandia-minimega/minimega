@@ -55,6 +55,7 @@ var (
 	f_pipe        = flag.String("pipe", "", "read/write to or from a named pipe")
 	f_headnode    = flag.String("headnode", "", "mesh node to send all logs to and get all files from")
 	f_hashfiles   = flag.Bool("hashfiles", false, "hash files to be served by iomeshage")
+	f_absSnapshot = flag.Bool("abssnapshot", false, "use absolute paths to backing images when creating snapshots")
 
 	f_e         = flag.Bool("e", false, "execute command on running minimega")
 	f_attach    = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
@@ -98,6 +99,10 @@ func main() {
 	// see containerShim()
 	if flag.NArg() > 1 && flag.Arg(0) == CONTAINER_MAGIC {
 		containerShim()
+	}
+
+	if *f_absSnapshot {
+		backingType = "absolute" // used for command help messages
 	}
 
 	cliSetup()
@@ -218,7 +223,7 @@ func main() {
 	}
 
 	// attempt to set up the base path
-	if err := os.MkdirAll(*f_base, os.FileMode(0770)); err != nil {
+	if err := os.MkdirAll(*f_base, os.FileMode(0o770)); err != nil {
 		log.Fatal("mkdir base path: %v", err)
 	}
 
