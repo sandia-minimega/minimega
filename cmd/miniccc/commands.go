@@ -319,7 +319,7 @@ func testConnect(test *ron.ConnTest) (string, string) {
 						}
 					}
 
-					buf := make([]byte, 1)
+					buf := make([]byte, 4096)
 
 					if _, err := conn.Read(buf); err != nil {
 						return fmt.Sprintf("%s | fail", uri.Host), ""
