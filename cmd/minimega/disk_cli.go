@@ -6,6 +6,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,6 +16,8 @@ import (
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
+
+var backingType = "relative"
 
 var diskCLIHandlers = []minicli.Handler{
 	{
@@ -83,7 +86,7 @@ The 'recursive' flag can be set to print out full details for all backing images
 	},
 	{
 		HelpShort: "creates a new disk 'dst' backed by 'image'",
-		HelpLong: `
+		HelpLong: fmt.Sprintf(`
 Creates a new qcow2 image 'dst' backed by 'image'.
 
 Example of taking a snapshot of a disk:
@@ -95,13 +98,13 @@ snapshot will be stored in the 'files' directory. Snapshots are always created
 in the 'files' directory.
 
 Users may use paths relative to the 'files' directory or absolute paths for inputs; 
-however, the backing path will always be relative to the new image.`,
+however, the backing path will always be %s to the new image.`, backingType),
 		Patterns: []string{"disk snapshot <image> [dst image]"},
 		Call:     wrapSimpleCLI(cliDiskSnapshot),
 	},
 	{
 		HelpShort: "rebases the disk onto a different backing image",
-		HelpLong: `
+		HelpLong: fmt.Sprintf(`
 Rebases the image 'image' onto a new backing file 'backing'.
 Using 'rebase' will write any differences between the original backing file and the new backing file to 'image'.
 
@@ -116,7 +119,7 @@ The 'backing' argument can be omitted, causing all backing data to be written to
 		disk rebase myimage.qcow2
 		
 Users may use paths relative to the 'files' directory or absolute paths for inputs; 
-however, the backing path will always be relative to the rebased image.`,
+however, the backing path will always be %s to the rebased image.`, backingType),
 		Patterns: []string{
 			"disk <rebase,> <image> [backing file]",
 			"disk <set-backing,> <image> [backing file]",
