@@ -18,7 +18,11 @@ import (
 func getUUID() string {
 	out, err := exec.Command("wmic", "path", "win32_computersystemproduct", "get", "uuid").CombinedOutput()
 	if err != nil {
-		log.Fatal("wmic run: %v", err)
+		// Try powershell fallback
+		out, err = exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", "Get-CimInstance -ClassName Win32_ComputerSystemProduct | Select-Object -ExpandProperty UUID").CombinedOutput()
+		if err != nil {
+			log.Fatal("unable to get UUID: %v", err)
+		}
 	}
 
 	// string must be in the form:
