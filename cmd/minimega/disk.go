@@ -352,16 +352,29 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 	}
 	log.Debug("mount args: %v", args)
 
-	_, err = processWrapper(args...)
-	if err != nil {
+	var out string
+	mounted := false
+	for i := 1; i <= 5; i++ {
+		out, err = processWrapper(args...)
+		if err == nil {
+			mounted = true
+			break
+		}
+		log.Debug("mount attempt %d failed: %v", i, err)
+		time.Sleep(time.Duration(i*100) * time.Millisecond)
+	}
+
+	if !mounted {
+		log.Debug("standard mount failed, trying ntfs-3g: %v, %v", out, err)
 		// check that ntfs-3g is installed
-		_, err = processWrapper("ntfs-3g", "--version")
+		out, err := processWrapper("ntfs-3g", "--version")
 		if err != nil {
 			log.Error("ntfs-3g not found, ntfs images unwriteable")
+			return fmt.Errorf("[image %s] ntfs-3g not found %v: %v", dst, out, err)
 		}
 
 		// mount with ntfs-3g
-		out, err := processWrapper("mount", "-o", "ntfs-3g", path, mntDir)
+		out, err = processWrapper("mount", "-o", "ntfs-3g", path, mntDir)
 		if err != nil {
 			log.Error("failed to mount partition")
 			return fmt.Errorf("[image %s] %v: %v", dst, out, err)
@@ -400,7 +413,7 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 	}
 
 	// explicitly flush buffers
-	out, err := processWrapper("blockdev", "--flushbufs", path)
+	out, err = processWrapper("blockdev", "--flushbufs", path)
 	if err != nil {
 		return fmt.Errorf("[image %s] unable to flush: %v %v", dst, out, err)
 	}
