@@ -35,4 +35,4 @@ jobs:
           if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'
           with:
             name: minimega-python-dist
-            path: ./lib/dist/
+            path: ./minimega/lib/dist/
