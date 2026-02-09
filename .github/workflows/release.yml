@@ -1,0 +1,52 @@
+name: Create Draft Release
+
+on:
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  deb-build:
+    name: Build deb File
+    uses: ./.github/workflows/deb.yml
+  rpm-build:
+    name: Build rpm File
+    uses: ./.github/workflows/rpm.yml
+  binary-build:
+    name: Build Binaries
+    uses: ./.github/workflows/build.yml
+  build-and-draft:
+    name: Build and Draft Release
+    needs: [deb-build, rpm-build, binary-build]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: minimega
+      - name: Get Version
+        run: |
+          VER=$(cat minimega/VERSION | cut -d'=' -f2)
+          echo "version=$VER" >> $GITHUB_ENV
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+      - name: temp
+        run: |
+          ls minimega* -lh
+      - name: Create Release
+        uses: softprops/action-gh-release@v2.2.2
+        id: create-release
+        with:
+          draft: true
+          prerelease: false
+          name: minimega ${{ env.version }}
+          tag_name: ${{ inputs.version }}
+          files: |
+            minimega-binaries/*.tar.gz
+            minimega-deb/*.deb
+            minimega-rpm/**/*.rpm
+          generate_release_notes: true
+          fail_on_unmatched_files: true
