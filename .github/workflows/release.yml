@@ -48,5 +48,6 @@ jobs:
             minimega-binaries/*.tar.gz
             minimega-deb/*.deb
             minimega-rpm/**/*.rpm
+            minimega-python-dist/**/*.whl
           generate_release_notes: true
           fail_on_unmatched_files: true

@@ -2,6 +2,8 @@ name: Build Binaries
 on: 
   push:
   workflow_call:
+  release:
+    types: [published]
 
 jobs:
   build:
@@ -20,17 +22,17 @@ jobs:
             ./scripts/all.bash
         # Only for release:
         - name: Tar
-          if: github.event_name == 'workflow_dispatch'
+          if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'
           run: tar -czvf minimega-$( cat minimega/VERSION | cut -d'=' -f2 )-binaries.tar.gz minimega
         - name: Upload artifact
           uses: actions/upload-artifact@v4.0.0
-          if: github.event_name == 'workflow_dispatch'
+          if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'
           with:
             name: minimega-binaries
             path: ./*.tar.gz
         - name: Upload python package
           uses: actions/upload-artifact@v4.0.0
-          if: github.event_name == 'workflow_dispatch'
+          if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'
           with:
             name: minimega-python-dist
-            path: ./lib/dist/
+            path: ./minimega/lib/dist/
