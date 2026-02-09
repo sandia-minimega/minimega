@@ -16,8 +16,12 @@ permissions:
   contents: read
 
 jobs:
+  binary-build:
+    name: Build Binaries
+    uses: ./.github/workflows/build.yml
   deploy:
     runs-on: ubuntu-latest
+    needs: binary-build
     steps:
     - uses: actions/checkout@v4
     - uses: actions/download-artifact@v5
