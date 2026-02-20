@@ -105,7 +105,7 @@ func TestDelLogger(t *testing.T) {
 	testString := "test 123"
 	testString2 := "test 456"
 
-	Debug(testString)
+	Debug("%s", testString)
 
 	s, err := sink.ReadString('\n')
 	if err != nil {
@@ -118,7 +118,7 @@ func TestDelLogger(t *testing.T) {
 
 	DelLogger("sinkDel")
 
-	Debug(testString2)
+	Debug("%s", testString2)
 
 	s, err = sink.ReadString('\n')
 	if err != nil && err != io.EOF {

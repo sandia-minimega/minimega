@@ -603,7 +603,7 @@ func cliClearNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 	// destroy the namespace on all remote hosts as well
 	if c.Source == "" {
 		// recompile and set source so that we don't try to broadcast again
-		cmd := minicli.MustCompilef(c.Original)
+		cmd := minicli.MustCompilef("%v", c.Original)
 		cmd.Source = name
 
 		respChan2, err := meshageSend(cmd, Wildcard)
