@@ -33,7 +33,7 @@ For previous versions of minimega, visit our [[/articles/download.article][downl
 
 ** Building from source
 
-To build from source you will need [[http://golang.org][Go]] (version 1.20 or
+To build from source you will need [[http://golang.org][Go]] (version 1.24 or
 later) and libpcap headers. On a Debian-type system, you can install
 compile-time dependencies with:
 
@@ -44,10 +44,10 @@ Having installed the dependencies, grab the minimega source:
        $ git clone git@github.com:sandia-minimega/minimega.git
        $ cd minimega
 
-Next, check out the 2.7 release. If you wish to run the development version
+Next, check out the latest release. If you wish to run the development version
 ("tip") of minimega, skip this command.
 
-	$ git checkout 2.7
+	$ git checkout 3.0.0
 
 Finally, compile minimega:
 
