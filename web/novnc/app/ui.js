@@ -86,7 +86,7 @@ const UI = {
 
         // Try to fetch version number
         try {
-            let response = await fetch('./package.json');
+            let response = await fetch('/novnc/package.json');
             if (!response.ok) {
                 throw Error("" + response.status + " " + response.statusText);
             }

@@ -61,8 +61,8 @@
     <script type="module" crossorigin="anonymous" src="/novnc/app/error-handler.js"></script>
 
     <script type="module">
-        import UI from "./novnc/app/ui.js";
-        import * as Log from './novnc/core/util/logging.js';
+        import UI from "/novnc/app/ui.js";
+        import * as Log from '/novnc/core/util/logging.js';
 
         let response;
 
@@ -74,7 +74,7 @@
         // cannot change.
 
         try {
-            response = await fetch('./novnc/defaults.json');
+            response = await fetch('/novnc/defaults.json');
             if (!response.ok) {
                 throw Error("" + response.status + " " + response.statusText);
             }
@@ -85,7 +85,7 @@
         }
 
         try {
-            response = await fetch('./novnc/mandatory.json');
+            response = await fetch('/novnc/mandatory.json');
             if (!response.ok) {
                 throw Error("" + response.status + " " + response.statusText);
             }
