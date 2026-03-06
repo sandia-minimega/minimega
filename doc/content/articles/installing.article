@@ -47,7 +47,8 @@ Having installed the dependencies, grab the minimega source:
 Next, check out the latest release. If you wish to run the development version
 ("tip") of minimega, skip this command.
 
-	$ git checkout 3.0.0
+	$ git fetch --tags
+	$ git checkout $(git describe --tags $(git rev-list --tags --max-count=1))
 
 Finally, compile minimega:
 
