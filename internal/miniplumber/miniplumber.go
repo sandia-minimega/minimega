@@ -1040,7 +1040,7 @@ func (p *Pipe) write(value string, r int64) {
 	if r == SCHEDULE_ALL {
 		p.last = value
 		if p.log {
-			log.Debug(fmt.Sprintf("pipe %v: %v", p.name, strings.TrimSpace(value)))
+			log.Debug("%s", fmt.Sprintf("pipe %v: %v", p.name, strings.TrimSpace(value)))
 		}
 		for _, c := range p.readers {
 			d, err := p.via(value)
@@ -1057,7 +1057,7 @@ func (p *Pipe) write(value string, r int64) {
 	} else {
 		if c, ok := p.readers[r]; ok {
 			if p.log {
-				log.Debug(fmt.Sprintf("pipe %v: %v", p.name, strings.TrimSpace(value)))
+				log.Debug("%s", fmt.Sprintf("pipe %v: %v", p.name, strings.TrimSpace(value)))
 			}
 			d, err := p.via(value)
 			if err != nil {

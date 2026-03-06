@@ -63,7 +63,7 @@ func diskChainInfo(image string) ([]DiskInfo, error) {
 		// qemu-img returns nothing if it has an error reading a backing image.
 		// Instead log error and get details for just this image
 		if strings.Contains(out, "Could not open") && !strings.Contains(out, image) {
-			log.Warn(fmt.Sprintf("[image %s] returning just image details. Error getting backing image details: %v",
+			log.Warn("%s", fmt.Sprintf("[image %s] returning just image details. Error getting backing image details: %v",
 				image, out))
 			single, err2 := diskInfo(image)
 			if err2 != nil {

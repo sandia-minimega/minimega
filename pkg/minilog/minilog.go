@@ -149,7 +149,7 @@ func LogAll(i io.Reader, level Level, name string) {
 		for {
 			d, err := r.ReadString('\n')
 			if d := strings.TrimSpace(d); d != "" {
-				log(level, name, d)
+				log(level, name, "%s", d)
 			}
 			if level == FATAL {
 				os.Exit(1)

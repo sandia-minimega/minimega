@@ -90,7 +90,7 @@ func (p ServerTechPDU) logout() error {
 	p.c.Close()
 	//check if connection is closed
 	err = p.readTelnet(prompt)
-	log.Debug(err.Error())
+	log.Debug("%v", err.Error())
 	log.Debug("Connection Closed")
 	return nil
 }

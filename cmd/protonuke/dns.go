@@ -52,7 +52,7 @@ func dnsClient() {
 		log.Debug("dns client: question=%v", m.Question)
 		in, err := dns.Exchange(m, h+addr)
 		if err != nil {
-			log.Debug(err.Error())
+			log.Debug("%v", err.Error())
 		} else {
 			log.Debug("dns client: answer=%v", in)
 			dnsReportChan <- 1
@@ -79,7 +79,7 @@ func dnsServer() {
 
 	err := server.ListenAndServe()
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal("%v", err.Error())
 	}
 }
 

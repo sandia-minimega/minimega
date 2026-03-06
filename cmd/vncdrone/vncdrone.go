@@ -79,7 +79,7 @@ func main() {
 
 	c, err := miniclient.Dial(*f_base)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal("%v", err.Error())
 	}
 	// don't set a pager for the client
 	c.Pager = nil
@@ -90,7 +90,7 @@ func main() {
 	// get all the recordings
 	r, err := ioutil.ReadDir(*f_recordings)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal("%v", err.Error())
 	}
 	for _, v := range r {
 		f := strings.Split(v.Name(), "_")

@@ -108,13 +108,13 @@ func renderTemplate(w http.ResponseWriter, r *http.Request, t string, d interfac
 
 	tmpl, err := template.ParseFiles(lp, fp)
 	if err != nil {
-		log.Error(err.Error())
+		log.Error("%v", err.Error())
 		http.Error(w, http.StatusText(500), 500)
 		return
 	}
 
 	if err := tmpl.ExecuteTemplate(w, "layout", d); err != nil {
-		log.Error(err.Error())
+		log.Error("%v", err.Error())
 		http.Error(w, http.StatusText(500), 500)
 	}
 }
@@ -627,7 +627,7 @@ func minibuilderHandler(w http.ResponseWriter, r *http.Request) {
 			format = "xml"
 		}
 
-		log.Info(fmt.Sprintf("Saving file %s as %s", fname, format))
+		log.Info("%s", fmt.Sprintf("Saving file %s as %s", fname, format))
 
 		data, err := url.QueryUnescape(r.FormValue("xml"))
 		if err != nil {

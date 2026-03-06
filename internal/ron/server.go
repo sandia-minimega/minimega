@@ -260,7 +260,7 @@ func (s *Server) DialSerial(path, uuid string) error {
 			cli, err := s.handshake(conn)
 			if err != nil {
 				if errors.Is(err, errClientTooOld) {
-					log.Error(err.Error())
+					log.Error("%v", err.Error())
 					return
 				}
 

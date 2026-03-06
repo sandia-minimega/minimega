@@ -145,7 +145,7 @@ func readConfig(filename string) (Config, error) {
 			if len(fields) > 1 {
 				ll, err := log.ParseLevel(fields[1])
 				if err != nil {
-					log.Error(err.Error())
+					log.Error("%v", err.Error())
 					return ret, nil
 				}
 				log.AddSyslog("local", "", "powerbot", ll)
@@ -173,7 +173,7 @@ func main() {
 	// Parse configuration file
 	config, err = readConfig(*f_config)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal("%v", err.Error())
 	}
 
 	if len(args) == 2 {
@@ -201,7 +201,7 @@ func main() {
 		ranger, _ := ranges.NewRange(config.prefix, 0, 1000000)
 		nodeList, err = ranger.SplitRange(nodes)
 		if err != nil {
-			log.Fatal(err.Error())
+			log.Fatal("%v", err.Error())
 		}
 	} else {
 		nodeList = config.nodes
@@ -224,7 +224,7 @@ func main() {
 	devs := make(map[string]Device)
 	devs, err = findOutletsAndDevs(remainingNodes)
 	if err != nil {
-		log.Fatal(err.Error())
+		log.Fatal("%v", err.Error())
 	}
 	log.Info("Attempting PDU commands...")
 
@@ -235,7 +235,7 @@ func main() {
 		// First, let's see if IPMI is available
 		pdu, err = PDUtypes[dev.pdutype](dev.host, dev.port, dev.username, dev.password)
 		if err != nil {
-			log.Error(err.Error())
+			log.Error("%v", err.Error())
 			continue
 		}
 
@@ -243,22 +243,22 @@ func main() {
 		case "on":
 			err := pdu.On(dev.outlets)
 			if err != nil {
-				log.Error(err.Error())
+				log.Error("%v", err.Error())
 			}
 		case "off":
 			err := pdu.Off(dev.outlets)
 			if err != nil {
-				log.Error(err.Error())
+				log.Error("%v", err.Error())
 			}
 		case "cycle":
 			err := pdu.Cycle(dev.outlets)
 			if err != nil {
-				log.Error(err.Error())
+				log.Error("%v", err.Error())
 			}
 		case "status":
 			err := pdu.Status(dev.outlets)
 			if err != nil {
-				log.Error(err.Error())
+				log.Error("%v", err.Error())
 			}
 		case "temp", "info":
 			fmt.Println("Invalid PDU command; Remaining nodes skipped.")
@@ -340,7 +340,7 @@ func useIPMI(s []string, c string) []string {
 		if err != nil {
 			ret = append(ret, n)
 			log.Info("Failed to use IPMI for %s, adding to PDU list, if available:", n)
-			log.Info(err.Error())
+			log.Info("%v", err.Error())
 		}
 	}
 	return ret

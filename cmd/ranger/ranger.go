@@ -25,14 +25,14 @@ func main() {
 
 	data, err := ioutil.ReadFile(os.Args[1])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, err.Error())
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 	input := strings.Fields(string(data))
 
 	res, err := r.UnsplitRange(input)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, err.Error())
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 	fmt.Println(res)

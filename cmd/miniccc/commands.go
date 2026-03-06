@@ -215,10 +215,10 @@ func runCommand(stdin, stdout, stderr string, command []string, background bool)
 			cmd.Wait()
 			log.Info("command exited: %v", command)
 			if bufout.Len() > 0 {
-				log.Info(bufout.String())
+				log.Info("%s", bufout.String())
 			}
 			if buferr.Len() > 0 {
-				log.Info(buferr.String())
+				log.Info("%s", buferr.String())
 			}
 
 			client.Lock()
