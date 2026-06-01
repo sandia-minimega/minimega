@@ -757,7 +757,7 @@ func (s *Server) handshake(conn net.Conn) (*client, error) {
 				case <-t.C:
 					log.Debug("sending HEARTBEAT to client %s", m.Client.UUID)
 					m := Message{Type: MESSAGE_HEARTBEAT, Version: "v1"}
-					c.enc.Encode(&m) // no need to worry about errors here
+					c.sendMessage(&m) // a loss of connection is detected elsewhere.
 				}
 			}
 		}()
@@ -765,14 +765,17 @@ func (s *Server) handshake(conn net.Conn) (*client, error) {
 		return nil, fmt.Errorf("client %s: %w", m.Client.UUID, errClientTooOld)
 	}
 
-	// TODO: if the client blocks, ron will hang... probably not good
-	if err := c.enc.Encode(&m); err != nil {
+	// set write deadline to prevent ron from hanging
+	conn.SetWriteDeadline(time.Now().Add(HEARTBEAT_RATE * time.Second))
+	if err := c.sendMessage(&m); err != nil {
 		// client disconnected before it read the full handshake
+		close(c.cancelHeartbeat)
 		if err != io.EOF {
 			log.Errorln(err)
 		}
 		return nil, err
 	}
+	conn.SetWriteDeadline(time.Time{})
 
 	c.Client = m.Client
 	if c.mangled {
