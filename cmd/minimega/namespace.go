@@ -913,10 +913,17 @@ func GetNamespace() *Namespace {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
 
-	_, ok := namespaces[namespace]
-	if namespace == DefaultNamespace && !ok {
-		// recreate automatically
-		namespaces[namespace] = NewNamespace(namespace)
+	// If the active namespace no longer exists, fall back to the default
+	// rather than returning nil, which callers dereference.
+	if _, ok := namespaces[namespace]; !ok {
+		if namespace != DefaultNamespace {
+			log.Warn("active namespace %v no longer exists, reverting to %v", namespace, DefaultNamespace)
+			namespace = DefaultNamespace
+		}
+
+		if _, ok := namespaces[DefaultNamespace]; !ok {
+			namespaces[DefaultNamespace] = NewNamespace(DefaultNamespace)
+		}
 	}
 
 	return namespaces[namespace]
