@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
@@ -18,6 +19,10 @@ import (
 
 var (
 	ErrNoDeviceAvailable = errors.New("no available nbds found")
+
+	// nbdLock serializes device selection and connection so concurrent
+	// callers can't claim the same device.
+	nbdLock sync.Mutex
 )
 
 const (
@@ -103,32 +108,45 @@ func GetDevice() (string, error) {
 // ConnectImage exports a image using the NBD protocol using the qemu-nbd. If
 // successful, returns the NBD device.
 func ConnectImage(image string) (string, error) {
-	var nbdPath string
 	var err error
 
 	for i := 0; i < maxConnectRetries; i++ {
+		var nbdPath string
+
+		// Hold the lock across selection and connection so a concurrent caller
+		// can't grab the same device between the check and qemu-nbd -c.
+		nbdLock.Lock()
+
 		nbdPath, err = GetDevice()
-		if err != ErrNoDeviceAvailable {
-			break
+		if err != nil {
+			nbdLock.Unlock()
+
+			if err != ErrNoDeviceAvailable {
+				return "", err
+			}
+
+			log.Debug("all nbds in use, sleeping before retrying")
+			time.Sleep(time.Second * 10)
+
+			continue
 		}
 
-		log.Debug("all nbds in use, sleeping before retrying")
-		time.Sleep(time.Second * 10)
+		log.Debug("connect nbd: %v -> %v", image, nbdPath)
+
+		out, cerr := processWrapper("qemu-nbd", "-c", nbdPath, image)
+
+		nbdLock.Unlock()
+
+		if cerr == nil {
+			return nbdPath, nil
+		}
+
+		// The device was likely claimed since the check; try the next one.
+		err = fmt.Errorf("unable to connect to nbd: %v", out)
+		log.Debug("nbd connect failed, retrying: %v", err)
 	}
 
-	if err != nil {
-		return "", err
-	}
-
-	log.Debug("connect nbd: %v -> %v", image, nbdPath)
-
-	// connect it to qemu-nbd
-	out, err := processWrapper("qemu-nbd", "-c", nbdPath, image)
-	if err != nil {
-		return "", fmt.Errorf("unable to connect to nbd: %v", out)
-	}
-
-	return nbdPath, nil
+	return "", err
 }
 
 // DisconnectDevice disconnects a given NBD using qemu-nbd.
