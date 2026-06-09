@@ -41,11 +41,11 @@ and can scale to run on massive clusters with virtually no setup.
 **Note:** This package requires the EPEL repository to be enabled, as it depends on the `ntfs-3g` package, which is only available in EPEL.
 
 %build
-MM="../../../../"
+MM="../../../.."
 (cd $MM && ./scripts/build.bash && ./scripts/doc.bash)
 
 %install
-MM="../../../../"
+MM="../../../.."
 
 rm -rf $RPM_BUILD_ROOT
 rm -rf %{_rpmdir}/*
