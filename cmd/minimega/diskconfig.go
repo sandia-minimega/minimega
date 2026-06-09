@@ -30,6 +30,23 @@ type DiskConfigs []DiskConfig
 // ParseDiskConfig processes the input specifying the disk image path, interface,
 // and cache mode and udpates the vm config accordingly.
 func ParseDiskConfig(spec string, snapshot bool) (*DiskConfig, error) {
+	// NOTE: diskspec currently uses comma as a structural delimiter:
+	//
+	//   <path>[,<interface>[,<cache>]]
+	//
+	// As a result, paths/URLs containing commas are not supported by this
+	// parser. This is a pre-existing limitation of the diskspec grammar.
+	//
+	// We intentionally parse the diskspec first and then apply preprocessing
+	// only to the path component so that preprocessors like:
+	//
+	//   file:
+	//   http://
+	//   https://
+	//   tar:
+	//
+	// operate on the actual disk path rather than the full diskspec string.
+
 	// example: /data/minimega/images/linux.qcow2,virtio,writeback
 	f := strings.Split(spec, ",")
 
@@ -59,6 +76,15 @@ func ParseDiskConfig(spec string, snapshot bool) (*DiskConfig, error) {
 		}
 	default:
 		return nil, errors.New("malformed diskspec")
+	}
+
+	// Apply all CLI preprocessors to the path only. This preserves the
+	// interface/cache suffix semantics of diskspec while still allowing
+	// iomeshage and URL-based disk paths.
+	var err error
+	p, err = cliPreprocess(p)
+	if err != nil {
+		return nil, err
 	}
 
 	log.Info(`got path="%v", interface="%v", cache="%v"`, p, i, c)

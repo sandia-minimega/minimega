@@ -572,8 +572,10 @@ func cliPreprocess(v string) (string, error) {
 // Current preprocessors are: "file:", "http://", and "https://".
 func cliPreprocessor(c *minicli.Command) error {
 	for k, v := range c.StringArgs {
+
 		v2, err := cliPreprocess(v)
 		if err != nil {
+			log.Debug("cliPreprocessor: StringArg[%s] preprocess error: %v", k, err)
 			return err
 		}
 
@@ -585,6 +587,16 @@ func cliPreprocessor(c *minicli.Command) error {
 
 	for k := range c.ListArgs {
 		for k2, v := range c.ListArgs[k] {
+			// Disk specs may contain an iomeshage-backed path followed by
+			// interface/cache options, e.g.:
+			//   file:foo.qcow2,virtio,writeback
+			// Generic preprocessing would incorrectly treat the entire string as
+			// the file path. Let ParseDiskConfig handle preprocessing of only the
+			// path portion.
+			if k == "diskspec" {
+				log.Debug("cliPreprocessor: skipping preprocessing for ListArg[%s][%d]", k, k2)
+				continue
+			}
 			v2, err := cliPreprocess(v)
 			if err != nil {
 				return err
