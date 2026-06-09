@@ -10,14 +10,18 @@ doc/content/articles/minirouter_api.article
 lib/dist
 lib/MANIFEST
 lib/minimega.py
+lib/minimega.egg-info/
 tests/*.got
 tests/*/*.got
 .DS_Store*
+
+# Debian and RPM packaging temp files
 *.deb
 *.changes
 *.buildinfo
 *.ddeb
 *.rpm
+/minimega.service
 packaging/debian/.debhelper/
 packaging/debian/debhelper-build-stamp
 packaging/debian/files
@@ -33,4 +37,3 @@ packaging/debian/minimega/DEBIAN/postrm
 packaging/debian/minimega/DEBIAN/prerm
 packaging/debian/tmp/
 packaging/debian/minimega/
-lib/minimega.egg-info/

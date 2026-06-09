@@ -3,7 +3,6 @@
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
 MM=$SCRIPT_DIR/../..
-FILES=$SCRIPT_DIR/minmega
 
 # substitute version for control file
 source $MM/VERSION

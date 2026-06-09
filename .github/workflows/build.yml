@@ -1,5 +1,5 @@
 name: Build Binaries
-on: 
+on:
   push:
   workflow_call:
   release:
@@ -11,7 +11,7 @@ jobs:
       runs-on: ubuntu-latest
       steps:
         - name: Checkout
-          uses: actions/checkout@v4
+          uses: actions/checkout@v6
           with:
             path: minimega
         - name: Build
@@ -25,13 +25,13 @@ jobs:
           if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'
           run: tar -czvf minimega-$( cat minimega/VERSION | cut -d'=' -f2 )-binaries.tar.gz minimega
         - name: Upload artifact
-          uses: actions/upload-artifact@v4.0.0
+          uses: actions/upload-artifact@v7.0.1
           if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'
           with:
             name: minimega-binaries
             path: ./*.tar.gz
         - name: Upload python package
-          uses: actions/upload-artifact@v4.0.0
+          uses: actions/upload-artifact@v7.0.1
           if: github.event_name == 'workflow_dispatch' || github.event_name == 'release'
           with:
             name: minimega-python-dist
