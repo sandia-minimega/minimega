@@ -51,7 +51,12 @@ func (s *Server) ListenUFS(uuid string) (int, error) {
 		for {
 			conn, err := l.Accept()
 			if err != nil {
-				log.Error("accept failed: %v", err)
+				// the listener is closed by DisconnectUFS during teardown
+				if errors.Is(err, net.ErrClosed) {
+					log.Debug("ufs listener closed")
+				} else {
+					log.Error("accept failed: %v", err)
+				}
 
 				c.Lock()
 				defer c.Unlock()

@@ -39,6 +39,24 @@ codebase, you should adhere to the style in that particular section of code.
 minimega is growing rapidly and often times newer code is more well thought out
 (or not) than older code.
 
+* EditorConfig
+
+Use EditorConfig support in your editor so basic formatting rules are applied
+automatically when `.editorconfig` files are present in the tree.
+
+If you use VS Code, install the
+[[https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig][EditorConfig for VS Code]]
+extension and ensure it is enabled for your workspace.
+
+Quick verification:
+
+- Open a file in a directory that has an `.editorconfig`.
+- Edit whitespace (for example indentation or trailing spaces) and save.
+- Confirm the file follows the directory's EditorConfig rules.
+
+EditorConfig complements language-native formatters such as `gofmt`; continue
+to run language-specific formatters and tests before opening a pull request.
+
 * Tests
 
 Add unit tests using Go's unit test framework whenever possible. If your code

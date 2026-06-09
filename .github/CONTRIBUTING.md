@@ -9,6 +9,7 @@ Thank you for your interest in contributing to minimega! We welcome contribution
   - [Reporting Issues](#reporting-issues)
   - [Suggesting Enhancements](#suggesting-enhancements)
   - [Submitting Code](#submitting-code)
+    - [EditorConfig](#editorconfig)
 - [License](#license)
 
 ## Getting Started
@@ -115,6 +116,24 @@ We welcome suggestions for improvements! Please open an issue to discuss your id
     ```
     
 5. **Open a Pull Request**: Go to the original repository and open a [pull request](https://github.com/sandia-minimega/minimega/pulls). Provide a clear description of your changes and reference any related issues.
+
+### EditorConfig
+
+Use EditorConfig support in your editor so basic formatting rules are applied automatically when `.editorconfig` files are present in the tree.
+
+In Visual Studio Code ([VSCode](https://code.visualstudio.com/)):
+
+1. Install the [EditorConfig for VS Code](https://marketplace.visualstudio.com/items?itemName=EditorConfig.EditorConfig) extension.
+2. Open the `minimega` repository in VS Code.
+3. Make sure the extension is enabled for your workspace.
+
+Quick verification:
+
+1. Open a file in a directory that has an `.editorconfig`.
+2. Edit whitespace (for example indentation or trailing spaces) and save.
+3. Confirm the file is formatted according to that directory's rules.
+
+EditorConfig complements language-native formatters such as `gofmt`; continue to run language-specific formatters and tests before opening a pull request.
 
 ## License
 By contributing to this project, you agree that your contributions will be licensed under the [GNU General Public License v3.0](https://github.com/sandia-minimega/minimega/blob/master/LICENSE) License.
