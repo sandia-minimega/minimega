@@ -1,0 +1,12 @@
+# Default owners
+* @GhostofGoes @sdelliot @jacdavi @aherna
+
+# Repository directories
+/cmd/       @activeshadow @jacdavi @sdelliot
+/docker/    @activeshadow @glattercj @GhostofGoes @sdelliot @jacdavi
+/internal/  @activeshadow @jacdavi @glattercj
+/lib/       @jacdavi @sdelliot @GhostofGoes
+/packaging/ @sdelliot
+/pkg/       @activeshadow @jacdavi
+/scripts/   @sdelliot @jacdavi @activeshadow
+/web/       @jacdavi @sdelliot @activeshadow

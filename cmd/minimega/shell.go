@@ -175,7 +175,7 @@ type BackgroundWriter struct {
 
 func (bw *BackgroundWriter) Write(data []byte) (n int, err error) {
 	logString := fmt.Sprintf("Background process %d: %s", bw.ProcessID, string(data))
-	log.Info(logString)
+	log.Info("%s", logString)
 	return len(data), nil
 }
 

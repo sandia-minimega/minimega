@@ -85,7 +85,7 @@ func GetDevice() (string, error) {
 		_, err_pid := os.Stat(filepath.Join("/sys/block", dev, "pid"))
 
 		if os.IsNotExist(err_sock) && os.IsNotExist(err_pid) {
-			log.Debug("found available nbd: " + dev)
+			log.Debug("found available nbd: %v", dev)
 			nbdPath = filepath.Join("/dev", dev)
 			break
 		} else {

@@ -9,13 +9,13 @@
 // per channel.
 //
 // To only be able to load pnm images using image.Decode, use
+//
 //	import _ "github.com/jbuchbinder/gopnm"
 //
 // Not implemented are:
-//	- Writing pnm files in raw format.
-//	- Writing images with 16 bits per channel.
-//	- Writing images with a custom Maxvalue.
-//	- Reading/and writing PAM images.
+//   - Writing pnm files in raw format.
+//   - Reading/and writing PAM images.
+//
 // (I would be happy to accept patches for these.)
 //
 // Specifications can be found at http://netpbm.sourceforge.net/doc/#formats.
@@ -218,19 +218,33 @@ func decodeRawRGB(r io.Reader, c PNMConfig) (image.Image, error) {
 }
 
 func decodeRawRGB64(r io.Reader, c PNMConfig) (image.Image, error) {
-	m := image.NewRGBA(image.Rect(0, 0, c.Width, c.Height))
+	m := image.NewRGBA64(image.Rect(0, 0, c.Width, c.Height))
 	count := len(m.Pix)
 
-	for i := 0; i < count; i += 8 {
-		pixel := m.Pix[i : i+6]
-		m.Pix[i+6] = 0xff
-		m.Pix[i+7] = 0xff
+	if c.Maxval < 256 {
+		for i := 0; i+8 <= count; i += 8 {
+			pixel := m.Pix[i : i+6 : i+6]
+			m.Pix[i+6] = 0xff
+			m.Pix[i+7] = 0xff
 
+			if _, err := io.ReadFull(r, pixel); err != nil {
+				return nil, err
+			}
+		}
+		return m, nil
+	}
+
+	for i := 0; i+16 <= count; i += 16 {
+		pixel := m.Pix[i : i+12 : i+12]
+		m.Pix[i+12] = 0xff
+		m.Pix[i+13] = 0xff
+		m.Pix[i+14] = 0xff
+		m.Pix[i+15] = 0xff
 		if _, err := io.ReadFull(r, pixel); err != nil {
 			return nil, err
 		}
-	}
 
+	}
 	return m, nil
 }
 
@@ -241,10 +255,10 @@ func decodePAM(r io.Reader, c PNMConfig) (image.Image, error) {
 // Decode reads a PNM image from r and returns it as an image.Image.
 //
 // The type of Image returned depends on the PNM contents:
-//  - PBM: image.Gray with black = 0 and white = 255
-//  - PGM: image.Gray or image.Gray16, values as in the file
-//  - PPM: image.RGBA or image.RGBA64, values as in the file
-//  - PAM: not supported (yet)
+//   - PBM: image.Gray with black = 0 and white = 255
+//   - PGM: image.Gray or image.Gray16, values as in the file
+//   - PPM: image.RGBA or image.RGBA64, values as in the file
+//   - PAM: not supported (yet)
 func Decode(r io.Reader) (image.Image, error) {
 	br := bufio.NewReader(r)
 	c, err := DecodeConfigPNM(br)

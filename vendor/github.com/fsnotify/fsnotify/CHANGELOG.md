@@ -1,18 +1,154 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+1.9.0 2024-04-04
+----------------
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+### Changes and fixes
 
-## [Unreleased]
+- all: make BufferedWatcher buffered again ([#657])
 
+- inotify: fix race when adding/removing watches while a watched path is being
+  deleted ([#678], [#686])
+
+- inotify: don't send empty event if a watched path is unmounted ([#655])
+
+- inotify: don't register duplicate watches when watching both a symlink and its
+  target; previously that would get "half-added" and removing the second would
+  panic ([#679])
+
+- kqueue: fix watching relative symlinks ([#681])
+
+- kqueue: correctly mark pre-existing entries when watching a link to a dir on
+  kqueue ([#682])
+
+- illumos: don't send error if changed file is deleted while processing the
+  event ([#678])
+
+
+[#657]: https://github.com/fsnotify/fsnotify/pull/657
+[#678]: https://github.com/fsnotify/fsnotify/pull/678
+[#686]: https://github.com/fsnotify/fsnotify/pull/686
+[#655]: https://github.com/fsnotify/fsnotify/pull/655
+[#681]: https://github.com/fsnotify/fsnotify/pull/681
+[#679]: https://github.com/fsnotify/fsnotify/pull/679
+[#682]: https://github.com/fsnotify/fsnotify/pull/682
+
+1.8.0 2024-10-31
+----------------
+
+### Additions
+
+- all: add `FSNOTIFY_DEBUG` to print debug logs to stderr ([#619])
+
+### Changes and fixes
+
+- windows: fix behaviour of `WatchList()` to be consistent with other platforms ([#610])
+
+- kqueue: ignore events with Ident=0 ([#590])
+
+- kqueue: set O_CLOEXEC to prevent passing file descriptors to children ([#617])
+
+- kqueue: emit events as "/path/dir/file" instead of "path/link/file" when watching a symlink ([#625])
+
+- inotify: don't send event for IN_DELETE_SELF when also watching the parent ([#620])
+
+- inotify: fix panic when calling Remove() in a goroutine ([#650])
+
+- fen: allow watching subdirectories of watched directories ([#621])
+
+[#590]: https://github.com/fsnotify/fsnotify/pull/590
+[#610]: https://github.com/fsnotify/fsnotify/pull/610
+[#617]: https://github.com/fsnotify/fsnotify/pull/617
+[#619]: https://github.com/fsnotify/fsnotify/pull/619
+[#620]: https://github.com/fsnotify/fsnotify/pull/620
+[#621]: https://github.com/fsnotify/fsnotify/pull/621
+[#625]: https://github.com/fsnotify/fsnotify/pull/625
+[#650]: https://github.com/fsnotify/fsnotify/pull/650
+
+1.7.0 - 2023-10-22
+------------------
+This version of fsnotify needs Go 1.17.
+
+### Additions
+
+- illumos: add FEN backend to support illumos and Solaris. ([#371])
+
+- all: add `NewBufferedWatcher()` to use a buffered channel, which can be useful
+  in cases where you can't control the kernel buffer and receive a large number
+  of events in bursts. ([#550], [#572])
+
+- all: add `AddWith()`, which is identical to `Add()` but allows passing
+  options. ([#521])
+
+- windows: allow setting the ReadDirectoryChangesW() buffer size with
+  `fsnotify.WithBufferSize()`; the default of 64K is the highest value that
+  works on all platforms and is enough for most purposes, but in some cases a
+  highest buffer is needed. ([#521])
+
+### Changes and fixes
+
+- inotify: remove watcher if a watched path is renamed ([#518])
+
+  After a rename the reported name wasn't updated, or even an empty string.
+  Inotify doesn't provide any good facilities to update it, so just remove the
+  watcher. This is already how it worked on kqueue and FEN.
+
+  On Windows this does work, and remains working.
+
+- windows: don't listen for file attribute changes ([#520])
+
+  File attribute changes are sent as `FILE_ACTION_MODIFIED` by the Windows API,
+  with no way to see if they're a file write or attribute change, so would show
+  up as a fsnotify.Write event. This is never useful, and could result in many
+  spurious Write events.
+
+- windows: return `ErrEventOverflow` if the buffer is full ([#525])
+
+  Before it would merely return "short read", making it hard to detect this
+  error.
+
+- kqueue: make sure events for all files are delivered properly when removing a
+  watched directory ([#526])
+
+  Previously they would get sent with `""` (empty string) or `"."` as the path
+  name.
+
+- kqueue: don't emit spurious Create events for symbolic links ([#524])
+
+  The link would get resolved but kqueue would "forget" it already saw the link
+  itself, resulting on a Create for every Write event for the directory.
+
+- all: return `ErrClosed` on `Add()` when the watcher is closed ([#516])
+
+- other: add `Watcher.Errors` and `Watcher.Events` to the no-op `Watcher` in
+  `backend_other.go`, making it easier to use on unsupported platforms such as
+  WASM, AIX, etc. ([#528])
+
+- other: use the `backend_other.go` no-op if the `appengine` build tag is set;
+  Google AppEngine forbids usage of the unsafe package so the inotify backend
+  won't compile there.
+
+[#371]: https://github.com/fsnotify/fsnotify/pull/371
+[#516]: https://github.com/fsnotify/fsnotify/pull/516
+[#518]: https://github.com/fsnotify/fsnotify/pull/518
+[#520]: https://github.com/fsnotify/fsnotify/pull/520
+[#521]: https://github.com/fsnotify/fsnotify/pull/521
+[#524]: https://github.com/fsnotify/fsnotify/pull/524
+[#525]: https://github.com/fsnotify/fsnotify/pull/525
+[#526]: https://github.com/fsnotify/fsnotify/pull/526
+[#528]: https://github.com/fsnotify/fsnotify/pull/528
+[#537]: https://github.com/fsnotify/fsnotify/pull/537
+[#550]: https://github.com/fsnotify/fsnotify/pull/550
+[#572]: https://github.com/fsnotify/fsnotify/pull/572
+
+1.6.0 - 2022-10-13
+------------------
 This version of fsnotify needs Go 1.16 (this was already the case since 1.5.1,
 but not documented). It also increases the minimum Linux version to 2.6.32.
 
 ### Additions
 
-- all: add `Event.Has()` and `Op.Has()` (#477)
+- all: add `Event.Has()` and `Op.Has()` ([#477])
 
   This makes checking events a lot easier; for example:
 
@@ -24,13 +160,13 @@ but not documented). It also increases the minimum Linux version to 2.6.32.
 	    if event.Has(Write) && !event.Has(Remove) {
 	    }
 
-- all: add cmd/fsnotify (#463)
+- all: add cmd/fsnotify ([#463])
 
-  A command-line utility for testing and as an example.
+  A command-line utility for testing and some examples.
 
 ### Changes and fixes
 
-- inotify: don't ignore events for files that don't exist (#260, #470)
+- inotify: don't ignore events for files that don't exist ([#260], [#470])
 
   Previously the inotify watcher would call `os.Lstat()` to check if a file
   still exists before emitting events.
@@ -41,40 +177,56 @@ but not documented). It also increases the minimum Linux version to 2.6.32.
   longer exists.
 
 - all: return `ErrNonExistentWatch` when `Remove()` is called on a path that's
-  not watched (#460)
+  not watched ([#460])
 
-- inotify: replace epoll() with non-blocking inotify #434
+- inotify: replace epoll() with non-blocking inotify ([#434])
 
   Non-blocking inotify was not generally available at the time this library was
   written in 2014, but now it is. As a result, the minimum Linux version is
   bumped from 2.6.27 to 2.6.32. This hugely simplifies the code and is faster.
 
-- kqueue: don't check for events every 100ms (#480)
+- kqueue: don't check for events every 100ms ([#480])
 
   The watcher would wake up every 100ms, even when there was nothing to do. Now
   it waits until there is something to do.
 
-- macos: retry opening files on EINTR (#475)
+- macos: retry opening files on EINTR ([#475])
 
-- kqueue: skip unreadable files (#479)
+- kqueue: skip unreadable files ([#479])
 
   kqueue requires a file descriptor for every file in a directory; this would
   fail if a file was unreadable by the current user. Now these files are simply
   skipped.
 
-- windows: fix renaming a watched directory if the parent is also watched (#370)
+- windows: fix renaming a watched directory if the parent is also watched ([#370])
 
-- windows: increase buffer size from 4K to 64K (#485)
+- windows: increase buffer size from 4K to 64K ([#485])
 
-- windows: close file handle on Remove() (#288)
+- windows: close file handle on Remove() ([#288])
 
-- kqueue: put pathname in the error if watching a file fails (#471)
+- kqueue: put pathname in the error if watching a file fails ([#471])
 
-- inotify, windows: calling Close() more than once could race (#465)
+- inotify, windows: calling Close() more than once could race ([#465])
 
-- kqueue: improve Close() performance (#233)
+- kqueue: improve Close() performance ([#233])
 
 - all: various documentation additions and clarifications.
+
+[#233]: https://github.com/fsnotify/fsnotify/pull/233
+[#260]: https://github.com/fsnotify/fsnotify/pull/260
+[#288]: https://github.com/fsnotify/fsnotify/pull/288
+[#370]: https://github.com/fsnotify/fsnotify/pull/370
+[#434]: https://github.com/fsnotify/fsnotify/pull/434
+[#460]: https://github.com/fsnotify/fsnotify/pull/460
+[#463]: https://github.com/fsnotify/fsnotify/pull/463
+[#465]: https://github.com/fsnotify/fsnotify/pull/465
+[#470]: https://github.com/fsnotify/fsnotify/pull/470
+[#471]: https://github.com/fsnotify/fsnotify/pull/471
+[#475]: https://github.com/fsnotify/fsnotify/pull/475
+[#477]: https://github.com/fsnotify/fsnotify/pull/477
+[#479]: https://github.com/fsnotify/fsnotify/pull/479
+[#480]: https://github.com/fsnotify/fsnotify/pull/480
+[#485]: https://github.com/fsnotify/fsnotify/pull/485
 
 ## [1.5.4] - 2022-04-25
 

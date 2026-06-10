@@ -110,7 +110,7 @@ func (c *Conn) sub(opt byte, data ...byte) error {
 	if _, err := c.Conn.Write([]byte{cmdIAC, cmdSB, opt}); err != nil {
 		return err
 	}
-	if _, err := c.Write(data); err != nil {
+	if _, err := c.Conn.Write(data); err != nil {
 		return err
 	}
 	_, err := c.Conn.Write([]byte{cmdIAC, cmdSE})
@@ -175,9 +175,15 @@ func (c *Conn) cmd(cmd byte) error {
 				err = c.wont(o)
 			}
 		case cmdWill:
-			err = c.do(o)
+			if !c.cliEcho {
+				c.cliEcho = true
+				err = c.do(o)
+			}
 		case cmdWont:
-			err = c.dont(o)
+			if c.cliEcho {
+				c.cliEcho = false
+				err = c.dont(o)
+			}
 		}
 	case optSuppressGoAhead:
 		// We don't use GA so can allways accept every configuration
@@ -193,10 +199,15 @@ func (c *Conn) cmd(cmd byte) error {
 				err = c.wont(o)
 			}
 		case cmdWill:
-			err = c.do(o)
+			if !c.cliSuppressGoAhead {
+				c.cliSuppressGoAhead = true
+				err = c.do(o)
+			}
 		case cmdWont:
-			err = c.dont(o)
-
+			if c.cliSuppressGoAhead {
+				c.cliSuppressGoAhead = false
+				err = c.dont(o)
+			}
 		}
 	case optNAWS:
 		if cmd != cmdDo {
@@ -207,7 +218,7 @@ func (c *Conn) cmd(cmd byte) error {
 			break
 		}
 		// Reply with max window size: 65535x65535
-		err = c.sub(o, 255, 255, 255, 255)
+		err = c.sub(o, 255, 255, 255, 255, 255, 255, 255, 255)
 	default:
 		// Deny any other option
 		err = c.deny(cmd, o)
@@ -285,16 +296,17 @@ loop:
 func (c *Conn) Read(buf []byte) (int, error) {
 	var n int
 	for n < len(buf) {
-		b, err := c.ReadByte()
+		b, retry, err := c.tryReadByte()
 		if err != nil {
 			return n, err
 		}
-		//log.Printf("char: %d %q", b, b)
-		buf[n] = b
-		n++
-		if c.r.Buffered() == 0 {
-			// Try don't block if can return some data
-			break
+		if !retry {
+			buf[n] = b
+			n++
+		}
+		if n > 0 && c.r.Buffered() == 0 {
+			// Don't block if can't return more data.
+			return n, err
 		}
 	}
 	return n, nil

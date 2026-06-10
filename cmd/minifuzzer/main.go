@@ -73,7 +73,7 @@ func run(mm *miniclient.Conn, cmd string) {
 		}
 	}
 
-	log.Debug(res)
+	log.Debug("%v", res)
 }
 
 // genCmd generates a new command string matching one of the patterns in the
