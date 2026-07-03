@@ -1,6 +1,6 @@
 module github.com/sandia-minimega/minimega/v2
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/Harvey-OS/ninep v0.0.0-20200724082702-d30a6d4f9789
@@ -19,9 +19,9 @@ require (
 	github.com/thoj/go-ircevent v0.0.0-20210723090443-73e444401d64
 	github.com/twmb/murmur3 v1.1.8
 	github.com/ziutek/telnet v0.1.0
-	golang.org/x/crypto v0.48.0
-	golang.org/x/net v0.50.0
-	golang.org/x/sys v0.41.0
+	golang.org/x/crypto v0.51.0
+	golang.org/x/net v0.55.0
+	golang.org/x/sys v0.45.0
 	golang.org/x/tools v0.42.0
 )
 
@@ -31,7 +31,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.20 // indirect
 	golang.org/x/mod v0.33.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/term v0.40.0 // indirect
+	golang.org/x/term v0.43.0 // indirect
 )
 
 replace github.com/Harvey-OS/ninep => github.com/jcrussell/ninep v0.0.0-20180619175724-35ad2879c0a3
