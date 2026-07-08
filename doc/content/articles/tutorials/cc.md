@@ -269,6 +269,11 @@ minimega$ cc send somedirectory/*
 Files will appear in the `files` subdirectory in the client's base directory.
 By default, this is `/tmp/miniccc/files`.
 
+If you need the files somewhere else on the client, specify a destination
+directory explicitly:
+
+	minimega$ cc send-to /opt/myfiles foo.bash
+
 At this point we can both send and execute a file on the client. Let's execute
 the script we sent a moment ago:
 
