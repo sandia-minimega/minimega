@@ -44,6 +44,11 @@ send a file 'foo' and display the contents on a remote VM:
 	cc send foo
 	cc exec cat foo
 
+You can override the default destination directory on clients when sending
+files:
+
+	cc send-to /opt/myfiles foo
+
 Files to be sent must be in the filepath directory, as set by the -filepath
 flag when launching minimega.
 
@@ -130,6 +135,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <prefix,> [prefix]",
 
 			"cc <send,> <file>...",
+			"cc <send-to,> <destination> <file>...",
 			"cc <recv,> <file>...",
 			"cc <exec,> <command>...",
 			"cc <exec-once,> <command>...",
@@ -212,6 +218,7 @@ var ccCliSubHandlers = map[string]wrappedCLIFunc{
 	"exitcode":        cliCCExitCode,
 	"rtunnel":         cliCCTunnel,
 	"send":            cliCCFileSend,
+	"send-to":         cliCCFileSendTo,
 	"tunnel":          cliCCTunnel,
 	"listen":          cliCCListen,
 	"test-conn":       cliCCTestConn,
@@ -510,7 +517,19 @@ func cliCCFilter(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 // send
 func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	return cliCCFileSendWithDestination(ns, c, resp, "")
+}
+
+// send-to
+func cliCCFileSendTo(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	return cliCCFileSendWithDestination(ns, c, resp, c.StringArgs["destination"])
+}
+
+func cliCCFileSendWithDestination(ns *Namespace, c *minicli.Command, resp *minicli.Response, destination string) error {
 	files := make([]string, len(c.ListArgs["file"]))
+	if destination != "" {
+		destination = filepath.Clean(destination)
+	}
 
 	// Ensure each file to be sent to the VM is present locally before sending.
 	for i, file := range c.ListArgs["file"] {
@@ -550,6 +569,7 @@ func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 	if err != nil {
 		return err
 	}
+	cmd.FilesSendDir = destination
 
 	resp.Data = ns.NewCommand(cmd)
 	return nil
