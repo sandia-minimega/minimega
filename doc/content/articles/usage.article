@@ -153,6 +153,23 @@ Using `e` will connect to the local minimega instance's command port in the
 base directory, issue the command, and print any results/errors. This is
 especially useful for pipelining minimega commands with other unix utilities.
 
+** Bash Tab Completion
+
+minimega can generate a bash tab-completion script for its command line
+flags, as well as for minimega commands typed after the `e` or `attach`
+flags. To enable it for the current shell session:
+
+	$ source <(minimega -completion)
+
+To enable it for every session, write the script somewhere bash-completion
+will find it, e.g.:
+
+	$ minimega -completion | sudo tee /etc/bash_completion.d/minimega
+
+With this sourced, typing `minimega -e vm sta<TAB>` at the bash prompt will
+complete to `minimega -e vm start`, the same way tab completion works at the
+minimega command prompt itself.
+
 The command port can also be interfaces by external programs. It is a UNIX
 domain socket in the base directory at `<base>/minimega`. The command port uses
 JSON encoded commands and responses using the following schema:

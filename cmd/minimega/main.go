@@ -50,6 +50,8 @@ var (
 	f_context     = flag.String("context", "minimega", "meshage context for discovery")
 	f_iomBase     = flag.String("filepath", IOM_PATH, "directory to serve files from")
 	f_cli         = flag.Bool("cli", false, "validate and print the minimega cli, in JSON, to stdout and exit")
+	f_completion  = flag.Bool("completion", false, "print a bash tab-completion script for minimega to stdout and exit")
+	f_suggest     = flag.String("suggest", "", "print minicli suggestions for a partial command, one per line, and exit (used by the bash completion script)")
 	f_panic       = flag.Bool("panic", false, "panic on quit, producing stack traces for debugging")
 	f_cgroup      = flag.String("cgroup", "/sys/fs/cgroup", "path to cgroup mount")
 	f_pipe        = flag.String("pipe", "", "read/write to or from a named pipe")
@@ -87,11 +89,33 @@ func usage() {
 	flag.PrintDefaults()
 }
 
+// suggestSet reports whether the -suggest flag was explicitly provided on
+// the command line, as opposed to left at its zero value default. This
+// distinguishes `-suggest ""` (asking for top-level command suggestions)
+// from not passing -suggest at all.
+func suggestSet() bool {
+	var set bool
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "suggest" {
+			set = true
+		}
+	})
+	return set
+}
+
 func main() {
 	var err error
 
 	flag.Usage = usage
 	flag.Parse()
+
+	// generates a bash tab-completion script from the flags registered
+	// above, so this needs to happen after flag.Parse() but doesn't depend
+	// on anything else minimega sets up
+	if *f_completion {
+		fmt.Print(bashCompletion())
+		os.Exit(0)
+	}
 
 	log.Init()
 	logLevel = log.LevelFlag
@@ -106,6 +130,17 @@ func main() {
 	}
 
 	cliSetup()
+
+	// used by the bash completion script to complete minicli commands
+	// passed to -e/-attach without needing a running minimega instance. We
+	// can't just check `*f_suggest != ""` here because the empty string is
+	// itself a valid (and common) partial command -- e.g. completing right
+	// after `-e ` with nothing typed yet -- so instead check whether the
+	// flag was actually set on the command line.
+	if suggestSet() {
+		fmt.Println(strings.Join(minicli.Suggest(*f_suggest), "\n"))
+		os.Exit(0)
+	}
 
 	if *f_cli {
 		if err := minicli.Validate(); err != nil {
