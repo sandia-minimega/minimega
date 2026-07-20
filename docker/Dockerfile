@@ -1,8 +1,10 @@
-# To specify an alternate base image: --build-arg BASE_IMAGE="some/other/image:tag"
+# To specify an alternate base image: --build-arg BASE_IMAGE="some/other/base_image:tag"
+# To specify an alternate Go image: --build-arg GO_IMAGE="some/other/go_image:tag"
 ARG BASE_IMAGE="ubuntu:22.04"
+ARG GO_IMAGE="golang:1.24.13"
 
 # -- go builder --
-FROM golang:1.24.13 AS gobuilder
+FROM ${GO_IMAGE} AS gobuilder
 
 ENV DEBIAN_FRONTEND="noninteractive"
 RUN apt-get update && apt-get install -y libpcap-dev
