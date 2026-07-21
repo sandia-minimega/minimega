@@ -35,7 +35,7 @@ info include:
 - state*     : one of (building, running, paused, quit, error)
 - uptime     : amount of time since the VM was launched
 - namespace* : namespace the VM belongs to
-- type*      : one of (kvm, container)
+- type*      : one of (kvm, container, android)
 - uuid*      : QEMU system uuid
 - cc_active* : indicates whether cc is connected
 - vcpus      : the number of allocated CPUs
@@ -75,6 +75,14 @@ Additional fields are available for container-based VMs:
 - fifo         : number of fifo devices
 - console_port : port for console shim
 
+Additional fields are available for Android VMs:
+
+- android_avd          : Android Virtual Device name
+- android_console_port : Android emulator console port
+- android_adb_port     : Android emulator adb port
+- android_serial       : adb serial name, e.g. emulator-5554
+- pid                  : pid of Android emulator process
+
 The optional summary flag limits the columns to those denoted with a '*'.
 
 Examples:
@@ -101,6 +109,7 @@ supported VM types are:
 
 - kvm : QEMU-based vms
 - container: Linux containers
+- android : Android emulator-based VMs
 
 If you supply a name instead of a number of VMs, one VM with that name will be
 launched. You may also supply a range expression to launch VMs with a specific
@@ -119,11 +128,16 @@ example:
 
 If queueing is enabled (see "ns"), VMs will be queued for launching until "vm
 launch" is called with no additional arguments. This allows the scheduler to
-better allocate resources across the cluster.`,
+better allocate resources across the cluster.
+
+Android VMs use host-side emulator console/ADB port pairs. minimega currently
+uses 64 valid port pairs per host, so each host can run at most 64 Android VMs
+concurrently, and fewer if some of those ports are already in use.`,
 		Patterns: []string{
 			"vm launch",
 			"vm launch <kvm,> <name or count> [config]",
 			"vm launch <container,> <name or count> [config]",
+			"vm launch <android,> <name or count> [config]",
 		},
 		Call: wrapSimpleCLI(cliVMLaunch),
 	},
@@ -540,6 +554,7 @@ func init() {
 	gob.Register(VMs{})
 	gob.Register(&KvmVM{})
 	gob.Register(&ContainerVM{})
+	gob.Register(&AndroidVM{})
 }
 
 func cliVMApply(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

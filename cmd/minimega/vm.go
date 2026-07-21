@@ -31,6 +31,7 @@ const (
 	_ VMType = iota
 	KVM
 	CONTAINER
+	ANDROID
 )
 
 type VM interface {
@@ -146,6 +147,8 @@ var vmInfo = []string{
 	"vcpus", "disks", "snapshot", "initrd", "kernel", "cdrom", "save",
 	"append", "serial-ports", "virtio-ports", "vnc_port", "usb-use-xhci",
 	"tpm-socket", "bidirectional-copy-paste",
+	// android fields
+	"android_avd", "android_console_port", "android_adb_port", "android_serial",
 	// container fields
 	"filesystem", "hostname", "init", "preinit", "fifo", "volume",
 	"console_port",
@@ -168,6 +171,7 @@ func init() {
 	gob.Register([]VM{})
 	gob.Register(&KvmVM{})
 	gob.Register(&ContainerVM{})
+	gob.Register(&AndroidVM{})
 }
 
 func NewVM(name, namespace string, vmType VMType, config VMConfig) (VM, error) {
@@ -176,6 +180,8 @@ func NewVM(name, namespace string, vmType VMType, config VMConfig) (VM, error) {
 		return NewKVM(name, namespace, config)
 	case CONTAINER:
 		return NewContainer(name, namespace, config)
+	case ANDROID:
+		return NewAndroid(name, namespace, config)
 	}
 
 	return nil, errors.New("unknown VM type")
@@ -258,6 +264,8 @@ func (s VMType) String() string {
 		return "kvm"
 	case CONTAINER:
 		return "container"
+	case ANDROID:
+		return "android"
 	default:
 		return "???"
 	}
@@ -269,6 +277,8 @@ func ParseVMType(s string) (VMType, error) {
 		return KVM, nil
 	case "container":
 		return CONTAINER, nil
+	case "android":
+		return ANDROID, nil
 	default:
 		return 0, errors.New("invalid VMType")
 	}

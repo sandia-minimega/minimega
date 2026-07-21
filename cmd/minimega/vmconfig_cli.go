@@ -55,7 +55,6 @@ Android-related generated config fields use the following names:
 	android-no-window
 	android-console-base-port
 	android-extra-args
-	android-require-kvm
 	android-writable-system
 
 These refer to host-side Android emulator runtime settings, not files served
@@ -323,6 +322,15 @@ func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 		case *ContainerVM:
 			ns.vmConfig.BaseConfig = vm.BaseConfig.Copy()
 			ns.vmConfig.ContainerConfig = vm.ContainerConfig.Copy()
+		case *AndroidVM:
+			ns.vmConfig.BaseConfig = vm.BaseVM.BaseConfig.Copy()
+			ns.vmConfig.KVMConfig = vm.KVMConfig.Copy()
+			ns.vmConfig.AndroidConfig = vm.AndroidConfig.Copy()
+
+			// Clear SnapshotPaths since we can't launch VMs with the same SnapshotPath.
+			for i := range ns.vmConfig.KVMConfig.Disks {
+				ns.vmConfig.KVMConfig.Disks[i].SnapshotPath = ""
+			}
 		}
 
 		// clear UUID since we can't launch VMs with the same UUID

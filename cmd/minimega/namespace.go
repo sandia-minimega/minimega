@@ -1083,6 +1083,7 @@ func NewHostStats() *HostStats {
 		h.MemCommit += mem
 		h.NetworkCommit += net
 		h.VMs += ns.VMs.Count()
+		h.AndroidVMs += ns.VMs.CountTypeState(ANDROID, VM_KILLABLE)
 
 		// update if limit is unlimited or we're not unlimited and we're less
 		// than the previous limit

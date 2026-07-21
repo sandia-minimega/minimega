@@ -83,6 +83,21 @@ func (vms *VMs) Count() int {
 	return len(vms.m)
 }
 
+func (vms *VMs) CountTypeState(t VMType, mask VMState) int {
+	vms.mu.Lock()
+	defer vms.mu.Unlock()
+
+	var count int
+
+	for _, vm := range vms.m {
+		if vm.GetType() == t && vm.GetState()&mask != 0 {
+			count++
+		}
+	}
+
+	return count
+}
+
 // Limit is the lowest coschedule value for VMs (-1 is no limit)
 func (vms *VMs) Limit() int {
 	vms.mu.Lock()

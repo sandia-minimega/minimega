@@ -587,3 +587,486 @@ func BenchmarkSchedule(b *testing.B) {
 		schedule(queue, hosts, cpuCommit)
 	}
 }
+
+func TestScheduleAndroidCapacity(t *testing.T) {
+	var names []string
+	for i := 0; i < MaxAndroidVMsPerHost+1; i++ {
+		names = append(names, strconv.Itoa(i))
+	}
+
+	queue := []*QueuedVMs{
+		{
+			Names:  names,
+			VMType: ANDROID,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+	}
+
+	hosts := fakeHostData(1, true)
+
+	if _, err := schedule(queue, hosts, cpuCommit); err == nil {
+		t.Error("expected scheduler to reject too many Android VMs for one host")
+	}
+}
+
+func TestScheduleAndroidCapacityMultiHost(t *testing.T) {
+	var names []string
+	for i := 0; i < MaxAndroidVMsPerHost*2; i++ {
+		names = append(names, strconv.Itoa(i))
+	}
+
+	queue := []*QueuedVMs{
+		{
+			Names:  names,
+			VMType: ANDROID,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+	}
+
+	hosts := fakeHostData(2, true)
+
+	s, err := schedule(queue, hosts, cpuCommit)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for host, q := range s {
+		var count int
+		for _, queued := range q {
+			count += len(queued.Names)
+		}
+
+		if count > MaxAndroidVMsPerHost {
+			t.Fatalf("host %s scheduled %d Android VMs, limit is %d", host, count, MaxAndroidVMsPerHost)
+		}
+	}
+}
+
+func TestScheduleAndroidCapacityExistingVMs(t *testing.T) {
+	queue := []*QueuedVMs{
+		{
+			Names:  []string{"new"},
+			VMType: ANDROID,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+	}
+
+	hosts := fakeHostData(1, true)
+	hosts[0].AndroidVMs = MaxAndroidVMsPerHost
+
+	if _, err := schedule(queue, hosts, cpuCommit); err == nil {
+		t.Error("expected scheduler to reject Android VM on full Android host")
+	}
+}
+
+func TestScheduleAndroidCapacitySingleHostExact(t *testing.T) {
+	var names []string
+	for i := 0; i < MaxAndroidVMsPerHost; i++ {
+		names = append(names, strconv.Itoa(i))
+	}
+
+	queue := []*QueuedVMs{
+		{
+			Names:  names,
+			VMType: ANDROID,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+	}
+
+	hosts := fakeHostData(1, true)
+
+	if _, err := schedule(queue, hosts, cpuCommit); err != nil {
+		t.Fatalf("expected exactly %d Android VMs to schedule on one host: %v", MaxAndroidVMsPerHost, err)
+	}
+}
+
+func TestScheduleAndroidCapacityExistingVMsExact(t *testing.T) {
+	queue := []*QueuedVMs{
+		{
+			Names:  []string{"new"},
+			VMType: ANDROID,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+	}
+
+	hosts := fakeHostData(1, true)
+	hosts[0].AndroidVMs = MaxAndroidVMsPerHost - 1
+
+	if _, err := schedule(queue, hosts, cpuCommit); err != nil {
+		t.Fatalf("expected Android VM to fit in final slot: %v", err)
+	}
+}
+
+func TestScheduleAndroidSkipsAndroidFullLeastLoadedHost(t *testing.T) {
+	queue := []*QueuedVMs{
+		{
+			Names:  []string{"android"},
+			VMType: ANDROID,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+	}
+
+	hosts := fakeHostData(2, true)
+
+	hosts[0].Name = "0"
+	hosts[0].CPUCommit = 0
+	hosts[0].MemCommit = 0
+	hosts[0].NetworkCommit = 0
+	hosts[0].AndroidVMs = MaxAndroidVMsPerHost
+
+	hosts[1].Name = "1"
+	hosts[1].CPUCommit = 100
+	hosts[1].MemCommit = 100
+	hosts[1].NetworkCommit = 100
+	hosts[1].AndroidVMs = 0
+
+	s, err := schedule(queue, hosts, cpuCommit)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := countScheduledVMs(s["0"]); got != 0 {
+		t.Fatalf("expected no Android VMs scheduled on Android-full least-loaded host 0, got %d; schedule: %#v", got, s)
+	}
+
+	if got := countScheduledVMs(s["1"]); got != 1 {
+		t.Fatalf("expected Android VM scheduled on host 1, got %d; schedule: %#v", got, s)
+	}
+}
+
+func TestScheduleKVMUnaffectedByAndroidCapacity(t *testing.T) {
+	queue := []*QueuedVMs{
+		{
+			Names:  []string{"kvm"},
+			VMType: KVM,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+	}
+
+	hosts := fakeHostData(2, true)
+
+	hosts[0].Name = "0"
+	hosts[0].CPUCommit = 0
+	hosts[0].MemCommit = 0
+	hosts[0].NetworkCommit = 0
+	hosts[0].AndroidVMs = MaxAndroidVMsPerHost
+
+	hosts[1].Name = "1"
+	hosts[1].CPUCommit = 100
+	hosts[1].MemCommit = 100
+	hosts[1].NetworkCommit = 100
+	hosts[1].AndroidVMs = 0
+
+	s, err := schedule(queue, hosts, cpuCommit)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := countScheduledVMs(s["0"]); got != 1 {
+		t.Fatalf("expected KVM to schedule on least-loaded host 0 despite Android capacity, got schedule: %#v", s)
+	}
+
+	if got := countScheduledVMs(s["1"]); got != 0 {
+		t.Fatalf("expected no KVMs scheduled on host 1, got %d; schedule: %#v", got, s)
+	}
+}
+
+func countScheduledVMs(queue []*QueuedVMs) int {
+	var count int
+
+	for _, q := range queue {
+		count += len(q.Names)
+	}
+
+	return count
+}
+
+func TestScheduleAndroidPinnedToFullHostFails(t *testing.T) {
+	queue := []*QueuedVMs{
+		{
+			Names:  []string{"android"},
+			VMType: ANDROID,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					Schedule:   "0",
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+	}
+
+	hosts := fakeHostData(2, true)
+	hosts[0].Name = "0"
+	hosts[0].AndroidVMs = MaxAndroidVMsPerHost
+	hosts[1].Name = "1"
+
+	if _, err := schedule(queue, hosts, cpuCommit); err == nil {
+		t.Fatal("expected pinned Android VM to fail on Android-full host")
+	}
+}
+
+func TestScheduleAndroidPinnedToNonFullHostSucceeds(t *testing.T) {
+	queue := []*QueuedVMs{
+		{
+			Names:  []string{"android"},
+			VMType: ANDROID,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					Schedule:   "1",
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+	}
+
+	hosts := fakeHostData(2, true)
+	hosts[0].Name = "0"
+	hosts[0].AndroidVMs = MaxAndroidVMsPerHost
+	hosts[1].Name = "1"
+
+	s, err := schedule(queue, hosts, cpuCommit)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(s["1"]) != 1 {
+		t.Fatalf("expected Android VM scheduled on pinned non-full host 1, got: %#v", s)
+	}
+}
+
+func TestScheduleAndroidCapacityMultiHostOverflow(t *testing.T) {
+	var names []string
+	for i := 0; i < MaxAndroidVMsPerHost*2+1; i++ {
+		names = append(names, strconv.Itoa(i))
+	}
+
+	queue := []*QueuedVMs{
+		{
+			Names:  names,
+			VMType: ANDROID,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+	}
+
+	hosts := fakeHostData(2, true)
+
+	if _, err := schedule(queue, hosts, cpuCommit); err == nil {
+		t.Fatalf("expected scheduling %d Android VMs on two hosts to fail", MaxAndroidVMsPerHost*2+1)
+	}
+}
+
+func TestScheduleAndroidColocateCapacityFails(t *testing.T) {
+	queue := []*QueuedVMs{
+		{
+			Names:  []string{"anchor"},
+			VMType: ANDROID,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					Schedule:   "0",
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+		{
+			Names:  []string{"colocated"},
+			VMType: ANDROID,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					Colocate:   "anchor",
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+	}
+
+	hosts := fakeHostData(1, true)
+	hosts[0].Name = "0"
+	hosts[0].AndroidVMs = MaxAndroidVMsPerHost - 1
+
+	if _, err := schedule(queue, hosts, cpuCommit); err == nil {
+		t.Fatal("expected colocated Android VMs to exceed remaining Android capacity")
+	}
+}
+
+func androidSchedulerHost(name string, cpu uint64, androidVMs int) *HostStats {
+	return &HostStats{
+		Name:          name,
+		CPUCommit:     cpu,
+		MemCommit:     cpu,
+		NetworkCommit: int(cpu),
+		CPUs:          1,
+		MemTotal:      1,
+		Limit:         -1,
+		AndroidVMs:    androidVMs,
+	}
+}
+
+func scheduledVMNames(qs []*QueuedVMs) map[string]bool {
+	names := map[string]bool{}
+
+	for _, q := range qs {
+		for _, name := range q.Names {
+			names[name] = true
+		}
+	}
+
+	return names
+}
+
+func TestScheduleAndroidColocatedGroupSkipsHostWithoutEnoughAndroidSlots(t *testing.T) {
+	queue := []*QueuedVMs{
+		{
+			Names:  []string{"anchor"},
+			VMType: ANDROID,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+		{
+			Names:  []string{"buddy"},
+			VMType: ANDROID,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					Colocate:   "anchor",
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+	}
+
+	hosts := []*HostStats{
+		// Least-loaded host, but it only has one Android slot available.
+		androidSchedulerHost("0", 0, MaxAndroidVMsPerHost-1),
+
+		// More-loaded host, but it has enough Android slots for the colocated group.
+		androidSchedulerHost("1", 100, 0),
+	}
+
+	s, err := schedule(queue, hosts, cpuCommit)
+	if err != nil {
+		t.Fatalf("expected scheduler to choose host with enough Android slots for colocated group: %v", err)
+	}
+
+	host0Names := scheduledVMNames(s["0"])
+	if host0Names["anchor"] || host0Names["buddy"] {
+		t.Fatalf("expected no colocated Android group members on host 0, got schedule: %#v", s)
+	}
+
+	host1Names := scheduledVMNames(s["1"])
+	if !host1Names["anchor"] || !host1Names["buddy"] {
+		t.Fatalf("expected both colocated Android VMs on host 1, got schedule: %#v", s)
+	}
+}
+
+func TestScheduleNonAndroidAnchorWithAndroidColocateSkipsAndroidFullHost(t *testing.T) {
+	queue := []*QueuedVMs{
+		{
+			Names:  []string{"anchor"},
+			VMType: KVM,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+		{
+			Names:  []string{"android-buddy"},
+			VMType: ANDROID,
+			VMConfig: VMConfig{
+				BaseConfig: BaseConfig{
+					Colocate:   "anchor",
+					VCPUs:      1,
+					Memory:     1,
+					Coschedule: -1,
+				},
+			},
+		},
+	}
+
+	hosts := []*HostStats{
+		// Least-loaded host, but it has no Android capacity.
+		androidSchedulerHost("0", 0, MaxAndroidVMsPerHost),
+
+		// More-loaded host, but it can fit the Android colocated VM.
+		androidSchedulerHost("1", 100, 0),
+	}
+
+	s, err := schedule(queue, hosts, cpuCommit)
+	if err != nil {
+		t.Fatalf("expected scheduler to choose host with Android capacity for colocated group: %v", err)
+	}
+
+	host0Names := scheduledVMNames(s["0"])
+	if host0Names["anchor"] || host0Names["android-buddy"] {
+		t.Fatalf("expected no colocated group members on Android-full host 0, got schedule: %#v", s)
+	}
+
+	host1Names := scheduledVMNames(s["1"])
+	if !host1Names["anchor"] || !host1Names["android-buddy"] {
+		t.Fatalf("expected both colocated VMs on host 1, got schedule: %#v", s)
+	}
+}

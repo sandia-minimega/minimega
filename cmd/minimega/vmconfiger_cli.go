@@ -144,7 +144,24 @@ Default: true
 	},
 	{
 		HelpShort: "configures android-console-base-port",
-		HelpLong: `Configure the base console port for Android emulator instances.
+		HelpLong: `Configure the preferred starting console port for Android emulator instances.
+
+This value is a hint, not a guaranteed assignment. minimega searches for the
+first available Android console/ADB port pair starting at this port. If the
+requested pair is already reserved or unavailable, the next valid pair is
+used.
+
+If set to 0, minimega starts searching at the beginning of the valid Android
+emulator console port range. Console ports are even ports in the range
+5554-5680, and the corresponding ADB port is console+1.
+
+If nonzero, this value must be an even port in the valid console port range.
+Starting later in the range reduces the number of candidate port pairs.
+
+The valid range contains 64 console/ADB port pairs, so a single minimega
+host can run at most 64 Android emulator VMs concurrently, and fewer if some
+ports in the range are already in use. In a multi-host namespace, this limit
+applies independently to each host.
 
 Default: 0
 `,
@@ -160,6 +177,10 @@ Default: 0
 
 			i, err := strconv.ParseUint(c.StringArgs["value"], 10, 64)
 			if err != nil {
+				return err
+			}
+
+			if err := validateAndroidConsoleBasePort(ns.vmConfig, i); err != nil {
 				return err
 			}
 

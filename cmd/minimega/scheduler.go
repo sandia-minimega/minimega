@@ -45,8 +45,21 @@ func (s *Scheduler) Schedule() (map[string][]*QueuedVMs, error) {
 
 	if len(s.hosts) == 1 {
 		log.Warn("only one host in namespace, scheduling all VMs on it")
+
+		host := s.hosts[0]
+		androidCount := host.AndroidVMs + androidQueuedVMCount(s.queue)
+
+		if androidCount > MaxAndroidVMsPerHost {
+			return nil, fmt.Errorf(
+				"cannot schedule %d Android VMs on host %s; each host supports at most %d concurrent Android VMs",
+				androidCount,
+				host.Name,
+				MaxAndroidVMsPerHost,
+			)
+		}
+
 		res := map[string][]*QueuedVMs{
-			s.hosts[0].Name: s.queue,
+			host.Name: s.queue,
 		}
 		return res, nil
 	}
@@ -103,12 +116,10 @@ func (s *Scheduler) Schedule() (map[string][]*QueuedVMs, error) {
 		}
 
 		for _, name := range q.Names {
-			// least loaded host is at position zero
-			host := s.hosts[0]
-
-			if v := q.Schedule; v != "" {
-				// find the specified host
-				host = s.findHostStats(v)
+			host, err := s.chooseHost(q, name)
+			if err != nil {
+				s.dumpSchedule()
+				return nil, err
 			}
 
 			if err := s.add(host, name, q); err != nil {
@@ -157,6 +168,138 @@ func (s *Scheduler) findHostStats(host string) *HostStats {
 	return nil
 }
 
+// CanFit enforces host-specific capacity constraints for queued VMs.
+func (h *HostStats) CanFit(q *QueuedVMs) error {
+	if q.VMType == ANDROID {
+		return h.CanFitAndroidSlots(1)
+	}
+
+	return nil
+}
+
+// CanFitAndroidSlots reports whether this host has room for the requested
+// number of additional Android VMs.
+func (h *HostStats) CanFitAndroidSlots(slots int) error {
+	if slots <= 0 {
+		return nil
+	}
+
+	if h.AndroidVMs+slots > MaxAndroidVMsPerHost {
+		return fmt.Errorf(
+			"host %s has insufficient Android VM slots: need %d, %d/%d already assigned",
+			h.Name,
+			slots,
+			h.AndroidVMs,
+			MaxAndroidVMsPerHost,
+		)
+	}
+
+	return nil
+}
+
+// androidSlotsFor returns the number of Android VM slots required to schedule
+// name from q, including any floating VMs recursively colocated with name.
+func (s *Scheduler) androidSlotsFor(q *QueuedVMs, name string) int {
+	seen := map[string]bool{
+		name: true,
+	}
+
+	var slots int
+	if q.VMType == ANDROID {
+		slots++
+	}
+
+	return slots + s.androidSlotsForColocated(name, seen)
+}
+
+func (s *Scheduler) androidSlotsForColocated(anchor string, seen map[string]bool) int {
+	var slots int
+
+	for _, q := range s.colocated[anchor] {
+		for _, name := range q.Names {
+			if seen[name] {
+				continue
+			}
+
+			seen[name] = true
+
+			if q.VMType == ANDROID {
+				slots++
+			}
+
+			slots += s.androidSlotsForColocated(name, seen)
+		}
+	}
+
+	return slots
+}
+
+func (s *Scheduler) chooseHost(q *QueuedVMs, name string) (*HostStats, error) {
+	androidSlots := s.androidSlotsFor(q, name)
+
+	if q.Schedule != "" {
+		host := s.findHostStats(q.Schedule)
+		if host == nil {
+			return nil, fmt.Errorf("VM scheduled on unknown host: `%v`", q.Schedule)
+		}
+
+		if err := host.CanFitAndroidSlots(androidSlots); err != nil {
+			return nil, err
+		}
+
+		return host, nil
+	}
+
+	// Preserve existing behavior for VMs/groups that do not require Android
+	// capacity: use the heap root.
+	if androidSlots == 0 {
+		return s.hosts[0], nil
+	}
+
+	// For groups requiring Android capacity, still prefer the least-loaded host
+	// if it has enough room for the whole colocated group.
+	if err := s.hosts[0].CanFitAndroidSlots(androidSlots); err == nil {
+		return s.hosts[0], nil
+	}
+
+	// The least-loaded host cannot fit the Android portion of this group, so
+	// find the least-loaded host that can.
+	var best *HostStats
+
+	for _, host := range s.hosts {
+		if err := host.CanFitAndroidSlots(androidSlots); err != nil {
+			continue
+		}
+
+		if best == nil || s.hostSortBy(host, best) {
+			best = host
+		}
+	}
+
+	if best == nil {
+		return nil, fmt.Errorf(
+			"no host has available Android VM slots for colocated group requiring %d Android slot(s); "+
+				"each host supports at most %d concurrent Android VMs",
+			androidSlots,
+			MaxAndroidVMsPerHost,
+		)
+	}
+
+	return best, nil
+}
+
+func androidQueuedVMCount(queue []*QueuedVMs) int {
+	var count int
+
+	for _, q := range queue {
+		if q.VMType == ANDROID {
+			count += len(q.Names)
+		}
+	}
+
+	return count
+}
+
 // add a VM to the given host, checking and adjusting limits if necessary
 func (s *Scheduler) add(host *HostStats, name string, q *QueuedVMs) error {
 	limit := int(q.Coschedule)
@@ -176,8 +319,12 @@ func (s *Scheduler) add(host *HostStats, name string, q *QueuedVMs) error {
 		}
 	}
 
+	if err := host.CanFit(q); err != nil {
+		return err
+	}
+
 	// update commit based on this VM's specs
-	host.increment(q.VMConfig)
+	host.increment(q.VMConfig, q.VMType)
 
 	// schedule all floating VMs on this host as well
 	for _, q := range s.colocated[name] {
@@ -313,11 +460,15 @@ func (q *QueuedVMs) Less(q2 *QueuedVMs) bool {
 	return len(q.Names) > len(q2.Names)
 }
 
-func (s *HostStats) increment(config VMConfig) {
+func (s *HostStats) increment(config VMConfig, vmType VMType) {
 	s.VMs += 1
 	s.CPUCommit += config.VCPUs
 	s.MemCommit += config.Memory
 	s.NetworkCommit += len(config.Networks)
+
+	if vmType == ANDROID {
+		s.AndroidVMs += 1
+	}
 }
 
 // cpuCommit tests whether h1 < h2.
