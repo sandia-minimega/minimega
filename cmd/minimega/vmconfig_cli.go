@@ -43,7 +43,23 @@ configured with a static MAC, the VM config will not be launchable. Clone also
 clears the UUID.
 
 Calling clear vm config will clear all VM configuration options, but will not
-remove saved configurations.`,
+remove saved configurations.
+
+Android-related generated config fields use the following names:
+
+	android-sdk
+	android-emulator
+	android-adb
+	android-avd
+	android-avd-dir
+	android-no-window
+	android-console-base-port
+	android-extra-args
+	android-require-kvm
+	android-writable-system
+
+These refer to host-side Android emulator runtime settings, not files served
+from the minimega files directory.`,
 		Patterns: []string{
 			"vm config",
 			"vm config <save,> <name>",

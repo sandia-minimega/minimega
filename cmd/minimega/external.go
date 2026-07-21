@@ -113,6 +113,24 @@ func checkExternal() error {
 		log.Warn("no kvm module detected, is virtualization enabled?")
 	}
 
+	// Android runtime is optional and only checked when Android appears configured
+	if androidConfiguredAny() {
+		for _, ns := range namespaces {
+			cfg := ns.vmConfig.AndroidConfig
+			if !androidConfigured(cfg) {
+				continue
+			}
+
+			if err := checkAndroidDependencies(cfg); err != nil {
+				log.Warn("android runtime unavailable: %v", err)
+				break
+			} else {
+				log.Info("android runtime available")
+				break
+			}
+		}
+	}
+
 	return nil
 }
 
