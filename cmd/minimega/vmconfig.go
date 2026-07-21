@@ -2,7 +2,7 @@
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
 //
-//go:generate ../../bin/vmconfiger -type BaseConfig,KVMConfig,ContainerConfig
+//go:generate ../../bin/vmconfiger -type BaseConfig,KVMConfig,ContainerConfig,AndroidConfig
 
 package main
 
@@ -27,6 +27,7 @@ type VMConfig struct {
 	BaseConfig
 	KVMConfig
 	ContainerConfig
+	AndroidConfig
 }
 
 func NewVMConfig() VMConfig {
@@ -109,19 +110,22 @@ func (old VMConfig) Copy() VMConfig {
 		BaseConfig:      old.BaseConfig.Copy(),
 		KVMConfig:       old.KVMConfig.Copy(),
 		ContainerConfig: old.ContainerConfig.Copy(),
+		AndroidConfig:   old.AndroidConfig.Copy(),
 	}
 }
 
 func (vm VMConfig) String(namespace string) string {
 	return vm.BaseConfig.String(namespace) +
 		vm.KVMConfig.String() +
-		vm.ContainerConfig.String()
+		vm.ContainerConfig.String() +
+		vm.AndroidConfig.String()
 }
 
 func (vm *VMConfig) Clear(mask string) {
 	vm.BaseConfig.Clear(mask)
 	vm.KVMConfig.Clear(mask)
 	vm.ContainerConfig.Clear(mask)
+	vm.AndroidConfig.Clear(mask)
 }
 
 func (vm *VMConfig) WriteConfig(w io.Writer) error {
@@ -129,6 +133,7 @@ func (vm *VMConfig) WriteConfig(w io.Writer) error {
 		vm.BaseConfig.WriteConfig,
 		vm.KVMConfig.WriteConfig,
 		vm.ContainerConfig.WriteConfig,
+		vm.AndroidConfig.WriteConfig,
 	}
 
 	for _, fn := range funcs {
@@ -146,6 +151,8 @@ func (vm *VMConfig) ReadConfig(r io.ReadSeeker, ns string) error {
 	vm.KVMConfig.ReadConfig(r, ns)
 	r.Seek(0, io.SeekStart)
 	vm.ContainerConfig.ReadConfig(r, ns)
+	r.Seek(0, io.SeekStart)
+	vm.AndroidConfig.ReadConfig(r, ns)
 
 	return nil
 }
