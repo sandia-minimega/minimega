@@ -35,7 +35,7 @@ info include:
 - state*     : one of (building, running, paused, quit, error)
 - uptime     : amount of time since the VM was launched
 - namespace* : namespace the VM belongs to
-- type*      : one of (kvm, container)
+- type*      : one of (kvm, container, android)
 - uuid*      : QEMU system uuid
 - cc_active* : indicates whether cc is connected
 - vcpus      : the number of allocated CPUs
@@ -75,6 +75,14 @@ Additional fields are available for container-based VMs:
 - fifo         : number of fifo devices
 - console_port : port for console shim
 
+Additional fields are available for Android VMs:
+
+- android_avd          : Android Virtual Device name
+- android_console_port : Android emulator console port
+- android_adb_port     : Android emulator adb port
+- android_serial       : adb serial name, e.g. emulator-5554
+- pid                  : pid of Android emulator process
+
 The optional summary flag limits the columns to those denoted with a '*'.
 
 Examples:
@@ -101,6 +109,7 @@ supported VM types are:
 
 - kvm : QEMU-based vms
 - container: Linux containers
+- android : Android emulator-based VMs
 
 If you supply a name instead of a number of VMs, one VM with that name will be
 launched. You may also supply a range expression to launch VMs with a specific
@@ -124,6 +133,7 @@ better allocate resources across the cluster.`,
 			"vm launch",
 			"vm launch <kvm,> <name or count> [config]",
 			"vm launch <container,> <name or count> [config]",
+			"vm launch <android,> <name or count> [config]",
 		},
 		Call: wrapSimpleCLI(cliVMLaunch),
 	},
@@ -252,7 +262,7 @@ connections via vm config when launching VMs. See "vm config net" for more detai
 You will need to specify the VLAN of which the interface is a member. Optionally, you may
 specify the bridge the interface will be connected on. You may also specify a MAC address for
 the interface. Finally, you may also specify the network device for qemu to use. By default,
-"e1000" is used. The order is:
+"e1000" is used for KVM and "virtio-net-pci" is used for Android VMs. The order is:
 
 	<bridge>,<VLAN>,<MAC>,<driver>
 
@@ -279,6 +289,16 @@ optional bridge:
 If the bridge name is omitted, the interface will be reconnected to the same
 bridge that it is already on. If the interface is not connected to a bridge, it
 will be connected to the default bridge, "mega_bridge".
+
+For Android VMs, vm net connect/disconnect operates on the host-side minimega
+tap attached to the Android Emulator backend NIC. It does not configure Android
+guest IP addresses, policy routing, or firewall rules.
+
+For runtime Android NIC hot-add, the host-side tap and QEMU device are added by
+minimega, but the Android guest may not automatically enumerate the new PCI
+device. A guest-side PCI rescan and interface configuration may be required,
+for example writing 1 to /sys/bus/pci/rescan and then configuring the new
+interface.
 
 To create a bond comprised of two or more interfaces on a VM, use 'vm net bond'.
 For example, to create an 'active-backup' bond with interfaces 1 and 2 on VM foo
@@ -540,6 +560,7 @@ func init() {
 	gob.Register(VMs{})
 	gob.Register(&KvmVM{})
 	gob.Register(&ContainerVM{})
+	gob.Register(&AndroidVM{})
 }
 
 func cliVMApply(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -966,13 +987,17 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 				return true, err
 			}
 
-			kvm, ok := vm.(*KvmVM)
+			type nicAdder interface {
+				AddNIC(NetConfig) error
+			}
+
+			adder, ok := vm.(nicAdder)
 			if !ok {
-				return true, fmt.Errorf("unable to get Kvm")
+				return true, fmt.Errorf("VM type does not support adding NICs: %v", vm.GetType())
 			}
 
 			for _, n := range nics {
-				err = kvm.AddNIC(n)
+				err = adder.AddNIC(n)
 			}
 
 			if err != nil {

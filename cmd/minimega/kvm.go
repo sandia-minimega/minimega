@@ -506,9 +506,26 @@ func (vm *KvmVM) Conflicts(vm2 VM) error {
 		return vm.ConflictsKVM(vm2)
 	case *ContainerVM:
 		return vm.BaseVM.conflicts(vm2.BaseVM)
+	case *AndroidVM:
+		return vm.ConflictsAndroid(vm2)
 	}
 
 	return errors.New("unknown VM type")
+}
+
+func (vm *KvmVM) ConflictsAndroid(vm2 *AndroidVM) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	for _, d := range vm.Disks {
+		for _, d2 := range vm2.Disks {
+			if d.Path == d2.Path && (!vm.Snapshot || !vm2.Snapshot) {
+				return fmt.Errorf("disk conflict with android vm %v: %v", vm2.Name, d)
+			}
+		}
+	}
+
+	return vm.BaseVM.conflicts(vm2.BaseVM)
 }
 
 // ConflictsKVM tests whether vm and vm2 share a disk and returns an

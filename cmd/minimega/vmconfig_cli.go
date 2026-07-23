@@ -43,7 +43,23 @@ configured with a static MAC, the VM config will not be launchable. Clone also
 clears the UUID.
 
 Calling clear vm config will clear all VM configuration options, but will not
-remove saved configurations.`,
+remove saved configurations.
+
+Android-related generated config fields use the following names:
+
+	android-sdk
+	android-emulator
+	android-adb
+	android-avd
+	android-avd-dir
+	android-no-window
+	android-console-base-port
+	android-extra-args
+	android-require-kvm
+	android-writable-system
+
+These refer to host-side Android emulator runtime settings, not files served
+from the minimega files directory.`,
 		Patterns: []string{
 			"vm config",
 			"vm config <save,> <name>",
@@ -165,6 +181,17 @@ use/abuse this implementation detail:
 
 	namespace bar
 	vm config net foo//DMZ
+
+For Android VMs, configured networks are attached using minimega-created
+tap devices on the requested bridge/VLAN. AndroidVM automatically uses a
+virtio-net-pci NIC for these tap-backed interfaces because Android Emulator's
+backend QEMU does not support minimega's default e1000 NIC. The Android guest
+will see the device as an additional interface, for example eth1.
+
+minimega only creates and manages the host-side tap/bridge/VLAN plumbing. It
+does not configure Android guest IP addresses, policy routing, or firewall
+rules. Those must be configured inside the guest by the user or an orchestration
+layer.
 
 Calling vm config net with no arguments prints the current configuration.`,
 		Patterns: []string{
@@ -307,6 +334,15 @@ func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 		case *ContainerVM:
 			ns.vmConfig.BaseConfig = vm.BaseConfig.Copy()
 			ns.vmConfig.ContainerConfig = vm.ContainerConfig.Copy()
+		case *AndroidVM:
+			ns.vmConfig.BaseConfig = vm.BaseVM.BaseConfig.Copy()
+			ns.vmConfig.KVMConfig = vm.KVMConfig.Copy()
+			ns.vmConfig.AndroidConfig = vm.AndroidConfig.Copy()
+
+			// Clear SnapshotPaths since we can't launch VMs with the same SnapshotPath.
+			for i := range ns.vmConfig.KVMConfig.Disks {
+				ns.vmConfig.KVMConfig.Disks[i].SnapshotPath = ""
+			}
 		}
 
 		// clear UUID since we can't launch VMs with the same UUID
