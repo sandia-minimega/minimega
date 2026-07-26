@@ -67,8 +67,11 @@ type Command struct {
 	// once, or if it should be sent after client reconnections.
 	Once bool
 
-	// Sent tracks whether or not this command has been sent already. Only used
-	// when Once is enabled.
+	// Sent is deprecated and unused. Once delivery is tracked per client by
+	// the server (Server.onceSent); a single global bool could be consumed by
+	// a send that never reached the client the Filter named, permanently
+	// suppressing the command for its intended target. The field is retained
+	// so the gob type transmitted to miniccc agents is unchanged.
 	Sent bool
 
 	// plumber connections

@@ -57,6 +57,24 @@ type Server struct {
 	vms        map[string]VM      // map of uuid -> VM
 	clientLock sync.Mutex         // lock for clients and vms
 
+	// onceSent records, per Once command ID, the set of client UUIDs that the
+	// command has actually been written to. It replaces Command.Sent as the
+	// gate for Once delivery: Sent was a single global bool, so a send that
+	// never reached the client named by the command's Filter (a concurrent
+	// per-client send during another client's handshake, a client that was not
+	// yet in s.clients, or a failed write) would consume the command for
+	// everyone and the intended target would never receive it.
+	//
+	// Entries deliberately outlive the client: they are NOT removed by
+	// removeClient or the reaper, which is what keeps a rebooted VM from
+	// re-running a Once command. They are freed when the command they refer to
+	// is deleted or when the command list is cleared.
+	onceSent map[int]map[string]bool
+	// onceSentLock synchronizes access to onceSent. It is a separate lock
+	// because onceSent is read and written from the parallel per-client
+	// goroutines in route, which run while clientLock is held.
+	onceSentLock sync.Mutex
+
 	path string // path for serving files
 
 	// subpath is an optional path parameter that will always be used when
@@ -82,6 +100,7 @@ func NewServer(path, subpath string, plumber *miniplumber.Plumber) (*Server, err
 		conns:         make(map[string]net.Conn),
 		listeners:     make(map[string]net.Listener),
 		commands:      make(map[int]*Command),
+		onceSent:      make(map[int]map[string]bool),
 		clients:       make(map[string]*client),
 		vms:           make(map[string]VM),
 		path:          path,
@@ -488,6 +507,7 @@ func (s *Server) DeleteCommand(id int) error {
 
 	if _, ok := s.commands[id]; ok {
 		delete(s.commands, id)
+		s.forgetOnce(id)
 		return nil
 	} else {
 		return fmt.Errorf("command %v not found", id)
@@ -507,6 +527,7 @@ func (s *Server) DeleteCommands(prefix string) error {
 		if c.Prefix == prefix {
 			matched = true
 			delete(s.commands, id)
+			s.forgetOnce(id)
 		}
 	}
 
@@ -530,6 +551,11 @@ func (s *Server) ClearCommands() {
 
 	s.commandCounter = 0
 	s.commands = make(map[int]*Command)
+
+	// The ID counter is reset, so command IDs are about to be reused. Any
+	// retained Once delivery records would silently suppress the *new*
+	// commands that reuse those IDs, so they must all go.
+	s.forgetAllOnce()
 
 	for _, c := range s.clients {
 		c.maxCommandID = 0
@@ -928,6 +954,11 @@ func (s *Server) removeClient(uuid string) {
 		close(c.cancelHeartbeat)
 
 		delete(s.clients, uuid)
+
+		// note: s.onceSent is intentionally left alone. A Once command must
+		// not be re-sent to this UUID if it reconnects, so its delivery record
+		// has to outlive the connection. The records are freed when the
+		// commands themselves are deleted or cleared.
 	}
 }
 
@@ -943,14 +974,65 @@ func (s *Server) sendCommands(uuid string) {
 		UUID:     uuid,
 	}
 
+	// Include every command, Once or not. Whether a Once command still needs
+	// to go to a particular client is decided per client in route, which is
+	// the only place that knows both the client and the command's Filter.
+	// Filtering here on a single global Sent bool cannot be correct: the
+	// message built here may be routed to one client (during that client's
+	// handshake) or to every client, and in neither case does inclusion in the
+	// message imply delivery to the client the Filter names.
 	for k, v := range s.commands {
-		if !v.Once || !v.Sent {
-			m.Commands[k] = v.Copy()
-			v.Sent = true
-		}
+		m.Commands[k] = v.Copy()
 	}
 
 	s.route(m)
+}
+
+// onceDelivered reports whether the Once command with the given ID has already
+// been written to the client with the given UUID.
+func (s *Server) onceDelivered(id int, uuid string) bool {
+	s.onceSentLock.Lock()
+	defer s.onceSentLock.Unlock()
+
+	return s.onceSent[id][uuid]
+}
+
+// markOnceDelivered records that the Once commands with the given IDs were
+// successfully written to the client with the given UUID.
+func (s *Server) markOnceDelivered(ids []int, uuid string) {
+	if len(ids) == 0 {
+		return
+	}
+
+	s.onceSentLock.Lock()
+	defer s.onceSentLock.Unlock()
+
+	for _, id := range ids {
+		if s.onceSent[id] == nil {
+			s.onceSent[id] = make(map[string]bool)
+		}
+
+		s.onceSent[id][uuid] = true
+	}
+}
+
+// forgetOnce drops the delivery records for commands that no longer exist.
+// Callers must hold commandLock.
+func (s *Server) forgetOnce(ids ...int) {
+	s.onceSentLock.Lock()
+	defer s.onceSentLock.Unlock()
+
+	for _, id := range ids {
+		delete(s.onceSent, id)
+	}
+}
+
+// forgetAllOnce drops every delivery record. Callers must hold commandLock.
+func (s *Server) forgetAllOnce() {
+	s.onceSentLock.Lock()
+	defer s.onceSentLock.Unlock()
+
+	s.onceSent = make(map[int]map[string]bool)
 }
 
 // NewFilesSendCommand creates a command to send to clients to read the listed
@@ -1025,9 +1107,13 @@ func (s *Server) sendFile(c *client, filename string) error {
 // route an outgoing message to one or all clients, according to UUID
 func (s *Server) route(m *Message) {
 	var maxCommandID int
-	for i := range m.Commands {
+	var hasOnce bool
+	for i, cmd := range m.Commands {
 		if i > maxCommandID {
 			maxCommandID = i
+		}
+		if cmd.Once {
+			hasOnce = true
 		}
 	}
 
@@ -1041,10 +1127,19 @@ func (s *Server) route(m *Message) {
 			return
 		}
 
-		if c.maxCommandID == maxCommandID {
+		// The command ID watermark alone cannot decide this when Once commands
+		// are in play: it advances to the highest ID in the message even for
+		// commands this client did not match, so a client can be at the
+		// watermark and still be owed a Once command. When there are no Once
+		// commands the old fast path is exact, so keep it.
+		if c.maxCommandID == maxCommandID && !hasOnce {
 			log.Info("no commands for %v", uuid)
 			return
 		}
+
+		// onceIDs collects the Once commands placed in this client's message,
+		// so they can be recorded as delivered only if the write succeeds.
+		var onceIDs []int
 
 		if m.Type == MESSAGE_COMMAND {
 			if s.UseVMs {
@@ -1077,9 +1172,27 @@ func (s *Server) route(m *Message) {
 
 			// filter the commands to relevant ones
 			for i, cmd := range m.Commands {
-				if c.Matches(cmd.Filter) && i > c.maxCommandID {
-					m2.Commands[i] = cmd
+				if !c.Matches(cmd.Filter) {
+					continue
 				}
+
+				if cmd.Once {
+					// Once commands are gated on the per-client delivery
+					// record instead of the watermark. The watermark is reset
+					// on reconnect (so it cannot enforce Once across
+					// reconnects) and it advances past commands that were
+					// never written to this client (so it wrongly suppresses
+					// them). The record does both jobs correctly.
+					if s.onceDelivered(i, uuid) {
+						continue
+					}
+
+					onceIDs = append(onceIDs, i)
+				} else if i <= c.maxCommandID {
+					continue
+				}
+
+				m2.Commands[i] = cmd
 			}
 
 			c.maxCommandID = maxCommandID
@@ -1098,7 +1211,13 @@ func (s *Server) route(m *Message) {
 			} else {
 				log.Info("unable to send message to %v: %v", uuid, err)
 			}
+
+			// the client never got the message, so do not burn the Once
+			// commands in it -- they must be offered again on reconnect
+			return
 		}
+
+		s.markOnceDelivered(onceIDs, uuid)
 	}
 
 	// handleUUID doesn't modify the clients map so we can allow parallel reads
