@@ -191,7 +191,7 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 		return
 	}
 
-	ns := GetNamespace()
+	ns := resolveNamespace(c)
 
 	resp := &minicli.Response{Host: hostname}
 

@@ -70,7 +70,7 @@ type BaseConfig struct {
 	// Set a host where the VM should be scheduled.
 	//
 	// Note: Cannot specify Schedule and Colocate in the same config.
-	Schedule string `validate:"validSchedule" suggest:"wrapHostnameSuggest(true, false, false)"`
+	Schedule string `validate:"ns.validSchedule" suggest:"wrapHostnameSuggest(true, false, false)"`
 
 	// Colocate this VM with another VM that has already been launched or is
 	// queued for launching.
@@ -347,7 +347,7 @@ func (vm *BaseConfig) ReadFieldConfig(r io.Reader, field, namespace string) erro
 	return nil
 }
 
-func validSchedule(vmConfig VMConfig, s string) error {
+func (ns *Namespace) validSchedule(vmConfig VMConfig, s string) error {
 	if vmConfig.Colocate != "" && s != "" {
 		return errors.New("cannot specify schedule and colocate in the same config")
 	}
@@ -357,8 +357,6 @@ func validSchedule(vmConfig VMConfig, s string) error {
 	}
 
 	// check if s is in the namespace
-	ns := GetNamespace()
-
 	if !ns.Hosts[s] {
 		return fmt.Errorf("host is not in namespace: %v", s)
 	}
