@@ -1555,7 +1555,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 
 	// hook for hugepage support
 	if vm.hugepagesMountPath != "" {
-		args = append(args, "-mem-info")
+		args = append(args, "-mem-path")
 		args = append(args, vm.hugepagesMountPath)
 	}
 
