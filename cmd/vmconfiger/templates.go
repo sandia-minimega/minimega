@@ -28,6 +28,9 @@ const stringTemplate = `{
 	HelpLong: ` + "`{{ .Doc }}`," + `
 	Patterns: []string{
 		"vm config {{ .ConfigName }} [value]",
+		{{- range .Aliases }}
+		"vm config {{ . }} [value]",
+		{{- end }}
 	},
 	{{ if .Suggest }}
 	Suggest: {{ .Suggest }},
@@ -62,6 +65,9 @@ const sliceTemplate = `{
 	HelpLong: ` + "`{{ .Doc }}`," + `
 	Patterns: []string{
 		"vm config {{ .ConfigName }} [value]...",
+		{{- range .Aliases }}
+		"vm config {{ . }} [value]...",
+		{{- end }}
 	},
 	{{ if .Suggest }}
 	Suggest: {{ .Suggest }},
@@ -106,6 +112,10 @@ const mapTemplate = `{
 	Patterns: []string{
 		"vm config {{ .ConfigName }}",
 		"vm config {{ .ConfigName }} <key> [value]",
+		{{- range .Aliases }}
+		"vm config {{ . }}",
+		"vm config {{ . }} <key> [value]",
+		{{- end }}
 	},
 	{{ if .Suggest }}
 	Suggest: {{ .Suggest }},
@@ -139,7 +149,6 @@ const mapTemplate = `{
 		}
 		{{ end }}
 
-
 		{{ if .Path }}
 		v := checkPath(c.StringArgs["value"])
 
@@ -159,6 +168,9 @@ const numTemplate = `{
 	HelpLong: ` + "`{{ .Doc }}`," + `
 	Patterns: []string{
 		"vm config {{ .ConfigName }} [value]",
+		{{- range .Aliases }}
+		"vm config {{ . }} [value]",
+		{{- end }}
 	},
 	{{ if .Suggest }}
 	Suggest: {{ .Suggest }},
@@ -200,6 +212,9 @@ const boolTemplate = `{
 	HelpLong: ` + "`{{ .Doc }}`," + `
 	Patterns: []string{
 		"vm config {{ .ConfigName }} [true,false]",
+		{{- range .Aliases }}
+		"vm config {{ . }} [true,false]",
+		{{- end }}
 	},
 	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
 		if len(c.BoolArgs) == 0 {
@@ -220,6 +235,9 @@ const clearTemplate = `{
 		"clear vm config",
 		{{- range . }}
 		"clear vm config <{{ .ConfigName }},>",
+		{{- range .Aliases }}
+		"clear vm config <{{ . }},>",
+		{{- end }}
 		{{- end }}
 	},
 	Call: wrapSimpleCLI(func (ns *Namespace, c *minicli.Command, r *minicli.Response) error {
@@ -242,7 +260,7 @@ const funcsTemplate = `
 {{ range $type, $fields := . }}
 func (v *{{ $type }}) Info(field string) (string, error) {
 	{{- range $fields }}
-		if field == "{{ .ConfigName }}" {
+		if field == "{{ .ConfigName }}"{{- range .Aliases }} || field == "{{ . }}"{{- end }} {
 			{{- if eq .Type "string" }}
 			return v.{{ .Field }}, nil
 			{{- else if eq .Type "uint64" }}
@@ -260,7 +278,7 @@ func (v *{{ $type }}) Info(field string) (string, error) {
 
 func (v *{{ $type }} ) Clear(mask string) {
 	{{- range $fields }}
-		if mask == Wildcard || mask == "{{ .ConfigName }}" {
+		if mask == Wildcard || mask == "{{ .ConfigName }}"{{- range .Aliases }} || mask == "{{ . }}"{{- end }} {
 			v.{{ .Field }} = {{ .Default }}
 		}
 	{{- end }}
@@ -309,7 +327,7 @@ func (v *{{ $type }} ) ReadConfig(r io.Reader, ns string) error {
 
 		switch field {
 		{{- range $fields }}
-		case "{{ .ConfigName }}":
+		case "{{ .ConfigName }}"{{- range .Aliases }}, "{{ . }}"{{- end }}:
 			{{- if eq .Type "bool" }}
 			v.{{ .Field }}, _ = strconv.ParseBool(config[1])
 			{{- else if eq .Type "map" }}
@@ -321,7 +339,7 @@ func (v *{{ $type }} ) ReadConfig(r io.Reader, ns string) error {
 			{{- else if eq .Type "uint64" }}
 			v.{{ .Field }}, _ = strconv.ParseUint(config[1], 10, 64)
 			{{- else if eq .Type "slice" }}
-			v.{{ .Field }} = strings.Fields(config[1])
+			v.{{ .Field }} = fieldsQuoteEscape("\"", strings.Join(config[1:], " "))
 			{{- else }}
 			v.ReadFieldConfig(strings.NewReader(line), "{{ .ConfigName }}", ns)
 			{{- end }}

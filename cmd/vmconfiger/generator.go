@@ -24,13 +24,14 @@ import (
 const Default = "Default: "
 
 type Field struct {
-	Field      string // name of the field in the struct
-	ConfigName string // name of the field in the CLI
-	Type       string // field type
-	Doc        string // field documentation
-	Default    string // default value, parsed from doc
-	Validate   string // name of function to validate argument
-	Suggest    string // name of function to use for Suggest
+	Field      string   // name of the field in the struct
+	ConfigName string   // canonical public name of the field in the CLI
+	Aliases    []string // alternate public names accepted by generated code
+	Type       string   // field type
+	Doc        string   // field documentation
+	Default    string   // default value, parsed from doc
+	Validate   string   // name of function to validate argument
+	Suggest    string   // name of function to use for Suggest
 
 	Path   bool // if filepath should be checked
 	Signed bool // for int64 vs uint64
@@ -171,13 +172,23 @@ func (g *Generator) handleNode(node ast.Node) bool {
 				tag = reflect.StructTag(v)
 			}
 
-			configName := name
-			if strings.Contains(name, "Path") {
-				// trim both path and paths, should only contain one
-				configName = strings.TrimSuffix(configName, "Path")
-				configName = strings.TrimSuffix(configName, "Paths")
+			configName := tag.Get("config")
+			if configName == "" {
+				configName = name
+				if strings.Contains(name, "Path") {
+					// trim both path and paths, should only contain one
+					configName = strings.TrimSuffix(configName, "Path")
+					configName = strings.TrimSuffix(configName, "Paths")
+				}
+				configName = camelToHyphenated(configName)
 			}
-			configName = camelToHyphenated(configName)
+
+			pathCheck := strings.Contains(name, "Path")
+			if tag.Get("path") == "false" {
+				pathCheck = false
+			}
+
+			aliases := splitCSVTag(tag.Get("alias"))
 
 			switch typ := field.Type.(type) {
 			case *ast.Ident:
@@ -216,13 +227,14 @@ func (g *Generator) handleNode(node ast.Node) bool {
 				f := Field{
 					Field:      name,
 					ConfigName: configName,
+					Aliases:    aliases,
 					Type:       typ.Name,
 					Default:    zero,
 					Validate:   tag.Get("validate"),
 					Suggest:    tag.Get("suggest"),
 					Doc:        doc,
 					Signed:     signed,
-					Path:       strings.Contains(name, "Path"),
+					Path:       pathCheck,
 				}
 
 				log.Info("field: %#v", f)
@@ -236,14 +248,15 @@ func (g *Generator) handleNode(node ast.Node) bool {
 				v, ok := typ.Elt.(*ast.Ident)
 				if !ok || v.Name != "string" {
 					log.Error("unhandled type: []%v", typ.Elt)
-					// always add field, even if we don't generate the handler
 					g.fields[strctName] = append(g.fields[strctName], Field{
 						Field:      name,
 						ConfigName: configName,
+						Aliases:    aliases,
 						Default:    "nil",
 						Validate:   tag.Get("validate"),
 						Suggest:    tag.Get("suggest"),
 						Doc:        doc,
+						Path:       pathCheck,
 					})
 
 					continue
@@ -262,30 +275,31 @@ func (g *Generator) handleNode(node ast.Node) bool {
 				f := Field{
 					Field:      name,
 					ConfigName: configName,
+					Aliases:    aliases,
 					Type:       "slice",
 					Default:    zero,
 					Validate:   tag.Get("validate"),
 					Suggest:    tag.Get("suggest"),
 					Doc:        doc,
-					Path:       strings.Contains(name, "Path"),
+					Path:       pathCheck,
 				}
 
 				g.fields[strctName] = append(g.fields[strctName], f)
-
 				g.Execute("slice", f)
 			case *ast.MapType:
 				v, ok := typ.Key.(*ast.Ident)
 				v2, ok2 := typ.Value.(*ast.Ident)
 				if !ok || v.Name != "string" || !ok2 || v2.Name != "string" {
 					log.Error("unhandled type: %v", typ)
-					// always add field, even if we don't generate the handler
 					g.fields[strctName] = append(g.fields[strctName], Field{
 						Field:      name,
 						ConfigName: configName,
+						Aliases:    aliases,
 						Default:    "nil",
 						Validate:   tag.Get("validate"),
 						Suggest:    tag.Get("suggest"),
 						Doc:        doc,
+						Path:       pathCheck,
 					})
 
 					continue
@@ -306,32 +320,32 @@ func (g *Generator) handleNode(node ast.Node) bool {
 				f := Field{
 					Field:      name,
 					ConfigName: configName,
+					Aliases:    aliases,
 					Type:       "map",
 					Default:    zero,
 					Validate:   tag.Get("validate"),
 					Suggest:    tag.Get("suggest"),
 					Doc:        doc,
-					Path:       strings.Contains(name, "Path"),
+					Path:       pathCheck,
 				}
 
 				g.fields[strctName] = append(g.fields[strctName], f)
-
 				g.Execute("map", f)
 			case *ast.StructType:
 				log.Error("unhandled struct type for %v: %v", name, typ)
-				// always add field, even if we don't generate the handler
 				g.fields[strctName] = append(g.fields[strctName], Field{
 					Field:      name,
 					ConfigName: configName,
+					Aliases:    aliases,
 					Doc:        doc,
 					Default:    "nil",
 				})
 			default:
 				log.Error("unhandled type for %v: %v", name, typ)
-				// always add field, even if we don't generate the handler
 				g.fields[strctName] = append(g.fields[strctName], Field{
 					Field:      name,
 					ConfigName: configName,
+					Aliases:    aliases,
 					Doc:        doc,
 					Default:    "nil",
 				})
@@ -350,4 +364,20 @@ func getDefault(s, d string) string {
 	}
 
 	return d
+}
+
+func splitCSVTag(s string) []string {
+	if s == "" {
+		return nil
+	}
+
+	parts := strings.Split(s, ",")
+	var out []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
