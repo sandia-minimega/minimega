@@ -90,7 +90,6 @@ func main() {
 	mux.HandleFunc("/vlans", mustAuth(templateHandler))
 	mux.HandleFunc("/graph", mustAuth(templateHandler))
 	mux.HandleFunc("/tilevnc", mustAuth(templateHandler))
-	mux.HandleFunc("/montage", mustAuth(templateHandler))
 	mux.HandleFunc("/minibuilder", mustAuth(templateHandler))
 
 	mux.HandleFunc("/hosts.json", mustAuth(tabularHandler))
