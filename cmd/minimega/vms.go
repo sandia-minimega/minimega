@@ -54,6 +54,7 @@ type QueuedVMs struct {
 // status update messages about file transfer status.
 func (q QueuedVMs) GetFiles(updatee string) error {
 	files := []string{
+		q.ContainerConfig.FilesystemPath,
 		q.ContainerConfig.Preinit,
 		q.KVMConfig.CdromPath,
 		q.KVMConfig.InitrdPath,

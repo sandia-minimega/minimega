@@ -534,38 +534,52 @@ func cliPreprocess(v string) (string, error) {
 				path = v2
 			}
 
-			// check to see how many things are in the top-level directory
-			out, err := processWrapper("tar", "--exclude=*/*", "-tf", path)
-			if err != nil {
+			// Pre-extract the tar on the local node for immediate availability.
+			// We still return the tar file path (not the extracted directory) so
+			// that the path can be transferred to remote nodes via iomeshage.
+			if _, err := extractTar(path); err != nil {
 				return v, err
 			}
 
-			if strings.Count(out, "\n") != 1 {
-				return v, errors.New("unable to handle tar without a single top-level directory")
-			}
-
-			// remove trailing "\n"
-			out = out[:len(out)-1]
-
-			// check to see if we already extracted this tar
-			dst := filepath.Join(filepath.Dir(path), out)
-			if _, err := os.Stat(dst); err == nil {
-				return dst, nil
-			}
-
-			log.Debug("untar to %v", dst)
-
-			// do the extraction
-			_, err = processWrapper("tar", "-C", filepath.Dir(path), "-xf", path)
-			if err != nil {
-				return v, err
-			}
-
-			return dst, nil
+			return path, nil
 		}
 	}
 
 	return v, nil
+}
+
+// extractTar extracts a tar archive to the same directory as the archive and
+// returns the path of the extracted top-level directory. It is idempotent: if
+// the directory already exists, it returns the existing path without
+// re-extracting.
+func extractTar(path string) (string, error) {
+	// check to see how many things are in the top-level directory
+	out, err := processWrapper("tar", "--exclude=*/*", "-tf", path)
+	if err != nil {
+		return "", err
+	}
+
+	if strings.Count(out, "\n") != 1 {
+		return "", errors.New("unable to handle tar without a single top-level directory")
+	}
+
+	// remove trailing "\n"
+	out = out[:len(out)-1]
+
+	// check to see if we already extracted this tar
+	dst := filepath.Join(filepath.Dir(path), out)
+	if _, err := os.Stat(dst); err == nil {
+		return dst, nil
+	}
+
+	log.Debug("untar to %v", dst)
+
+	// do the extraction
+	if _, err = processWrapper("tar", "-C", filepath.Dir(path), "-xf", path); err != nil {
+		return "", err
+	}
+
+	return dst, nil
 }
 
 // cliPreprocessor allows modifying commands post-compile but pre-process.

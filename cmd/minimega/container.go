@@ -839,6 +839,17 @@ func (vm *ContainerVM) launch() error {
 	// If this is the first time launching the VM, do the final configuration
 	// check, create a directory for it, and setup the FS.
 	if vm.State == VM_BUILDING {
+		// Resolve a tar-based filesystem path to the extracted directory.
+		// This handles the case where the filesystem was specified with the
+		// tar: preprocessor and was transferred to this node as a tar archive.
+		if info, err := os.Stat(vm.FilesystemPath); err == nil && !info.IsDir() {
+			dir, err := extractTar(vm.FilesystemPath)
+			if err != nil {
+				return vm.setErrorf("extracting filesystem tar: %v", err)
+			}
+			vm.FilesystemPath = dir
+		}
+
 		if err := os.MkdirAll(vm.instancePath, os.FileMode(0700)); err != nil {
 			return vm.setErrorf("unable to create VM dir: %v", err)
 		}
