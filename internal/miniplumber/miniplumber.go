@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
+	"os"
 	"os/exec"
 	"sort"
 	"strings"
@@ -775,6 +776,13 @@ func (p *Plumber) startPipeline(pl *pipeline) {
 			continue
 		}
 
+		// looks like a file terminal
+		if strings.HasPrefix(e, "file://") {
+			path := strings.TrimPrefix(e, "file://")
+			b = pl.fileTerminal(path, b)
+			continue
+		}
+
 		// looks like a named pipe
 		var in *Reader
 
@@ -930,6 +938,42 @@ func (pl *pipeline) cancel() {
 		log.Debug("closing pipeline: %v", pl.name)
 		close(pl.done)
 	})
+}
+
+// fileTerminal writes all incoming data to the file at path. If the file
+// exists it is appended to; otherwise it is created. The returned channel is
+// always nil because a file terminal consumes data and produces no output.
+func (pl *pipeline) fileTerminal(path string, in <-chan string) <-chan string {
+	log.Debug("fileTerminal: %v", path)
+
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		pl.cancel()
+		log.Errorln(err)
+		return nil
+	}
+
+	go func() {
+		defer pl.cancel()
+		defer f.Close()
+
+		for {
+			select {
+			case v, ok := <-in:
+				if !ok {
+					return
+				}
+				if _, err := f.WriteString(v); err != nil {
+					log.Errorln(err)
+					return
+				}
+			case <-pl.done:
+				return
+			}
+		}
+	}()
+
+	return nil
 }
 
 func (p *Pipe) Name() string {
