@@ -388,7 +388,7 @@ Note: This will overwrite any prior saved files.`,
 		HelpShort: "**DEPRECATED**: Use 'vm save' - write VM state and disk to file",
 		HelpLong: `
 **DEPRECATED**: Use 'vm save' - Write VM state (migrate) and disk to file, which can later be booted with 'vm config
-migrate ...' and 'vm config disk ...', respectively.
+state ...' and 'vm config disk ...', respectively.
 Saved migrate and disk files are written to the files directory as specified with
 -filepath. On success, a call to snapshot a VM will return immediately. You can
 check the status of in-flight snapshots by invoking vm snapshot with no arguments.`,
@@ -403,7 +403,7 @@ check the status of in-flight snapshots by invoking vm snapshot with no argument
 		HelpShort: "**DEPRECATED**: Use 'vm save' - write VM state to disk",
 		HelpLong: `
 **DEPRECATED**: Use 'vm save' - Migrate runtime state of a VM to disk, which can later
-be booted with vm config migrate.
+be booted with vm config state.
 Migration files are written to the files directory as specified with -filepath.
 On success, a call to migrate a VM will return immediately. You can check the
 status of in-flight migrations by invoking vm migrate with no arguments.`,

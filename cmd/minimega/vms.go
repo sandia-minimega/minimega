@@ -58,7 +58,7 @@ func (q QueuedVMs) GetFiles(updatee string) error {
 		q.KVMConfig.CdromPath,
 		q.KVMConfig.InitrdPath,
 		q.KVMConfig.KernelPath,
-		q.KVMConfig.MigratePath,
+		q.KVMConfig.StatePath,
 	}
 	for _, f := range q.KVMConfig.Disks {
 		files = append(files, f.Path)
