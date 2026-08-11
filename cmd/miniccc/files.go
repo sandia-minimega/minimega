@@ -43,14 +43,24 @@ func sendFile(ID int, filename string) error {
 
 // recvFiles retrieves a list of files from the ron server by requesting each
 // one individually.
-func recvFiles(files []string) {
+func recvFiles(files []string, destination string) {
 	start := time.Now()
 	var size int64
+	destDir := filepath.Join(*f_path, "files")
+
+	if destination != "" {
+		if filepath.IsAbs(destination) {
+			destDir = destination
+		} else {
+			destDir = filepath.Join(destDir, destination)
+		}
+	}
+	destDir = filepath.Clean(destDir)
 
 	for _, v := range files {
 		log.Info("requesting file %v", v)
 
-		dst := filepath.Join(*f_path, "files", v)
+		dst := filepath.Join(destDir, v)
 
 		if _, err := os.Stat(dst); err == nil {
 			// file exists (TODO: overwrite?)
