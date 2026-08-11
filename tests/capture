@@ -42,3 +42,21 @@ namespace bar capture
 namespace foo capture pcap vm car 1 /dev/null
 namespace foo capture pcap vm bar 0 /dev/null
 namespace foo capture pcap delete vm bar
+
+# Stop a capture for a single VM interface without affecting the others
+namespace foo vm config net A B
+namespace foo vm launch kvm multi
+namespace foo capture pcap vm multi 0 /dev/null
+namespace foo capture pcap vm multi 1 /dev/null
+namespace foo capture
+namespace foo capture pcap delete vm multi 0
+namespace foo capture
+namespace foo capture pcap delete vm multi 1
+namespace foo capture
+
+# Deleting a nonexistent interface capture should fail
+namespace foo capture pcap vm multi 0 /dev/null
+namespace foo capture pcap delete vm multi 5
+namespace foo capture
+namespace foo capture pcap delete vm multi 0
+namespace foo capture

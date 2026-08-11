@@ -35,7 +35,7 @@ var captureCLIHandlers = []minicli.Handler{
 		HelpShort: "capture experiment data for a VM",
 		Patterns: []string{
 			"capture <pcap,> vm <vm name> <interface index> <filename>",
-			"capture <pcap,> <delete,> vm <vm name>",
+			"capture <pcap,> <delete,> vm <vm name> [interface index]",
 		},
 		Call:    wrapVMTargetCLI(cliCaptureVM),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
@@ -79,11 +79,15 @@ capture, use the delete commands:
 	capture netflow delete bridge <bridge>
 	capture pcap delete bridge <bridge>
 	capture pcap delete vm <name>
+	capture pcap delete vm <name> <interface index>
 
 To stop all captures of a particular kind, replace <bridge> or <vm> with "all".
 If a VM has multiple interfaces and there are multiple captures running,
 calling "capture pcap delete vm <name>" stops all the captures for that VM. To
-stop all captures of all types, use "clear capture".
+stop only the capture for a single interface, specify the interface index,
+e.g. "capture pcap delete vm <name> 0" stops the capture for interface 0
+without affecting captures on other interfaces of the same VM. To stop all
+captures of all types, use "clear capture".
 
 Notes with namespaces:
  * Capturing traffic directly from the bridge (as PCAP or netflow) is not
@@ -245,9 +249,19 @@ func cliCaptureVM(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	iface := c.StringArgs["interface"]
 	fname := c.StringArgs["filename"]
 
-	// stopping capture for one or all VMs
+	// stopping capture for one or all VMs, optionally scoped to a single
+	// interface index
 	if c.BoolArgs["delete"] {
-		return ns.captures.StopVM(name)
+		if iface != "" {
+			num, err := strconv.Atoi(iface)
+			if err != nil {
+				return fmt.Errorf("invalid interface: `%v`", iface)
+			}
+
+			return ns.captures.StopVM(name, &num)
+		}
+
+		return ns.captures.StopVM(name, nil)
 	}
 
 	// capture VM:interface -> pcap
