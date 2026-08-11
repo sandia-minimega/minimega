@@ -1432,7 +1432,10 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 			}
 
 			args = append(args, "-device")
-			args = append(args, fmt.Sprintf("ide-drive,drive=ahci-drive-%v,bus=ahci.%v", ahciBusSlot, ahciBusSlot))
+			// "ide-drive" was removed in QEMU 6.0; "ide-hd" is the modern
+			// replacement for attaching a disk (as opposed to "ide-cd" for
+			// a CD-ROM) to an AHCI/IDE bus.
+			args = append(args, fmt.Sprintf("ide-hd,drive=ahci-drive-%v,bus=ahci.%v", ahciBusSlot, ahciBusSlot))
 
 			driveParams = fmt.Sprintf("id=ahci-drive-%v,file=%v,media=disk,if=none", ahciBusSlot, path)
 
@@ -1559,7 +1562,7 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 
 	// hook for hugepage support
 	if vm.hugepagesMountPath != "" {
-		args = append(args, "-mem-info")
+		args = append(args, "-mem-path")
 		args = append(args, vm.hugepagesMountPath)
 	}
 
