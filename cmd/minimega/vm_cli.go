@@ -375,7 +375,11 @@ filename provided. If no filename is provided, the state and disk image will be 
 On success, a call to 'vm save' a VM will return immediately. You can check the
 status of in-flight saves by invoking 'vm save' with no arguments.
 
-Note: This will overwrite any prior saved files.`,
+Note: This will overwrite any prior saved files.
+
+Note: vm save is currently supported for KVM VMs only. Android VM save is not
+supported because Android Emulator snapshot/AVD state is managed separately
+from minimega's KVM migration state.`,
 		Patterns: []string{
 			"vm save",
 			"vm save <vm name>",
@@ -836,9 +840,16 @@ func cliVMSave(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		return nil
 	}
 
-	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
-	if err != nil {
-		return err
+	target := c.StringArgs["vm"]
+
+	found := ns.FindVM(target)
+	if found == nil {
+		return vmNotFound(target)
+	}
+
+	vm, ok := found.(*KvmVM)
+	if !ok {
+		return fmt.Errorf("vm save is only supported for KVM VMs; %q is type %v", found.GetName(), found.GetType())
 	}
 
 	fname := c.StringArgs["filename"]

@@ -698,9 +698,11 @@ func (n *Namespace) processVMBonds(vals []string) error {
 	return nil
 }
 
-// Save creates a snapshot of a namespace so that it can be restored later.
-// Both a state file and hard disk file (disk) are created for each
-// VM in the namespace. If dir is not an absolute path, it will be a
+// Save creates a restorable namespace launch script and saves runtime state for
+// VM types that support minimega save semantics. KVM VMs have state and disk
+// files saved. Container and Android VMs are saved as configuration only.
+// Android Emulator runtime state, AVD data changes, and guest-side network
+// configuration are not captured. If dir is not an absolute path, it will be a
 // subdirectory of iomBase.
 func (n *Namespace) Save(dir string) error {
 	var useIOM bool
@@ -802,12 +804,26 @@ func (n *Namespace) Save(dir string) error {
 			fmt.Fprintf(f, "vm config disks %s\n", diskConfigs.String())
 
 		} else if vm.GetType() == CONTAINER {
-			log.Warn("Skipping save for container: %q\n", vm.GetName())
+			log.Warn("Saving configuration only for container: %q\n", vm.GetName())
 			fmt.Fprintf(f, "clear vm config\n")
 
 			if err := vm.WriteConfig(f); err != nil {
 				return err
 			}
+		} else if vm.GetType() == ANDROID {
+			log.Warn("Saving configuration only for Android VM: %q\n", vm.GetName())
+
+			fmt.Fprintf(f, "# Android VM %q is saved as configuration only.\n", vm.GetName())
+			fmt.Fprintf(f, "# Android Emulator runtime state, AVD data changes, guest IP addresses,\n")
+			fmt.Fprintf(f, "# guest policy routing, and guest firewall state are not captured.\n")
+
+			fmt.Fprintf(f, "clear vm config\n")
+
+			if err := vm.WriteConfig(f); err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("namespace save does not support VM type %v for VM %q", vm.GetType(), vm.GetName())
 		}
 
 		fmt.Fprintf(f, "vm launch %v %q\n\n", vm.GetType(), vm.GetName())
