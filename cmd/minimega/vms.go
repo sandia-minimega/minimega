@@ -611,7 +611,6 @@ func globalVMs(ns *Namespace) []VM {
 	// Collected VMs
 	vms := []VM{}
 
-	// LOCK: see func description.
 	for resps := range runCommands(cmds...) {
 		for _, resp := range resps {
 			if resp.Error != "" {

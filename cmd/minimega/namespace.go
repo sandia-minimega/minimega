@@ -922,6 +922,16 @@ func GetNamespace() *Namespace {
 	return namespaces[namespace]
 }
 
+// resolveNamespace returns the namespace a command must run in: the one tagged
+// on the command itself, if any, otherwise the process-wide active namespace.
+func resolveNamespace(c *minicli.Command) *Namespace {
+	if c != nil && c.Namespace != "" {
+		return GetOrCreateNamespace(c.Namespace)
+	}
+
+	return GetNamespace()
+}
+
 // GetOrCreateNamespace returns the specified namespace, creating one if it
 // doesn't already exist.
 func GetOrCreateNamespace(name string) *Namespace {
@@ -953,23 +963,6 @@ func SetNamespace(name string) error {
 
 	namespace = name
 	return nil
-}
-
-// RevertNamespace reverts the active namespace (which should match curr) back
-// to the old namespace.
-func RevertNamespace(old, curr *Namespace) {
-	namespaceLock.Lock()
-	defer namespaceLock.Unlock()
-
-	log.Debug("reverting to namespace: %v", old)
-
-	// This is very odd and should *never* happen unless something has gone
-	// horribly wrong.
-	if namespace != curr.Name {
-		log.Warn("unexpected namespace, `%v` != `%v`, when reverting to `%v`", namespace, curr, old)
-	}
-
-	namespace = old.Name
 }
 
 func DestroyNamespace(name string) error {

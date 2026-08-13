@@ -32,6 +32,11 @@ type Command struct {
 	// from. Setting and using this is entirely up to developers using minicli.
 	Source string
 
+	// Namespace names the namespace this command must run in, regardless of
+	// which namespace happens to be active when it is dispatched. This is not
+	// required.
+	Namespace string
+
 	// exact tracks whether the command was formed from prefixes or not, can be
 	// used to break ties if there is ambiguity.
 	exact bool
@@ -53,6 +58,15 @@ func (c *Command) SetSource(source string) {
 
 	if c.Subcommand != nil {
 		c.Subcommand.SetSource(source)
+	}
+}
+
+// SetNamespace sets the Namespace field for a command and all nested subcommands.
+func (c *Command) SetNamespace(namespace string) {
+	c.Namespace = namespace
+
+	if c.Subcommand != nil {
+		c.Subcommand.SetNamespace(namespace)
 	}
 }
 

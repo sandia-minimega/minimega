@@ -1016,7 +1016,7 @@ Note: Cannot specify Schedule and Colocate in the same config.
 				return nil
 			}
 
-			if err := validSchedule(ns.vmConfig, c.StringArgs["value"]); err != nil {
+			if err := ns.validSchedule(ns.vmConfig, c.StringArgs["value"]); err != nil {
 				return err
 			}
 

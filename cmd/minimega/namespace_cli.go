@@ -143,9 +143,6 @@ var nsCliHandlers = map[string]minicli.CLIFunc{
 func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
-	// Get the active namespace
-	ns := GetNamespace()
-
 	if name, ok := c.StringArgs["name"]; ok {
 		// check the name is sane
 		if !validName.MatchString(name) {
@@ -154,20 +151,13 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 			return
 		}
 
-		ns2 := GetOrCreateNamespace(name)
+		// validates the name and creates the namespace if it is new
+		GetOrCreateNamespace(name)
 
 		if c.Subcommand != nil {
-			// If we're not already in the desired namespace, change to it
-			// before running the command and then revert back afterwards. If
-			// we're already in the namespace, just run the command.
-			if ns.Name != name {
-				if err := SetNamespace(name); err != nil {
-					resp.Error = err.Error()
-					respChan <- minicli.Responses{resp}
-					return
-				}
-				defer RevertNamespace(ns, ns2)
-			}
+			// Tag the subcommand (rather than switching the active namespace
+			// around it)
+			c.Subcommand.SetNamespace(name)
 
 			// we don't want to see both:
 			// 		namespace foo vm info
@@ -469,7 +459,6 @@ func cliNamespaceBridge(ns *Namespace, c *minicli.Command, resp *minicli.Respons
 		}
 	}
 
-	// LOCK: This is a CLI handler.
 	if err := consume(runCommands(cmds...)); err != nil {
 		return err
 	}
@@ -501,12 +490,11 @@ func cliNamespaceDelBridge(ns *Namespace, c *minicli.Command, resp *minicli.Resp
 		cmds = append(cmds, cmd)
 	}
 
-	// LOCK: This is a CLI handler.
 	return consume(runCommands(cmds...))
 }
 
 func cliNamespaceSave(c *minicli.Command, respChan chan<- minicli.Responses) {
-	ns := GetNamespace()
+	ns := resolveNamespace(c)
 
 	resp := &minicli.Response{Host: hostname}
 
@@ -587,7 +575,6 @@ func cliClearNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 			cmds = append(cmds, cmd)
 		}
 
-		// LOCK: This is a CLI handler.
 		if err := consume(runCommands(cmds...)); err != nil {
 			respChan <- errResp(err)
 			return
@@ -654,7 +641,7 @@ func cliNamespaceRun(c *minicli.Command, respChan chan<- minicli.Responses) {
 		}
 	}
 
-	ns := GetNamespace()
+	ns := resolveNamespace(c)
 
 	res := minicli.Responses{}
 
