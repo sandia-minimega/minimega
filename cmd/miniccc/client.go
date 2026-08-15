@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,7 +44,7 @@ type Process struct {
 }
 
 func NewClient() {
-	client.UUID = getUUID()
+	client.UUID = resolveClientUUID(*f_uuid, getUUID)
 	client.Arch = runtime.GOARCH
 	client.OS = runtime.GOOS
 	client.Version = version.Revision
@@ -52,6 +53,14 @@ func NewClient() {
 
 	client.commandChan = make(chan map[int]*ron.Command, 1024)
 	client.fileChan = make(chan *ron.Message, 1024)
+}
+
+func resolveClientUUID(configured string, discover func() string) string {
+	if uuid := strings.ToLower(strings.TrimSpace(configured)); uuid != "" {
+		return uuid
+	}
+
+	return discover()
 }
 
 func sendMessage(m *ron.Message) error {

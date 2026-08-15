@@ -65,6 +65,13 @@ virtio-serial file.
 
 	miniccc -serial /dev/virtio-ports/cc
 
+Miniccc normally reads its VM UUID from the guest platform. When a serial
+client has no local UUID source, minimega binds the connection to the UUID of
+the VM that owns that serial port. A TCP client without a platform UUID must
+provide one explicitly:
+
+	miniccc -parent 10.0.0.1 -uuid 3b440429-067f-5b75-a0c3-f436519f8ccb
+
 *NOTE:* In linux, the default virtio-serial cc port is `/dev/virtio-ports/cc`.
 In Windows, the path is `\\.\Global\cc`.
 

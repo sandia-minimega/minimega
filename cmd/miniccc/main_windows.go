@@ -30,6 +30,7 @@ var (
 	f_parent  = flag.String("parent", "", "parent to connect to (if relay or client)")
 	f_path    = flag.String("path", "/tmp/miniccc", "path to store files in")
 	f_serial  = flag.String("serial", "", "use serial device instead of tcp")
+	f_uuid    = flag.String("uuid", "", "override the client UUID")
 	f_family  = flag.String("family", "tcp", "[tcp,unix] family to dial on")
 	f_pipe    = flag.String("pipe", "", "read/write to or from a named pipe")
 	f_install = flag.String("install", "", "install as Windows service ('manual-start' or 'auto-start')")
