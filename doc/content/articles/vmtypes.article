@@ -75,8 +75,54 @@ Configuration parameters specific to `KVM` instances:
 - `cpu` - Set the virtual CPU architecture.
 - `kernel` - Attach a kernel image to a VM.
 - `initrd` - Attach an initrd image to a VM.
+- `baremetal` - Suppress PC-oriented devices and launch a firmware image with QMP, serial, and tap-network lifecycle support.
+- `baremetal-network-driver` - Admit a board-integrated QEMU NIC model for bare-metal network configuration.
 - `serial` - Specify serial ports.
 - `virtio-serial` - Specify virtio-serial ports.
+
+*** Bare-metal firmware
+
+The `baremetal` configuration supports firmware and RTOS guests whose QEMU
+machine does not provide PC hardware. It removes minimega's implicit VNC,
+VGA, USB, CD-ROM, keyboard, RTC, PCI bridge, and virtio backchannel devices.
+QMP lifecycle control, PID tracking, kernel loading, serial sockets, and tap
+networking remain available.
+
+Bare-metal VMs require `vm config kernel`, must disable `backchannel`, and do
+not support disks, CD-ROMs, migrated state, TPM devices, virtio serial ports,
+or bidirectional copy and paste. Serial ports use the target board's native
+UARTs and are exposed as unix sockets in the VM instance directory. Network
+interfaces use QEMU's board-oriented `-net nic,model=...` form rather than a
+PCI bridge, so the configured driver must be implemented by both the selected
+QEMU machine and the firmware. Set `vm config baremetal-network-driver` when using
+a board-integrated controller because QEMU does not report those controllers
+through its PCI device-discovery interface.
+
+For example, an Arm Cortex-M3 firmware built for QEMU's MPS2 AN385 board can
+be configured with:
+
+	vm config qemu /usr/bin/qemu-system-arm
+	vm config machine mps2-an385
+	vm config cpu cortex-m3
+	vm config memory 16
+	vm config vcpus 1
+	vm config kernel /absolute/path/RTOSDemo.out
+	vm config baremetal true
+	vm config baremetal-network-driver lan9118
+	vm config backchannel false
+	vm config serial-ports 1
+	vm config net 378,52:54:00:12:34:ad,lan9118
+	vm launch kvm freertos-mps2
+	vm start freertos-mps2
+
+The firmware's first UART is then available at `serial0` in the VM instance
+directory. Bare-metal firmware normally has no framebuffer, so VNC is not
+created and the `vnc_port` field is zero. QEMU stdout and stderr diagnostics are
+captured in `qemu.log` in the same instance directory. Firmware console and Arm
+semihosting output remain available through the configured serial socket.
+Firmware that uses Arm semihosting can enable it with:
+
+	vm config qemu-append -semihosting -semihosting-config enable=on,target=native
 
 *** Technical details
 

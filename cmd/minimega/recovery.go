@@ -161,7 +161,9 @@ func recover() error {
 
 				go kvm.qmpLogger()
 
-				log.Info("connecting to VNC for vm %s (ID: %s)", name, vm.VMID)
+				if !kvm.Baremetal {
+					log.Info("connecting to VNC for vm %s (ID: %s)", name, vm.VMID)
+				}
 
 				if err := kvm.connectVNC(); err != nil {
 					return fmt.Errorf("unable to connect VNC for vm %s: %w", vm.VMID, err)

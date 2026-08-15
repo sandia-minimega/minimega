@@ -17,7 +17,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sandia-minimega/minimega/v2/internal/qemu"
 	"github.com/sandia-minimega/minimega/v2/internal/ron"
 	"github.com/sandia-minimega/minimega/v2/internal/vlans"
 	"github.com/sandia-minimega/minimega/v2/internal/vnc"
@@ -614,7 +613,7 @@ func (n *Namespace) processVMDisks(vals []string) error {
 // active vmConfig.
 func (n *Namespace) parseVMNets(vals []string) ([]NetConfig, error) {
 	// get valid NIC drivers for current qemu/machine
-	nics, err := qemu.NICs(n.vmConfig.QemuPath, n.vmConfig.Machine)
+	nics, err := qemuNICsForConfig(n.vmConfig)
 
 	// warn on not finding kvm because we may just be using containers,
 	// otherwise throw a regular error

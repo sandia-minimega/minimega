@@ -44,3 +44,36 @@ func TestParseNICs(t *testing.T) {
 
 	t.Logf("parsed %v nics", len(res))
 }
+
+func TestCapsReturnsIndependentMaps(t *testing.T) {
+	const name = "test-independent-capability-maps"
+
+	mu.Lock()
+	original, existed := cache[name]
+	cache[name] = map[string]bool{"e1000": true}
+	mu.Unlock()
+
+	t.Cleanup(func() {
+		mu.Lock()
+		defer mu.Unlock()
+		if existed {
+			cache[name] = original
+		} else {
+			delete(cache, name)
+		}
+	})
+
+	first, err := caps(name, []string{"unused"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first["lan9118"] = true
+
+	second, err := caps(name, []string{"unused"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second["lan9118"] {
+		t.Fatal("mutating returned capabilities changed the cached map")
+	}
+}

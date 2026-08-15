@@ -682,6 +682,57 @@ Note: this configuration only applies to KVM-based VMs.
 		}),
 	},
 	{
+		HelpShort: "configures baremetal",
+		HelpLong: `Launch QEMU with only the devices required for a bare-metal firmware.
+This suppresses the PC-oriented display, VNC, USB, CD-ROM, keyboard,
+RTC, PCI bridge, and virtio backchannel devices that minimega normally
+adds. QMP, PID tracking, serial sockets, tap networking, and lifecycle
+control remain available.
+
+Bare-metal guests must provide a kernel/firmware image, disable the
+MiniCCC backchannel, and explicitly request any serial ports.
+
+Default: false
+`,
+		Patterns: []string{
+			"vm config baremetal [true,false]",
+		},
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.BoolArgs) == 0 {
+				r.Response = strconv.FormatBool(ns.vmConfig.Baremetal)
+				return nil
+			}
+
+			ns.vmConfig.Baremetal = c.BoolArgs["true"]
+
+			return nil
+		}),
+	},
+	{
+		HelpShort: "configures baremetal-network-driver",
+		HelpLong: `Specify a board-integrated NIC model that QEMU does not report through
+its device-help output. Bare-metal machines such as mps2-an385 expose their
+network controller as part of the board rather than as a PCI device, so
+it must be added explicitly to the accepted network-driver set.
+
+This setting has no effect unless baremetal is enabled.
+`,
+		Patterns: []string{
+			"vm config baremetal-network-driver [value]",
+		},
+
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = ns.vmConfig.BaremetalNetworkDriver
+				return nil
+			}
+
+			ns.vmConfig.BaremetalNetworkDriver = c.StringArgs["value"]
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "configures serial-ports",
 		HelpLong: `Specify the serial ports that will be created for the VM to use. Serial
 ports specified will be mapped to the VM's /dev/ttySX device, where X
@@ -1149,6 +1200,8 @@ Default: empty map
 			"clear vm config <android-avd,>",
 			"clear vm config <append,>",
 			"clear vm config <backchannel,>",
+			"clear vm config <baremetal,>",
+			"clear vm config <baremetal-network-driver,>",
 			"clear vm config <bidirectional-copy-paste,>",
 			"clear vm config <bonds,>",
 			"clear vm config <cpu,>",
@@ -1302,7 +1355,7 @@ func (v *AndroidConfig) WriteConfig(w io.Writer) error {
 	return nil
 }
 
-func (v *AndroidConfig) ReadConfig(r io.Reader, ns string) error {
+func (v *AndroidConfig) ReadConfig(r io.Reader, ns string, vmConfig *VMConfig) error {
 	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
@@ -1456,7 +1509,7 @@ func (v *BaseConfig) WriteConfig(w io.Writer) error {
 	return nil
 }
 
-func (v *BaseConfig) ReadConfig(r io.Reader, ns string) error {
+func (v *BaseConfig) ReadConfig(r io.Reader, ns string, vmConfig *VMConfig) error {
 	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
@@ -1487,9 +1540,13 @@ func (v *BaseConfig) ReadConfig(r io.Reader, ns string) error {
 		case "backchannel":
 			v.Backchannel, _ = strconv.ParseBool(config[1])
 		case "networks":
-			v.ReadFieldConfig(strings.NewReader(line), "networks", ns)
+			if err := v.ReadFieldConfig(strings.NewReader(line), "networks", ns, vmConfig); err != nil {
+				return err
+			}
 		case "bonds":
-			v.ReadFieldConfig(strings.NewReader(line), "bonds", ns)
+			if err := v.ReadFieldConfig(strings.NewReader(line), "bonds", ns, vmConfig); err != nil {
+				return err
+			}
 		case "tags":
 			v.Tags[config[1]] = config[2]
 		}
@@ -1569,7 +1626,7 @@ func (v *ContainerConfig) WriteConfig(w io.Writer) error {
 	return nil
 }
 
-func (v *ContainerConfig) ReadConfig(r io.Reader, ns string) error {
+func (v *ContainerConfig) ReadConfig(r io.Reader, ns string, vmConfig *VMConfig) error {
 	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
@@ -1636,6 +1693,12 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	if field == "machine" {
 		return v.Machine, nil
 	}
+	if field == "baremetal" {
+		return strconv.FormatBool(v.Baremetal), nil
+	}
+	if field == "baremetal-network-driver" {
+		return v.BaremetalNetworkDriver, nil
+	}
 	if field == "serial-ports" {
 		return strconv.FormatUint(v.SerialPorts, 10), nil
 	}
@@ -1701,6 +1764,12 @@ func (v *KVMConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "machine" {
 		v.Machine = ""
 	}
+	if mask == Wildcard || mask == "baremetal" {
+		v.Baremetal = false
+	}
+	if mask == Wildcard || mask == "baremetal-network-driver" {
+		v.BaremetalNetworkDriver = ""
+	}
 	if mask == Wildcard || mask == "serial-ports" {
 		v.SerialPorts = 0
 	}
@@ -1764,6 +1833,12 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 	if v.Machine != "" {
 		fmt.Fprintf(w, "vm config machine %v\n", v.Machine)
 	}
+	if v.Baremetal != false {
+		fmt.Fprintf(w, "vm config baremetal %t\n", v.Baremetal)
+	}
+	if v.BaremetalNetworkDriver != "" {
+		fmt.Fprintf(w, "vm config baremetal-network-driver %v\n", v.BaremetalNetworkDriver)
+	}
 	if v.SerialPorts != 0 {
 		fmt.Fprintf(w, "vm config serial-ports %v\n", v.SerialPorts)
 	}
@@ -1798,7 +1873,7 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 	return nil
 }
 
-func (v *KVMConfig) ReadConfig(r io.Reader, ns string) error {
+func (v *KVMConfig) ReadConfig(r io.Reader, ns string, vmConfig *VMConfig) error {
 	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
@@ -1832,6 +1907,10 @@ func (v *KVMConfig) ReadConfig(r io.Reader, ns string) error {
 			v.Threads, _ = strconv.ParseUint(config[1], 10, 64)
 		case "machine":
 			v.Machine = config[1]
+		case "baremetal":
+			v.Baremetal, _ = strconv.ParseBool(config[1])
+		case "baremetal-network-driver":
+			v.BaremetalNetworkDriver = config[1]
 		case "serial-ports":
 			v.SerialPorts, _ = strconv.ParseUint(config[1], 10, 64)
 		case "virtio-ports":
@@ -1841,7 +1920,9 @@ func (v *KVMConfig) ReadConfig(r io.Reader, ns string) error {
 		case "append":
 			v.Append = fieldsQuoteEscape("\"", strings.Join(config[1:], " "))
 		case "disks":
-			v.ReadFieldConfig(strings.NewReader(line), "disks", ns)
+			if err := v.ReadFieldConfig(strings.NewReader(line), "disks", ns, vmConfig); err != nil {
+				return err
+			}
 		case "usb-use-xhci":
 			v.UsbUseXHCI, _ = strconv.ParseBool(config[1])
 		case "tpm-socket":
@@ -1851,7 +1932,9 @@ func (v *KVMConfig) ReadConfig(r io.Reader, ns string) error {
 		case "qemu-append":
 			v.QemuAppend = fieldsQuoteEscape("\"", strings.Join(config[1:], " "))
 		case "qemu-override":
-			v.ReadFieldConfig(strings.NewReader(line), "qemu-override", ns)
+			if err := v.ReadFieldConfig(strings.NewReader(line), "qemu-override", ns, vmConfig); err != nil {
+				return err
+			}
 		}
 	}
 
