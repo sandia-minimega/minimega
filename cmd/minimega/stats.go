@@ -27,6 +27,7 @@ type HostStats struct {
 	MemTotal      int
 	MemUsed       int
 	VMs           int
+	AndroidVMs    int
 	Limit         int
 	CPUCommit     uint64
 	MemCommit     uint64
@@ -53,6 +54,7 @@ Report information about hosts in the current namespace:
 - tx         : TX bandwidth stats (MB/s)
 - uptime     : uptime
 - vms        : number of VMs
+- androidvms : number of active Android VMs counted against the per-host Android port limit
 - vmlimit    : limit based on coschedule values (-1 is no limit)
 
 All VM-based stats are computed across namespaces.`,
@@ -71,6 +73,7 @@ All VM-based stats are computed across namespaces.`,
 			"host <uptime,>",
 			"host <vms,>",
 			"host <vmlimit,>",
+			"host <androidvms,>",
 		},
 		Call: wrapBroadcastCLI(cliHost),
 	},
@@ -108,6 +111,8 @@ func (h *HostStats) Print(v string) string {
 		return strconv.Itoa(h.NetworkCommit)
 	case "vms":
 		return strconv.Itoa(h.VMs)
+	case "androidvms":
+		return strconv.Itoa(h.AndroidVMs)
 	case "vmlimit":
 		return strconv.Itoa(h.Limit)
 	case "uptime":
@@ -122,7 +127,7 @@ func (h *HostStats) Print(v string) string {
 // it's usually redundant in the tabular data unless .annotate is false.
 var hostInfoKeys = []string{
 	"cpus", "load", "memused", "memtotal", "rx", "tx", "vms", "vmlimit",
-	"cpucommit", "memcommit", "netcommit", "uptime",
+	"androidvms", "cpucommit", "memcommit", "netcommit", "uptime",
 }
 
 func cliHost(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

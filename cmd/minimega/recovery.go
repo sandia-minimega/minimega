@@ -59,6 +59,19 @@ func recover() error {
 
 			f.Close()
 
+			// Android recovery is intentionally unsupported for now. Android VMs do not
+			// expose the KVM VNC shim and require Android-specific runtime reconstruction,
+			// so do not treat them as KVM VMs during recovery.
+			if androidConfigured(cfg.AndroidConfig) {
+				log.Warn(
+					"skipping recovery of Android VM %s (ID: %s, PID: %d): Android recovery is not supported",
+					name,
+					vm.VMID,
+					vm.PID,
+				)
+				continue
+			}
+
 			if len(cfg.Networks) > 0 {
 				body, err = ioutil.ReadFile(filepath.Join(*f_base, vm.VMID, "taps"))
 				if err != nil {

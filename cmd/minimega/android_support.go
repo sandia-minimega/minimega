@@ -43,10 +43,27 @@ type AndroidConfig struct {
 	// Default: true
 	NoWindow bool `config:"android-no-window"`
 
-	// Configure the base console port for Android emulator instances.
+	// Configure the preferred starting console port for Android emulator instances.
+	//
+	// This value is a hint, not a guaranteed assignment. minimega searches for the
+	// first available Android console/ADB port pair starting at this port. If the
+	// requested pair is already reserved or unavailable, the next valid pair is
+	// used.
+	//
+	// If set to 0, minimega starts searching at the beginning of the valid Android
+	// emulator console port range. Console ports are even ports in the range
+	// 5554-5680, and the corresponding ADB port is console+1.
+	//
+	// If nonzero, this value must be an even port in the valid console port range.
+	// Starting later in the range reduces the number of candidate port pairs.
+	//
+	// The valid range contains 64 console/ADB port pairs, so a single minimega
+	// host can run at most 64 Android emulator VMs concurrently, and fewer if some
+	// ports in the range are already in use. In a multi-host namespace, this limit
+	// applies independently to each host.
 	//
 	// Default: 0
-	ConsoleBasePort uint64 `config:"android-console-base-port"`
+	ConsoleBasePort uint64 `config:"android-console-base-port" validate:"validateAndroidConsoleBasePort"`
 
 	// Additional raw arguments to append to the Android emulator command line.
 	ExtraArgs []string `config:"android-extra-args"`
@@ -103,12 +120,32 @@ func findAndroidTool(path, name string) (string, error) {
 	return exec.LookPath(name)
 }
 
-func validateAndroidConfig(cfg AndroidConfig) error {
-	if cfg.ConsoleBasePort < 1024 {
-		return fmt.Errorf("android-console-base-port must be >= 1024")
+func validateAndroidConsoleBasePortValue(port uint64) error {
+	if port == 0 {
+		return nil
+	}
+
+	if port%2 != 0 {
+		return fmt.Errorf("android-console-base-port must be 0 or an even port")
+	}
+
+	if port < MinAndroidConsolePort || port > MaxAndroidConsolePort {
+		return fmt.Errorf(
+			"android-console-base-port must be 0 or an even port in range %d-%d",
+			MinAndroidConsolePort,
+			MaxAndroidConsolePort,
+		)
 	}
 
 	return nil
+}
+
+func validateAndroidConsoleBasePort(_ VMConfig, port uint64) error {
+	return validateAndroidConsoleBasePortValue(port)
+}
+
+func validateAndroidConfig(cfg AndroidConfig) error {
+	return validateAndroidConsoleBasePortValue(cfg.ConsoleBasePort)
 }
 
 func androidAVDExists(cfg AndroidConfig) error {
