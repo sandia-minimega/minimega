@@ -25,7 +25,7 @@ ENV DEBIAN_FRONTEND="noninteractive" \
 RUN apt-get update \
   && apt-get install -y \
     dnsmasq iproute2 isc-dhcp-client \
-    libpcap-dev ntfs-3g openssh-client \
+    less libpcap-dev ntfs-3g openssh-client \
     openvswitch-switch qemu-kvm qemu-utils \
     iptables ffmpeg \
   && apt autoremove -y \
