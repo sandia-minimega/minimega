@@ -60,3 +60,29 @@ E: no such interface 1 for car
 E: vm not found: bar
 ## namespace foo capture pcap delete vm bar
 E: vm not found: bar
+
+## # Stop a capture for a single VM interface without affecting the others
+## namespace foo vm config net A B
+## namespace foo vm launch kvm multi
+## namespace foo capture pcap vm multi 0 /dev/null
+## namespace foo capture pcap vm multi 1 /dev/null
+## namespace foo capture
+bridge      | type | interface | mode | compress | path
+mega_bridge | pcap | multi:0   |      |          | /dev/null
+mega_bridge | pcap | multi:1   |      |          | /dev/null
+## namespace foo capture pcap delete vm multi 0
+## namespace foo capture
+bridge      | type | interface | mode | compress | path
+mega_bridge | pcap | multi:1   |      |          | /dev/null
+## namespace foo capture pcap delete vm multi 1
+## namespace foo capture
+
+## # Deleting a nonexistent interface capture should fail
+## namespace foo capture pcap vm multi 0 /dev/null
+## namespace foo capture pcap delete vm multi 5
+E: vm not found: multi
+## namespace foo capture
+bridge      | type | interface | mode | compress | path
+mega_bridge | pcap | multi:0   |      |          | /dev/null
+## namespace foo capture pcap delete vm multi 0
+## namespace foo capture

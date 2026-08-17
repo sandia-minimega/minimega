@@ -220,14 +220,19 @@ func (c *captures) StopAll() error {
 	})
 }
 
-// StopVM stops capture for VM (wildcard supported).
-func (c *captures) StopVM(s string) error {
+// StopVM stops captures for a VM (wildcard supported for VM name). If iface
+// is non-nil, only the capture for that interface index is stopped; otherwise
+// all captures for the VM are stopped.
+func (c *captures) StopVM(s string, iface *int) error {
 	var found bool
 
 	err := c.stop(func(v capture) bool {
 		switch v := v.(type) {
 		case *pcapVMCapture:
 			r := v.VM.GetName() == s || s == Wildcard
+			if iface != nil {
+				r = r && v.Interface == *iface
+			}
 			found = r || found
 			return r
 		}
