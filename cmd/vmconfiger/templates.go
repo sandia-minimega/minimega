@@ -312,7 +312,7 @@ func (v *{{ $type }} ) WriteConfig(w io.Writer) error {
 	return nil
 }
 
-func (v *{{ $type }} ) ReadConfig(r io.Reader, ns string) error {
+func (v *{{ $type }} ) ReadConfig(r io.Reader, ns string, vmConfig *VMConfig) error {
 	scanner := bufio.NewScanner(r)
 
 	for scanner.Scan() {
@@ -341,7 +341,9 @@ func (v *{{ $type }} ) ReadConfig(r io.Reader, ns string) error {
 			{{- else if eq .Type "slice" }}
 			v.{{ .Field }} = fieldsQuoteEscape("\"", strings.Join(config[1:], " "))
 			{{- else }}
-			v.ReadFieldConfig(strings.NewReader(line), "{{ .ConfigName }}", ns)
+			if err := v.ReadFieldConfig(strings.NewReader(line), "{{ .ConfigName }}", ns, vmConfig); err != nil {
+				return err
+			}
 			{{- end }}
 		{{- end }}
 		}

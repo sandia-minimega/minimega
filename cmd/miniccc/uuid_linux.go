@@ -8,19 +8,51 @@
 package main
 
 import (
+	"fmt"
 	"io/ioutil"
 	"strings"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
-func getUUID() string {
-	d, err := ioutil.ReadFile("/sys/devices/virtual/dmi/id/product_uuid")
-	if err != nil {
-		log.Fatal("unable to get UUID: %v", err)
+var linuxUUIDPaths = []string{
+	"/sys/devices/virtual/dmi/id/product_uuid",
+}
+
+func readLinuxUUID(readFile func(string) ([]byte, error)) (string, error) {
+	var errors []string
+	for _, path := range linuxUUIDPaths {
+		d, err := readFile(path)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", path, err))
+			continue
+		}
+
+		uuid := strings.ToLower(strings.Trim(string(d), "\x00 \t\r\n"))
+		if uuid == "" {
+			errors = append(errors, fmt.Sprintf("%s: empty UUID", path))
+			continue
+		}
+
+		return uuid, nil
 	}
 
-	uuid := strings.ToLower(strings.TrimSpace(string(d)))
+	return "", fmt.Errorf("no usable VM UUID source (%s)", strings.Join(errors, "; "))
+}
+
+func getUUID() string {
+	uuid, err := readLinuxUUID(ioutil.ReadFile)
+	if err != nil {
+		if *f_serial == "" {
+			log.Fatal("unable to get UUID: %v", err)
+		}
+		// Serial MiniCCC connections are already bound to a specific VM by the
+		// host. Leave the UUID empty so that the server can return that trusted
+		// identity during the handshake.
+		log.Warn("unable to get UUID locally; requesting serial-bound identity: %v", err)
+		return ""
+	}
+
 	log.Debug("got UUID: %v", uuid)
 
 	return uuid

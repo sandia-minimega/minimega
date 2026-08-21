@@ -120,6 +120,26 @@ type KVMConfig struct {
 	// Note: this configuration only applies to KVM-based VMs.
 	Machine string `validate:"validMachine" suggest:"wrapSuggest(suggestMachine)"`
 
+	// Launch QEMU with only the devices required for a bare-metal firmware.
+	// This suppresses the PC-oriented display, VNC, USB, CD-ROM, keyboard,
+	// RTC, PCI bridge, and virtio backchannel devices that minimega normally
+	// adds. QMP, PID tracking, serial sockets, tap networking, and lifecycle
+	// control remain available.
+	//
+	// Bare-metal guests must provide a kernel/firmware image, disable the
+	// MiniCCC backchannel, and explicitly request any serial ports.
+	//
+	// Default: false
+	Baremetal bool
+
+	// Specify a board-integrated NIC model that QEMU does not report through
+	// its device-help output. Bare-metal machines such as mps2-an385 expose their
+	// network controller as part of the board rather than as a PCI device, so
+	// it must be added explicitly to the accepted network-driver set.
+	//
+	// This setting has no effect unless baremetal is enabled.
+	BaremetalNetworkDriver string
+
 	// Specify the serial ports that will be created for the VM to use. Serial
 	// ports specified will be mapped to the VM's /dev/ttySX device, where X
 	// refers to the connected unix socket on the host at
@@ -273,7 +293,7 @@ func (old KVMConfig) Copy() KVMConfig {
 	return res
 }
 
-func (vm *KVMConfig) ReadFieldConfig(r io.Reader, field, namespace string) error {
+func (vm *KVMConfig) ReadFieldConfig(r io.Reader, field, namespace string, _ *VMConfig) error {
 	switch field {
 	case "disks":
 		scanner := bufio.NewScanner(r)
@@ -346,6 +366,30 @@ func (vm *KVMConfig) ReadFieldConfig(r io.Reader, field, namespace string) error
 }
 
 func NewKVM(name, namespace string, config VMConfig) (*KvmVM, error) {
+	if config.Baremetal {
+		if config.KernelPath == "" {
+			return nil, errors.New("bare-metal VMs require a kernel firmware image")
+		}
+		if config.Backchannel {
+			return nil, errors.New("bare-metal VMs do not support the MiniCCC backchannel")
+		}
+		if config.BidirectionalCopyPaste {
+			return nil, errors.New("bare-metal VMs do not support bidirectional copy and paste")
+		}
+		if config.VirtioPorts != "" {
+			return nil, errors.New("bare-metal VMs do not support virtio serial ports")
+		}
+		if config.CdromPath != "" || len(config.Disks) != 0 || config.MigratePath != "" {
+			return nil, errors.New("bare-metal VMs do not support disks, CD-ROMs, or migrated VM state")
+		}
+		if config.TpmSocketPath != "" {
+			return nil, errors.New("bare-metal VMs do not support TPM devices")
+		}
+		if len(config.Networks) != 0 && config.BaremetalNetworkDriver == "" {
+			return nil, errors.New("networked bare-metal VMs require a bare-metal NIC driver")
+		}
+	}
+
 	vm := new(KvmVM)
 
 	vm.BaseVM = NewBaseVM(name, namespace, config)
@@ -570,6 +614,8 @@ func (vm *KVMConfig) String() string {
 	fmt.Fprintf(w, "Serial Ports:\t%v\n", vm.SerialPorts)
 	fmt.Fprintf(w, "Virtio-Serial Ports:\t%v\n", vm.VirtioPorts)
 	fmt.Fprintf(w, "Machine:\t%v\n", vm.Machine)
+	fmt.Fprintf(w, "Bare metal:\t%v\n", vm.Baremetal)
+	fmt.Fprintf(w, "Bare metal network driver:\t%v\n", vm.BaremetalNetworkDriver)
 	fmt.Fprintf(w, "CPU:\t%v\n", vm.CPU)
 	fmt.Fprintf(w, "Cores:\t%v\n", vm.Cores)
 	fmt.Fprintf(w, "Threads:\t%v\n", vm.Threads)
@@ -763,6 +809,10 @@ func (vm *KvmVM) connectQMP() (err error) {
 }
 
 func (vm *KvmVM) connectVNC() error {
+	if vm.Baremetal {
+		return nil
+	}
+
 	l, err := net.Listen("tcp", "")
 	if err != nil {
 		return err
@@ -971,6 +1021,7 @@ func (vm *KvmVM) launch() error {
 
 	var sOut bytes.Buffer
 	var sErr bytes.Buffer
+	var qemuLog *os.File
 
 	vmConfig := VMConfig{BaseConfig: vm.BaseConfig, KVMConfig: vm.KVMConfig}
 
@@ -998,15 +1049,33 @@ func (vm *KvmVM) launch() error {
 		qemu = v
 	}
 
+	stdout := io.Writer(&sOut)
+	stderr := io.Writer(&sErr)
+	if vm.Baremetal {
+		var err error
+		qemuLog, err = os.OpenFile(vm.path("qemu.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
+		if err != nil {
+			return vm.setErrorf("unable to create bare-metal QEMU log: %v", err)
+		}
+		stdout = qemuLog
+		stderr = qemuLog
+	}
+
 	cmd := &exec.Cmd{
 		Path:   qemu,
 		Args:   append([]string{qemu}, args...),
-		Stdout: &sOut,
-		Stderr: &sErr,
+		Stdout: stdout,
+		Stderr: stderr,
 	}
 
 	if err := cmd.Start(); err != nil {
+		if qemuLog != nil {
+			qemuLog.Close()
+		}
 		return vm.setErrorf("unable to start qemu: %v %v", err, sErr.String())
+	}
+	if qemuLog != nil {
+		qemuLog.Close()
 	}
 
 	vm.Pid = cmd.Process.Pid
@@ -1337,10 +1406,14 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "-m")
 	args = append(args, strconv.FormatUint(vm.Memory, 10))
 
-	args = append(args, "-nographic")
+	if vm.Baremetal {
+		args = append(args, "-display", "none")
+	} else {
+		args = append(args, "-nographic")
 
-	args = append(args, "-vnc")
-	args = append(args, "unix:"+filepath.Join(vmPath, "vnc"))
+		args = append(args, "-vnc")
+		args = append(args, "unix:"+filepath.Join(vmPath, "vnc"))
+	}
 
 	args = append(args, "-smp")
 	smp := strconv.FormatUint(vm.VCPUs, 10)
@@ -1358,26 +1431,28 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	args = append(args, "-qmp")
 	args = append(args, "unix:"+filepath.Join(vmPath, "qmp")+",server=on")
 
-	args = append(args, "-vga")
-	if vm.Vga == "" {
-		args = append(args, "std")
-	} else {
-		args = append(args, vm.Vga)
-	}
+	if !vm.Baremetal {
+		args = append(args, "-vga")
+		if vm.Vga == "" {
+			args = append(args, "std")
+		} else {
+			args = append(args, vm.Vga)
+		}
 
-	args = append(args, "-rtc")
-	args = append(args, "clock=vm,base=utc")
+		args = append(args, "-rtc")
+		args = append(args, "clock=vm,base=utc")
 
-	// for USB 1.0, creates bus named usb-bus.0
-	args = append(args, "-usb")
-	// create bus for xHCI or EHCI depending on config
-	if vm.UsbUseXHCI {
-		args = append(args, "-device", "qemu-xhci,id=xhci")
-	} else {
-		args = append(args, "-device", "usb-ehci,id=ehci")
+		// for USB 1.0, creates bus named usb-bus.0
+		args = append(args, "-usb")
+		// create bus for xHCI or EHCI depending on config
+		if vm.UsbUseXHCI {
+			args = append(args, "-device", "qemu-xhci,id=xhci")
+		} else {
+			args = append(args, "-device", "usb-ehci,id=ehci")
+		}
+		// this allows absolute pointers in vnc, and works great on android vms
+		args = append(args, "-device", "usb-tablet,bus=usb-bus.0")
 	}
-	// this allows absolute pointers in vnc, and works great on android vms
-	args = append(args, "-device", "usb-tablet,bus=usb-bus.0")
 
 	if vm.TpmSocketPath != "" {
 		args = append(args, "-chardev")
@@ -1393,23 +1468,32 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		args = append(args, "-chardev")
 		args = append(args, fmt.Sprintf("socket,id=charserial%v,path=%v%v,server=on,wait=off", i, filepath.Join(vmPath, "serial"), i))
 
-		args = append(args, "-device")
-		args = append(args, fmt.Sprintf("isa-serial,chardev=charserial%v,id=serial%v", i, i))
+		if vm.Baremetal {
+			args = append(args, "-serial")
+			args = append(args, fmt.Sprintf("chardev:charserial%v", i))
+		} else {
+			args = append(args, "-device")
+			args = append(args, fmt.Sprintf("isa-serial,chardev=charserial%v,id=serial%v", i, i))
+		}
 	}
 
 	args = append(args, "-pidfile")
 	args = append(args, filepath.Join(vmPath, "qemu.pid"))
 
-	args = append(args, "-k")
-	args = append(args, "en-us")
+	if !vm.Baremetal {
+		args = append(args, "-k")
+		args = append(args, "en-us")
+	}
 
 	if vm.CPU != "" {
 		args = append(args, "-cpu")
 		args = append(args, vm.CPU)
 	}
 
-	args = append(args, "-net")
-	args = append(args, "none")
+	if !vm.Baremetal || len(vm.Networks) == 0 {
+		args = append(args, "-net")
+		args = append(args, "none")
+	}
 
 	args = append(args, "-S")
 
@@ -1418,17 +1502,19 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 		args = append(args, fmt.Sprintf("exec:cat %v", vm.MigratePath))
 	}
 
-	// put cdrom *before* disks so that it is always connected to ide0 -- this
-	// allows us to use a hardcoded block device name in cdrom eject/change.
-	if vm.CdromPath != "" {
-		args = append(args, "-drive")
-		args = append(args, "file="+vm.CdromPath+",media=cdrom")
-		args = append(args, "-boot")
-		args = append(args, "once=d")
-	} else {
-		// add an empty cdrom
-		args = append(args, "-drive")
-		args = append(args, "media=cdrom")
+	if !vm.Baremetal {
+		// put cdrom *before* disks so that it is always connected to ide0 -- this
+		// allows us to use a hardcoded block device name in cdrom eject/change.
+		if vm.CdromPath != "" {
+			args = append(args, "-drive")
+			args = append(args, "file="+vm.CdromPath+",media=cdrom")
+			args = append(args, "-boot")
+			args = append(args, "once=d")
+		} else {
+			// add an empty cdrom
+			args = append(args, "-drive")
+			args = append(args, "media=cdrom")
+		}
 	}
 
 	// disks
@@ -1488,89 +1574,98 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 	}
 
 	// net
-	var bus, addr int
-	addBus := func() {
-		addr = 1 // start at 1 because 0 is reserved
-		bus++
-		args = append(args, fmt.Sprintf("-device"))
-		args = append(args, fmt.Sprintf("pci-bridge,id=pci.%v,chassis_nr=%v", bus, bus))
-	}
-
-	addBus()
-	for _, net := range vm.Networks {
-		args = append(args, "-netdev")
-		args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", net.Tap, net.Tap))
-		args = append(args, "-device")
-		args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", net.Driver, net.Tap, net.MAC, bus, addr))
-		addr++
-		if addr == DEV_PER_BUS {
-			addBus()
+	if vm.Baremetal {
+		for _, net := range vm.Networks {
+			args = append(args, "-netdev")
+			args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", net.Tap, net.Tap))
+			args = append(args, "-net")
+			args = append(args, fmt.Sprintf("nic,model=%v,netdev=%v,macaddr=%v", net.Driver, net.Tap, net.MAC))
 		}
-	}
-
-	// start at -1 so that the first time we call addVirtioDevice we create port 0
-	virtioPort := -1
-
-	addVirtioDevice := func() {
-		virtioPort++
-
-		args = append(args, "-device")
-		args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial%v,bus=pci.%v,addr=0x%x", virtioPort, bus, addr))
-
-		addr++
-		if addr == DEV_PER_BUS { // check to see if we've run out of addr slots on this bus
-			addBus()
-		}
-	}
-
-	// virtio-serial
-	if vm.Backchannel {
-		addVirtioDevice()
-
-		args = append(args, "-chardev")
-		args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%v,server=on,wait=off", filepath.Join(vmPath, "cc")))
-		args = append(args, "-device")
-		args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserialCC,id=charvserialCC,name=cc", virtioPort))
-	}
-
-	if vm.BidirectionalCopyPaste {
-		addVirtioDevice()
-
-		args = append(args, "-chardev")
-		args = append(args, "qemu-vdagent,id=vdagent,clipboard=on")
-		args = append(args, "-device")
-		args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=vdagent,name=com.redhat.spice.0", virtioPort))
-	}
-
-	if vm.VirtioPorts != "" {
-		names := []string{}
-
-		v, err := strconv.ParseUint(vm.VirtioPorts, 10, 64)
-		if err == nil {
-			// if the VirtioPorts is an int, assume they want automatically generated names
-			for i := uint64(0); i < v; i++ {
-				names = append(names, "virtio-serial"+strconv.FormatUint(i, 10))
-			}
-		} else {
-			// otherwise, assume they specified a list of names
-			names = strings.Split(vm.VirtioPorts, ",")
+	} else {
+		var bus, addr int
+		addBus := func() {
+			addr = 1 // start at 1 because 0 is reserved
+			bus++
+			args = append(args, fmt.Sprintf("-device"))
+			args = append(args, fmt.Sprintf("pci-bridge,id=pci.%v,chassis_nr=%v", bus, bus))
 		}
 
-		for i, name := range names {
-			if name == "cc" && vm.Backchannel {
-				// TODO: abort?
-				log.Warn("virtio-port name conflicts with miniccc's")
+		addBus()
+		for _, net := range vm.Networks {
+			args = append(args, "-netdev")
+			args = append(args, fmt.Sprintf("tap,id=%v,script=no,ifname=%v", net.Tap, net.Tap))
+			args = append(args, "-device")
+			args = append(args, fmt.Sprintf("driver=%v,netdev=%v,mac=%v,bus=pci.%v,addr=0x%x", net.Driver, net.Tap, net.MAC, bus, addr))
+			addr++
+			if addr == DEV_PER_BUS {
+				addBus()
 			}
+		}
 
-			// If we've maxed out the device, create a new one
-			if i%DEV_PER_VIRTIO == 0 {
-				addVirtioDevice()
+		// start at -1 so that the first time we call addVirtioDevice we create port 0
+		virtioPort := -1
+
+		addVirtioDevice := func() {
+			virtioPort++
+
+			args = append(args, "-device")
+			args = append(args, fmt.Sprintf("virtio-serial-pci,id=virtio-serial%v,bus=pci.%v,addr=0x%x", virtioPort, bus, addr))
+
+			addr++
+			if addr == DEV_PER_BUS { // check to see if we've run out of addr slots on this bus
+				addBus()
 			}
+		}
+
+		// virtio-serial
+		if vm.Backchannel {
+			addVirtioDevice()
 
 			args = append(args, "-chardev")
-			args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%v%v,server=on,wait=off", i, filepath.Join(vmPath, "virtio-serial"), i))
+			args = append(args, fmt.Sprintf("socket,id=charvserialCC,path=%v,server=on,wait=off", filepath.Join(vmPath, "cc")))
 			args = append(args, "-device")
-			args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserial%v,id=charvserial%v,name=%v", virtioPort, i, i, name))
+			args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserialCC,id=charvserialCC,name=cc", virtioPort))
+		}
+
+		if vm.BidirectionalCopyPaste {
+			addVirtioDevice()
+
+			args = append(args, "-chardev")
+			args = append(args, "qemu-vdagent,id=vdagent,clipboard=on")
+			args = append(args, "-device")
+			args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=vdagent,name=com.redhat.spice.0", virtioPort))
+		}
+
+		if vm.VirtioPorts != "" {
+			names := []string{}
+
+			v, err := strconv.ParseUint(vm.VirtioPorts, 10, 64)
+			if err == nil {
+				// if the VirtioPorts is an int, assume they want automatically generated names
+				for i := uint64(0); i < v; i++ {
+					names = append(names, "virtio-serial"+strconv.FormatUint(i, 10))
+				}
+			} else {
+				// otherwise, assume they specified a list of names
+				names = strings.Split(vm.VirtioPorts, ",")
+			}
+
+			for i, name := range names {
+				if name == "cc" && vm.Backchannel {
+					// TODO: abort?
+					log.Warn("virtio-port name conflicts with miniccc's")
+				}
+
+				// If we've maxed out the device, create a new one
+				if i%DEV_PER_VIRTIO == 0 {
+					addVirtioDevice()
+				}
+
+				args = append(args, "-chardev")
+				args = append(args, fmt.Sprintf("socket,id=charvserial%v,path=%v%v,server=on,wait=off", i, filepath.Join(vmPath, "virtio-serial"), i))
+				args = append(args, "-device")
+				args = append(args, fmt.Sprintf("virtserialport,bus=virtio-serial%v.0,chardev=charvserial%v,id=charvserial%v,name=%v", virtioPort, i, i, name))
+			}
 		}
 	}
 

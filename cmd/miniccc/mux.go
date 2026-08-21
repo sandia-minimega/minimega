@@ -31,7 +31,7 @@ func mux(done chan struct{}) {
 		}
 	}()
 
-	go ron.Trunk(remote, client.UUID, sendMessage)
+	tunnelStarted := false
 
 	// Read messages from gob, mux message to the correct place
 	var err error
@@ -70,6 +70,14 @@ func mux(done chan struct{}) {
 		switch m.Type {
 		case ron.MESSAGE_CLIENT:
 			// ACK of the handshake
+			if client.UUID == "" && m.Client != nil && m.Client.UUID != "" {
+				client.UUID = m.Client.UUID
+				log.Info("adopted serial-bound UUID: %v", client.UUID)
+			}
+			if !tunnelStarted {
+				go ron.Trunk(remote, client.UUID, sendMessage)
+				tunnelStarted = true
+			}
 			log.Info("handshake complete")
 
 			go periodic(done)

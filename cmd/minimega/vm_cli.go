@@ -9,7 +9,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -345,6 +347,28 @@ and a JSON string, and returns the JSON encoded response. For example:
 			"vm qmp <vm name> <qmp command>",
 		},
 		Call:    wrapVMTargetCLI(cliVMQmp),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
+	},
+	{ // vm serial
+		HelpShort: "read a bounded snapshot from a VM serial port",
+		HelpLong: `
+Connect to a VM's QEMU serial socket and return output for a bounded interval.
+This is intended for firmware and recovery consoles that do not expose VNC.
+The default port is 0, the default read interval is 750 milliseconds, and the
+default output limit is 65536 bytes. The maximum interval is 5000 milliseconds
+and the maximum output is 1048576 bytes.
+
+Examples:
+
+	vm serial freertos
+	vm serial freertos 0 1500 131072`,
+		Patterns: []string{
+			"vm serial <vm name>",
+			"vm serial <vm name> <port>",
+			"vm serial <vm name> <port> <milliseconds>",
+			"vm serial <vm name> <port> <milliseconds> <bytes>",
+		},
+		Call:    wrapVMTargetCLI(cliVMSerial),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
 	{ // vm screenshot
@@ -787,6 +811,84 @@ func cliVMQmp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 
 	resp.Response = out
 	return nil
+}
+
+func cliVMSerial(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
+	if err != nil {
+		return err
+	}
+
+	port, milliseconds, limit := 0, 750, 65536
+	for key, target := range map[string]*int{
+		"port":         &port,
+		"milliseconds": &milliseconds,
+		"bytes":        &limit,
+	} {
+		if value := c.StringArgs[key]; value != "" {
+			parsed, err := strconv.Atoi(value)
+			if err != nil {
+				return fmt.Errorf("invalid serial %s: %q", key, value)
+			}
+			*target = parsed
+		}
+	}
+	if port < 0 || uint64(port) >= vm.SerialPorts {
+		return fmt.Errorf("serial port %d is not configured for VM %s", port, vm.GetName())
+	}
+	if milliseconds < 1 || milliseconds > 5000 {
+		return errors.New("serial read interval must be between 1 and 5000 milliseconds")
+	}
+	if limit < 1 || limit > 1048576 {
+		return errors.New("serial output limit must be between 1 and 1048576 bytes")
+	}
+
+	path := filepath.Join(vm.GetInstancePath(), fmt.Sprintf("serial%d", port))
+	out, err := readUnixSocketSnapshot(
+		path,
+		time.Duration(milliseconds)*time.Millisecond,
+		limit,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to read serial port %d for VM %s: %v", port, vm.GetName(), err)
+	}
+	resp.Response = string(out)
+	return nil
+}
+
+func readUnixSocketSnapshot(path string, duration time.Duration, limit int) ([]byte, error) {
+	conn, err := net.DialTimeout("unix", path, time.Second)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	if err := conn.SetReadDeadline(time.Now().Add(duration)); err != nil {
+		return nil, err
+	}
+	result := make([]byte, 0, limit)
+	buffer := make([]byte, 4096)
+	for len(result) < limit {
+		remaining := limit - len(result)
+		if remaining < len(buffer) {
+			buffer = buffer[:remaining]
+		}
+		count, readErr := conn.Read(buffer)
+		if count > 0 {
+			result = append(result, buffer[:count]...)
+		}
+		if readErr == nil {
+			continue
+		}
+		if errors.Is(readErr, io.EOF) {
+			return result, nil
+		}
+		if netErr, ok := readErr.(net.Error); ok && netErr.Timeout() {
+			return result, nil
+		}
+		return result, readErr
+	}
+	return result, nil
 }
 
 func cliVMScreenshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

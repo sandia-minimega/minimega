@@ -29,6 +29,7 @@ var (
 	f_parent  = flag.String("parent", "", "parent to connect to (if relay or client)")
 	f_path    = flag.String("path", "/tmp/miniccc", "path to store files in")
 	f_serial  = flag.String("serial", "", "use serial device instead of tcp")
+	f_uuid    = flag.String("uuid", "", "override the client UUID")
 	f_family  = flag.String("family", "tcp", "[tcp,unix] family to dial on")
 	f_tag     = flag.Bool("tag", false, "add a key value tag in minimega for this vm")
 	f_pipe    = flag.String("pipe", "", "read/write to or from a named pipe")

@@ -257,7 +257,7 @@ func (s *Server) DialSerial(path, uuid string) error {
 				return
 			}
 
-			cli, err := s.handshake(conn)
+			cli, err := s.handshake(conn, uuid)
 			if err != nil {
 				if errors.Is(err, errClientTooOld) {
 					log.Error("%v", err.Error())
@@ -655,7 +655,7 @@ func (s *Server) serve(addr string, ln net.Listener) {
 		remote := conn.RemoteAddr()
 
 		log.Info("client connected: %v -> %v", remote, addr)
-		c, err := s.handshake(conn)
+		c, err := s.handshake(conn, "")
 		if err != nil {
 			if err != io.EOF {
 				// supress these, VM was probably never started
@@ -674,7 +674,7 @@ func (s *Server) serve(addr string, ln net.Listener) {
 
 // handshake performs a handshake with the client, returning the new client if
 // there were no errors.
-func (s *Server) handshake(conn net.Conn) (*client, error) {
+func (s *Server) handshake(conn net.Conn, expectedUUID string) (*client, error) {
 	// read until we see the magic bytes
 	var buf [3]byte
 	for string(buf[:]) != "RON" {
@@ -705,6 +705,14 @@ func (s *Server) handshake(conn net.Conn) (*client, error) {
 	// get the first client struct as a handshake
 	var m Message
 	if err := c.dec.Decode(&m); err != nil {
+		return nil, err
+	}
+
+	// A serial connection is created for one specific VM, so its expected UUID
+	// is host-controlled. Guests without DMI can leave their UUID empty and
+	// adopt this trusted identity from the handshake response. Unbound clients
+	// must provide an identity of their own.
+	if err := bindClientUUID(&m, expectedUUID); err != nil {
 		return nil, err
 	}
 
@@ -788,6 +796,23 @@ func (s *Server) handshake(conn net.Conn) (*client, error) {
 	s.clients[c.UUID] = c
 
 	return c, nil
+}
+
+func bindClientUUID(m *Message, expectedUUID string) error {
+	if m.Client == nil {
+		return fmt.Errorf("client handshake missing client metadata")
+	}
+	if m.Client.UUID != "" {
+		return nil
+	}
+	if expectedUUID == "" {
+		return fmt.Errorf("client handshake missing UUID without serial binding")
+	}
+
+	m.Client.UUID = expectedUUID
+	m.UUID = expectedUUID
+	log.Info("bound serial client to VM UUID %s", expectedUUID)
+	return nil
 }
 
 // client and transport handler for connections.

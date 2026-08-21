@@ -25,6 +25,19 @@ var (
 
 type parser func(io.Reader) (map[string]bool, error)
 
+func copyCapabilities(src map[string]bool) map[string]bool {
+	if src == nil {
+		return nil
+	}
+
+	dst := make(map[string]bool, len(src))
+	for k, v := range src {
+		dst[k] = v
+	}
+
+	return dst
+}
+
 // CPUs returns a list of supported QEMU CPUs for the specified qemu and
 // machine type.
 func CPUs(qemu, machine string) (map[string]bool, error) {
@@ -89,7 +102,7 @@ func caps(name string, cmd []string, fn parser) (map[string]bool, error) {
 
 	// test if the key exists
 	if v, ok := cache[name]; ok {
-		return v, nil
+		return copyCapabilities(v), nil
 	}
 
 	out, err := exec.Command(cmd[0], cmd[1:]...).CombinedOutput()
@@ -103,7 +116,7 @@ func caps(name string, cmd []string, fn parser) (map[string]bool, error) {
 	}
 
 	cache[name] = res
-	return res, nil
+	return copyCapabilities(res), nil
 }
 
 func parseCPUs(r io.Reader) (map[string]bool, error) {

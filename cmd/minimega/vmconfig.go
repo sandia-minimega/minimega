@@ -146,13 +146,23 @@ func (vm *VMConfig) WriteConfig(w io.Writer) error {
 }
 
 func (vm *VMConfig) ReadConfig(r io.ReadSeeker, ns string) error {
-	vm.BaseConfig.ReadConfig(r, ns)
-	r.Seek(0, io.SeekStart)
-	vm.KVMConfig.ReadConfig(r, ns)
-	r.Seek(0, io.SeekStart)
-	vm.ContainerConfig.ReadConfig(r, ns)
-	r.Seek(0, io.SeekStart)
-	vm.AndroidConfig.ReadConfig(r, ns)
+	readers := []func(io.Reader, string, *VMConfig) error{
+		vm.KVMConfig.ReadConfig,
+		vm.BaseConfig.ReadConfig,
+		vm.ContainerConfig.ReadConfig,
+		vm.AndroidConfig.ReadConfig,
+	}
+
+	for i, read := range readers {
+		if err := read(r, ns, vm); err != nil {
+			return err
+		}
+		if i != len(readers)-1 {
+			if _, err := r.Seek(0, io.SeekStart); err != nil {
+				return err
+			}
+		}
+	}
 
 	return nil
 }
@@ -241,13 +251,33 @@ func (vm *BaseConfig) QosString(b, t, i string) string {
 	return strings.Trim(val, " ")
 }
 
-func (vm *BaseConfig) ReadFieldConfig(r io.Reader, field, namespace string) error {
+// qemuNICsForConfig returns the NIC drivers accepted by the active VM
+// configuration. QEMU's device listing omits controllers integrated into
+// bare-metal boards, so an explicitly configured board NIC is admitted in
+// addition to the discoverable devices.
+func qemuNICsForConfig(config VMConfig) (map[string]bool, error) {
+	nics, err := qemu.NICs(config.QemuPath, config.Machine)
+	if nics == nil {
+		nics = make(map[string]bool)
+	}
+	if config.Baremetal && config.BaremetalNetworkDriver != "" {
+		nics[config.BaremetalNetworkDriver] = true
+	}
+	return nics, err
+}
+
+func (vm *BaseConfig) ReadFieldConfig(r io.Reader, field, namespace string, config *VMConfig) error {
 	switch field {
 	case "networks":
-		ns := GetOrCreateNamespace(namespace)
+		var activeConfig VMConfig
+		if config == nil {
+			activeConfig = GetOrCreateNamespace(namespace).vmConfig
+		} else {
+			activeConfig = *config
+		}
 
-		// get valid NIC drivers for current qemu/machine
-		nics, err := qemu.NICs(ns.vmConfig.QemuPath, ns.vmConfig.Machine)
+		// get valid NIC drivers for the qemu/machine being loaded
+		nics, err := qemuNICsForConfig(activeConfig)
 		if err != nil {
 			if strings.Contains(err.Error(), "executable file not found in $PATH") {
 				// warn on not finding kvm because we may just be using containers,
@@ -272,14 +302,12 @@ func (vm *BaseConfig) ReadFieldConfig(r io.Reader, field, namespace string) erro
 			for _, spec := range specs {
 				nic, err := ParseNetConfig(spec, nics)
 				if err != nil {
-					log.Warnln(err) // ??
-					continue
+					return fmt.Errorf("invalid network %q: %w", spec, err)
 				}
 
 				vlan, err := lookupVLAN(namespace, nic.Alias)
 				if err != nil {
-					log.Warnln(err) // ??
-					continue
+					return fmt.Errorf("invalid VLAN %q: %w", nic.Alias, err)
 				}
 
 				nic.VLAN = vlan
