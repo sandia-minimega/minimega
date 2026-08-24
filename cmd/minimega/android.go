@@ -23,11 +23,18 @@ const (
 	MinAndroidConsolePort = 5554
 
 	// Highest console port minimega will use as the base of a console/ADB pair.
-	// The ADB port is console+1. The default Android emulator range is 5554 to 5682
-	// allowing for 64 concurrent virtual devices per host as detailed in:
-	// https://developer.android.com/studio/run/emulator-commandline
+	// The ADB port is console+1. minimega uses console ports 5554 through 5680,
+	// yielding 64 console/ADB port pairs per host: 5554/5555 through 5680/5681.
+	// See: https://developer.android.com/studio/run/emulator-commandline
 	MaxAndroidConsolePort = 5680
 	MaxAndroidVMsPerHost  = (MaxAndroidConsolePort-MinAndroidConsolePort)/2 + 1
+
+	// Android Emulator's QEMU backend does not support minimega's KVM default
+	// e1000 NIC. Use virtio-net-pci for Android tap-backed NICs.
+	DefaultAndroidNetDriver = "virtio-net-pci"
+
+	AndroidQMPConnectRetry = 300
+	AndroidQMPConnectDelay = 100
 )
 
 type AndroidVM struct {
@@ -59,6 +66,16 @@ func NewAndroid(name, namespace string, config VMConfig) (*AndroidVM, error) {
 
 	vm.KVMConfig = config.KVMConfig.Copy()
 	vm.AndroidConfig = config.AndroidConfig.Copy()
+
+	// Normalize Android network devices to a NIC model supported by the Android
+	// Emulator backend. This preserves minimega's existing NetConfig/qemuArgs flow
+	// while avoiding the KVM default e1000 device, which Android's backend QEMU
+	// rejects.
+	for i := range vm.Networks {
+		if vm.Networks[i].Driver == "" || vm.Networks[i].Driver == DefaultKVMDriver {
+			vm.Networks[i].Driver = DefaultAndroidNetDriver
+		}
+	}
 
 	if vm.AVDName == "" {
 		return nil, errors.New("unable to create android VM without a configured android-avd")
@@ -169,17 +186,16 @@ func (vm *AndroidVM) Flush() error {
 	defer vm.lock.Unlock()
 
 	for _, net := range vm.Networks {
-		// Android networking is currently unsupported, so Android VMs may have
-		// configured networks without created taps. Nothing to clean up.
+		// Android VMs can enter ERROR before taps are created. Nothing to clean
+		// up in that case.
 		if net.Tap == "" {
 			continue
 		}
 
-		// Handle already disconnected taps differently since they are not
-		// assigned to any bridges.
-		if net.VLAN == DisconnectedVLAN {
+		// Disconnected taps are no longer associated with a bridge.
+		if net.VLAN == DisconnectedVLAN || net.Bridge == "" {
 			if err := bridge.DestroyTap(net.Tap); err != nil {
-				log.Error("leaked tap %v: %v", net.Tap, err)
+				log.Error("leaked android tap %v: %v", net.Tap, err)
 			}
 
 			continue
@@ -187,11 +203,19 @@ func (vm *AndroidVM) Flush() error {
 
 		br, err := getBridge(net.Bridge)
 		if err != nil {
-			return err
+			// Be defensive during cleanup. If bridge lookup fails, still try to
+			// destroy the tap directly.
+			log.Warn("unable to get bridge %v while flushing android tap %v: %v", net.Bridge, net.Tap, err)
+
+			if err2 := bridge.DestroyTap(net.Tap); err2 != nil {
+				return fmt.Errorf("unable to clean android tap %v: bridge lookup failed: %v; direct destroy failed: %v", net.Tap, err, err2)
+			}
+
+			continue
 		}
 
 		if err := br.DestroyTap(net.Tap); err != nil {
-			log.Error("leaked tap %v: %v", net.Tap, err)
+			log.Error("leaked android tap %v: %v", net.Tap, err)
 		}
 	}
 
@@ -347,12 +371,6 @@ func (vm *AndroidVM) launch() error {
 		return vm.setErrorf("android adb not found: %v", err)
 	}
 
-	// Android emulator tap/network support is deferred. Avoid creating taps
-	// and then failing later with obscure /dev/net/tun errors.
-	if len(vm.Networks) > 0 || len(vm.Bonds) > 0 {
-		return vm.setErrorf("android VM networking is not supported yet")
-	}
-
 	if vm.State == VM_BUILDING {
 		// Android reuses KVMConfig/qemuArgs for backend QEMU arguments, so apply
 		// the same disk snapshot behavior as KVM VMs.
@@ -366,6 +384,15 @@ func (vm *AndroidVM) launch() error {
 				vm.Disks[i].SnapshotPath = dst
 			}
 		}
+	}
+
+	if err := vm.createTaps(); err != nil {
+		return err
+	}
+
+	// This MUST be done after vm.createTaps.
+	if err := vm.createBonds(); err != nil {
+		return err
 	}
 
 	console, adb, err := reserveAndroidPortPair(vm.ConsoleBasePort)
@@ -456,7 +483,13 @@ func (vm *AndroidVM) androidQEMUArgs() []string {
 	args := vmConfig.qemuArgs(vm.ID, vm.instancePath)
 	args = vmConfig.applyQemuOverrides(args)
 
-	return filterAndroidQEMUArgs(args)
+	log.Debug("android backend qemu args before filter for vm %v: %#v", vm.ID, args)
+
+	args = filterAndroidQEMUArgs(args)
+
+	log.Debug("android backend qemu args after filter for vm %v: %#v", vm.ID, args)
+
+	return args
 }
 
 // filterAndroidQEMUArgs implements important argument filtering.
@@ -515,9 +548,9 @@ func (vm *AndroidVM) androidEnv() []string {
 }
 
 func (vm *AndroidVM) connectQMP() (err error) {
-	delay := QMP_CONNECT_DELAY * time.Millisecond
+	delay := AndroidQMPConnectDelay * time.Millisecond
 
-	for count := 0; count < QMP_CONNECT_RETRY; count++ {
+	for count := 0; count < AndroidQMPConnectRetry; count++ {
 		vm.q, err = qmp.Dial(vm.path("qmp"))
 		if err == nil {
 			log.Debug("android qmp dial to %v successful", vm.ID)
@@ -608,7 +641,7 @@ func reserveAndroidPortPair(base uint64) (int, int, error) {
 			continue
 		}
 
-		if !tcpPortPairAvailable(console, adb) {
+		if !tcpPortAvailable(console) || !tcpPortAvailable(adb) {
 			continue
 		}
 
@@ -635,18 +668,179 @@ func releaseAndroidPortPair(console int) {
 	delete(androidReservedPort, console+1)
 }
 
-func tcpPortPairAvailable(console, adb int) bool {
-	consoleListener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", console))
+func tcpPortAvailable(port int) bool {
+	l, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", port))
 	if err != nil {
 		return false
 	}
-	defer consoleListener.Close()
 
-	adbListener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", adb))
-	if err != nil {
-		return false
-	}
-	defer adbListener.Close()
-
+	l.Close()
 	return true
+}
+
+func (vm *AndroidVM) createTapName(bridge string) (string, error) {
+	br, err := getBridge(bridge)
+	if err != nil {
+		return "", vm.setErrorf("unable to get bridge %v: %v", bridge, err)
+	}
+
+	return br.CreateTapName(), nil
+}
+
+func (vm *AndroidVM) addTap(name, bridge, mac string, vlan int, qinq bool) (string, error) {
+	br, err := getBridge(bridge)
+	if err != nil {
+		return name, vm.setErrorf("unable to get bridge %v: %v", bridge, err)
+	}
+
+	tap, err := br.CreateTap(name, mac, vlan)
+	if err != nil {
+		return tap, err
+	}
+
+	if qinq {
+		if err := br.SetTapQinQ(tap, vlan); err != nil {
+			return tap, err
+		}
+	}
+
+	return tap, nil
+}
+
+func (vm *AndroidVM) createTaps() error {
+	for i := range vm.Networks {
+		nic := &vm.Networks[i]
+		if nic.Tap != "" {
+			// Tap has already been created.
+			continue
+		}
+
+		tap, err := vm.addTap("", nic.Bridge, nic.MAC, nic.VLAN, nic.QinQ)
+		if err != nil {
+			return vm.setErrorf("unable to create android tap %v: %v", i, err)
+		}
+
+		nic.Tap = tap
+	}
+
+	if len(vm.Networks) > 0 {
+		if err := vm.writeTaps(); err != nil {
+			return vm.setErrorf("unable to write android taps: %v", err)
+		}
+	}
+
+	return nil
+}
+
+func (vm *AndroidVM) createBonds() error {
+	for i := range vm.Bonds {
+		bond := &vm.Bonds[i]
+
+		if bond.created {
+			continue
+		}
+
+		if err := vm.addBond(bond); err != nil {
+			return vm.setErrorf("unable to create android bond %v: %v", i, err)
+		}
+
+		bond.created = true
+	}
+
+	if len(vm.Bonds) > 0 {
+		if err := vm.writeBonds(); err != nil {
+			return vm.setErrorf("unable to write android bonds: %v", err)
+		}
+	}
+
+	return nil
+}
+
+func (vm *AndroidVM) AddNIC(nic NetConfig) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if nic.MAC == "" {
+		nic.MAC = randomMac()
+	}
+
+	// Android Emulator's backend QEMU does not support minimega's default
+	// e1000 NIC, so normalize unspecified/default KVM drivers to Android's
+	// supported default.
+	if nic.Driver == "" || nic.Driver == DefaultKVMDriver {
+		nic.Driver = DefaultAndroidNetDriver
+	}
+
+	var err error
+	nic.Tap, err = vm.createTapName(nic.Bridge)
+	if err != nil {
+		return err
+	}
+
+	if _, err := vm.addTap(nic.Tap, nic.Bridge, nic.MAC, nic.VLAN, nic.QinQ); err != nil {
+		return vm.setErrorf("unable to add android tap %v: %v", nic.Tap, err)
+	}
+
+	cleanupTap := func() {
+		if nic.Bridge != "" && nic.VLAN != DisconnectedVLAN {
+			if br, err := getBridge(nic.Bridge); err == nil {
+				if err := br.DestroyTap(nic.Tap); err != nil {
+					log.Error("unable to clean android tap %v after AddNIC failure: %v", nic.Tap, err)
+				}
+				return
+			}
+		}
+
+		if err := bridge.DestroyTap(nic.Tap); err != nil {
+			log.Error("unable to clean android tap %v after AddNIC failure: %v", nic.Tap, err)
+		}
+	}
+
+	cleanupNetdev := func() {
+		// Best-effort cleanup. NetDevAdd is issued through HMP, so use the same
+		// path to remove it if device_add fails.
+		cmd := fmt.Sprintf(
+			`{"execute":"human-monitor-command","arguments":{"command-line":%q}}`,
+			fmt.Sprintf("netdev_del %s", nic.Tap),
+		)
+
+		if _, err := vm.q.Raw(cmd); err != nil {
+			log.Warn("unable to clean android netdev %v after AddNIC failure: %v", nic.Tap, err)
+		}
+	}
+
+	r, err := vm.q.NetDevAdd("tap", nic.Tap, nic.Tap)
+	if err != nil {
+		cleanupTap()
+		return err
+	}
+	if strings.TrimSpace(r) != "" {
+		cleanupTap()
+		return fmt.Errorf("android qmp netdev_add failed: %s", strings.TrimSpace(r))
+	}
+	log.Debugln("android qmp netdev_add response:", r)
+
+	// Android Emulator's pci.0 is crowded/reserved by emulator-generated
+	// devices. qemuArgs creates pci.1 for minimega devices, so hot-add Android
+	// NICs there as well.
+	r, err = vm.q.NicAdd(nic.Tap, nic.Tap, "pci.1", nic.Driver, nic.MAC)
+	if err != nil {
+		cleanupNetdev()
+		cleanupTap()
+		return err
+	}
+	if strings.TrimSpace(r) != "" {
+		cleanupNetdev()
+		cleanupTap()
+		return fmt.Errorf("android qmp device_add failed: %s", strings.TrimSpace(r))
+	}
+	log.Debugln("android qmp device_add response:", r)
+
+	vm.Networks = append(vm.Networks, nic)
+
+	if err := vm.writeTaps(); err != nil {
+		return vm.setErrorf("unable to write android taps: %v", err)
+	}
+
+	return nil
 }

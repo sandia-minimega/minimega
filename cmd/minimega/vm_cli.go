@@ -266,7 +266,7 @@ connections via vm config when launching VMs. See "vm config net" for more detai
 You will need to specify the VLAN of which the interface is a member. Optionally, you may
 specify the bridge the interface will be connected on. You may also specify a MAC address for
 the interface. Finally, you may also specify the network device for qemu to use. By default,
-"e1000" is used. The order is:
+"e1000" is used for KVM and "virtio-net-pci" is used for Android VMs. The order is:
 
 	<bridge>,<VLAN>,<MAC>,<driver>
 
@@ -293,6 +293,16 @@ optional bridge:
 If the bridge name is omitted, the interface will be reconnected to the same
 bridge that it is already on. If the interface is not connected to a bridge, it
 will be connected to the default bridge, "mega_bridge".
+
+For Android VMs, vm net connect/disconnect operates on the host-side minimega
+tap attached to the Android Emulator backend NIC. It does not configure Android
+guest IP addresses, policy routing, or firewall rules.
+
+For runtime Android NIC hot-add, the host-side tap and QEMU device are added by
+minimega, but the Android guest may not automatically enumerate the new PCI
+device. A guest-side PCI rescan and interface configuration may be required,
+for example writing 1 to /sys/bus/pci/rescan and then configuring the new
+interface.
 
 To create a bond comprised of two or more interfaces on a VM, use 'vm net bond'.
 For example, to create an 'active-backup' bond with interfaces 1 and 2 on VM foo
@@ -981,13 +991,17 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 				return true, err
 			}
 
-			kvm, ok := vm.(*KvmVM)
+			type nicAdder interface {
+				AddNIC(NetConfig) error
+			}
+
+			adder, ok := vm.(nicAdder)
 			if !ok {
-				return true, fmt.Errorf("unable to get Kvm")
+				return true, fmt.Errorf("VM type does not support adding NICs: %v", vm.GetType())
 			}
 
 			for _, n := range nics {
-				err = kvm.AddNIC(n)
+				err = adder.AddNIC(n)
 			}
 
 			if err != nil {

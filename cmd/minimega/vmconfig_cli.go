@@ -181,6 +181,17 @@ use/abuse this implementation detail:
 	namespace bar
 	vm config net foo//DMZ
 
+For Android VMs, configured networks are attached using minimega-created
+tap devices on the requested bridge/VLAN. AndroidVM automatically uses a
+virtio-net-pci NIC for these tap-backed interfaces because Android Emulator's
+backend QEMU does not support minimega's default e1000 NIC. The Android guest
+will see the device as an additional interface, for example eth1.
+
+minimega only creates and manages the host-side tap/bridge/VLAN plumbing. It
+does not configure Android guest IP addresses, policy routing, or firewall
+rules. Those must be configured inside the guest by the user or an orchestration
+layer.
+
 Calling vm config net with no arguments prints the current configuration.`,
 		Patterns: []string{
 			"vm config networks [netspec]...",

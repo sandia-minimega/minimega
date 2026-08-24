@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"text/tabwriter"
 )
 
@@ -111,10 +112,14 @@ func androidConfiguredAny() bool {
 
 func findAndroidTool(path, name string) (string, error) {
 	if path != "" {
-		if _, err := os.Stat(path); err != nil {
-			return "", err
+		if filepath.IsAbs(path) || strings.Contains(path, string(os.PathSeparator)) {
+			if _, err := os.Stat(path); err != nil {
+				return "", err
+			}
+			return path, nil
 		}
-		return path, nil
+
+		return exec.LookPath(path)
 	}
 
 	return exec.LookPath(name)
