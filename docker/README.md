@@ -73,6 +73,68 @@ docker compose logs -f  # CTRL+C to stop following logs
 
 # Extras
 
+## Host wrapper script and tab completion
+
+The `docker/minimega-wrapper.sh` script lets you run `minimega` commands from
+the host as if the binary were installed locally, by transparently forwarding
+them to `docker exec` inside the running `minimega` container. It also takes
+care of only allocating a pseudo-TTY (`-it`) when stdout is actually a
+terminal, so its output can be safely piped or redirected (e.g. for bash tab
+completion, see below) without picking up spurious `\r` characters.
+
+Install it as `/usr/local/bin/minimega` so it's available on your `$PATH`:
+
+```bash
+sudo install -m 0755 docker/minimega-wrapper.sh /usr/local/bin/minimega
+```
+
+With that in place, you can run minimega commands directly:
+
+```bash
+minimega -e vm info
+minimega -attach
+```
+
+### Installing tab completion
+
+minimega can generate its own tab-completion script for `bash`, `zsh`, or
+`fish` via the `-completion` flag. Since the wrapper script forwards
+`-completion` through to the minimega binary inside the container, you can
+use it the same way you would the native binary.
+
+To enable it for the current shell session:
+
+```bash
+source <(minimega -completion bash)   # bash
+source <(minimega -completion zsh)    # zsh
+minimega -completion fish | source    # fish
+```
+
+To enable it for every session, write the generated script somewhere your
+shell's completion system will find it, e.g.:
+
+```bash
+# bash
+minimega -completion bash | sudo tee /usr/share/bash-completion/completions/minimega >/dev/null
+
+# zsh (write to a directory in your fpath)
+minimega -completion zsh | sudo tee /usr/share/zsh/site-functions/_minimega >/dev/null
+
+# fish
+minimega -completion fish | sudo tee /usr/share/fish/vendor_completions.d/minimega.fish >/dev/null
+```
+
+With completion installed, typing `minimega -e vm sta<TAB>` will complete to
+`minimega -e vm start`, the same way tab completion works at the minimega
+command prompt itself.
+
+> [!TIP]
+> The `minimega` Docker image ships with the `bash-completion` package and a
+> pre-generated completion script at
+> `/usr/share/bash-completion/completions/minimega`, so bash tab completion
+> works out of the box for interactive shells inside the container, e.g.
+> `docker exec -it minimega bash`.
+
 ## Convenience aliases
 
 ```bash

@@ -15,4 +15,11 @@ chown -R minimega:minimega /etc/minimega
 
 # Symlink all binaries
 
+# Generate and install the bash tab-completion script as part of a standard
+# install, so users don't need to run 'minimega -completion' manually.
+if [ -x /usr/bin/minimega ]; then
+    mkdir -p /usr/share/bash-completion/completions
+    /usr/bin/minimega -completion bash > /usr/share/bash-completion/completions/minimega
+fi
+
 #DEBHELPER#

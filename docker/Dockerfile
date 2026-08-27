@@ -22,7 +22,7 @@ ENV DEBIAN_FRONTEND="noninteractive" \
 
 RUN apt-get update \
   && apt-get install -y \
-    dnsmasq iproute2 isc-dhcp-client \
+    bash-completion dnsmasq iproute2 isc-dhcp-client \
     less libpcap-dev ntfs-3g openssh-client \
     openvswitch-switch qemu-kvm qemu-utils \
     iptables ffmpeg \
@@ -36,6 +36,13 @@ RUN apt-get update \
 # needed in a deployment, the disk utilization difference is minimal,
 # and ensures any future tools get included in the Docker image.
 COPY --from=gobuilder /minimega/bin/ /opt/minimega/bin/
+
+# Pre-generate the bash tab-completion script so it's available out of the
+# box for interactive shells inside the container (e.g. `docker exec -it
+# minimega bash`), picked up automatically via the bash-completion package
+# installed above.
+RUN mkdir -p /usr/share/bash-completion/completions \
+  && /opt/minimega/bin/minimega -completion bash > /usr/share/bash-completion/completions/minimega
 
 # As the minimega API changes, so does the minimega.py generated file. Given
 # this, let's go ahead and also include the lib directory so we can grab the

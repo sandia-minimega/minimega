@@ -153,6 +153,50 @@ Using `e` will connect to the local minimega instance's command port in the
 base directory, issue the command, and print any results/errors. This is
 especially useful for pipelining minimega commands with other unix utilities.
 
+** Shell Tab Completion
+
+minimega can generate a tab-completion script for `bash`, `zsh`, or `fish`
+for its command line flags, as well as for minimega commands typed after
+the `e` or `attach` flags:
+
+	$ minimega -completion bash
+	$ minimega -completion zsh
+	$ minimega -completion fish
+
+To enable completion for the current shell session:
+
+	$ source <(minimega -completion bash)   # bash
+	$ source <(minimega -completion zsh)    # zsh
+	$ minimega -completion fish | source    # fish
+
+To enable it for every session, write the script somewhere your shell's
+completion system will find it. For bash, that's typically:
+
+	$ minimega -completion bash | sudo tee /usr/share/bash-completion/completions/minimega >/dev/null
+
+or, on older systems without a `/usr/share/bash-completion/completions`
+directory:
+
+	$ minimega -completion bash | sudo tee /etc/bash_completion.d/minimega >/dev/null
+
+For zsh, write it somewhere in your `fpath` (a directory searched by
+`compinit`), e.g.:
+
+	$ minimega -completion zsh | sudo tee /usr/share/zsh/site-functions/_minimega >/dev/null
+
+For fish, write it to fish's vendor completions directory, e.g.:
+
+	$ minimega -completion fish | sudo tee /usr/share/fish/vendor_completions.d/minimega.fish >/dev/null
+
+With completion installed, typing `minimega -e vm sta<TAB>` at the shell
+prompt will complete to `minimega -e vm start`, the same way tab completion
+works at the minimega command prompt itself.
+
+minimega packages (RPM and Debian) install the bash completion script
+automatically to `/usr/share/bash-completion/completions/minimega` as part
+of a standard package install; see the packaging scripts under `packaging/`
+for details.
+
 The command port can also be interfaces by external programs. It is a UNIX
 domain socket in the base directory at `<base>/minimega`. The command port uses
 JSON encoded commands and responses using the following schema:

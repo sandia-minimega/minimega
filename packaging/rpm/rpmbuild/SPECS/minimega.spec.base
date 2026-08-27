@@ -55,6 +55,7 @@ mkdir -p $RPM_BUILD_ROOT/usr/share/doc/minimega
 mkdir -p $RPM_BUILD_ROOT/usr/bin
 mkdir -p $RPM_BUILD_ROOT/etc/minimega
 mkdir -p $RPM_BUILD_ROOT/usr/lib/systemd/system
+mkdir -p $RPM_BUILD_ROOT/usr/share/bash-completion/completions
 
 cp -Lr $MM/bin $RPM_BUILD_ROOT/opt/minimega/
 cp -Lr $MM/doc $RPM_BUILD_ROOT/opt/minimega/
@@ -64,6 +65,10 @@ cp -Lr $MM/misc/vmbetter_configs $RPM_BUILD_ROOT/opt/minimega/misc/
 cp -Lr $MM/web $RPM_BUILD_ROOT/opt/minimega/
 cp -Lr $MM/LICENSE $RPM_BUILD_ROOT/usr/share/doc/minimega/
 cp -Lr $MM/LICENSES $RPM_BUILD_ROOT/usr/share/doc/minimega/
+
+# Generate and install the bash tab-completion script as part of a standard
+# install, so users don't need to run 'minimega -completion' manually.
+$MM/bin/minimega -completion bash > $RPM_BUILD_ROOT/usr/share/bash-completion/completions/minimega
 
 # Make future symlinks
 ln -sf /opt/minimega/bin/minimega $RPM_BUILD_ROOT/usr/bin/minimega
