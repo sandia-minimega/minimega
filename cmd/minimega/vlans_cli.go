@@ -92,6 +92,10 @@ func cliVLANsAdd(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	if err == nil {
 		// update file so that we have a copy of the vlans if minimega crashes
 		mustWrite(filepath.Join(*f_base, "vlans"), vlanInfo())
+
+		if c.Source == "" {
+			broadcastVLANAlias(ns.Name, alias, vlan)
+		}
 	}
 
 	return err

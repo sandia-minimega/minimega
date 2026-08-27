@@ -13,7 +13,6 @@ import (
 	"image"
 	"image/png"
 	"io"
-	"io/ioutil"
 	"math"
 	"math/rand"
 	"net/http"
@@ -104,7 +103,7 @@ func unreachable() error {
 
 func generateUUID() string {
 	log.Debugln("generateUUID")
-	uuid, err := ioutil.ReadFile("/proc/sys/kernel/random/uuid")
+	uuid, err := os.ReadFile("/proc/sys/kernel/random/uuid")
 	if err != nil {
 		log.Error("generateUUID: %v", err)
 		return "00000000-0000-0000-0000-000000000000"
@@ -297,7 +296,7 @@ func hasWildcard(v map[string]bool) bool {
 func mustWrite(fpath, data string) {
 	log.Debug("writing to %v", fpath)
 
-	if err := ioutil.WriteFile(fpath, []byte(data), 0664); err != nil {
+	if err := os.WriteFile(fpath, []byte(data), 0664); err != nil {
 		log.Fatal("write %v failed: %v", fpath, err)
 	}
 }
@@ -353,32 +352,36 @@ func lookupVLAN(namespace, alias string) (int, error) {
 		// update file so that we have a copy of the vlans if minimega crashes
 		mustWrite(filepath.Join(*f_base, "vlans"), vlanInfo())
 
-		// broadcast out the alias to the cluster so that the other nodes can
-		// print the alias correctly
-		cmd := minicli.MustCompilef("namespace %v vlans add %q %v", namespace, alias, vlan)
-		cmd.SetRecord(false)
-		cmd.SetSource(namespace)
-
-		respChan, err := meshageSend(cmd, Wildcard)
-		if err != nil {
-			// don't propagate the error since this is supposed to be best-effort.
-			log.Error("unable to broadcast alias update: %v", err)
-			return vlan, nil
-		}
-
-		// read all the responses, looking for errors
-		go func() {
-			for resps := range respChan {
-				for _, resp := range resps {
-					if resp.Error != "" {
-						log.Error("unable to send alias %v -> %v to %v: %v", alias, vlan, resp.Host, resp.Error)
-					}
-				}
-			}
-		}()
+		broadcastVLANAlias(namespace, alias, vlan)
 	}
 
 	return vlan, nil
+}
+
+// broadcastVLANAlias sends an alias update to all mesh nodes. The source
+// marker prevents recipients from broadcasting the update again.
+func broadcastVLANAlias(namespace, alias string, vlan int) {
+	cmd := minicli.MustCompilef("namespace %v vlans add %q %v", namespace, alias, vlan)
+	cmd.SetRecord(false)
+	cmd.SetSource(namespace)
+
+	respChan, err := meshageSend(cmd, Wildcard)
+	if err != nil {
+		// Alias updates are best-effort; the local mapping remains valid.
+		log.Error("unable to broadcast alias update: %v", err)
+		return
+	}
+
+	// Read all the responses, looking for errors.
+	go func() {
+		for resps := range respChan {
+			for _, resp := range resps {
+				if resp.Error != "" {
+					log.Error("unable to send alias %v -> %v to %v: %v", alias, vlan, resp.Host, resp.Error)
+				}
+			}
+		}
+	}()
 }
 
 func recoverVLANs() error {
@@ -474,11 +477,11 @@ func writeInt(filename string, value int) error {
 	log.Debug("writing %v to %v", value, filename)
 
 	b := []byte(strconv.Itoa(value))
-	return ioutil.WriteFile(filename, b, 0644)
+	return os.WriteFile(filename, b, 0644)
 }
 
 func readInt(filename string) (int, error) {
-	b, err := ioutil.ReadFile(filename)
+	b, err := os.ReadFile(filename)
 	if err != nil {
 		return 0, fmt.Errorf("unable to read %v: %v", filename, err)
 	}
