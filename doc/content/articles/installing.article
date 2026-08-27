@@ -115,10 +115,14 @@ The following debian packages should install most of the dependencies:
 
 *** Grub note
 
-If you intend to run Linux containers, you need to have the `memory` cgroup
-enabled, but Debian (and some other distros) do not enable it by default. If
-you try to start a container and get an error, you may need to enable the
-memory cgroup.
+This applies only to hosts using a legacy (v1) cgroup hierarchy. Modern
+distributions mount a unified (v2) hierarchy, which minimega detects and uses
+without any host configuration; it needs linux 5.2 or newer to do so.
+
+If you intend to run Linux containers on a legacy hierarchy, you need to have
+the `memory` cgroup enabled, but Debian (and some other distros) do not enable
+it by default. If you try to start a container and get an error, you may need
+to enable the memory cgroup.
 
 To enable it, add the following to your kernel boot parameters:
 
