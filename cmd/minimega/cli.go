@@ -514,6 +514,12 @@ func cliPreprocess(v string) (string, error) {
 	if u, err := url.Parse(v); err == nil {
 		switch u.Scheme {
 		case "file":
+			// iomeshage files are opaque ("file:name"). Leave "file://path",
+			// such as a plumber file terminal, to the command.
+			if u.Opaque == "" {
+				return v, nil
+			}
+
 			log.Debug("file preprocessor")
 			return iomHelper(u.Opaque, "")
 		case "http", "https":
