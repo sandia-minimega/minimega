@@ -1,0 +1,20 @@
+{
+  "name": "minimega Linux development",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "containerEnv": {
+    "GOFLAGS": "-mod=vendor"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "EditorConfig.EditorConfig",
+        "golang.Go"
+      ]
+    }
+  },
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true
+}

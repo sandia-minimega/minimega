@@ -15,7 +15,8 @@ minimega's plumber is designed to interact with unix command line tools and prov
 
 You can use miniplumber to send a message over miniccc in a manner very similar to netcat.
 
-You can find a presentation on miniplumber here: [github.com/sandia-minimega/minimega/blob/master/doc/content/presentations/miniplumber.slide](https://github.com/sandia-minimega/minimega/blob/master/doc/content/presentations/miniplumber.slide)
+You can find the [miniplumber presentation](../../presentations/miniplumber.md)
+in the repository.
 
 ## Environment Build
 
