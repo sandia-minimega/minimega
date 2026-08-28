@@ -5,6 +5,7 @@ Thank you for your interest in contributing to minimega! We welcome contribution
 ## Table of Contents
 
 - [Getting Started](#getting-started)
+  - [Development Container](#development-container)
 - [How to Contribute](#how-to-contribute)
   - [Reporting Issues](#reporting-issues)
   - [Suggesting Enhancements](#suggesting-enhancements)
@@ -41,6 +42,15 @@ Thank you for your interest in contributing to minimega! We welcome contribution
         git push origin master
         ```
 
+### Development Container
+
+On macOS or Windows, use the repository development container for Linux builds
+and unit tests. Install Docker Desktop in Linux-container mode and the VS Code
+[Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers),
+open the repository, and run **Dev Containers: Reopen in Container**. See the
+[development container guide](../.devcontainer/README.md) for checks, CLI usage,
+worktree guidance, and runtime limitations.
+
 ## How to Contribute
 
 ### Reporting Issues
@@ -57,9 +67,9 @@ We welcome suggestions for improvements! Please open an issue to discuss your id
 
 ### Submitting Code
 
-1. **Create a Branch**: Create a new branch (on your fork of the repository) for your feature or bug fix using [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) notation. The branch name should follow this format:
+1. **Create a Branch**: Create a new branch (on your fork of the repository) for your feature or bug fix using [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) notation. The branch name should follow this format and must not contain `/`:
     ```bash
-    type/description
+    type-short-description
     ```
     Where `type` can be one of the following:
     - `feat`: A new feature
@@ -72,7 +82,7 @@ We welcome suggestions for improvements! Please open an issue to discuss your id
 
     Example:
     ```bash
-    git checkout -b feat/add-user-authentication
+    git checkout -b feat-add-user-authentication
     ```
 
 2. **Make Your Changes**: Implement your changes.
@@ -112,7 +122,7 @@ We welcome suggestions for improvements! Please open an issue to discuss your id
     
     Example:
     ```bash
-    git push origin feat/add-user-authentication
+    git push origin feat-add-user-authentication
     ```
     
 5. **Open a Pull Request**: Go to the original repository and open a [pull request](https://github.com/sandia-minimega/minimega/pulls). Provide a clear description of your changes and reference any related issues.

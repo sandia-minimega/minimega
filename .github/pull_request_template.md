@@ -35,6 +35,7 @@
 - [ ] This PR conforms to the process detailed in the [Contributing Guide](https://github.com/sandia-minimega/minimega/blob/master/.github/CONTRIBUTING.md).
 - [ ] I have included no proprietary/sensitive information in my code or the PR.
 - [ ] I have performed a self-review of my code.
+- [ ] My branch is rebased onto `master` and has one commit unless multiple commits are intentionally reviewable.
 - [ ] I have commented my code, particularly in hard-to-understand areas.
 - [ ] I have made corresponding changes to the documentation.
 - [ ] I have tested my code (describe above).

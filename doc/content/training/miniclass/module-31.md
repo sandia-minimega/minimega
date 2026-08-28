@@ -13,10 +13,10 @@ This guide covers the basics of setting up a cluster to run minimega and the pro
 
 Here are some additional docs on doing so:
 
-- [minimega.org/articles/cluster.article](http://minimega.org/articles/cluster.article)
-- [minimega.org/articles/namespaces.article](http://minimega.org/articles/namespaces.article)
-- [minimega.org/articles/file.article](http://minimega.org/articles/file.article)
-- [minimega.org/articles/usage.article](http://minimega.org/articles/usage.article)
+- [Cluster guide](../../articles/cluster.md)
+- [Namespaces guide](../../articles/namespaces.md)
+- [File transfer guide](../../articles/file.md)
+- [User guide](../../articles/usage.md)
 
 ### Suggestions:
 

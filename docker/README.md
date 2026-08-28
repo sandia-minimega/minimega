@@ -173,6 +173,7 @@ The defaults set for minimega are:
 MM_BASE=/tmp/minimega
 MM_FILEPATH=/tmp/minimega/files
 MM_BROADCAST=255.255.255.255
+MM_VLANRANGE=101-4096
 MM_PORT=9000
 MM_DEGREE=1
 MM_CONTEXT=minimega
@@ -181,6 +182,7 @@ MM_LOGFILE=/var/log/minimega.log
 MM_FORCE=true
 MM_RECOVER=false
 MM_CGROUP=/sys/fs/cgroup
+MM_ABSSNAPSHOT=false
 ```
 
 The defaults set for miniweb are:
@@ -201,8 +203,8 @@ Docker when starting the container or by binding a file to
 
 > [!NOTE]
 > If a value is specified both as an environment variable to Docker and in
-> the file bound to `/etc/default/minimega`, the value in
-> `/etc/default/minimega` will be used.
+> the file bound to `/etc/default/minimega`, the existing non-empty environment
+> variable will be used.
 
 > [!WARNING]
 > If the port is changed for minimega or miniweb and standard container
