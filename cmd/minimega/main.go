@@ -103,6 +103,14 @@ func suggestSet() bool {
 	return set
 }
 
+func containerShimRequested() bool {
+	return flag.NArg() > 1 && flag.Arg(0) == CONTAINER_MAGIC
+}
+
+func localClientRequested(attach, execute bool, pipe string) bool {
+	return attach || execute || pipe != ""
+}
+
 func main() {
 	var err error
 
@@ -122,11 +130,25 @@ func main() {
 		os.Exit(0)
 	}
 
+	if suggestSet() {
+		cliSetup()
+		fmt.Println(strings.Join(minicli.Suggest(*f_suggest), "\n"))
+		os.Exit(0)
+	}
+
+	// Apply environment-backed defaults unless this is an internal container shim.
+	if !containerShimRequested() {
+		if err := applyEnvironmentFlagDefaults(localClientRequested(*f_attach, *f_e, *f_pipe)); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+	}
+
 	log.Init()
 	logLevel = log.LevelFlag
 
 	// see containerShim()
-	if flag.NArg() > 1 && flag.Arg(0) == CONTAINER_MAGIC {
+	if containerShimRequested() {
 		containerShim()
 	}
 
@@ -135,17 +157,6 @@ func main() {
 	}
 
 	cliSetup()
-
-	// used by the bash completion script to complete minicli commands
-	// passed to -e/-attach without needing a running minimega instance. We
-	// can't just check `*f_suggest != ""` here because the empty string is
-	// itself a valid (and common) partial command -- e.g. completing right
-	// after `-e ` with nothing typed yet -- so instead check whether the
-	// flag was actually set on the command line.
-	if suggestSet() {
-		fmt.Println(strings.Join(minicli.Suggest(*f_suggest), "\n"))
-		os.Exit(0)
-	}
 
 	if *f_cli {
 		if err := minicli.Validate(); err != nil {
