@@ -35,6 +35,9 @@ type Command struct {
 	// Files to transfer to the client. Any path given in a file specified
 	// here will be rooted at <BASE>/files
 	FilesSend []string
+	// Optional destination directory for FilesSend on the client. If empty,
+	// clients use their default files directory.
+	FilesSendDir string
 
 	// Files to transfer back to the master
 	FilesRecv []string
@@ -148,6 +151,7 @@ func (c *Command) Copy() *Command {
 	c2.CheckedIn = append(c2.CheckedIn, c.CheckedIn...)
 
 	c2.FilesSend = append(c2.FilesSend, c.FilesSend...)
+	c2.FilesSendDir = c.FilesSendDir
 	c2.FilesRecv = append(c2.FilesRecv, c.FilesRecv...)
 
 	if c.Filter != nil {
