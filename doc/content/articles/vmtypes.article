@@ -186,7 +186,7 @@ enabled by default in linux 3.18+.
 When launching `container` type VMs, the following occurs, in order:
 
 - A new VM handler is created within minimega, which is populated with a copy of the VM configuration
-- If this is the first container to be launched, minimega cgroup subtrees will be created for the freezer, memory, and devices cgroup subsystems.
+- If this is the first container to be launched, a minimega cgroup subtree will be created (one per subsystem on a legacy hierarchy, a single one on a unified hierarchy)
 - If this is a new container, checks are performed to ensure there are no networking or disk conflicts
 - An instance directory and container configuration are written to disk (by default /tmp/minimega/N, where N is the VM ID)
 - If the VM is in snapshot mode, an `overlayfs` mountpoint is created within the instance directory
@@ -206,6 +206,7 @@ When the container shim is launched in a new set of namespaces, the following oc
 - Various symlinks and file masks are applied to prevent the container from having root access to the host
 - The UUID is applied via a special bind mount in sysfs
 - cgroups are setup within the new mount namespace, applying memory and other provided restrictions
+- On a unified hierarchy, the shim enters a new cgroup namespace rooted at the VM's own cgroup and mounts it at /sys/fs/cgroup, so that inits such as systemd can nest cgroups of their own
 - The container chroots into the rootfs (or overlayfs mount if snapshot mode is enabled)
 - root capabilities are applied to prevent the container from having root access to the host
 - The shim synchronizes with the parent (see above), and the parent minimega puts the container in the FREEZER state
@@ -213,9 +214,24 @@ When the container shim is launched in a new set of namespaces, the following oc
 
 *** Notes
 
-Many linux distributions explicitly disable the `memory` cgroup, which is
-required for minimega to boot `container` type VMs. On debian based linux hosts
-(including ubuntu), add
+minimega detects whether the cgroup hierarchy at the `-cgroup` path (by default
+/sys/fs/cgroup) is unified (v2) or legacy (v1) and uses whichever it finds. No
+host configuration is needed on modern distributions, which mount a unified
+hierarchy by default.
+
+On a unified hierarchy, minimega requires linux 5.2 or newer, since containers
+are paused using the cgroup freezer. It also requires that the `cpu` and
+`memory` controllers be available at the cgroup root; if minimega is run from a
+systemd unit, that unit needs `Delegate=cpu`memory`.
+
+There is no `devices` controller in the unified hierarchy -- it was replaced by
+cgroup device programs, which minimega does not attach. Container device access
+is therefore unrestricted there. Note that containers are not a security
+boundary under either hierarchy: they run as root and are granted `CAP_MKNOD`.
+
+On a legacy hierarchy, many linux distributions explicitly disable the `memory`
+cgroup, which is required for minimega to boot `container` type VMs. On debian
+based linux hosts (including ubuntu), add
 
 	cgroup_enable=memory
 
@@ -225,12 +241,16 @@ cgroup. To enable this in GRUB on Debian, open /etc/default/grub and edit the
 `update-grub` to update the GRUB config. When you reboot, the cgroup will be
 enabled.
 
-To better work with systemd-based systems, minimega requires the cgroup hierarchy be mounted as individual mounts (as opposed to one large cgroup mount with all enabled subsystems). If you don't already have a cgroup hierarchy mounted, the following will create a minimal one for minimega:
+A legacy hierarchy must be mounted as individual mounts, one per subsystem, as
+opposed to one large cgroup mount with all enabled subsystems. If you don't
+already have one mounted, the following will create a minimal one for minimega:
 
 	mount -t tmpfs cgroup /sys/fs/cgroup
 	mkdir /sys/fs/cgroup/memory
 	mkdir /sys/fs/cgroup/freezer
 	mkdir /sys/fs/cgroup/devices
+	mkdir /sys/fs/cgroup/cpu
 	mount -t cgroup cgroup -o memory /sys/fs/cgroup/memory
 	mount -t cgroup cgroup -o freezer /sys/fs/cgroup/freezer
 	mount -t cgroup cgroup -o devices /sys/fs/cgroup/devices
+	mount -t cgroup cgroup -o cpu /sys/fs/cgroup/cpu
