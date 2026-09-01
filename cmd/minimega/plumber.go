@@ -30,15 +30,23 @@ var plumbCLIHandlers = []minicli.Handler{
 	{ // plumb
 		HelpShort: "plumb I/O between minimega, VMs, and external programs",
 		HelpLong: `
-Create pipelines composed of named pipes and external programs. Pipelines pass
-data on standard I/O, with messages split on newlines. Pipelines are
-constructed similar to that of UNIX pipelines. For example, to pipeline named
-pipe "foo" through "sed" and into another pipe "bar":
+Create pipelines composed of named pipes, external programs, and file
+terminals. Pipelines pass data on standard I/O, with messages split on
+newlines. Pipelines are constructed similar to that of UNIX pipelines. For
+example, to pipeline named pipe "foo" through "sed" and into another pipe
+"bar":
 
 	plumb foo "sed -u s/foo/moo/" bar
 
 When specifying pipelines, strings that are not found in $PATH are considered
-named pipes.
+named pipes, unless prefixed with "file://" in which case they are treated as
+file terminals.
+
+A file terminal (e.g. file:///foo/bar) may appear as the last element in a
+pipeline to write all received data to that file. If the file already exists,
+data is appended; otherwise the file is created.
+
+	plumb foo file:///foo/bar
 
 Pipelines can be composed into larger, nonlinear pipelines. For example, to
 create a simple tree rooted at A with leaves B and C, simply specify multiple
@@ -123,6 +131,10 @@ func cliPlumbLocal(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 	args := append([]string{c.StringArgs["src"]}, c.ListArgs["dst"]...)
 
 	for i, e := range args {
+		// file:// terminals are passed through as-is
+		if strings.HasPrefix(e, "file://") {
+			continue
+		}
 		// This production is a little odd but we have to make choices
 		// somewhere - if a field isn't already in the namespace//pipe
 		// format AND doesn't exist in the path, then it must be a pipe
