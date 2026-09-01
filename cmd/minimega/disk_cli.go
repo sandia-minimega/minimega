@@ -77,6 +77,44 @@ a comma. For example:
 		Call: wrapSimpleCLI(cliDiskInject),
 	},
 	{
+		HelpShort: "extracts files/directories from a disk",
+		HelpLong: `
+Extracts files or directories from a disk image and writes them to the host
+filesystem.
+
+To extract files from an image:
+
+	disk extract window7_miniccc.qc2 files "Program Files/miniccc":miniccc
+
+Each argument after the image should be a source and destination pair,
+separated by a ':', where the source is a path within the image and the
+destination is a path on the host. If the file paths contain spaces, use
+double quotes. Optionally, you may specify a partition (partition 1 will be
+used by default):
+
+	disk extract window7_miniccc.qc2:2 files "Program Files/miniccc":miniccc
+
+You may also specify that there is no partition on the disk, if your
+filesystem was directly written to the disk (this is highly unusual):
+
+	disk extract partitionless_disk.qc2:none files /miniccc:/miniccc
+
+You can optionally specify mount arguments to use with extract. Multiple
+options should be quoted. For example:
+
+	disk extract foo.qcow2 options "-t fat -o offset=100" files foo:bar
+
+The image is always mounted read-only. If the standard mount fails, extract
+will automatically retry with a handful of options intended to work around
+mild filesystem corruption (e.g. skipping journal replay).
+		`,
+		Patterns: []string{
+			"disk <extract,> <image> files <files like /path/to/src:/path/to/dst>...",
+			"disk <extract,> <image> <options,> <options> files <files like /path/to/src:/path/to/dst>",
+		},
+		Call: wrapSimpleCLI(cliDiskExtract),
+	},
+	{
 		HelpShort: "provides info about a disk",
 		HelpLong: `
 Provides information about a disk such as format, virtual/actual size, and backing file.
@@ -167,17 +205,25 @@ func getImage(c *minicli.Command) string {
 	return image
 }
 
-func cliDiskInject(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	image := getImage(c)
-	var partition string
-
+// splitImagePartition splits an "<image>[:<partition>]" string into its
+// image and partition parts. partition is "" if not specified.
+func splitImagePartition(image string) (string, string, error) {
 	if strings.Contains(image, ":") {
 		parts := strings.Split(image, ":")
 		if len(parts) != 2 {
-			return errors.New("found way too many ':'s, expected <path/to/image>:<partition>")
+			return "", "", errors.New("found way too many ':'s, expected <path/to/image>:<partition>")
 		}
 
-		image, partition = parts[0], parts[1]
+		return parts[0], parts[1], nil
+	}
+
+	return image, "", nil
+}
+
+func cliDiskInject(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	image, partition, err := splitImagePartition(getImage(c))
+	if err != nil {
+		return err
 	}
 
 	delete := strings.Contains(c.Original, " delete files ")
@@ -198,6 +244,30 @@ func cliDiskInject(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 	}
 
 	return diskInject(image, partition, pairs, options, delete, paths)
+}
+
+func cliDiskExtract(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	image, partition, err := splitImagePartition(getImage(c))
+	if err != nil {
+		return err
+	}
+
+	options := fieldsQuoteEscape("\"", c.StringArgs["options"])
+	log.Debug("got options: %v", options)
+
+	var files interface{}
+	if _, ok := c.StringArgs["options"]; !ok {
+		files = c.ListArgs["files"]
+	} else {
+		files = c.StringArgs["files"]
+	}
+
+	pairs, _, err := parseFiles(files, false)
+	if err != nil {
+		return err
+	}
+
+	return diskExtract(image, partition, pairs, options)
 }
 
 func cliDiskCreate(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
