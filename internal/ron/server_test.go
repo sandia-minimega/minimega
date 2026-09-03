@@ -7,6 +7,9 @@ package ron
 import (
 	"encoding/gob"
 	"net"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -97,5 +100,30 @@ func TestSendCommandsTracksIssuedCommands(t *testing.T) {
 
 	if got := s.GetCommand(1).Issued; got != 2 {
 		t.Fatalf("issued after reconnect = %d, want 2", got)
+	}
+}
+
+func TestNewFilesSendCommandExpandsMultipleGlobs(t *testing.T) {
+	path := t.TempDir()
+	for _, name := range []string{"one.txt", "two.txt", "three.log"} {
+		if err := os.WriteFile(filepath.Join(path, name), nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	server, err := NewServer(path, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Destroy()
+
+	command, err := server.NewFilesSendCommand([]string{"*.txt", "*.log"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"one.txt", "two.txt", "three.log"}
+	if !reflect.DeepEqual(command.FilesSend, want) {
+		t.Fatalf("files sent = %v, want %v", command.FilesSend, want)
 	}
 }
