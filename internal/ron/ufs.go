@@ -98,19 +98,26 @@ func (s *Server) ListenUFS(uuid string) (int, error) {
 	return addr.Port, nil
 }
 
+// DisconnectUFS stops the UFS session of the client and tells the guest to
+// close it. Do not call DisconnectUFS and ListenUFS at the same time for one
+// client: DisconnectUFS clears the session state before it sends UFS_CLOSE, so
+// a session that ListenUFS starts during the send can receive that UFS_CLOSE.
 func (s *Server) DisconnectUFS(uuid string) error {
 	s.clientLock.Lock()
-	defer s.clientLock.Unlock()
-
 	c, ok := s.clients[uuid]
+	s.clientLock.Unlock()
+
 	if !ok {
 		return fmt.Errorf("no such client: %v", uuid)
 	}
 
+	// release the locks before I/O so ufsMessage never waits on a blocked send
 	c.Lock()
-	defer c.Unlock()
+	l, conn := c.ufsListener, c.ufsConn
+	c.ufsListener, c.ufsConn = nil, nil
+	c.Unlock()
 
-	if c.ufsListener == nil {
+	if l == nil {
 		return errors.New("ufs is not running")
 	}
 
@@ -123,17 +130,24 @@ func (s *Server) DisconnectUFS(uuid string) error {
 		log.Error("unable to close: %v", err)
 	}
 
-	c.ufsListener.Close()
-	c.ufsListener = nil
+	l.Close()
 
-	if c.ufsConn != nil {
-		c.ufsConn.Close()
-		c.ufsConn = nil
+	if conn != nil {
+		conn.Close()
 	}
 
 	return nil
 }
 
 func (c *client) ufsMessage(m *Message) {
-	c.ufsConn.Write(m.Tunnel)
+	c.Lock()
+	conn := c.ufsConn
+	c.Unlock()
+
+	if conn == nil {
+		log.Debug("dropping ufs message for %v: no active connection", c.UUID)
+		return
+	}
+
+	conn.Write(m.Tunnel)
 }
