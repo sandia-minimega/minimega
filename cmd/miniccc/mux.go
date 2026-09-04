@@ -85,7 +85,15 @@ func mux(done chan struct{}) {
 		case ron.MESSAGE_COMMAND:
 			client.commandChan <- m.Commands
 		case ron.MESSAGE_FILE:
-			client.fileChan <- &m
+			if m.File != nil && m.File.Update {
+				if m.Error != "" {
+					log.Error("miniccc auto-update: %v", m.Error)
+				} else if err := handleUpdateFile(m.File); err != nil {
+					log.Error("miniccc auto-update: %v", err)
+				}
+			} else {
+				client.fileChan <- &m
+			}
 		case ron.MESSAGE_TUNNEL:
 			_, err = remote.Write(m.Tunnel)
 		case ron.MESSAGE_PIPE:

@@ -85,9 +85,10 @@ type Namespace struct {
 	*vnc.Player   // embed vnc player for this namespace
 
 	// Command and control for this namespace
-	ccServer *ron.Server
-	ccFilter *ron.Filter
-	ccPrefix string
+	ccServer     *ron.Server
+	ccFilter     *ron.Filter
+	ccPrefix     string
+	ccAutoUpdate bool
 
 	ccMounts map[string]ccMount
 

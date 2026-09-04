@@ -93,6 +93,11 @@ Client information is stored by UUID in minimega. When a client responds to a
 command, the response is logged by minimega in a subdirectory named after the
 UUID for that client. We'll discuss responses later.
 
+Miniccc can update itself when it connects to minimega. Enable this per
+namespace with `cc auto-update true`; minimega serves `miniccc` (or
+`miniccc.exe`) from its files directory when the client version differs.
+Disable it with `cc auto-update false`.
+
 * Executing Commands
 
 Executing commands is simple - just issue `cc`exec` with the command you want

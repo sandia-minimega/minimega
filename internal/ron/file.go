@@ -17,9 +17,10 @@ import (
 // uniquely identify the transfer. Perm is only used for the first chunk. EOF
 // signals that this is the last data chunk.
 type File struct {
-	ID   int         // command that requested the file
-	Name string      // name of the file
-	Perm os.FileMode // permissions
+	ID     int         // command that requested the file
+	Name   string      // name of the file
+	Perm   os.FileMode // permissions
+	Update bool        // file is a miniccc auto-update binary
 
 	Data   []byte // data chunk
 	Offset int64  // offset for this chunk

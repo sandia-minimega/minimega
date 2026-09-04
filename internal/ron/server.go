@@ -56,6 +56,7 @@ type Server struct {
 	clients    map[string]*client // map of active clients, each of which have a running handler
 	vms        map[string]VM      // map of uuid -> VM
 	clientLock sync.Mutex         // lock for clients and vms
+	autoUpdate bool
 
 	path string // path for serving files
 
@@ -101,6 +102,13 @@ func NewServer(path, subpath string, plumber *miniplumber.Plumber) (*Server, err
 	log.Info("registered new ron server: %v", filepath.Join(path, subpath))
 
 	return s, nil
+}
+
+// SetAutoUpdate enables or disables miniccc binary updates on client connect.
+func (s *Server) SetAutoUpdate(enabled bool) {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+	s.autoUpdate = enabled
 }
 
 func (s *Server) Destroy() {
@@ -795,6 +803,18 @@ func (s *Server) handshake(conn net.Conn, expectedUUID string) (*client, error) 
 
 	s.clients[c.UUID] = c
 
+	if s.autoUpdate && m.Client.Version != version.Revision {
+		filename := "miniccc"
+		if m.Client.OS == "windows" {
+			filename += ".exe"
+		}
+		go func() {
+			if err := s.sendUpdateFile(c, filename); err != nil {
+				log.Error("miniccc auto-update for %v: %v", c.UUID, err)
+			}
+		}()
+	}
+
 	return c, nil
 }
 
@@ -1045,6 +1065,24 @@ func (s *Server) sendFile(c *client, filename string) error {
 	dir = s.path
 	fpath = filepath.Join(dir, filename)
 	return SendFile(dir, fpath, 0, PART_SIZE, c.sendMessage)
+}
+
+func (s *Server) sendUpdateFile(c *client, filename string) error {
+	send := func(m *Message) error {
+		if m.File != nil {
+			m.File.Update = true
+		}
+		return c.sendMessage(m)
+	}
+
+	dir := filepath.Join(s.path, s.subpath)
+	fpath := filepath.Join(dir, filename)
+	if _, err := os.Stat(fpath); err != nil {
+		dir = s.path
+		fpath = filepath.Join(dir, filename)
+	}
+
+	return SendFile(dir, fpath, 0, PART_SIZE, send)
 }
 
 // route an outgoing message to one or all clients, according to UUID
