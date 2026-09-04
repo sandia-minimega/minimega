@@ -4,7 +4,11 @@
 
 package ron
 
-import "testing"
+import (
+	"encoding/gob"
+	"net"
+	"testing"
+)
 
 func TestBindClientUUIDUsesSerialIdentity(t *testing.T) {
 	want := "3b440429-067f-5b75-a0c3-f436519f8ccb"
@@ -38,5 +42,60 @@ func TestBindClientUUIDRejectsUnboundIdentity(t *testing.T) {
 				t.Fatal("expected an unbound client identity error")
 			}
 		})
+	}
+}
+
+func TestSendCommandsTracksIssuedCommands(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer serverConn.Close()
+	defer clientConn.Close()
+
+	dec := gob.NewDecoder(clientConn)
+	s := &Server{
+		commands: map[int]*Command{
+			1: {ID: 1, Command: []string{"echo", "hello"}},
+		},
+		clients: map[string]*client{
+			"client": {
+				Client: &Client{UUID: "client"},
+				conn:   serverConn,
+				enc:    gob.NewEncoder(serverConn),
+			},
+		},
+	}
+
+	readCommand := func() {
+		t.Helper()
+
+		m := new(Message)
+		if err := dec.Decode(m); err != nil {
+			t.Fatal(err)
+		}
+		if len(m.Commands) != 1 {
+			t.Fatalf("received %d commands, want 1", len(m.Commands))
+		}
+	}
+
+	sendAndRead := func() {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			readCommand()
+		}()
+		s.sendCommands("")
+		<-done
+	}
+
+	sendAndRead()
+
+	if got := s.GetCommand(1).Issued; got != 1 {
+		t.Fatalf("issued after first send = %d, want 1", got)
+	}
+
+	s.clients["client"].maxCommandID = 0
+	sendAndRead()
+
+	if got := s.GetCommand(1).Issued; got != 2 {
+		t.Fatalf("issued after reconnect = %d, want 2", got)
 	}
 }

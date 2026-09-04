@@ -59,6 +59,9 @@ type Command struct {
 	// clients that have responded to this command
 	CheckedIn []string
 
+	// Issued is the number of times this command was sent to a client.
+	Issued int
+
 	// Prefix is an optional field that can be used to track commands. It is
 	// not used by the server or client.
 	Prefix string
@@ -136,6 +139,7 @@ func (c *Command) Copy() *Command {
 		PID:        c.PID,
 		KillAll:    c.KillAll,
 		Prefix:     c.Prefix,
+		Issued:     c.Issued,
 		Once:       c.Once,
 		Sent:       c.Sent,
 		Stdin:      c.Stdin,

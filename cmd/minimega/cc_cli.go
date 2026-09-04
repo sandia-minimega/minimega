@@ -786,7 +786,7 @@ func cliCCClients(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 // command
 func cliCCCommand(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{
-		"id", "prefix", "command", "responses", "background", "once",
+		"id", "prefix", "command", "responses", "issued", "background", "once",
 		"sent", "received", "connectivity", "level", "filter",
 	}
 	resp.Tabular = [][]string{}
@@ -807,6 +807,7 @@ func cliCCCommand(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 			v.Prefix,
 			fmt.Sprintf("%v", v.Command),
 			strconv.Itoa(len(v.CheckedIn)),
+			strconv.Itoa(v.Issued),
 			strconv.FormatBool(v.Background),
 			strconv.FormatBool(v.Once),
 			fmt.Sprintf("%v", v.FilesSend),
