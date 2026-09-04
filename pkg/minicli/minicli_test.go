@@ -1,4 +1,4 @@
-// Copyright 2015-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+// Copyright 2015-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 // Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain
 // rights in this software.
 
@@ -31,7 +31,7 @@ var validTestPatterns = []struct {
 	// Optional string
 	{"cd [dir]", []string{"cd", "cd a"}},
 	// Required string
-	{"ping <host>", []string{"ping minimega.org"}},
+	{"ping <host>", []string{"ping example.com"}},
 	// Required multiple choice
 	{"ip <addr,link>", []string{"ip addr", "ip link"}},
 	// Required multiple choice followed by required string
@@ -39,7 +39,7 @@ var validTestPatterns = []struct {
 	// Optional multiple choice (we couldn't think of a real command
 	{"foo [bar,zap]", []string{"foo", "foo bar", "foo zap"}},
 	// Subcommand, must come last
-	{"test (foo)", []string{"test cd", "test ping minimega.org", "test foo bar"}},
+	{"test (foo)", []string{"test cd", "test ping example.com", "test foo bar"}},
 	// String literal, testing comments
 	{"foobar", []string{"foobar # test", "foobar #test", "foobar#test", "foobar# test"}},
 }

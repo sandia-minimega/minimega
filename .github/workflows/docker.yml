@@ -1,18 +1,33 @@
 name: Publish Docker image
-on: [push]
+
+on:
+  push:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
 jobs:
   push-to-ghcr:
-    name: Push Docker image to GitHub Packages
+    name: Build Docker image
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    concurrency:
+      group: docker-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     permissions:
       packages: write
       contents: read
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
       - name: Docker meta
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5.10.0
         with:
           # list of Docker images to use as base name for tags
           images: |
@@ -20,7 +35,8 @@ jobs:
           labels: |
             org.opencontainers.image.vendor=Sandia National Laboratories
             org.opencontainers.image.authors=minimega dev team <minimega-dev@sandia.gov>
-            org.opencontainers.image.documentation=https://www.sandia.gov/minimega/
+            org.opencontainers.image.url=https://sandia-minimega.github.io/minimega/
+            org.opencontainers.image.documentation=https://sandia-minimega.github.io/minimega/
             org.opencontainers.image.description=minimega is a tool for launching and managing virtual machines
             org.opencontainers.image.licenses=GPL-3.0
           # generate Docker tags based on the following events/attributes
@@ -31,17 +47,18 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=sha,prefix=,suffix=,format=short
-      - name: Log in to GitHub Docker Registry
-        uses: docker/login-action@v3
+      - name: Log in to GitHub Container Registry
+        if: github.event_name == 'push'
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Build container image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: .
           file: docker/Dockerfile
-          push: true
+          push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

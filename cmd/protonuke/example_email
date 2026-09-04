@@ -7,11 +7,10 @@
 	},
 	{
 		"To":"victim@mail.com",
-		"From":"evil@minimega.org",
+		"From":"evil@example.com",
 		"Subject": "foo",
 		"Msg":"CONFIDENTIAL",
 		"File": "foo"
 	}
 ]
-
 

@@ -9,7 +9,7 @@ Summary:       A distributed VM management tool.
 License:       GPLv3
 
 Group:         utils
-URL: https://www.sandia.gov/minimega
+URL: https://sandia-minimega.github.io/minimega/
 #Source0: https://github.com/sandia-minimega/minimega.git
 BuildArch:     x86_64
 AutoReqProv: no

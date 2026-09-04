@@ -1,0 +1,14 @@
+.md-typeset img {
+  height: auto;
+  max-width: 100%;
+}
+
+.md-typeset iframe {
+  border: 0;
+  max-width: 100%;
+}
+
+.md-typeset figcaption {
+  margin: 0 auto 1em;
+  text-align: center;
+}

@@ -1,0 +1,9 @@
+{% import "partials/languages/en.html" as fallback %}
+
+{% macro override(key) %}{{ {
+  "source.file.date.updated": "Last modified"
+}[key] }}{% endmacro %}
+
+{% macro t(key) %}{{
+  override(key) or fallback.t(key)
+}}{% endmacro %}

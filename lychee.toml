@@ -1,0 +1,18 @@
+scheme = ["https", "http"]
+accept = ["200..=299", "429"]
+exclude_loopback = true
+
+# Historical records intentionally retain obsolete and archived external links.
+exclude_path = [
+    "^doc/content/releases/",
+    "^doc/content/training/miniclass/",
+]
+
+# Generated self-links are covered by the strict Zensical build.
+exclude = [
+    "^https://github\\.com/sandia-minimega/minimega/blob/master/\\.github/workflows/docs\\.yml$",
+    "^https://sandia-minimega\\.github\\.io/minimega/",
+    # These resources reject automated clients while remaining browser-accessible.
+    "^https://ieeexplore\\.ieee\\.org/stamp/stamp\\.jsp",
+    "^https://storage\\.googleapis\\.com/minimega-files/",
+]

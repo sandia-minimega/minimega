@@ -1,0 +1,14 @@
+{% set updated = page.meta.revision_date if page.meta else none %}
+{% if not updated %}
+  {% set updated = config.extra.revision_dates[page.url] %}
+{% endif %}
+{% if updated %}
+  <aside class="md-source-file">
+    <span class="md-source-file__fact">
+      <span class="md-icon" title="{{ lang.t('source.file.date.updated') }}">
+        {% include ".icons/material/clock-edit-outline.svg" %}
+      </span>
+      {{ updated }}
+    </span>
+  </aside>
+{% endif %}
