@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,10 @@ import (
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
+// CapAutoUpdate is the capability that a client advertises when it can replace
+// its own binary with one that the server sends.
+const CapAutoUpdate = "auto-update"
+
 type Client struct {
 	UUID     string
 	Arch     string
@@ -26,6 +31,13 @@ type Client struct {
 	Hostname string
 	IPs      []string
 	MACs     []string
+
+	// Capabilities lists the optional features that the client supports.
+	// Servers ignore names that they do not know.
+	Capabilities []string
+
+	// SHA256 is the hex-encoded SHA-256 hash of the client binary.
+	SHA256 string
 
 	// Processes that are running in the background
 	Processes map[int]*Process
@@ -87,6 +99,10 @@ type client struct {
 
 	// used to stop the server --> client heartbeat Goroutine
 	cancelHeartbeat chan struct{}
+
+	// updating is true while the server holds commands for the client during
+	// an auto-update. Protected by Server.clientLock.
+	updating bool
 }
 
 func (c *client) sendMessage(m *Message) error {
@@ -94,6 +110,11 @@ func (c *client) sendMessage(m *Message) error {
 	defer c.writeMu.Unlock()
 
 	return c.enc.Encode(m)
+}
+
+// HasCapability reports whether the client advertises the capability.
+func (c *Client) HasCapability(name string) bool {
+	return slices.Contains(c.Capabilities, name)
 }
 
 // Matches tests whether all the filters match the client.
