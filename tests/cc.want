@@ -37,16 +37,16 @@ foo
 bar
 
 ## # make sure that commands ended up being attributed correctly
-## .columns id,responses,filter namespace foo cc commands
-id   | responses | filter
-1    | 1         |
-## .columns id,responses,filter namespace bar cc commands
-id   | responses | filter
-1    | 1         |
+## .columns id,responses,issued,filter namespace foo cc commands
+id   | responses | issued | filter
+1    | 1         | 1      |
+## .columns id,responses,issued,filter namespace bar cc commands
+id   | responses | issued | filter
+1    | 1         | 1      |
 
 ## # clear commands in one namespace
 ## namespace foo clear cc commands
-## namespace foo .columns id,responses,filter cc commands
-## namespace bar .columns id,responses,filter cc commands
-id   | responses | filter
-1    | 1         |
+## namespace foo .columns id,responses,issued,filter cc commands
+## namespace bar .columns id,responses,issued,filter cc commands
+id   | responses | issued | filter
+1    | 1         | 1      |

@@ -29,10 +29,10 @@ namespace foo cc responses all
 namespace bar cc responses all
 
 # make sure that commands ended up being attributed correctly
-.columns id,responses,filter namespace foo cc commands
-.columns id,responses,filter namespace bar cc commands
+.columns id,responses,issued,filter namespace foo cc commands
+.columns id,responses,issued,filter namespace bar cc commands
 
 # clear commands in one namespace
 namespace foo clear cc commands
-namespace foo .columns id,responses,filter cc commands
-namespace bar .columns id,responses,filter cc commands
+namespace foo .columns id,responses,issued,filter cc commands
+namespace bar .columns id,responses,issued,filter cc commands

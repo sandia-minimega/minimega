@@ -1050,6 +1050,7 @@ func (s *Server) sendFile(c *client, filename string) error {
 // route an outgoing message to one or all clients, according to UUID
 func (s *Server) route(m *Message) {
 	var maxCommandID int
+	var issuedLock sync.Mutex
 	for i := range m.Commands {
 		if i > maxCommandID {
 			maxCommandID = i
@@ -1122,6 +1123,12 @@ func (s *Server) route(m *Message) {
 				log.Debug("client disconnected: %v", uuid)
 			} else {
 				log.Info("unable to send message to %v: %v", uuid, err)
+			}
+		} else if m.Type == MESSAGE_COMMAND {
+			issuedLock.Lock()
+			defer issuedLock.Unlock()
+			for id := range m.Commands {
+				s.commands[id].Issued++
 			}
 		}
 	}
