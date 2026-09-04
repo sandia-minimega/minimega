@@ -1,0 +1,182 @@
+[project]
+site_name = "minimega documentation"
+site_description = "Documentation for minimega and its supporting tools"
+site_url = "https://sandia-minimega.github.io/minimega/"
+repo_name = "sandia-minimega/minimega"
+repo_url = "https://github.com/sandia-minimega/minimega"
+edit_uri = "edit/master/doc/content/"
+docs_dir = "doc/content"
+site_dir = "site"
+use_directory_urls = true
+extra_css = ["stylesheets/extra.css"]
+copyright = "Copyright 2015-2026. Sandia National Laboratories is a multimission laboratory managed and operated by National Technology & Engineering Solutions of Sandia, LLC, for the U.S. Department of Energy's National Nuclear Security Administration."
+
+[[project.nav]]
+Home = "index.md"
+
+[[project.nav]]
+"API Reference" = [
+  { minimega = "reference/minimega.md" },
+  { minirouter = "reference/minirouter.md" },
+  { Python = "reference/python.md" },
+]
+
+[[project.nav]]
+"Getting Started" = [
+  { Installation = "articles/installing.md" },
+  { Quickstart = "articles/tutorials/quickstart.md" },
+  { "Using minimega" = "articles/usage.md" },
+  { Downloads = "articles/download.md" },
+]
+
+[[project.nav]]
+"User Guides" = [
+  { "Cluster Setup" = "articles/cluster.md" },
+  { "File Management" = "articles/file.md" },
+  { Namespaces = "articles/namespaces.md" },
+  { "Virtual Machine Types" = "articles/vmtypes.md" },
+  { "Creating VMs" = "articles/newvm.md" },
+  { VLANs = "articles/vlans.md" },
+  { NAT = "articles/nat.md" },
+  { Routing = "articles/router.md" },
+  { "OSPF Costs" = "articles/ospf_cost.md" },
+  { "Port Mirroring" = "articles/mirror.md" },
+  { Plumbing = "articles/plumbing.md" },
+  { VNC = "articles/vnc.md" },
+  { "Command and Control" = "articles/cc.md" },
+]
+
+[[project.nav]]
+Tools = [
+  { Overview = "tools.md" },
+  { miniweb = "articles/miniweb.md" },
+  { minitest = "articles/minitest.md" },
+  { powerbot = "articles/powerbot.md" },
+  { protonuke = "articles/protonuke.md" },
+  { "Python API" = "articles/python.md" },
+  { Troubleshooting = "articles/troubleshooting.md" },
+]
+
+[[project.nav]]
+Tutorials = [
+  { "Command and Control" = "articles/tutorials/cc.md" },
+  { vmbetter = "articles/tutorials/vmbetter.md" },
+]
+
+[[project.nav]]
+"Miniclass" = [
+  { Overview = "training/miniclass/index.md" },
+]
+
+[[project.nav]]
+"Mini101 Training" = [
+  { "Module 1 - Essentials" = "training/module01.md" },
+  { "Module 2 - Getting Running" = "training/module02.md" },
+  { "Module 2.5 - Better vmbetter" = "training/module02_5.md" },
+  { "Module 3 - VM Orchestration" = "training/module03.md" },
+  { "Module 4 - Experiment Visualization" = "training/module04.md" },
+  { "Module 5 - VM Networking" = "training/module05.md" },
+  { "Module 6 - Experimental Networks" = "training/module06.md" },
+  { "Module 7 - Command and Control" = "training/module07.md" },
+  { "Module 8 - Background Traffic" = "training/module08.md" },
+  { "Module 9 - Plumbing" = "training/module09.md" },
+  { "Module 10 - VNC" = "training/module10.md" },
+  { "Module 11 - Instrumentation" = "training/module11.md" },
+  { "Module 12 - VM Physics" = "training/module12.md" },
+  { "Module 13 - Namespaces" = "training/module13.md" },
+  { "Module 14 - Clusters" = "training/module14.md" },
+]
+
+[[project.nav]]
+Development = [
+  { Contributing = "articles/contributing.md" },
+  { Locking = "articles/developer/locking.md" },
+  { "Namespace Internals" = "articles/developer/namespaces.md" },
+  { Naming = "articles/developer/naming.md" },
+  { "Status Updates" = "articles/developer/status_updates.md" },
+  { Vendoring = "articles/developer/vendoring.md" },
+]
+
+[[project.nav]]
+Legacy = [
+  { Screenshots = "screenshots/index.md" },
+  { Publications = "articles/publications.md" },
+  { Presentations = [
+    { "Generalized Modeling" = "presentations/gt_2018.md" },
+    { miniplumber = "presentations/miniplumber.md" },
+    { Scaling = "presentations/scale.md" },
+  ] },
+  { "Legacy Release Notes" = [
+    { "minimega 2.9" = "releases/minimega-2.9.md" },
+    { "minimega 2.8" = "releases/minimega-2.8.md" },
+    { "minimega 2.7" = "releases/minimega-2.7.md" },
+    { "minimega 2.6" = "releases/minimega-2.6.md" },
+    { "minimega 2.5" = "releases/minimega-2.5.md" },
+    { "minimega 2.4" = "releases/minimega-2.4.md" },
+    { "minimega 2.3" = "releases/minimega-2.3.md" },
+    { "minimega 2.2" = "releases/minimega-2.2.md" },
+    { "minimega 2.1" = "releases/minimega-2.1.md" },
+    { "minimega 2.0" = "releases/minimega-2.0.md" },
+  ] },
+]
+
+[project.theme]
+variant = "classic"
+custom_dir = "doc/overrides"
+language = "custom"
+font = false
+favicon = "static/favicon.png"
+logo = "static/favicon.png"
+features = [
+  "content.code.copy",
+  "navigation.sections",
+  "navigation.top",
+  "search.highlight",
+  "search.suggest",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "blue grey"
+accent = "deep orange"
+toggle.icon = "material/brightness-7"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "blue grey"
+accent = "deep orange"
+toggle.icon = "material/brightness-4"
+toggle.name = "Switch to light mode"
+
+[project.plugins.search]
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["lib"]
+
+[project.plugins.mkdocstrings.handlers.python.options]
+docstring_style = "sphinx"
+show_root_heading = true
+show_source = false
+
+[project.markdown_extensions]
+admonition = {}
+attr_list = {}
+footnotes = {}
+pymdownx.snippets.base_path = ["doc/content"]
+pymdownx.snippets.check_paths = true
+toc.permalink = true
+pymdownx.highlight.anchor_linenums = true
+pymdownx.highlight.line_spans = "__span"
+pymdownx.highlight.pygments_lang_class = true
+pymdownx.inlinehilite = {}
+pymdownx.superfences = {}
+
+[project.validation]
+invalid_links = true
+invalid_link_anchors = true
+
+# Populated from Git history by scripts/zensical_build.py, keyed by page URL.
+[project.extra.revision_dates]

@@ -2,6 +2,7 @@
 # To specify an alternate Go image: --build-arg GO_IMAGE="some/other/go_image:tag"
 ARG BASE_IMAGE="ubuntu:22.04"
 ARG GO_IMAGE="golang:1.24.13"
+ARG PYTHON_IMAGE="python:3.13-slim"
 
 # -- go builder --
 FROM ${GO_IMAGE} AS gobuilder
@@ -14,6 +15,27 @@ WORKDIR /minimega/
 COPY . .
 
 RUN ./scripts/all.bash
+
+
+# -- documentation builder --
+FROM ${PYTHON_IMAGE} AS docbuilder
+
+WORKDIR /minimega/
+
+COPY zensical.toml ./
+COPY doc/requirements.txt ./doc/requirements.txt
+COPY scripts/zensical_build.py ./scripts/zensical_build.py
+COPY doc/pygments_minimega ./doc/pygments_minimega
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends git \
+  && rm -rf /var/lib/apt/lists/* \
+  && pip install --no-cache-dir -r doc/requirements.txt
+
+COPY --from=gobuilder /minimega/doc/content ./doc/content
+COPY --from=gobuilder /minimega/doc/overrides ./doc/overrides
+COPY --from=gobuilder /minimega/lib/minimega.py ./lib/minimega.py
+COPY --from=gobuilder /minimega/.git ./.git
+RUN python scripts/zensical_build.py build --strict
 
 
 # -- minimega image --
@@ -55,10 +77,12 @@ COPY --from=gobuilder /minimega/VERSION   /opt/minimega/lib/VERSION
 
 # Copy files from source tree
 COPY ./web /opt/minimega/web
+COPY --from=docbuilder /minimega/site /opt/minimega/web/docs
 COPY ./docker/mm /usr/local/bin/mm
 COPY ./docker/start-minimega.sh /start-minimega.sh
 
-RUN chmod +x /usr/local/bin/mm \
+RUN ln -s /opt/minimega/web/docs /opt/minimega/docs \
+  && chmod +x /usr/local/bin/mm \
   && chmod +x /start-minimega.sh
 
 WORKDIR /opt/minimega

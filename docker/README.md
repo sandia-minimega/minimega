@@ -55,6 +55,10 @@ The container runs the `start-minimega.sh` script as PID 1, which takes care of
 starting openvswitch, miniweb, and finally minimega. This means the minimega
 logs will be available in the container logs via Docker (`docker logs minimega`).
 
+The image includes the documentation in `/opt/minimega/docs`. With the default
+`MINIWEB_ROOT`, miniweb also serves it at
+[http://localhost:9001/docs/](http://localhost:9001/docs/).
+
 # Using Docker Compose
 
 If you followed the
@@ -184,6 +188,10 @@ MINIWEB_ROOT=/opt/minimega/web
 MINIWEB_HOST=0.0.0.0
 MINIWEB_PORT=9001
 ```
+
+The default miniweb root contains the bundled documentation under `docs/`.
+When `MINIWEB_ROOT` points elsewhere, the documentation remains available
+inside the container at `/opt/minimega/docs` but is not served automatically.
 
 These values can be overwritten either by passing environment variables to
 Docker when starting the container or by binding a file to

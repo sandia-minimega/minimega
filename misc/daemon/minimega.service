@@ -1,6 +1,6 @@
 [Unit]
 Description="minimega Emulytics Daemon"
-Documentation=https://www.sandia.gov/minimega
+Documentation=https://sandia-minimega.github.io/minimega/
 Wants=openvswitch-switch.service
 
 [Install]

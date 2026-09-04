@@ -927,7 +927,7 @@ Actions.prototype.init = function()
             ext = '_' + mxClient.language;
         }
         
-        graph.openLink('https://minimega.org/'); // RESOURCES_PATH + '/help' + ext + '.html'
+        graph.openLink('https://sandia-minimega.github.io/minimega/'); // RESOURCES_PATH + '/help' + ext + '.html'
     });
     
     var showingAbout = false;

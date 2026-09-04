@@ -1,0 +1,3 @@
+./doc/pygments_minimega
+zensical==0.0.58
+mkdocstrings-python==2.0.8

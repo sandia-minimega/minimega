@@ -1,10 +1,10 @@
-// Copyright 2015-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+// Copyright 2015-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 // Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain
 // rights in this software.
 
-// apigen creates the api documentation by invoking minimega's JSON API output
-// (-cli), and applying the data to a minidoc api template. It is expected to
-// be invoked by the build script.
+// apigen creates API documentation by invoking minimega's JSON API output
+// (-cli) and applying the data to a Markdown template. The build script invokes
+// it before the documentation is built.
 package main
 
 import (
@@ -13,6 +13,7 @@ import (
 	"flag"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"text/template"
@@ -31,6 +32,25 @@ var (
 type apigen struct {
 	Date     string
 	Sections map[string][]*minicli.Handler
+}
+
+func markdownEscape(s string) string {
+	lines := strings.Split(s, "\n")
+	replacer := strings.NewReplacer("<", "&lt;", ">", "&gt;")
+
+	for i, line := range lines {
+		if strings.HasPrefix(line, "\t") || strings.HasPrefix(line, "    ") {
+			continue
+		}
+
+		line = replacer.Replace(line)
+		if strings.HasPrefix(line, "#") {
+			line = `\` + line
+		}
+		lines[i] = line
+	}
+
+	return strings.Join(lines, "\n")
 }
 
 func main() {
@@ -66,10 +86,8 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	// populate the apigen date for the template
-	year, month, day := time.Now().Date()
 	api := apigen{
-		Date:     fmt.Sprintf("%v %v %v", day, month, year),
+		Date:     time.Now().Format("2 January 2006"),
 		Sections: map[string][]*minicli.Handler{},
 	}
 
@@ -127,7 +145,9 @@ func main() {
 
 	// run the template and print to stdout
 	var out bytes.Buffer
-	t, err := template.ParseFiles(*f_template)
+	t, err := template.New(filepath.Base(*f_template)).Funcs(template.FuncMap{
+		"markdownEscape": markdownEscape,
+	}).ParseFiles(*f_template)
 	if err != nil {
 		log.Fatalln(err)
 	}

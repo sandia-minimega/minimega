@@ -8,7 +8,7 @@ Vcs-Git: https://github.com/sandia-minimega/minimega.git
 
 Package: minimega
 Architecture: amd64
-Homepage: https://www.sandia.gov/minimega
+Homepage: https://sandia-minimega.github.io/minimega/
 Depends: qemu-kvm,
          qemu-utils,
          openvswitch-switch,
