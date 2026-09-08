@@ -233,6 +233,48 @@ Default: false
 		}),
 	},
 	{
+		HelpShort: "configures android-grpc-base-port",
+		HelpLong: `Configure the preferred starting gRPC port for Android emulator instances.
+
+This value is a hint, not a guaranteed assignment. minimega searches for the
+first available gRPC port starting at this port. If the requested port is
+already reserved or unavailable, the next valid port is used.
+
+If set to 0, minimega starts searching at the beginning of the valid Android
+emulator gRPC port range (8554-8617).
+
+The valid range contains 64 ports, so a single minimega host can run at most
+64 Android emulator VMs concurrently, and fewer if some ports in the range
+are already in use. In a multi-host namespace, this limit applies
+independently to each host.
+
+Default: 0
+`,
+		Patterns: []string{
+			"vm config android-grpc-base-port [value]",
+		},
+
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = strconv.FormatUint(ns.vmConfig.GRPCBasePort, 10)
+				return nil
+			}
+
+			i, err := strconv.ParseUint(c.StringArgs["value"], 10, 64)
+			if err != nil {
+				return err
+			}
+
+			if err := validateAndroidGRPCBasePort(ns.vmConfig, i); err != nil {
+				return err
+			}
+
+			ns.vmConfig.GRPCBasePort = i
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "configures filesystem",
 		HelpLong: `Configure the filesystem to use for launching a container. This should
 be a root filesystem for a linux distribution (containing /dev, /proc,
@@ -1236,6 +1278,7 @@ Default: empty map
 			"clear vm config <android-extra-args,>",
 			"clear vm config <fifos,>",
 			"clear vm config <filesystem,>",
+			"clear vm config <android-grpc-base-port,>",
 			"clear vm config <hostname,>",
 			"clear vm config <init,>",
 			"clear vm config <initrd,>",
@@ -1310,6 +1353,9 @@ func (v *AndroidConfig) Info(field string) (string, error) {
 	if field == "android-writable-system" {
 		return strconv.FormatBool(v.WritableSystem), nil
 	}
+	if field == "android-grpc-base-port" {
+		return strconv.FormatUint(v.GRPCBasePort, 10), nil
+	}
 
 	return "", fmt.Errorf("invalid info field: %v", field)
 }
@@ -1342,6 +1388,9 @@ func (v *AndroidConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "android-writable-system" {
 		v.WritableSystem = false
 	}
+	if mask == Wildcard || mask == "android-grpc-base-port" {
+		v.GRPCBasePort = 0
+	}
 }
 
 func (v *AndroidConfig) WriteConfig(w io.Writer) error {
@@ -1371,6 +1420,9 @@ func (v *AndroidConfig) WriteConfig(w io.Writer) error {
 	}
 	if v.WritableSystem != false {
 		fmt.Fprintf(w, "vm config android-writable-system %t\n", v.WritableSystem)
+	}
+	if v.GRPCBasePort != 0 {
+		fmt.Fprintf(w, "vm config android-grpc-base-port %v\n", v.GRPCBasePort)
 	}
 
 	return nil
@@ -1408,6 +1460,8 @@ func (v *AndroidConfig) ReadConfig(r io.Reader, ns string, vmConfig *VMConfig) e
 			v.ExtraArgs = fieldsQuoteEscape("\"", strings.Join(config[1:], " "))
 		case "android-writable-system":
 			v.WritableSystem, _ = strconv.ParseBool(config[1])
+		case "android-grpc-base-port":
+			v.GRPCBasePort, _ = strconv.ParseUint(config[1], 10, 64)
 		}
 	}
 

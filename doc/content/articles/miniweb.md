@@ -189,8 +189,13 @@ CLI.
 
 ### Connecting to VMs
 
-`miniweb` supports VNC for KVM VMs and `xterm.js` for containers. These are
-both accessed via the `/vm/<name>/<connect>` path.
+`miniweb` supports VNC for KVM VMs, `xterm.js` for containers, and a
+gRPC-based display console for Android VMs. These are all accessed via the
+`/vm/<name>/connect/` path.
+
+For Android VMs, the console streams live PNG frames from the emulator over
+a WebSocket and supports mouse, keyboard, scroll, hardware button, GPS,
+and orientation controls. See the [Android VM guide](android.md) for details.
 
 The container's web console allows multiple users to view the same console at
 the same time. minimega stores some "scrollback" from the container's console,
@@ -207,8 +212,9 @@ connections.
 
 ### Screenshots
 
-Each KVM VM can returns its current screenshot to `miniweb` via the
-`/vm/<name>/screenshot.png` path
+Each KVM and Android VM can return its current screenshot to `miniweb` via the
+`/vm/<name>/screenshot.png` path. KVM screenshots use the minimega CLI, while
+Android screenshots are fetched directly from the emulator via gRPC.
 
 <a id="TOC_6."></a>
 
