@@ -1,7 +1,8 @@
 name: "Submit a feature request / idea"
 description: Describe an idea, feature, or improvement
-labels:
-  - enhancement
+title: "[FEATURE] "
+labels: ["enhancement"]
+type: Feature
 
 body:
   - type: textarea
@@ -33,3 +34,12 @@ body:
         - [ ] Any other criteria
     validations:
       required: true
+  - type: checkboxes
+    attributes:
+      label: Checklist
+      description: Please confirm the following before submitting your feature request.
+      options:
+        - label: "I have included no proprietary/sensitive information in my issue."
+          required: true
+        - label: "I have searched the existing issues and believe this is not a duplicate of an existing feature request."
+          required: true

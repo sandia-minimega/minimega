@@ -1,7 +1,8 @@
 name: "Bug report"
 description: Describe a bug, error, unexpected behavior, or other problem
-labels:
-  - bug
+title: "[BUG] "
+labels: ["bug"]
+type: Bug
 
 body:
   - type: input
@@ -43,3 +44,22 @@ body:
       description: What did you expect to happen that didn't?
     validations:
       required: true
+  - type: textarea
+    attributes:
+      label: Actual behavior
+      description: What happened instead?
+    validations:
+      required: true
+  - type: textarea
+    attributes:
+      label: Additional context
+      description: Add any other context, such as logs, stack traces, screenshots, or related issues/PRs.
+  - type: checkboxes
+    attributes:
+      label: Checklist
+      description: Please confirm the following before submitting your issue.
+      options:
+        - label: "I have included no proprietary/sensitive information in my issue."
+          required: true
+        - label: "I have searched the existing issues and believe this is not a duplicate of an existing bug report. If this bug is not the same as another bug, but closely related, please link to the related issue(s). If it's a duplicate, add your information to an existing issue instead of creating a new one."
+          required: true
