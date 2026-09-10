@@ -47,6 +47,48 @@ fi
 : "${OVS_APPEND:=}"
 : "${OVS_HOST_IFACE:=}"
 
+MM_SOCKET="${MM_BASE}/minimega"
+MM_PIDFILE="${MM_BASE}/minimega.pid"
+MINIWEB_PID=""
+MINIMEGA_PID=""
+
+# Remove stale minimega socket/PID state left behind by crashes or container stops.
+cleanup_stale_minimega_state() {
+  if [[ -f "${MM_PIDFILE}" ]]; then
+    local pid exe
+
+    pid="$(<"${MM_PIDFILE}")"
+    exe="$(readlink "/proc/${pid}/exe" 2>/dev/null || true)"
+    # If the PID is missing or no longer belongs to minimega, discard stale state.
+    if [[ ! "${pid}" =~ ^[0-9]+$ || "${exe}" != "/opt/minimega/bin/minimega" ]]; then
+      rm -f "${MM_PIDFILE}" "${MM_SOCKET}"
+    fi
+  elif [[ -S "${MM_SOCKET}" ]]; then
+    # A socket without a valid pidfile means the old daemon is gone but leftovers remain.
+    rm -f "${MM_SOCKET}"
+  fi
+}
+
+# Stop the background processes we started and clean any stale state before exit.
+shutdown() {
+  if [[ -n "${MINIMEGA_PID}" ]] && kill -0 "${MINIMEGA_PID}" 2>/dev/null; then
+    kill "${MINIMEGA_PID}"
+    wait "${MINIMEGA_PID}"
+  fi
+
+  if [[ -n "${MINIWEB_PID}" ]] && kill -0 "${MINIWEB_PID}" 2>/dev/null; then
+    kill "${MINIWEB_PID}"
+    wait "${MINIWEB_PID}"
+  fi
+
+  cleanup_stale_minimega_state
+}
+
+trap shutdown EXIT
+trap 'exit 143' TERM INT
+
+cleanup_stale_minimega_state
+
 # Start Open vSwitch
 /usr/share/openvswitch/scripts/ovs-ctl start ${OVS_APPEND} |& tee -a ${MM_LOGFILE}
 if [ ${PIPESTATUS[0]} -ne 0 ]; then
@@ -99,6 +141,7 @@ fi
 
 echo "starting miniweb..." | tee -a ${MM_LOGFILE}
 /opt/minimega/bin/miniweb -root=${MINIWEB_ROOT} -addr=${MINIWEB_HOST}:${MINIWEB_PORT} &
+MINIWEB_PID=$!
 echo "miniweb started on ${MINIWEB_HOST}:${MINIWEB_PORT}" | tee -a ${MM_LOGFILE}
 
 echo "starting minimega..." | tee -a ${MM_LOGFILE}
@@ -117,4 +160,6 @@ echo "starting minimega..." | tee -a ${MM_LOGFILE}
   -logfile=${MM_LOGFILE} \
   -cgroup=${MM_CGROUP} \
   -abssnapshot=${MM_ABSSNAPSHOT} \
-  ${MM_APPEND}
+  ${MM_APPEND} &
+MINIMEGA_PID=$!
+wait "${MINIMEGA_PID}"

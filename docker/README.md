@@ -52,8 +52,10 @@ docker run -d \
 ```
 
 The container runs the `start-minimega.sh` script as PID 1, which takes care of
-starting openvswitch, miniweb, and finally minimega. This means the minimega
-logs will be available in the container logs via Docker (`docker logs minimega`).
+starting openvswitch, miniweb, and finally minimega. On container stop, it
+forwards the shutdown signal to minimega and removes stale PID/socket state.
+This means the minimega logs will be available in the container logs via Docker
+(`docker logs minimega`).
 
 The image includes the documentation in `/opt/minimega/docs`. With the default
 `MINIWEB_ROOT`, miniweb also serves it at
