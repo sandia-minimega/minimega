@@ -127,6 +127,10 @@ We welcome suggestions for improvements! Please open an issue to discuss your id
     
 5. **Open a Pull Request**: Go to the original repository and open a [pull request](https://github.com/sandia-minimega/minimega/pulls). Provide a clear description of your changes and reference any related issues.
 
+### Contributor names
+
+If you are a new contributor, please ensure your first and last name is listed in [`CONTRIBUTORS`](../CONTRIBUTORS) without an email address.
+
 ### EditorConfig
 
 Use EditorConfig support in your editor so basic formatting rules are applied automatically when `.editorconfig` files are present in the tree.
