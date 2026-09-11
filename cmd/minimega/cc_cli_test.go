@@ -184,7 +184,7 @@ func TestFetchCCUpdateFilesUsesMesh(t *testing.T) {
 		got = append(got, file)
 		return nil
 	}
-	list := func(pattern string) []string { return mesh[pattern] }
+	list := func(pattern string) ([]string, error) { return mesh[pattern], nil }
 
 	if err := fetchCCUpdateFiles("ns", list, get); err != nil {
 		t.Fatal(err)
@@ -201,9 +201,14 @@ func TestFetchCCUpdateFilesUsesMesh(t *testing.T) {
 		t.Fatal("fetchCCUpdateFiles ignored a mesh error")
 	}
 
-	none := func(string) []string { return nil }
+	none := func(string) ([]string, error) { return nil, nil }
 	if err := fetchCCUpdateFiles("ns", none, get); err == nil {
 		t.Fatal("fetchCCUpdateFiles did not fail when the mesh has no binaries")
+	}
+
+	timeout := func(string) ([]string, error) { return nil, errors.New("timeout") }
+	if err := fetchCCUpdateFiles("ns", timeout, get); err == nil {
+		t.Fatal("fetchCCUpdateFiles ignored a mesh search error")
 	}
 }
 
@@ -267,5 +272,108 @@ func TestCCClientsShowsCapabilities(t *testing.T) {
 	want := map[string]string{"new": strings.Join([]string{ron.CapAutoUpdate, "other"}, ","), "old": ""}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("capabilities = %v, want %v", got, want)
+	}
+}
+
+func TestCCSendExpand(t *testing.T) {
+	errTimeout := errors.New("timeout")
+
+	cases := []struct {
+		name      string
+		namespace string
+		pattern   string
+		info      map[string][]string
+		errs      map[string]error
+		noSearch  bool
+		want      []ccSendFile
+		wantErr   error
+	}{
+		{
+			name:      "namespace match has namespace-relative send name",
+			namespace: "blue",
+			pattern:   "*.txt",
+			info:      map[string][]string{"blue/*.txt": {"blue/one.txt"}},
+			want:      []ccSendFile{{mesh: "blue/one.txt", send: "one.txt"}},
+		},
+		{
+			name:      "global match keeps its directory",
+			namespace: "red",
+			pattern:   "blue/*.txt",
+			info:      map[string][]string{"blue/*.txt": {"blue/one.txt"}},
+			want:      []ccSendFile{{mesh: "blue/one.txt", send: "blue/one.txt"}},
+		},
+		{
+			name:      "files below matched directories are not sent",
+			namespace: DefaultNamespace,
+			pattern:   "*",
+			info: map[string][]string{"*": {
+				"one.txt",
+				"blue/one.txt",
+				"miniccc_responses/1/uuid/stdout",
+			}},
+			want: []ccSendFile{{mesh: "one.txt", send: "one.txt"}},
+		},
+		{
+			name:      "namespace files below matched directories are not sent",
+			namespace: "blue",
+			pattern:   "*",
+			info: map[string][]string{"blue/*": {
+				"blue/one.txt",
+				"blue/miniccc_responses/1/uuid/stdout",
+			}},
+			want: []ccSendFile{{mesh: "blue/one.txt", send: "one.txt"}},
+		},
+		{
+			name:      "namespace search error does not fall back",
+			namespace: "blue",
+			pattern:   "*.txt",
+			info:      map[string][]string{"*.txt": {"global.txt"}},
+			errs:      map[string]error{"blue/*.txt": errTimeout},
+			wantErr:   errTimeout,
+		},
+		{
+			name:      "empty namespace search falls back",
+			namespace: "blue",
+			pattern:   "*.txt",
+			info:      map[string][]string{"*.txt": {"global.txt"}},
+			want:      []ccSendFile{{mesh: "global.txt", send: "global.txt"}},
+		},
+		{
+			name:      "files on many nodes are sent once",
+			namespace: DefaultNamespace,
+			pattern:   "*.txt",
+			info:      map[string][]string{"*.txt": {"two.txt", "one.txt", "two.txt", "one.txt"}},
+			want: []ccSendFile{
+				{mesh: "one.txt", send: "one.txt"},
+				{mesh: "two.txt", send: "two.txt"},
+			},
+		},
+		{
+			name:      "literal names do not search the mesh",
+			namespace: "blue",
+			pattern:   "one.txt",
+			noSearch:  true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			info := func(glob string) ([]string, error) {
+				if tc.noSearch {
+					t.Fatalf("unexpected mesh search for %q", glob)
+				}
+
+				return tc.info[glob], tc.errs[glob]
+			}
+
+			got, err := ccSendExpand(tc.namespace, tc.pattern, info)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("error = %v, want %v", err, tc.wantErr)
+			}
+
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("files = %#v, want %#v", got, tc.want)
+			}
+		})
 	}
 }
