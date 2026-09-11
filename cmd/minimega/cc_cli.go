@@ -529,29 +529,26 @@ func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 		}
 
 		expanded := []string{file}
-		if !filepath.IsAbs(file) {
-			matches, err := filepath.Glob(filepath.Join(*f_iomBase, file))
+		if filepath.IsAbs(file) {
+			matches, err := filepath.Glob(file)
 			if err != nil {
 				return err
 			}
 
-			if len(matches) == 0 && ns.Name != DefaultNamespace {
-				matches, err = filepath.Glob(filepath.Join(*f_iomBase, ns.Name, file))
-				if err != nil {
-					return err
-				}
+			if len(matches) > 0 {
+				expanded = matches
+			}
+		} else {
+			var matches []string
+			if ns.Name != DefaultNamespace {
+				matches = iom.Info(filepath.Join(ns.Name, file))
+			}
+			if len(matches) == 0 {
+				matches = iom.Info(file)
 			}
 
 			if len(matches) > 0 {
-				expanded = make([]string, len(matches))
-				for i, match := range matches {
-					rel, err := filepath.Rel(*f_iomBase, match)
-					if err != nil {
-						return err
-					}
-
-					expanded[i] = rel
-				}
+				expanded = matches
 			}
 		}
 
