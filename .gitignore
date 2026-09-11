@@ -41,3 +41,9 @@ packaging/debian/minimega/DEBIAN/postrm
 packaging/debian/minimega/DEBIAN/prerm
 packaging/debian/tmp/
 packaging/debian/minimega/
+
+# Development directories
+.claude/
+.codex/
+.opencode/
+.opencode-workspace/

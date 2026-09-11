@@ -149,6 +149,7 @@ var vmInfo = []string{
 	"tpm-socket", "bidirectional-copy-paste",
 	// android fields
 	"android_avd", "android_console_port", "android_adb_port", "android_serial",
+	"android_grpc_port",
 	// container fields
 	"filesystem", "hostname", "init", "preinit", "fifo", "volume",
 	"console_port",

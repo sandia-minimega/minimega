@@ -1,3 +1,7 @@
+// Copyright 2025-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+// Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain
+// rights in this software.
+
 package main
 
 import (
@@ -73,6 +77,23 @@ type AndroidConfig struct {
 	//
 	// Default: false
 	WritableSystem bool `config:"android-writable-system"`
+
+	// Configure the preferred starting gRPC port for Android emulator instances.
+	//
+	// This value is a hint, not a guaranteed assignment. minimega searches for the
+	// first available gRPC port starting at this port. If the requested port is
+	// already reserved or unavailable, the next valid port is used.
+	//
+	// If set to 0, minimega starts searching at the beginning of the valid Android
+	// emulator gRPC port range (8554-8617).
+	//
+	// The valid range contains 64 ports, so a single minimega host can run at most
+	// 64 Android emulator VMs concurrently, and fewer if some ports in the range
+	// are already in use. In a multi-host namespace, this limit applies
+	// independently to each host.
+	//
+	// Default: 0
+	GRPCBasePort uint64 `config:"android-grpc-base-port" validate:"validateAndroidGRPCBasePort"`
 }
 
 func (old AndroidConfig) Copy() AndroidConfig {
@@ -96,6 +117,7 @@ func (vm *AndroidConfig) String() string {
 	fmt.Fprintf(w, "Console Base Port:\t%v\n", vm.ConsoleBasePort)
 	fmt.Fprintf(w, "Extra Args:\t%v\n", vm.ExtraArgs)
 	fmt.Fprintf(w, "Writable System:\t%v\n", vm.WritableSystem)
+	fmt.Fprintf(w, "GRPC Base Port:\t%v\n", vm.GRPCBasePort)
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()
@@ -125,32 +147,53 @@ func findAndroidTool(path, name string) (string, error) {
 	return exec.LookPath(name)
 }
 
-func validateAndroidConsoleBasePortValue(port uint64) error {
+func validateAndroidBasePort(port uint64, min, max int, name string, extraChecks ...func(uint64) error) error {
 	if port == 0 {
 		return nil
 	}
 
-	if port%2 != 0 {
-		return fmt.Errorf("android-console-base-port must be 0 or an even port")
+	for _, check := range extraChecks {
+		if err := check(port); err != nil {
+			return err
+		}
 	}
 
-	if port < MinAndroidConsolePort || port > MaxAndroidConsolePort {
+	if port < uint64(min) || port > uint64(max) {
 		return fmt.Errorf(
-			"android-console-base-port must be 0 or an even port in range %d-%d",
-			MinAndroidConsolePort,
-			MaxAndroidConsolePort,
+			"%s must be 0 or a port in range %d-%d",
+			name, min, max,
 		)
 	}
 
 	return nil
 }
 
+func validateAndroidConsoleBasePortValue(port uint64) error {
+	return validateAndroidBasePort(port, MinAndroidConsolePort, MaxAndroidConsolePort, "android-console-base-port", func(p uint64) error {
+		if p%2 != 0 {
+			return fmt.Errorf("android-console-base-port must be 0 or an even port")
+		}
+		return nil
+	})
+}
+
 func validateAndroidConsoleBasePort(_ VMConfig, port uint64) error {
 	return validateAndroidConsoleBasePortValue(port)
 }
 
+func validateAndroidGRPCBasePortValue(port uint64) error {
+	return validateAndroidBasePort(port, MinAndroidGRPCPort, MaxAndroidGRPCPort, "android-grpc-base-port")
+}
+
+func validateAndroidGRPCBasePort(_ VMConfig, port uint64) error {
+	return validateAndroidGRPCBasePortValue(port)
+}
+
 func validateAndroidConfig(cfg AndroidConfig) error {
-	return validateAndroidConsoleBasePortValue(cfg.ConsoleBasePort)
+	if err := validateAndroidConsoleBasePortValue(cfg.ConsoleBasePort); err != nil {
+		return err
+	}
+	return validateAndroidGRPCBasePortValue(cfg.GRPCBasePort)
 }
 
 func androidAVDExists(cfg AndroidConfig) error {
@@ -174,7 +217,8 @@ func androidConfigured(cfg AndroidConfig) bool {
 		cfg.AVDDir != "" ||
 		cfg.ConsoleBasePort != 0 ||
 		len(cfg.ExtraArgs) > 0 ||
-		cfg.WritableSystem
+		cfg.WritableSystem ||
+		cfg.GRPCBasePort != 0
 }
 
 func checkAndroidDependencies(cfg AndroidConfig) error {

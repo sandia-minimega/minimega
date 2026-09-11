@@ -80,10 +80,11 @@ Additional fields are available for container-based VMs:
 Additional fields are available for Android VMs:
 
 - android_avd          : Android Virtual Device name
-- android_console_port : Android emulator console port
-- android_adb_port     : Android emulator adb port
+- android_console_port : Android emulator console port (auto-assigned; hint via android-console-base-port)
+- android_adb_port     : Android emulator adb port (console port + 1)
 - android_serial       : adb serial name, e.g. emulator-5554
 - pid                  : pid of Android emulator process
+- android_grpc_port    : Android emulator gRPC control port (auto-assigned; hint via android-grpc-base-port)
 
 The optional summary flag limits the columns to those denoted with a '*'.
 

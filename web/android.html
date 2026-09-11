@@ -1,0 +1,100 @@
+<!-- Copyright 2025-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+     Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain
+     rights in this software. -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>minimega</title>
+    <link rel="stylesheet" type="text/css" href="/css/bootstrap.css">
+    <link rel="stylesheet" type="text/css" href="/css/font-awesome.css">
+    <link rel="stylesheet" type="text/css" href="/css/minimega.css">
+</head>
+<body>
+
+    <div id="nav-container">
+      <a href="/"><img id="logo" src="/images/minimega.svg" alt=""></a>
+      <nav>
+        <a class="nav-blue" href="/vms">
+          <i class="fa fa-desktop fa-2x"></i>
+          <span>VMs</span>
+        </a>
+        <a class="nav-blue" href="/tilevnc">
+          <i class="fa fa-photo fa-2x"></i>
+          <span>VM Screenshots</span>
+        </a>
+        <a class="nav-blue" href="/hosts">
+          <i class="fa fa-server fa-2x"></i>
+          <span>Hosts</span>
+        </a>
+        <a class="nav-blue" href="/graph">
+          <i class="fa fa-sitemap fa-2x"></i>
+          <span>Graph</span>
+        </a>
+        <a class="nav-blue" href="/files">
+          <i class="fa fa-files-o fa-2x"></i>
+          <span>Files</span>
+        </a>
+        <a class="nav-blue" href="/namespaces">
+          <i class="fa fa-users fa-2x"></i>
+          <span>Namespaces</span>
+        </a>
+        <a class="nav-blue" href="/console">
+          <i class="fa fa-terminal fa-2x"></i>
+          <span>Console</span>
+        </a>
+        <a class="nav-blue" href="/minibuilder">
+          <i class="fa fa-pencil fa-2x"></i>
+          <span>Builder</span>
+        </a>
+      </nav>
+    </div>
+
+    <div class="android-status-bar">
+        <span><i class="fa fa-mobile"></i> <span class="vm-name" id="vm-name">Loading...</span></span>
+        <span>Display: <span id="display-status" class="status-loading">Connecting...</span></span>
+        <div id="status-error">
+            <i class="fa fa-exclamation-circle"></i> <span id="error-message"></span>
+        </div>
+    </div>
+
+    <div class="android-display-area">
+        <div id="display-placeholder" class="android-display-placeholder">
+            <div class="spinner"></div>
+            <div>Connecting to emulator...</div>
+        </div>
+
+        <div id="android-input-surface" tabindex="0">
+            <img id="android-display" alt="Android Emulator Display">
+        </div>
+
+        <div class="hw-buttons" id="android-hardware-buttons" style="display:none;">
+            <button class="hw-btn" id="hw-btn-back" title="Back"><i class="fa fa-arrow-left"></i></button>
+            <button class="hw-btn" id="hw-btn-home" title="Home"><i class="fa fa-home"></i></button>
+            <button class="hw-btn" id="hw-btn-app-switch" title="Recents"><i class="fa fa-th"></i></button>
+            <button class="hw-btn power-btn" id="hw-btn-power" title="Power"><i class="fa fa-power-off"></i></button>
+            <button class="hw-btn" id="hw-btn-vol-down" title="Volume Down"><i class="fa fa-volume-down"></i></button>
+            <button class="hw-btn" id="hw-btn-vol-up" title="Volume Up"><i class="fa fa-volume-up"></i></button>
+            <span style="width:1px;height:28px;background:#DADFE1;margin:0 4px;"></span>
+            <button class="hw-btn" id="hw-btn-landscape" title="Switch to Landscape"><i class="fa fa-mobile"></i></button>
+        </div>
+        <div class="vol-note" id="vol-note" style="display:none;">Volume controls the emulator only &mdash; audio is not streamed.</div>
+
+        <div class="gps-controls" id="android-gps-controls">
+            <label><i class="fa fa-map-marker"></i> GPS:</label>
+            <button class="gps-btn" id="gps-preset-sf">San Francisco</button>
+            <button class="gps-btn" id="gps-preset-nyc">New York</button>
+            <button class="gps-btn" id="gps-preset-london">London</button>
+            <button class="gps-btn" id="gps-preset-tokyo">Tokyo</button>
+            <span style="margin: 0 4px;">|</span>
+            <input type="number" id="gps-lat" placeholder="Lat" step="0.000001" class="gps-input">
+            <input type="number" id="gps-lng" placeholder="Lng" step="0.000001" class="gps-input">
+            <button class="gps-btn" id="gps-send"><i class="fa fa-paper-plane"></i> Send</button>
+            <span id="gps-status"></span>
+        </div>
+    </div>
+
+    <script src="/js/android-display.js"></script>
+</body>
+</html>
