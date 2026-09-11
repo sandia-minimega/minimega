@@ -175,6 +175,21 @@ func (b Bridges) Names() []string {
 	return res
 }
 
+// Lookup returns a bridge by name without creating it if it does not already
+// exist. This is intended for read-only lookups where side effects are not
+// acceptable.
+func (b Bridges) Lookup(name string) (*Bridge, bool) {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	if name == "" {
+		name = b.Default
+	}
+
+	br, ok := b.bridges[name]
+	return br, ok
+}
+
 // Get a bridge by name. If one doesn't exist, it will be created.
 func (b Bridges) Get(name string) (*Bridge, error) {
 	bridgeLock.Lock()
