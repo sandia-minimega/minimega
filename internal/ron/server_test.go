@@ -4,7 +4,12 @@
 
 package ron
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"testing"
+)
 
 func TestBindClientUUIDUsesSerialIdentity(t *testing.T) {
 	want := "3b440429-067f-5b75-a0c3-f436519f8ccb"
@@ -38,5 +43,30 @@ func TestBindClientUUIDRejectsUnboundIdentity(t *testing.T) {
 				t.Fatal("expected an unbound client identity error")
 			}
 		})
+	}
+}
+
+func TestNewFilesSendCommandExpandsMultipleGlobs(t *testing.T) {
+	path := t.TempDir()
+	for _, name := range []string{"one.txt", "two.txt", "three.log"} {
+		if err := os.WriteFile(filepath.Join(path, name), nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	server, err := NewServer(path, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Destroy()
+
+	command, err := server.NewFilesSendCommand([]string{"*.txt", "*.log"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"one.txt", "two.txt", "three.log"}
+	if !reflect.DeepEqual(command.FilesSend, want) {
+		t.Fatalf("files sent = %v, want %v", command.FilesSend, want)
 	}
 }

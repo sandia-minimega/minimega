@@ -1024,7 +1024,7 @@ func (s *Server) NewFilesSendCommand(files []string) (*Command, error) {
 			return nil, fmt.Errorf("no such file: %v", f)
 		}
 
-		cmd.FilesSend = send
+		cmd.FilesSend = append(cmd.FilesSend, send...)
 	}
 
 	return cmd, nil

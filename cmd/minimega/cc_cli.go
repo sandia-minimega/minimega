@@ -510,10 +510,11 @@ func cliCCFilter(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 // send
 func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	files := make([]string, len(c.ListArgs["file"]))
+	var files []string
 
-	// Ensure each file to be sent to the VM is present locally before sending.
-	for i, file := range c.ListArgs["file"] {
+	// Expand globs before fetching files through iomeshage, which only accepts
+	// individual filenames.
+	for _, file := range c.ListArgs["file"] {
 		original := file
 
 		// Strip base path from the file if it's present since the base path gets
@@ -527,23 +528,49 @@ func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 			file = rel
 		}
 
-		_, err := iomHelper(file, c.Source)
-		if err != nil {
-			// There's no namespace directory created for the default namespace.
-			if ns.Name == DefaultNamespace {
-				return fmt.Errorf("unable to get file %s via the mesh: %w", original, err)
+		expanded := []string{file}
+		if filepath.IsAbs(file) {
+			matches, err := filepath.Glob(file)
+			if err != nil {
+				return err
 			}
 
-			file = filepath.Join(ns.Name, file)
+			if len(matches) > 0 {
+				expanded = matches
+			}
+		} else {
+			var matches []string
+			if ns.Name != DefaultNamespace {
+				matches = iom.Info(filepath.Join(ns.Name, file))
+			}
+			if len(matches) == 0 {
+				matches = iom.Info(file)
+			}
 
-			// Try again, but this time with the namespace directory prepended.
-			_, err := iomHelper(file, c.Source)
-			if err != nil {
-				return fmt.Errorf("unable to get file %s via the mesh: %w", original, err)
+			if len(matches) > 0 {
+				expanded = matches
 			}
 		}
 
-		files[i] = file
+		for _, file := range expanded {
+			_, err := iomHelper(file, c.Source)
+			if err != nil {
+				// There's no namespace directory created for the default namespace.
+				if ns.Name == DefaultNamespace {
+					return fmt.Errorf("unable to get file %s via the mesh: %w", original, err)
+				}
+
+				file = filepath.Join(ns.Name, file)
+
+				// Try again, but this time with the namespace directory prepended.
+				_, err := iomHelper(file, c.Source)
+				if err != nil {
+					return fmt.Errorf("unable to get file %s via the mesh: %w", original, err)
+				}
+			}
+
+			files = append(files, file)
+		}
 	}
 
 	cmd, err := ns.ccServer.NewFilesSendCommand(files)
