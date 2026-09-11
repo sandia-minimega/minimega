@@ -20,9 +20,10 @@ searching for external tools.
 
 ```json
 $ sudo bin/minimega
-minimega, Copyright (2014) Sandia Corporation.
-Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
-the U.S. Government retains certain rights in this software.
+minimega, Copyright 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain
+rights in this software.
+minimega 3.2.0 200d51ac8b6dee778c4c8bc519445d63be3ec963 2026-09-11
 
 minimega$
 ```
