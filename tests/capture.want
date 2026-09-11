@@ -74,7 +74,15 @@ mega_bridge | pcap | multi:1   |      |          | /dev/null
 ## namespace foo capture
 bridge      | type | interface | mode | compress | path
 mega_bridge | pcap | multi:1   |      |          | /dev/null
+## namespace foo capture pcap vm multi 0 /dev/null
+## namespace foo capture
+bridge      | type | interface | mode | compress | path
+mega_bridge | pcap | multi:0   |      |          | /dev/null
 ## namespace foo capture pcap delete vm multi 1
+## namespace foo capture
+bridge      | type | interface | mode | compress | path
+mega_bridge | pcap | multi:0   |      |          | /dev/null
+## namespace foo capture pcap delete vm multi 0
 ## namespace foo capture
 
 ## # Deleting a nonexistent interface capture should fail
