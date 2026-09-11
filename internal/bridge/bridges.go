@@ -25,6 +25,8 @@ type Bridges struct {
 	bondChan chan string
 
 	bridges map[string]*Bridge
+
+	captureIDs map[string]*int
 }
 
 // openflow filters to redirect arp and icmp6 traffic to the local tap
@@ -74,10 +76,11 @@ func NewBridges(d, tf, bf string) *Bridges {
 	}()
 
 	b := &Bridges{
-		Default:  d,
-		tapChan:  tapChan,
-		bondChan: bondChan,
-		bridges:  map[string]*Bridge{},
+		Default:    d,
+		tapChan:    tapChan,
+		bondChan:   bondChan,
+		bridges:    map[string]*Bridge{},
+		captureIDs: map[string]*int{},
 	}
 
 	// Start a goroutine to collect bandwidth stats every 5 seconds
@@ -96,17 +99,24 @@ func NewBridges(d, tf, bf string) *Bridges {
 func (b Bridges) newBridge(name string) error {
 	log.Info("creating new bridge: %v", name)
 
+	captureID := b.captureIDs[name]
+	if captureID == nil {
+		captureID = new(int)
+		b.captureIDs[name] = captureID
+	}
+
 	br := &Bridge{
-		Name:     name,
-		taps:     make(map[string]*Tap),
-		trunks:   make(map[string]bool),
-		tunnels:  make(map[string]bool),
-		mirrors:  make(map[string]bool),
-		bonds:    make(map[string]map[string]int),
-		captures: make(map[int]capture),
-		tapChan:  b.tapChan,
-		bondChan: b.bondChan,
-		config:   make(map[string]string),
+		Name:      name,
+		taps:      make(map[string]*Tap),
+		trunks:    make(map[string]bool),
+		tunnels:   make(map[string]bool),
+		mirrors:   make(map[string]bool),
+		bonds:     make(map[string]map[string]int),
+		captures:  make(map[int]capture),
+		captureID: captureID,
+		tapChan:   b.tapChan,
+		bondChan:  b.bondChan,
+		config:    make(map[string]string),
 	}
 
 	// Create the bridge

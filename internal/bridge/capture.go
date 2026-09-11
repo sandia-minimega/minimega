@@ -103,7 +103,9 @@ func (b *Bridge) captureTap(tap, fname string, config ...CaptureConfig) (int, er
 		return 0, err
 	}
 
-	id := len(b.captures)
+	id := *b.captureID
+	*b.captureID++
+
 	stopped := uint64(0)
 	ack := make(chan bool)
 
