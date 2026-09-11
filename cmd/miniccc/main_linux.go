@@ -52,7 +52,6 @@ func main() {
 
 	if *f_version {
 		fmt.Println("miniccc", version.Version, version.Revision, version.Date)
-		fmt.Println(version.Copyright)
 		os.Exit(0)
 	}
 
