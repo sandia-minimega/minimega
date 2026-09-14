@@ -59,32 +59,32 @@ func parsePasswords(fname string) error {
 
 func mustAuth(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// check if URL is password protected
-		var matches []PasswordEntry
-		for _, entry := range passwords {
+		// find the most specific (longest) path entry protecting this URL --
+		// credentials for a broader path must not grant access to a more
+		// specific path that has its own entry
+		var match *PasswordEntry
+		for i, entry := range passwords {
 			if strings.HasPrefix(r.URL.Path, entry.Path) {
-				matches = append(matches, entry)
-			}
-		}
-
-		// no matches -- must not require auth
-		if len(matches) == 0 {
-			f(w, r)
-			return
-		}
-
-		// test all the matches and call f if any match credentials
-		username, password, ok := r.BasicAuth()
-		if ok {
-			for _, match := range matches {
-				if match.Match(username, password) {
-					f(w, r)
-					return
+				if match == nil || len(entry.Path) > len(match.Path) {
+					match = &passwords[i]
 				}
 			}
 		}
 
-		// all matches failed
+		// no match -- must not require auth
+		if match == nil {
+			f(w, r)
+			return
+		}
+
+		// only credentials for the most specific match are accepted
+		username, password, ok := r.BasicAuth()
+		if ok && match.Match(username, password) {
+			f(w, r)
+			return
+		}
+
+		// auth failed
 		w.Header().Set("WWW-Authenticate", `Basic realm="minimega"`)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	}
