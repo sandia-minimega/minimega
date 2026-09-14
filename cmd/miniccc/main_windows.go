@@ -52,8 +52,7 @@ func main() {
 	flag.Parse()
 
 	if *f_version {
-		fmt.Println("miniccc.exe", version.Revision, version.Date)
-		fmt.Println(version.Copyright)
+		fmt.Println("miniccc.exe", version.Version, version.Revision, version.Date)
 		os.Exit(0)
 	}
 

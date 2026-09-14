@@ -139,12 +139,12 @@ if [[ -v "OVS_HOST_IFACE" ]]; then
   fi
 fi
 
-echo "starting miniweb..." | tee -a ${MM_LOGFILE}
+echo "[$(date --rfc-3339=seconds)] starting miniweb..." | tee -a ${MM_LOGFILE}
 /opt/minimega/bin/miniweb -root=${MINIWEB_ROOT} -addr=${MINIWEB_HOST}:${MINIWEB_PORT} &
 MINIWEB_PID=$!
-echo "miniweb started on ${MINIWEB_HOST}:${MINIWEB_PORT}" | tee -a ${MM_LOGFILE}
+echo "[$(date --rfc-3339=seconds)] miniweb started on ${MINIWEB_HOST}:${MINIWEB_PORT}" | tee -a ${MM_LOGFILE}
 
-echo "starting minimega..." | tee -a ${MM_LOGFILE}
+echo "[$(date --rfc-3339=seconds)] starting minimega..." | tee -a ${MM_LOGFILE}
 /opt/minimega/bin/minimega \
   -nostdin \
   -force=${MM_FORCE} \
@@ -162,4 +162,5 @@ echo "starting minimega..." | tee -a ${MM_LOGFILE}
   -abssnapshot=${MM_ABSSNAPSHOT} \
   ${MM_APPEND} &
 MINIMEGA_PID=$!
+echo "[$(date --rfc-3339=seconds)] minimega started with PID ${MINIMEGA_PID}" | tee -a ${MM_LOGFILE}
 wait "${MINIMEGA_PID}"

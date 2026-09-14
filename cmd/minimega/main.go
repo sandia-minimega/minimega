@@ -1,6 +1,6 @@
-// Copyright (2012) Sandia Corporation.
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
-// the U.S. Government retains certain rights in this software.
+// Copyright 2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+// Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain
+// rights in this software.
 
 package main
 
@@ -46,7 +46,7 @@ var (
 	f_force       = flag.Bool("force", false, "force minimega to run even if it appears to already be running")
 	f_recover     = flag.Bool("recover", false, "attempt to recover from a previously running instance (only if -force is not set)")
 	f_nostdin     = flag.Bool("nostdin", false, "disable reading from stdin, useful for putting minimega in the background")
-	f_version     = flag.Bool("version", false, "print the version and copyright notices")
+	f_version     = flag.Bool("version", false, "print the version and exit")
 	f_context     = flag.String("context", "minimega", "meshage context for discovery")
 	f_iomBase     = flag.String("filepath", IOM_PATH, "directory to serve files from")
 	f_cli         = flag.Bool("cli", false, "validate and print the minimega cli, in JSON, to stdout and exit")
@@ -73,18 +73,23 @@ var (
 	shutdownMu sync.Mutex
 )
 
-const (
-	banner = `minimega, Copyright (2014) Sandia Corporation.
-Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
-the U.S. Government retains certain rights in this software.`
-	poeticDeath = `Willst du immer weiterschweifen?
+const poeticDeath = `Willst du immer weiterschweifen?
 Sieh, das Gute liegt so nah.
 Lerne nur das Glück ergreifen,
 denn das Glück ist immer da.`
-)
+
+func versionString() string {
+	return fmt.Sprintf("minimega %s %s %s", version.Version, version.Revision, version.Date)
+}
+
+// copyright returns the minimega copyright banner with the current year.
+func copyright() string {
+	return fmt.Sprintf(`minimega, Copyright %d National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain
+rights in this software.`, time.Now().Year())
+}
 
 func usage() {
-	fmt.Println(banner)
 	fmt.Println("usage: minimega [option]... [file]...")
 	flag.PrintDefaults()
 }
@@ -172,8 +177,7 @@ func main() {
 	}
 
 	if *f_version {
-		fmt.Println("minimega", version.Version, version.Revision, version.Date)
-		fmt.Println(version.Copyright)
+		fmt.Println(versionString())
 		os.Exit(0)
 	}
 
@@ -242,7 +246,8 @@ func main() {
 		return
 	}
 
-	fmt.Println(banner)
+	fmt.Println(copyright())
+	log.Info("%s", versionString())
 
 	// check all the external dependencies
 	if err := checkExternal(); err != nil {

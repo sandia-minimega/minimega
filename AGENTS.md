@@ -122,6 +122,8 @@ fields, and never accept `.got` without reviewing it.
 - Preserve lowercase project names in prose.
 - Update CLI help, API documentation, articles, examples, and integration
   guidance when user-visible behavior changes.
+- For new source files, use the current `cmd/minimega/main.go` copyright header as
+  the reference and set the year to the current calendar year.
 - Keep command registration, handlers, generated API Markdown, Python bindings,
   and external callers aligned when command syntax or output changes.
 - Do not directly edit `cmd/minimega/vmconfiger_cli.go`,
