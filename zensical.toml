@@ -35,6 +35,7 @@ Home = "index.md"
   { "File Management" = "articles/file.md" },
   { Namespaces = "articles/namespaces.md" },
   { "Virtual Machine Types" = "articles/vmtypes.md" },
+  { "Android VMs" = "articles/android.md" },
   { "Creating VMs" = "articles/newvm.md" },
   { VLANs = "articles/vlans.md" },
   { NAT = "articles/nat.md" },

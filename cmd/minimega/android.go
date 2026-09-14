@@ -1,3 +1,7 @@
+// Copyright 2025-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+// Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain
+// rights in this software.
+
 package main
 
 import (
@@ -29,6 +33,9 @@ const (
 	MaxAndroidConsolePort = 5680
 	MaxAndroidVMsPerHost  = (MaxAndroidConsolePort-MinAndroidConsolePort)/2 + 1
 
+	MinAndroidGRPCPort = 8554
+	MaxAndroidGRPCPort = 8617 // 64 ports, matching MaxAndroidVMsPerHost
+
 	// Android Emulator's QEMU backend does not support minimega's KVM default
 	// e1000 NIC. Use virtio-net-pci for Android tap-backed NICs.
 	DefaultAndroidNetDriver = "virtio-net-pci"
@@ -44,6 +51,7 @@ type AndroidVM struct {
 
 	ConsolePort int
 	ADBPort     int
+	GRPCPort    int
 
 	serial string
 	cmd    *exec.Cmd
@@ -246,6 +254,11 @@ func (vm *AndroidVM) Info(field string) (string, error) {
 		return vm.serial, nil
 	case "pid":
 		return strconv.Itoa(vm.Pid), nil
+	case "android_grpc_port":
+		if vm.GRPCPort == 0 {
+			return "", nil
+		}
+		return strconv.Itoa(vm.GRPCPort), nil
 	}
 
 	// Prefer Android-specific config fields, then fall back to KVM config fields.
@@ -404,9 +417,17 @@ func (vm *AndroidVM) launch() error {
 	vm.ADBPort = adb
 	vm.serial = fmt.Sprintf("emulator-%d", console)
 
+	grpcPort, err := reserveAndroidGRPCPort(vm.GRPCBasePort)
+	if err != nil {
+		releaseAndroidPortPair(console)
+		return vm.setErrorf("unable to reserve android gRPC port: %v", err)
+	}
+	vm.GRPCPort = grpcPort
+
 	logFilePath := vm.path("android-emulator.log")
 	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
+		releaseAndroidGRPCPort(grpcPort)
 		releaseAndroidPortPair(console)
 		return vm.setErrorf("unable to open android emulator log: %v", err)
 	}
@@ -424,6 +445,7 @@ func (vm *AndroidVM) launch() error {
 
 	if err := cmd.Start(); err != nil {
 		logFile.Close()
+		releaseAndroidGRPCPort(grpcPort)
 		releaseAndroidPortPair(console)
 		return vm.setErrorf("unable to start android emulator: %v", err)
 	}
@@ -433,7 +455,7 @@ func (vm *AndroidVM) launch() error {
 
 	log.Info("android vm %v has pid %v", vm.ID, vm.Pid)
 
-	waitChan := vm.waitForExit(cmd, logFile, console)
+	waitChan := vm.waitForExit(cmd, logFile, console, grpcPort)
 
 	if err := vm.connectQMP(); err != nil {
 		cmd.Process.Kill()
@@ -460,6 +482,10 @@ func (vm *AndroidVM) emulatorArgs(logFilePath string) []string {
 
 	if vm.WritableSystem {
 		args = append(args, "-writable-system")
+	}
+
+	if vm.GRPCPort != 0 {
+		args = append(args, "-grpc", strconv.Itoa(vm.GRPCPort))
 	}
 
 	args = append(args, vm.ExtraArgs...)
@@ -564,13 +590,14 @@ func (vm *AndroidVM) connectQMP() (err error) {
 	return errors.New("android qmp timeout")
 }
 
-func (vm *AndroidVM) waitForExit(cmd *exec.Cmd, logFile *os.File, consolePort int) chan struct{} {
+func (vm *AndroidVM) waitForExit(cmd *exec.Cmd, logFile *os.File, consolePort, grpcPort int) chan struct{} {
 	done := make(chan struct{})
 
 	go func() {
 		defer close(done)
 		defer logFile.Close()
 		defer releaseAndroidPortPair(consolePort)
+		defer releaseAndroidGRPCPort(grpcPort)
 
 		err := cmd.Wait()
 
@@ -621,12 +648,20 @@ func validateAndroidLaunchConfig(cfg AndroidConfig) error {
 	return checkAndroidDependencies(cfg)
 }
 
-func reserveAndroidPortPair(base uint64) (int, int, error) {
-	if err := validateAndroidConsoleBasePortValue(base); err != nil {
-		return 0, 0, err
+// reserveAndroidPort scans [min, max] with the given step, checking the
+// in-memory reservation map and OS-level TCP availability for each candidate.
+// It reserves and returns the first available port. When paired is true, the
+// adjacent port (port+1) must also be free and is reserved atomically. If
+// validate is non-nil it is called on base before scanning. A base of 0 starts
+// from min.
+func reserveAndroidPort(base uint64, min, max, step int, paired bool, validate func(uint64) error) (int, error) {
+	if validate != nil {
+		if err := validate(base); err != nil {
+			return 0, err
+		}
 	}
 
-	start := MinAndroidConsolePort
+	start := min
 	if base != 0 {
 		start = int(base)
 	}
@@ -634,30 +669,55 @@ func reserveAndroidPortPair(base uint64) (int, int, error) {
 	androidPortMu.Lock()
 	defer androidPortMu.Unlock()
 
-	for console := start; console <= MaxAndroidConsolePort; console += 2 {
-		adb := console + 1
-
-		if androidReservedPort[console] || androidReservedPort[adb] {
+	for port := start; port <= max; port += step {
+		if androidReservedPort[port] {
+			continue
+		}
+		if !tcpPortAvailable(port) {
 			continue
 		}
 
-		if !tcpPortAvailable(console) || !tcpPortAvailable(adb) {
-			continue
+		if paired {
+			adj := port + 1
+			if androidReservedPort[adj] || !tcpPortAvailable(adj) {
+				continue
+			}
+			androidReservedPort[adj] = true
 		}
 
-		androidReservedPort[console] = true
-		androidReservedPort[adb] = true
-
-		return console, adb, nil
+		androidReservedPort[port] = true
+		return port, nil
 	}
 
-	return 0, 0, fmt.Errorf(
-		"no available android console/adb port pair in range %d-%d; "+
-			"each minimega host supports at most %d concurrent Android emulator VMs",
-		start,
-		MaxAndroidConsolePort+1,
-		MaxAndroidVMsPerHost,
+	return 0, fmt.Errorf(
+		"no available android port in range %d-%d",
+		start, max,
 	)
+}
+
+func releaseAndroidPort(port int) {
+	androidPortMu.Lock()
+	defer androidPortMu.Unlock()
+
+	delete(androidReservedPort, port)
+}
+
+// reserveAndroidPortPair reserves a console/ADB port pair atomically. Console
+// ports are even; the ADB port is console+1. Both ports must be free.
+func reserveAndroidPortPair(base uint64) (int, int, error) {
+	console, err := reserveAndroidPort(
+		base,
+		MinAndroidConsolePort, MaxAndroidConsolePort, 2,
+		true,
+		validateAndroidConsoleBasePortValue,
+	)
+	if err != nil {
+		return 0, 0, fmt.Errorf(
+			"%v; each minimega host supports at most %d concurrent Android emulator VMs",
+			err, MaxAndroidVMsPerHost,
+		)
+	}
+	return console, console + 1, nil
 }
 
 func releaseAndroidPortPair(console int) {
@@ -666,6 +726,14 @@ func releaseAndroidPortPair(console int) {
 
 	delete(androidReservedPort, console)
 	delete(androidReservedPort, console+1)
+}
+
+func reserveAndroidGRPCPort(base uint64) (int, error) {
+	return reserveAndroidPort(base, MinAndroidGRPCPort, MaxAndroidGRPCPort, 1, false, validateAndroidGRPCBasePortValue)
+}
+
+func releaseAndroidGRPCPort(port int) {
+	releaseAndroidPort(port)
 }
 
 func tcpPortAvailable(port int) bool {

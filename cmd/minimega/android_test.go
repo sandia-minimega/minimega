@@ -1,3 +1,7 @@
+// Copyright 2025-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+// Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain
+// rights in this software.
+
 package main
 
 import (
@@ -5,6 +9,26 @@ import (
 	"strings"
 	"testing"
 )
+
+// containsArgPair checks if args contains a key-value pair
+func containsArgPair(args []string, key, value string) bool {
+	for i := 0; i < len(args)-1; i++ {
+		if args[i] == key && args[i+1] == value {
+			return true
+		}
+	}
+	return false
+}
+
+// containsArg checks if args contains a key
+func containsArg(args []string, key string) bool {
+	for _, arg := range args {
+		if arg == key {
+			return true
+		}
+	}
+	return false
+}
 
 func testAndroidConfig() VMConfig {
 	cfg := NewVMConfig()
@@ -139,6 +163,36 @@ func TestAndroidInfoFields(t *testing.T) {
 		if got != want {
 			t.Fatalf("Info(%q) = %q, want %q", field, got, want)
 		}
+	}
+}
+
+// TestAndroidGRPCPortInfoField tests that android_grpc_port is exposed when configured
+func TestAndroidGRPCPortInfoField(t *testing.T) {
+	cfg := testAndroidConfig()
+
+	vm, err := NewAndroid("phone0", DefaultNamespace, cfg)
+	if err != nil {
+		t.Fatalf("NewAndroid failed: %v", err)
+	}
+	vm.lock.Unlock()
+
+	// GRPCPort zero -> empty string
+	got, err := vm.Info("android_grpc_port")
+	if err != nil {
+		t.Fatalf("Info(android_grpc_port) failed: %v", err)
+	}
+	if got != "" {
+		t.Fatalf("Info(android_grpc_port) with port zero = %q, want empty", got)
+	}
+
+	// GRPCPort set -> returns port
+	vm.GRPCPort = 8554
+	got, err = vm.Info("android_grpc_port")
+	if err != nil {
+		t.Fatalf("Info(android_grpc_port) failed: %v", err)
+	}
+	if got != "8554" {
+		t.Fatalf("Info(android_grpc_port) = %q, want %q", got, "8554")
 	}
 }
 
@@ -282,6 +336,43 @@ func TestAndroidEmulatorArgs(t *testing.T) {
 	}
 }
 
+func TestAndroidEmulatorArgsAddsGRPCWhenPortSet(t *testing.T) {
+	cfg := testAndroidConfig()
+
+	vm, err := NewAndroid("phone0", DefaultNamespace, cfg)
+	if err != nil {
+		t.Fatalf("NewAndroid failed: %v", err)
+	}
+	vm.lock.Unlock()
+
+	vm.ConsolePort = 5554
+	vm.GRPCPort = 8554
+
+	args := vm.emulatorArgs("/tmp/android-emulator.log")
+
+	if !containsArgPair(args, "-grpc", "8554") {
+		t.Fatalf("expected -grpc 8554 in args: %#v", args)
+	}
+}
+
+func TestAndroidEmulatorArgsNoGRPCWhenPortZero(t *testing.T) {
+	cfg := testAndroidConfig()
+
+	vm, err := NewAndroid("phone0", DefaultNamespace, cfg)
+	if err != nil {
+		t.Fatalf("NewAndroid failed: %v", err)
+	}
+	vm.lock.Unlock()
+
+	vm.ConsolePort = 5554
+
+	args := vm.emulatorArgs("/tmp/android-emulator.log")
+
+	if containsArg(args, "-grpc") {
+		t.Fatalf("did not expect -grpc in args before launch: %#v", args)
+	}
+}
+
 func TestAndroidEnv(t *testing.T) {
 	cfg := testAndroidConfig()
 	cfg.AndroidConfig.SDKPath = "/opt/android-sdk"
@@ -391,5 +482,219 @@ func TestReserveAndroidPortPair(t *testing.T) {
 
 	if console2 == console || adb2 == adb {
 		t.Fatalf("reserved duplicate port pair: first %d/%d second %d/%d", console, adb, console2, adb2)
+	}
+}
+
+func TestAndroidGRPCBasePortValidation(t *testing.T) {
+	tests := []struct {
+		name    string
+		port    uint64
+		wantErr bool
+	}{
+		{name: "unset", port: 0, wantErr: false},
+		{name: "valid default", port: 8554, wantErr: false},
+		{name: "valid mid-range", port: 8590, wantErr: false},
+		{name: "valid max", port: 8617, wantErr: false},
+		{name: "below range", port: 80, wantErr: true},
+		{name: "above range", port: 9000, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateAndroidGRPCBasePortValue(tt.port)
+
+			if tt.wantErr && err == nil {
+				t.Fatalf("expected error for port %d", tt.port)
+			}
+
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected error for port %d: %v", tt.port, err)
+			}
+		})
+	}
+}
+
+func TestReserveAndroidGRPCPort(t *testing.T) {
+	port1, err := reserveAndroidGRPCPort(8600)
+	if err != nil {
+		t.Fatalf("reserveAndroidGRPCPort failed: %v", err)
+	}
+	defer releaseAndroidGRPCPort(port1)
+
+	if port1 < MinAndroidGRPCPort || port1 > MaxAndroidGRPCPort {
+		t.Fatalf("port %d out of range [%d, %d]", port1, MinAndroidGRPCPort, MaxAndroidGRPCPort)
+	}
+
+	port2, err := reserveAndroidGRPCPort(8600)
+	if err != nil {
+		t.Fatalf("second reserveAndroidGRPCPort failed: %v", err)
+	}
+	defer releaseAndroidGRPCPort(port2)
+
+	if port2 == port1 {
+		t.Fatalf("reserved duplicate gRPC port: %d", port1)
+	}
+}
+
+func TestReserveAndroidGRPCPortDefaultHint(t *testing.T) {
+	port, err := reserveAndroidGRPCPort(0)
+	if err != nil {
+		t.Fatalf("reserveAndroidGRPCPort(0) failed: %v", err)
+	}
+	defer releaseAndroidGRPCPort(port)
+
+	if port < MinAndroidGRPCPort || port > MaxAndroidGRPCPort {
+		t.Fatalf("port %d out of range [%d, %d]", port, MinAndroidGRPCPort, MaxAndroidGRPCPort)
+	}
+}
+
+func TestReserveAndroidGRPCPortExhaustion(t *testing.T) {
+	var ports []int
+	defer func() {
+		for _, p := range ports {
+			releaseAndroidGRPCPort(p)
+		}
+	}()
+
+	for i := 0; i < 3; i++ {
+		p, err := reserveAndroidGRPCPort(uint64(MaxAndroidGRPCPort - 2))
+		if err != nil {
+			t.Fatalf("reserve %d failed unexpectedly: %v", i, err)
+		}
+		ports = append(ports, p)
+	}
+
+	_, err := reserveAndroidGRPCPort(uint64(MaxAndroidGRPCPort - 2))
+	if err == nil {
+		t.Fatal("expected exhaustion error when all ports in sub-range are taken")
+	}
+}
+
+func TestValidateAndroidConfig(t *testing.T) {
+	tests := []struct {
+		name    string
+		cfg     AndroidConfig
+		wantErr bool
+	}{
+		{name: "zero defaults", cfg: AndroidConfig{}, wantErr: false},
+		{name: "valid ports", cfg: AndroidConfig{ConsoleBasePort: 5554, GRPCBasePort: 8554}, wantErr: false},
+		{name: "invalid console odd", cfg: AndroidConfig{ConsoleBasePort: 5555}, wantErr: true},
+		{name: "invalid grpc out of range", cfg: AndroidConfig{GRPCBasePort: 9000}, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateAndroidConfig(tt.cfg)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validateAndroidConfig() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestAndroidConfigured(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  AndroidConfig
+		want bool
+	}{
+		{name: "empty", cfg: AndroidConfig{}, want: false},
+		{name: "sdk path", cfg: AndroidConfig{SDKPath: "/opt/sdk"}, want: true},
+		{name: "grpc base port", cfg: AndroidConfig{GRPCBasePort: 8554}, want: true},
+		{name: "writable system", cfg: AndroidConfig{WritableSystem: true}, want: true},
+		{name: "extra args", cfg: AndroidConfig{ExtraArgs: []string{"-foo"}}, want: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := androidConfigured(tt.cfg); got != tt.want {
+				t.Fatalf("androidConfigured() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestAndroidConfigString(t *testing.T) {
+	cfg := AndroidConfig{
+		SDKPath:         "/opt/android-sdk",
+		AVDName:         "Pixel_9a",
+		GRPCBasePort:    8554,
+		ConsoleBasePort: 5554,
+		NoWindow:        true,
+	}
+	s := cfg.String()
+	for _, want := range []string{"SDK Path:", "/opt/android-sdk", "AVD Name:", "Pixel_9a", "GRPC Base Port:", "8554", "Console Base Port:", "5554", "No Window:", "true"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("String() missing %q in output:\n%s", want, s)
+		}
+	}
+}
+
+func TestConflictsKVMDisks(t *testing.T) {
+	cfg := testAndroidConfig()
+	vm, err := NewAndroid("phone0", DefaultNamespace, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm.lock.Unlock()
+
+	vm.Disks = DiskConfigs{{Path: "/tmp/disk.qcow2"}}
+	vm.Snapshot = false
+	if err := vm.conflictsKVMDisks(DiskConfigs{}, false); err != nil {
+		t.Fatalf("no disks should not conflict: %v", err)
+	}
+
+	vm.Snapshot = true
+	if err := vm.conflictsKVMDisks(DiskConfigs{{Path: "/tmp/disk.qcow2"}}, true); err != nil {
+		t.Fatalf("both snapshot should not conflict: %v", err)
+	}
+
+	vm.Snapshot = false
+	if err := vm.conflictsKVMDisks(DiskConfigs{{Path: "/tmp/disk.qcow2"}}, true); err == nil {
+		t.Fatal("same path without both snapshot should conflict")
+	}
+
+	if err := vm.conflictsKVMDisks(DiskConfigs{{Path: "/tmp/other.qcow2"}}, false); err != nil {
+		t.Fatalf("different paths should not conflict: %v", err)
+	}
+}
+
+func TestValidateAndroidLaunchConfigNoAVD(t *testing.T) {
+	err := validateAndroidLaunchConfig(AndroidConfig{})
+	if err == nil {
+		t.Fatal("expected error for empty AVDName")
+	}
+	if !strings.Contains(err.Error(), "android-avd") {
+		t.Fatalf("error should mention android-avd, got: %v", err)
+	}
+}
+
+func TestReserveAndroidPortGeneric(t *testing.T) {
+	port1, err := reserveAndroidPort(0, 9900, 9905, 1, false, nil)
+	if err != nil {
+		t.Fatalf("reserveAndroidPort failed: %v", err)
+	}
+	defer releaseAndroidPort(port1)
+
+	if port1 < 9900 || port1 > 9905 {
+		t.Fatalf("port %d out of range [9900, 9905]", port1)
+	}
+
+	port2, err := reserveAndroidPort(uint64(port1), 9900, 9905, 1, false, nil)
+	if err != nil {
+		t.Fatalf("second reserveAndroidPort failed: %v", err)
+	}
+	defer releaseAndroidPort(port2)
+
+	if port2 == port1 {
+		t.Fatalf("reserved duplicate port: %d", port1)
+	}
+
+	port3, err := reserveAndroidPort(0, 9900, 9905, 2, false, nil)
+	if err != nil {
+		t.Fatalf("reserveAndroidPort with step=2 failed: %v", err)
+	}
+	defer releaseAndroidPort(port3)
+
+	if port3%2 != 0 {
+		t.Fatalf("step=2 from even start should yield even port, got %d", port3)
 	}
 }

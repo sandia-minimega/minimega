@@ -11,6 +11,10 @@ import (
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
+// runTabularFunc provides a test seam for Android gateway resolver tests.
+// Tests can override this to mock VM info responses.
+var runTabularFunc = runTabular
+
 type tabularToMapper func(*minicli.Response, []string) map[string]string
 
 func tabularToMap(resp *minicli.Response, row []string) map[string]string {

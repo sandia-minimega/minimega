@@ -464,3 +464,163 @@ button.active {
 	margin-top: 5px;
 	margin-left: 5px;
 }
+
+/* --- Android Emulator Console --- */
+
+.android-status-bar {
+	background: #fff;
+	border-bottom: 1px solid #DADFE1;
+	padding: 10px 20px;
+	font-size: 0.9em;
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px 20px;
+}
+
+.android-status-bar .vm-name {
+	font-weight: bold;
+	color: #22313F;
+}
+
+.android-status-bar .status-ok { color: #26C281; }
+.android-status-bar .status-err { color: #C9302C; }
+.android-status-bar .status-loading { color: #888; font-style: italic; }
+
+.android-status-bar #status-error {
+	display: none;
+	width: 100%;
+	margin-top: 6px;
+	background: #fdf0f0;
+	color: #C9302C;
+	padding: 8px 12px;
+	border-radius: 4px;
+	font-size: 0.9em;
+}
+
+.android-display-area {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	padding: 20px 8px 8px;
+	min-height: calc(100vh - 120px);
+}
+
+#android-display {
+	display: none;
+	max-width: 100%;
+	max-height: 75vh;
+	width: auto;
+	height: auto;
+	object-fit: contain;
+	background: #ecf0f1;
+	cursor: crosshair;
+	touch-action: none;
+	user-select: none;
+}
+
+#android-input-surface { outline: none; background: #ecf0f1; overflow: hidden; border-radius: 17px; }
+
+#android-input-surface:focus #android-display {
+	box-shadow: 0 0 0 2px #1E8BC3;
+}
+
+.android-display-placeholder {
+	color: #888;
+	text-align: center;
+	padding: 60px 20px;
+}
+
+.android-display-placeholder .spinner {
+	display: inline-block;
+	width: 28px;
+	height: 28px;
+	border: 3px solid #DADFE1;
+	border-top-color: #1E8BC3;
+	border-radius: 50%;
+	animation: android-spin 0.8s linear infinite;
+	margin-bottom: 12px;
+}
+
+@keyframes android-spin { to { transform: rotate(360deg); } }
+
+.hw-buttons {
+	display: flex;
+	justify-content: center;
+	gap: 8px;
+	margin-top: 12px;
+}
+
+.hw-btn {
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	border: 1px solid #DADFE1;
+	background: #fff;
+	color: #22313F;
+	font-size: 16px;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	transition: background 0.15s;
+}
+
+.hw-btn:hover { background: #ecf0f1; }
+.hw-btn:active { background: #DADFE1; }
+
+.hw-btn.power-btn { color: #C9302C; border-color: #C9302C; }
+.hw-btn.power-btn:hover { background: #fdf0f0; }
+
+.hw-btn.landscape-active { background: #26C281; color: #fff; border-color: #26C281; }
+.hw-btn.landscape-active:hover { background: #2ecc71; }
+
+.hw-btn .fa-mobile.rotated { transform: rotate(90deg); }
+
+.vol-note {
+	font-size: 0.75em;
+	color: #888;
+	margin-top: 6px;
+	text-align: center;
+}
+
+.gps-controls {
+	margin-top: 14px;
+	padding-top: 12px;
+	border-top: 1px solid #DADFE1;
+	text-align: center;
+	display: none;
+}
+
+.gps-controls label {
+	font-size: 0.85em;
+	color: #666;
+	margin-right: 8px;
+}
+
+.gps-btn {
+	padding: 4px 10px;
+	margin: 3px;
+	background: #fff;
+	color: #22313F;
+	border: 1px solid #DADFE1;
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 0.8em;
+}
+
+.gps-btn:hover { background: #ecf0f1; }
+
+.gps-input {
+	width: 100px;
+	padding: 4px 6px;
+	margin: 3px;
+	background: #fff;
+	color: #333;
+	border: 1px solid #DADFE1;
+	border-radius: 4px;
+	font-size: 0.8em;
+}
+
+#gps-status { font-size: 0.8em; margin-left: 6px; }

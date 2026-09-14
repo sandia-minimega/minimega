@@ -205,42 +205,62 @@ func filesHandler(w http.ResponseWriter, r *http.Request) {
 func screenshotHandler(w http.ResponseWriter, r *http.Request, name string) {
 	log.Info("screenshotHandler handler: %v", r.URL.Path)
 
-	// TODO: sanitize?
 	size := r.URL.Query().Get("size")
-
-	// TODO: replace w with base64 encoder?
 	do_encode := r.URL.Query().Get("base64") != ""
 
-	cmd := NewCommand(r)
-	cmd.Command = fmt.Sprintf("vm screenshot %s file /dev/null %s", name, size)
+	var sizeInt int
+	if size != "" {
+		sizeInt, _ = strconv.Atoi(size)
+	}
+
+	vmType, ok := vmTypeForName(r, name)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
 
 	var screenshot []byte
 
-	for resps := range run(cmd) {
-		for _, resp := range resps.Resp {
-			if resp.Error != "" {
-				if strings.HasPrefix(resp.Error, "vm not running:") {
-					continue
-				} else if resp.Error == "cannot take screenshot of container" {
-					continue
+	switch vmType {
+	case "android":
+		data, err := androidScreenshotGRPC(r, name, sizeInt)
+		if err != nil {
+			log.Error("android screenshot: %v", err)
+			http.NotFound(w, r)
+			return
+		}
+		screenshot = data
+
+	case "container":
+		http.NotFound(w, r)
+		return
+
+	default:
+		cmd := NewCommand(r)
+		cmd.Command = fmt.Sprintf("vm screenshot %s file /dev/null %s", name, size)
+
+		for resps := range run(cmd) {
+			for _, resp := range resps.Resp {
+				if resp.Error != "" {
+					if strings.HasPrefix(resp.Error, "vm not running:") {
+						continue
+					}
+					log.Errorln(resp.Error)
+					http.Error(w, "unknown error", http.StatusInternalServerError)
+					return
 				}
 
-				// Unknown error
-				log.Errorln(resp.Error)
-				http.Error(w, "unknown error", http.StatusInternalServerError)
-				return
-			}
+				if resp.Data == nil {
+					log.Info("no data")
+					http.NotFound(w, r)
+					return
+				}
 
-			if resp.Data == nil {
-				log.Info("no data")
-				http.NotFound(w, r)
-				return
-			}
-
-			if screenshot == nil {
-				screenshot, _ = base64.StdEncoding.DecodeString(resp.Data.(string))
-			} else {
-				log.Error("received more than one response for vm screenshot")
+				if screenshot == nil {
+					screenshot, _ = base64.StdEncoding.DecodeString(resp.Data.(string))
+				} else {
+					log.Error("received more than one response for vm screenshot")
+				}
 			}
 		}
 	}
@@ -275,22 +295,32 @@ func connectHandler(w http.ResponseWriter, r *http.Request, name string) {
 	cmd.Columns = []string{"host", "type", "vnc_port", "console_port"}
 	cmd.Filters = []string{fmt.Sprintf("name=%q", name)}
 
-	for _, vm := range runTabular(cmd) {
+	for _, vm := range runTabularFunc(cmd) {
 		host = vm["host"]
 		vmType = vm["type"]
 
-		switch vm["type"] {
+		switch vmType {
 		case "kvm":
 			port, _ = strconv.Atoi(vm["vnc_port"])
 		case "container":
 			port, _ = strconv.Atoi(vm["console_port"])
+		case "android":
+			// Android VMs do not require a VNC/terminal port for the
+			// placeholder connect page. Android API routes are handled
+			// under /vm/<name>/android/...
 		default:
-			log.Info("unknown VM type: %v", vm["type"])
+			log.Info("unknown VM type: %v", vmType)
+			http.NotFound(w, r)
 			return
 		}
 	}
 
-	if vmType == "" || host == "" || port == 0 {
+	if vmType == "" || host == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	if vmType != "android" && port == 0 {
 		http.NotFound(w, r)
 		return
 	}
@@ -298,8 +328,12 @@ func connectHandler(w http.ResponseWriter, r *http.Request, name string) {
 	// check the request again to decide whether to serve the page or tunnel
 	// the request
 	if strings.HasSuffix(r.URL.Path, "/ws") {
-		websocket.Handler(connectWsHandler(vmType, host, port)).ServeHTTP(w, r)
+		if vmType == "android" {
+			http.NotFound(w, r)
+			return
+		}
 
+		websocket.Handler(connectWsHandler(vmType, host, port)).ServeHTTP(w, r)
 		return
 	}
 
@@ -313,6 +347,8 @@ func connectHandler(w http.ResponseWriter, r *http.Request, name string) {
 		http.ServeFile(w, r, filepath.Join(*f_root, "vnc.html"))
 	case "container":
 		http.ServeFile(w, r, filepath.Join(*f_root, "terminal.html"))
+	case "android":
+		http.ServeFile(w, r, filepath.Join(*f_root, "android.html"))
 	}
 }
 
@@ -346,6 +382,9 @@ func vmHandler(w http.ResponseWriter, r *http.Request) {
 			screenshotHandler(w, r, name)
 			return
 		}
+	case "android":
+		androidHandler(w, r, name, fields[3:])
+		return
 	case "start", "stop", "kill":
 		if r.Method == http.MethodPost && len(fields) == 3 {
 			cmd := NewCommand(r)
@@ -606,6 +645,93 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, resps)
+}
+
+// androidHandler handles Android Emulator WebRTC API routes under:
+//
+//	/vm/<name>/android/...
+func androidHandler(w http.ResponseWriter, r *http.Request, name string, fields []string) {
+	log.Info("android handler: %v", r.URL.Path)
+
+	if !isAndroidVM(r, name) {
+		http.NotFound(w, r)
+		return
+	}
+
+	if len(fields) < 1 {
+		http.NotFound(w, r)
+		return
+	}
+
+	// /vm/<name>/android/display/ws — screenshot streaming WebSocket
+	if len(fields) == 2 && fields[0] == "display" && fields[1] == "ws" {
+		host, grpcPort, err := resolveAndroidGRPC(r, name)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadGateway)
+			return
+		}
+		websocket.Handler(androidDisplayWsHandler(host, grpcPort)).ServeHTTP(w, r)
+		return
+	}
+
+	// /vm/<name>/android/api/v1/emulator/...
+	if len(fields) != 4 || fields[0] != "api" || fields[1] != "v1" || fields[2] != "emulator" {
+		http.NotFound(w, r)
+		return
+	}
+
+	switch fields[3] {
+	case "status":
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		androidStatusGRPCHandler(w, r, name)
+		return
+
+	case "gps":
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		androidGPSGRPCHandler(w, r, name)
+		return
+
+	case "rotation":
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		androidRotationGRPCHandler(w, r, name)
+		return
+
+	default:
+		http.NotFound(w, r)
+		return
+	}
+}
+
+// vmTypeForName returns the VM type for a given VM name
+func vmTypeForName(r *http.Request, name string) (string, bool) {
+	cmd := NewCommand(r)
+	cmd.Command = "vm info"
+	cmd.Columns = []string{"type"}
+	cmd.Filters = []string{fmt.Sprintf("name=%q", name)}
+
+	for _, vm := range runTabularFunc(cmd) {
+		return vm["type"], true
+	}
+
+	return "", false
+}
+
+// isAndroidVM checks if a VM is of type "android"
+func isAndroidVM(r *http.Request, name string) bool {
+	vmType, ok := vmTypeForName(r, name)
+	return ok && vmType == "android"
 }
 
 func minibuilderHandler(w http.ResponseWriter, r *http.Request) {

@@ -516,7 +516,7 @@ function updateScreenshotTable(vmsData) {
         <td>                                                                 \
             <a class="connect-vm-wrapper" target="_blank">                   \
             <div class="thumbnail">                                          \
-            <img src="images/ss_unavailable.svg" style="width: 300px; height: 225px;"> \
+            <img src="images/ss_unavailable.svg" style="width: 300px; height: 225px; object-fit: contain;"> \
             <div class="screenshot-state"></div>                             \
             <div class="screenshot-label-host grey"></div>                   \
             <div class="screenshot-label grey"></div>                        \

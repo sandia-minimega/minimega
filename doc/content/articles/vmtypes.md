@@ -5,10 +5,10 @@
 
 ## Introduction
 
-This document describes the two virtual machine (VM) types minimega is capable
-of launching - QEMU/KVM virtual machines and containers. minimega uses a common
-API to describe features and supports launching experiments consisting of both
-types of VM.
+This document describes the virtual machine (VM) types minimega is capable
+of launching — QEMU/KVM virtual machines, containers, and Android emulator
+instances. minimega uses a common API to describe features and supports
+launching experiments consisting of any combination of VM types.
 
 <a id="TOC_2."></a>
 
@@ -32,8 +32,8 @@ Notice we configure the disk image once, but end up launching 11 VMs that use
 which allows you to launch multiple copies of a VM easily.
 
 Also notice that in the `vm launch` command, we specify that we want to
-launch a `kvm` type VM. minimega currently supports the `kvm` type and the
-`container` type, described in detail below.
+launch a `kvm` type VM. minimega currently supports the `kvm`, `container`,
+and `android` types, described in detail below.
 
 <a id="TOC_3."></a>
 
@@ -268,3 +268,50 @@ mount -t cgroup cgroup -o memory /sys/fs/cgroup/memory
 mount -t cgroup cgroup -o freezer /sys/fs/cgroup/freezer
 mount -t cgroup cgroup -o devices /sys/fs/cgroup/devices
 ```
+
+<a id="TOC_4.3."></a>
+
+### Android Virtual Machines
+
+minimega supports launching `android` type VMs by running the official Android
+Emulator under QEMU/KVM. Android VMs integrate with minimega's networking,
+lifecycle management, and web console infrastructure. miniweb provides a
+browser-based console with live display streaming, input injection, hardware
+buttons, GPS, and screenshot support via the emulator's auto-assigned gRPC port.
+
+For full details, see the [Android VM guide](android.md).
+
+<a id="TOC_4.3.1."></a>
+
+#### Android-specific configuration parameters
+
+Configuration parameters specific to `android` instances:
+
+- `android-sdk` - Set the host-side Android SDK root directory.
+- `android-emulator` - Set the host-side Android emulator binary.
+- `android-adb` - Set the host-side adb binary.
+- `android-avd` - Set the Android Virtual Device (AVD) name to boot.
+- `android-avd-dir` - Set the host-side directory containing AVD data.
+- `android-no-window` - Launch without a local emulator window.
+- `android-console-base-port` - Set the preferred starting console port (even port in 5554–5680 range).
+- `android-extra-args` - Additional raw emulator command-line arguments.
+- `android-writable-system` - Enable writable system partition.
+- `android-grpc-base-port` - Set the preferred starting gRPC port (8554–8617 range); auto-assigned if 0.
+
+<a id="TOC_4.3.2."></a>
+
+#### Technical details
+
+When launching `android` type VMs, the following occurs, in order:
+
+- A new VM handler is created within minimega, populated with a copy of the VM configuration
+- An instance directory is created and the configuration is written to disk
+- Checks are performed to ensure there are no networking conflicts
+- An available console/ADB port pair is reserved from the range 5554–5681
+- An available gRPC port is reserved from the range 8554–8617
+- Network taps are created and attached to openvswitch
+- The Android Emulator arguments are constructed, including any QEMU passthrough flags and the `-grpc` flag
+- QEMU arguments from `vm config` are filtered to remove parameters the Android Emulator manages internally (VNC, VGA)
+- The Android Emulator process is started with the appropriate SDK environment
+- A QMP connection is established for lifecycle management
+- Handlers are created to watch the emulator state and handle shutdown

@@ -1,0 +1,229 @@
+// Trimmed subset of the Android Emulator gRPC controller proto.
+// Only includes RPCs and messages needed for screenshot streaming and input.
+//
+// Upstream: https://android.googlesource.com/platform/external/qemu/+/refs/heads/emu-master-dev/android/android-grpc/
+// See LICENSES/LICENSE.android-emulator-proto for the full license text.
+//
+// Copyright (C) 2018 The Android Open Source Project
+// Licensed under the Apache License, Version 2.0
+syntax = "proto3";
+
+option go_package = "github.com/sandia-minimega/minimega/v2/internal/android/emupb";
+
+package android.emulation.control;
+
+import "google/protobuf/empty.proto";
+
+service EmulatorController {
+    rpc getScreenshot(ImageFormat) returns (Image) {}
+    rpc streamScreenshot(ImageFormat) returns (stream Image) {}
+    rpc sendKey(KeyboardEvent) returns (google.protobuf.Empty) {}
+    rpc sendTouch(TouchEvent) returns (google.protobuf.Empty) {}
+    rpc sendMouse(MouseEvent) returns (google.protobuf.Empty) {}
+    rpc getStatus(google.protobuf.Empty) returns (EmulatorStatus) {}
+    rpc setPhysicalModel(PhysicalModelValue) returns (google.protobuf.Empty) {}
+    rpc setGps(GpsState) returns (google.protobuf.Empty) {}
+    rpc injectWheel(stream WheelEvent) returns (google.protobuf.Empty) {}
+    rpc getLogcat(LogMessage) returns (LogMessage) {}
+}
+
+message WheelEvent {
+    int32 dx = 1;
+    int32 dy = 2;
+    int32 display = 3;
+}
+
+message ImageFormat {
+    enum ImgFormat {
+        PNG = 0;
+        RGBA8888 = 1;
+        RGB888 = 2;
+    }
+    ImgFormat format = 1;
+    Rotation rotation = 2;
+    uint32 width = 3;
+    uint32 height = 4;
+    uint32 display = 5;
+    ImageTransport transport = 6;
+    FoldedDisplay foldedDisplay = 7;
+    DisplayModeValue displayMode = 8;
+}
+
+message Image {
+    ImageFormat format = 1;
+    uint32 width = 2 [deprecated = true];
+    uint32 height = 3 [deprecated = true];
+    bytes image = 4;
+    uint32 seq = 5;
+    uint64 timestampUs = 6;
+}
+
+message ImageTransport {
+    enum TransportChannel {
+        TRANSPORT_CHANNEL_UNSPECIFIED = 0;
+        MMAP = 1;
+    }
+    TransportChannel channel = 1;
+    string handle = 2;
+}
+
+message FoldedDisplay {
+    uint32 width = 1;
+    uint32 height = 2;
+    uint32 xOffset = 3;
+    uint32 yOffset = 4;
+}
+
+enum DisplayModeValue {
+    PHONE = 0;
+    FOLDABLE = 1;
+    TABLET = 2;
+    DESKTOP = 3;
+}
+
+message Rotation {
+    enum SkinRotation {
+        PORTRAIT = 0;
+        LANDSCAPE = 1;
+        REVERSE_PORTRAIT = 2;
+        REVERSE_LANDSCAPE = 3;
+    }
+    SkinRotation rotation = 1;
+    double xAxis = 2;
+    double yAxis = 3;
+    double zAxis = 4;
+}
+
+message MouseEvent {
+    int32 x = 1;
+    int32 y = 2;
+    int32 buttons = 3;
+    int32 display = 4;
+}
+
+message Touch {
+    int32 x = 1;
+    int32 y = 2;
+    int32 identifier = 3;
+    int32 pressure = 4;
+    int32 touch_major = 5;
+    int32 touch_minor = 6;
+    enum EventExpiration {
+        EVENT_EXPIRATION_UNSPECIFIED = 0;
+        NEVER_EXPIRE = 1;
+    }
+    EventExpiration expiration = 7;
+    int32 orientation = 8;
+}
+
+message TouchEvent {
+    repeated Touch touches = 1;
+    int32 display = 2;
+}
+
+message KeyboardEvent {
+    enum KeyCodeType {
+        Usb = 0;
+        Evdev = 1;
+        XKB = 2;
+        Win = 3;
+        Mac = 4;
+    }
+    enum KeyEventType {
+        keydown = 0;
+        keyup = 1;
+        keypress = 2;
+    }
+    KeyCodeType codeType = 1;
+    KeyEventType eventType = 2;
+    int32 keyCode = 3;
+    string key = 4;
+    string text = 5;
+}
+
+message EmulatorStatus {
+    string version = 1;
+    uint64 uptime = 2;
+    bool booted = 3;
+    VmConfiguration vmConfig = 4;
+    EntryList hardwareConfig = 5 [deprecated = true];
+    uint64 heartbeat = 6;
+    map<string, string> guestConfig = 7;
+    map<string, string> platformConfig = 8;
+}
+
+message VmConfiguration {
+    enum VmHypervisorType {
+        UNKNOWN = 0;
+        NONE = 1;
+        KVM = 2;
+        HAXM = 3 [deprecated = true];
+        HVF = 4;
+        WHPX = 5;
+        AEHD = 6;
+    }
+    VmHypervisorType hypervisorType = 1;
+    int32 numberOfCpuCores = 2;
+    int64 ramSizeBytes = 3;
+}
+
+message Entry {
+    string key = 1;
+    string value = 2;
+}
+
+message EntryList {
+    repeated Entry entry = 1;
+}
+
+message ParameterValue {
+    repeated float data = 1 [packed = true];
+}
+
+message PhysicalModelValue {
+    enum State {
+        OK = 0;
+        NO_SERVICE = -3;
+        DISABLED = -2;
+        UNKNOWN = -1;
+    }
+    enum PhysicalType {
+        POSITION = 0;
+        ROTATION = 1;
+        MAGNETIC_FIELD = 2;
+        TEMPERATURE = 3;
+        GRAVITY = 4;
+        PROXIMITY = 5;
+        LIGHT = 6;
+        PRESSURE = 7;
+        HUMIDITY = 8;
+        VELOCITY = 9;
+        AMBIENT_MOTION = 10;
+        HINGE_ANGLE0 = 11;
+        HINGE_ANGLE1 = 12;
+        HINGE_ANGLE2 = 13;
+        ROLLABLE0 = 14;
+        ROLLABLE1 = 15;
+        ROLLABLE2 = 16;
+        POSTURE = 17;
+    }
+    PhysicalType target = 1;
+    State status = 2;
+    ParameterValue value = 3;
+}
+
+message LogMessage {
+    string contents = 1;
+    int64 start = 2;
+    int64 next = 3;
+    // Severity, pid, tid, tag, msg fields omitted — not needed for our API
+}
+
+message GpsState {
+    bool passiveUpdate = 1;
+    double latitude = 2;
+    double longitude = 3;
+    double speed = 4;
+    double bearing = 5;
+    double altitude = 6;
+}
