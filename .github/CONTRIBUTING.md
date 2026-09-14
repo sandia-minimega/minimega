@@ -53,6 +53,8 @@ worktree guidance, and runtime limitations.
 
 ## How to Contribute
 
+> **For maintainers:** See the [Release Process](../doc/content/articles/developer/releases.md) documentation for information about creating and managing releases.
+
 ### Reporting Issues
 
 If you encounter a bug or have a feature request, please open an issue in the [Issues](https://github.com/sandia-minimega/minimega/issues) section. Be sure to include:

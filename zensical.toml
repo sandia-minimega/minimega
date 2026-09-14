@@ -90,6 +90,7 @@ Tutorials = [
 [[project.nav]]
 Development = [
   { Contributing = "articles/contributing.md" },
+  { Releases = "articles/developer/releases.md" },
   { Locking = "articles/developer/locking.md" },
   { "Namespace Internals" = "articles/developer/namespaces.md" },
   { Naming = "articles/developer/naming.md" },
