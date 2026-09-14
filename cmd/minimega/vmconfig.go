@@ -226,8 +226,11 @@ func (vm *BaseConfig) BondString(namespace string) string {
 
 func (vm *BaseConfig) QosString(b, t, i string) string {
 	var val string
-	br, err := getBridge(b)
-	if err != nil {
+
+	// This is a read-only VM info lookup; use a non-creating bridge lookup so we
+	// don't create or mutate bridge state when formatting QoS output.
+	br, ok := bridges.Lookup(b)
+	if !ok {
 		return val
 	}
 
