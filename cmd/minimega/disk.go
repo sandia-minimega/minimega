@@ -248,44 +248,51 @@ func diskResize(image, size string) error {
 	return nil
 }
 
-// diskInject injects files into or deletes files from a disk image.
-// dst/partition specify the image and the partition number. for injecting
-// files, pairs is the dst/src filepaths. for deleting files, paths is the
-// comma-separated list of filepaths to delete. options can be used to supply
-// mount arguments.
-func diskInject(dst, partition string, pairs map[string]string, options []string, delete bool, paths []string) error {
+// mountedImage tracks the state of an image that has been connected via nbd
+// and mounted onto the host filesystem. Close() undoes the mount/connect, in
+// reverse order, and removes the temporary mount point.
+type mountedImage struct {
+	image   string
+	nbdPath string
+	device  string // device (or partition) that was mounted
+	mntDir  string
+}
+
+// mountImage loads nbd, connects image, waits for/selects the desired
+// partition, and mounts it at a newly created temporary directory using the
+// provided mount args. mountArgsFn is called with the device path to mount
+// and should return one or more candidate sets of `mount` arguments; each
+// candidate is tried in turn (allowing callers to fall back to alternative
+// mount options, e.g. to work around mild filesystem corruption). Callers
+// must call Close() on the returned mountedImage once done.
+func mountImage(image, partition string, mountArgsFn func(path string) [][]string) (*mountedImage, error) {
 	// Load nbd
 	if err := nbd.Modprobe(); err != nil {
-		return err
+		return nil, err
 	}
 
 	// create a tmp mount point
 	mntDir, err := os.MkdirTemp(*f_base, "dstImg")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	log.Debug("temporary mount point: %v", mntDir)
-	defer func() {
-		if err := os.Remove(mntDir); err != nil {
-			log.Error("rm mount dir failed: %v", err)
-		}
-	}()
 
-	nbdPath, err := nbd.ConnectImage(dst)
+	mi := &mountedImage{image: image, mntDir: mntDir}
+
+	nbdPath, err := nbd.ConnectImage(image)
 	if err != nil {
-		return err
+		os.Remove(mntDir)
+		return nil, err
 	}
-	defer func() {
-		if err := nbd.DisconnectDevice(nbdPath); err != nil {
-			log.Error("nbd disconnect failed: %v", err)
-		}
-	}()
+	mi.nbdPath = nbdPath
 
 	path := nbdPath
 
 	f, err := os.Open(nbdPath)
 	if err != nil {
-		return err
+		mi.Close()
+		return nil, err
 	}
 	defer f.Close()
 
@@ -295,7 +302,8 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		timeoutTime := time.Now().Add(10 * time.Second)
 		for i := 1; ; i++ {
 			if time.Now().After(timeoutTime) {
-				return fmt.Errorf("[image %s] no partitions found on image", dst)
+				mi.Close()
+				return nil, fmt.Errorf("[image %s] no partitions found on image", image)
 			}
 
 			// tell kernel to reread partitions
@@ -314,7 +322,8 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		if partition == "" {
 			_, err = os.Stat(nbdPath + "p2")
 			if err == nil {
-				return fmt.Errorf("[image %s] please specify a partition; multiple found", dst)
+				mi.Close()
+				return nil, fmt.Errorf("[image %s] please specify a partition; multiple found", image)
 			}
 
 			partition = "1"
@@ -326,70 +335,142 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 		for i := 1; i <= 5; i++ {
 			_, err = os.Stat(path)
 			if err != nil {
-				err = fmt.Errorf("[image %s] desired partition %s not found", dst, partition)
+				err = fmt.Errorf("[image %s] desired partition %s not found", image, partition)
 
 				time.Sleep(time.Duration(i*100) * time.Millisecond)
 				continue
 			}
 
-			log.Info("desired partition %s found in image %s", partition, dst)
+			log.Info("desired partition %s found in image %s", partition, image)
 			break
 		}
 
 		if err != nil {
-			return err
+			mi.Close()
+			return nil, err
 		}
 	}
+
+	mi.device = path
 
 	// we use mount(8), because the mount syscall (mount(2)) requires we
 	// populate the fstype field, which we don't know
-	args := []string{"mount"}
-	if len(options) != 0 {
-		args = append(args, options...)
-		args = append(args, path, mntDir)
-	} else {
-		args = []string{"mount", "-w", path, mntDir}
-	}
-	log.Debug("mount args: %v", args)
-
 	var out string
+	var mountErr error
 	mounted := false
-	for i := 1; i <= 5; i++ {
-		out, err = processWrapper(args...)
-		if err == nil {
-			mounted = true
+
+	for _, args := range mountArgsFn(path) {
+		args = append(args, mntDir)
+		log.Debug("mount args: %v", args)
+
+		for i := 1; i <= 5; i++ {
+			out, mountErr = processWrapper(args...)
+			if mountErr == nil {
+				mounted = true
+				break
+			}
+			log.Debug("mount attempt %d failed: %v", i, mountErr)
+			time.Sleep(time.Duration(i*100) * time.Millisecond)
+		}
+
+		if mounted {
 			break
 		}
-		log.Debug("mount attempt %d failed: %v", i, err)
-		time.Sleep(time.Duration(i*100) * time.Millisecond)
+
+		log.Debug("mount attempt with args %v failed: %v, %v", args, out, mountErr)
 	}
 
 	if !mounted {
-		log.Debug("standard mount failed, trying ntfs-3g: %v, %v", out, err)
-		// check that ntfs-3g is installed
-		out, err := processWrapper("ntfs-3g", "--version")
-		if err != nil {
-			log.Error("ntfs-3g not found, ntfs images unwriteable")
-			return fmt.Errorf("[image %s] ntfs-3g not found %v: %v", dst, out, err)
-		}
+		mi.Close()
+		return nil, fmt.Errorf("[image %s] unable to mount %s: %v: %v", image, path, out, mountErr)
+	}
 
-		// mount with ntfs-3g
-		out, err = processWrapper("mount", "-o", "ntfs-3g", path, mntDir)
-		if err != nil {
-			log.Error("failed to mount partition")
-			return fmt.Errorf("[image %s] %v: %v", dst, out, err)
+	return mi, nil
+}
+
+// Close unmounts the filesystem (if mounted), disconnects the nbd device (if
+// connected), and removes the temporary mount point (if created). Errors are
+// logged rather than returned since Close is expected to be deferred.
+func (mi *mountedImage) Close() {
+	if mi.device != "" {
+		if err := syscall.Unmount(mi.mntDir, 0); err != nil {
+			log.Error("unmount failed: %v", err)
+		} else if out, err := processWrapper("blockdev", "--flushbufs", mi.device); err != nil {
+			log.Error("[image %s] unable to flush: %v %v", mi.image, out, err)
 		}
 	}
-	defer func() {
-		if err := syscall.Unmount(mntDir, 0); err != nil {
-			log.Error("unmount failed: %v", err)
+
+	if mi.nbdPath != "" {
+		if err := nbd.DisconnectDevice(mi.nbdPath); err != nil {
+			log.Error("nbd disconnect failed: %v", err)
 		}
-	}()
+	}
+
+	if err := os.Remove(mi.mntDir); err != nil {
+		log.Error("rm mount dir failed: %v", err)
+	}
+}
+
+// writableMountArgs returns candidate mount option sets for read-write
+// mounting, trying the user-supplied options first, then falling back to
+// ntfs-3g for NTFS images.
+func writableMountArgs(options []string) func(path string) [][]string {
+	return func(path string) [][]string {
+		if len(options) != 0 {
+			args := append([]string{"mount"}, options...)
+			args = append(args, path)
+			return [][]string{args}
+		}
+
+		return [][]string{
+			{"mount", "-w", path},
+			{"mount", "-o", "ntfs-3g", path},
+		}
+	}
+}
+
+// readOnlyMountArgs returns candidate mount option sets for read-only
+// mounting. In addition to the user-supplied options (if any), it tries a
+// handful of fallbacks intended to cope with mild filesystem corruption,
+// such as skipping journal replay.
+func readOnlyMountArgs(options []string) func(path string) [][]string {
+	return func(path string) [][]string {
+		if len(options) != 0 {
+			args := append([]string{"mount"}, options...)
+			args = append(args, path)
+			return [][]string{args}
+		}
+
+		return [][]string{
+			// normal read-only mount
+			{"mount", "-r", path},
+			// ext2/3/4: mount without replaying the journal, in case the
+			// journal itself is corrupt or replaying it would otherwise fail
+			{"mount", "-r", "-o", "noload", path},
+			// xfs: skip log recovery
+			{"mount", "-r", "-o", "norecovery", path},
+			// ntfs: force mount even if marked dirty/unclean
+			{"mount", "-r", "-o", "ntfs-3g,force", path},
+		}
+	}
+}
+
+// diskInject injects files into or deletes files from a disk image.
+// dst/partition specify the image and the partition number. for injecting
+// files, pairs is the dst/src filepaths. for deleting files, paths is the
+// comma-separated list of filepaths to delete. options can be used to supply
+// mount arguments.
+func diskInject(dst, partition string, pairs map[string]string, options []string, delete bool, paths []string) error {
+	mi, err := mountImage(dst, partition, writableMountArgs(options))
+	if err != nil {
+		return err
+	}
+	defer mi.Close()
 
 	if delete {
 		// delete the file paths from mntDir.
 		for _, path := range paths {
-			mntPath := filepath.Join(mntDir, path)
+			mntPath := filepath.Join(mi.mntDir, path)
 			if _, err := os.Stat(mntPath); os.IsNotExist(err) {
 				log.Warn("[image %s] path does not exist to delete: %v", dst, path)
 			} else {
@@ -402,20 +483,49 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 	} else {
 		// copy files/folders into mntDir
 		for target, source := range pairs {
-			dir := filepath.Dir(filepath.Join(mntDir, target))
+			dir := filepath.Dir(filepath.Join(mi.mntDir, target))
 			os.MkdirAll(dir, 0o775)
 
-			out, err := processWrapper("cp", "-fr", source, filepath.Join(mntDir, target))
+			out, err := processWrapper("cp", "-fr", source, filepath.Join(mi.mntDir, target))
 			if err != nil {
 				return fmt.Errorf("[image %s] %v: %v", dst, out, err)
 			}
 		}
 	}
 
-	// explicitly flush buffers
-	out, err = processWrapper("blockdev", "--flushbufs", path)
+	return nil
+}
+
+// diskExtract extracts files/directories from a disk image onto the host
+// filesystem. src/partition specify the image and the partition number.
+// pairs maps a destination path on the host to the source path within the
+// image. options can be used to supply mount arguments. The image is always
+// mounted read-only; a handful of mount fallbacks are attempted to cope with
+// mild filesystem corruption.
+func diskExtract(src, partition string, pairs map[string]string, options []string) error {
+	mi, err := mountImage(src, partition, readOnlyMountArgs(options))
 	if err != nil {
-		return fmt.Errorf("[image %s] unable to flush: %v %v", dst, out, err)
+		return err
+	}
+	defer mi.Close()
+
+	// copy files/folders out of mntDir
+	for dst, source := range pairs {
+		mntPath := filepath.Join(mi.mntDir, source)
+
+		if _, err := os.Stat(mntPath); err != nil {
+			return fmt.Errorf("[image %s] error accessing '%s' in image: %v", src, source, err)
+		}
+
+		dir := filepath.Dir(dst)
+		if err := os.MkdirAll(dir, 0o775); err != nil {
+			return fmt.Errorf("[image %s] error creating destination directory '%s': %v", src, dir, err)
+		}
+
+		out, err := processWrapper("cp", "-fr", mntPath, dst)
+		if err != nil {
+			return fmt.Errorf("[image %s] %v: %v", src, out, err)
+		}
 	}
 
 	return nil
