@@ -73,6 +73,16 @@ func mustAuth(f http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		// refuse to process credentials sent over an insecure (non-TLS)
+		// connection, since HTTP Basic Auth credentials are trivially
+		// recoverable from cleartext traffic
+		if r.TLS == nil {
+			log.Warn("rejecting basic auth attempt over insecure connection from %v", r.RemoteAddr)
+			w.Header().Set("WWW-Authenticate", `Basic realm="minimega"`)
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		// test all the matches and call f if any match credentials
 		username, password, ok := r.BasicAuth()
 		if ok {
