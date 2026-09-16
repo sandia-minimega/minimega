@@ -57,34 +57,55 @@ func parsePasswords(fname string) error {
 	return json.NewDecoder(f).Decode(&passwords)
 }
 
+// pathMatches reports whether urlPath is covered by entryPath. Matching is
+// segment-aware: an entry for "/vm" covers "/vm" and "/vm/anything" but NOT
+// "/vms" or "/vmware". A trailing slash on entryPath is optional and does
+// not change behavior -- "/vm" and "/vm/" are equivalent. entryPath "/"
+// covers every path.
+func pathMatches(urlPath, entryPath string) bool {
+	if entryPath == "/" {
+		return true
+	}
+
+	entryPath = strings.TrimSuffix(entryPath, "/")
+
+	if urlPath == entryPath {
+		return true
+	}
+
+	return strings.HasPrefix(urlPath, entryPath+"/")
+}
+
 func mustAuth(f http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// find the most specific (longest) path entry protecting this URL --
-		// credentials for a broader path must not grant access to a more
-		// specific path that has its own entry
-		var match *PasswordEntry
+		// access is recursive -- an entry for a broader path (e.g. "/")
+		// also authorizes access to narrower sub-paths (e.g. "/vm/fritz").
+		// collect every entry whose path covers this URL; the request is
+		// authorized if credentials match ANY of them.
+		var matches []*PasswordEntry
 		for i, entry := range passwords {
-			if strings.HasPrefix(r.URL.Path, entry.Path) {
-				if match == nil || len(entry.Path) > len(match.Path) {
-					match = &passwords[i]
+			if pathMatches(r.URL.Path, entry.Path) {
+				matches = append(matches, &passwords[i])
+			}
+		}
+
+		// no matching entries -- must not require auth
+		if len(matches) == 0 {
+			f(w, r)
+			return
+		}
+
+		username, password, ok := r.BasicAuth()
+		if ok {
+			for _, m := range matches {
+				if m.Match(username, password) {
+					f(w, r)
+					return
 				}
 			}
 		}
 
-		// no match -- must not require auth
-		if match == nil {
-			f(w, r)
-			return
-		}
-
-		// only credentials for the most specific match are accepted
-		username, password, ok := r.BasicAuth()
-		if ok && match.Match(username, password) {
-			f(w, r)
-			return
-		}
-
-		// auth failed
+		// all matches failed
 		w.Header().Set("WWW-Authenticate", `Basic realm="minimega"`)
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 	}
