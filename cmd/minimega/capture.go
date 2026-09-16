@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/sandia-minimega/minimega/v2/internal/bridge"
@@ -264,19 +265,24 @@ func (c *captures) StopBridge(s, typ string) error {
 	})
 }
 
-// stop stops all captures that fn returns true for.
+// stop stops all captures that fn returns true for. Captures are always
+// removed from the map, even if stopping them failed, so that a single bad
+// capture doesn't prevent the rest from being stopped or leave a permanently
+// unstoppable entry behind. Any errors encountered are aggregated.
 func (c *captures) stop(fn func(capture) bool) error {
+	var errs []error
+
 	for id, v := range c.m {
 		if fn(v) {
 			if err := v.Stop(); err != nil {
-				return err
+				errs = append(errs, err)
 			}
 
 			delete(c.m, id)
 		}
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
 // getOrCreateNetflow wraps calls to getBridge and getNetflowFromBridge,

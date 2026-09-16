@@ -38,6 +38,11 @@ type Bridge struct {
 	// we want to stop a capture.
 	captures map[int]capture
 
+	// captureID is a monotonically increasing counter used to assign unique
+	// IDs to captures. IDs must never be reused, even after captures are
+	// stopped and removed from the captures map or the bridge is recreated.
+	captureID *int
+
 	trunks  map[string]bool
 	tunnels map[string]bool
 
