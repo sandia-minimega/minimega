@@ -55,8 +55,9 @@ key=value pair. For example:
 	cc background stdin=foo stdout=bar /usr/bin/program
 
 Executed commands can also be marked to be sent to miniccc clients only once.
-This will prevent the command from being sent again if the client restarts (for
-example, after a reboot).
+Each matching client will run the command a single time, and will not run it
+again if the client restarts (for example, after a reboot). Clients that connect
+after the command was issued will still run it once.
 
 	cc exec-once shutdown -r now
 
