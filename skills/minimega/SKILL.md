@@ -214,7 +214,9 @@ inside a running cluster.
 ### Namespaces
 
 The active namespace scopes VMs, taps, captures, VLAN aliases, and other state.
-The default namespace is `minimega`.
+The default namespace is `minimega`. Namespace and VM names may only contain
+letters, numbers, hyphens, underscores, and periods; `.` and `..` are rejected
+because names are used as directory names.
 
 ```text
 namespace                         # list namespaces
