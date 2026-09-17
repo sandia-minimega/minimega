@@ -1,25 +1,26 @@
 ---
 name: minimega
-description: 'Guide for configuring, operating, and integrating minimega to manage KVM virtual machines, Android emulators, Linux containers, networks, namespaces, clusters, files, and miniccc command-and-control. Use for startup flags, environment variables, command files, Docker or systemd configuration, CLI commands, command socket or Python API usage, miniweb, phēnix or FIREWHEEL integration, VM lifecycle, VLANs, captures, or distributed emulation troubleshooting.'
-license: GPL-3.0-only (see LICENSE)
+description: 'This skill should be used when the user asks how to configure, run, automate, integrate, or troubleshoot minimega (VMs, namespaces, VLANs, clusters, miniccc, miniweb, command socket or Python API, Docker or systemd deployment, phēnix or FIREWHEEL integration), or when changing code that defines minimega startup flags, CLI commands, or other externally visible behavior. Example triggers: "run minimega in Docker", "why does vm launch leave the VM in BUILDING", "phenix mm fails", "add a minimega startup flag".'
+license: GPL-3.0-only
 ---
 
 # minimega operations and integration
 
 minimega manages KVM virtual machines, Android emulators, and Linux containers
-on one host or across a mesh-connected cluster. Read
-[AGENTS.md](../../AGENTS.md) before changing this repository or writing tests;
-this skill focuses on using minimega and preserving its operational contracts.
+on one host or across a mesh-connected cluster. This skill focuses on using
+minimega and preserving its operational contracts.
 
-## When to use this skill
+File paths in this skill are relative to the minimega repository root. The skill
+lives at `skills/minimega/` inside that repository and may be installed through
+a symlink, so do not resolve repository paths relative to this file. Read
+`AGENTS.md` at the repository root before changing code, configuration, startup
+flags, deployment defaults, the Docker wrapper, service units, or tests.
 
-- Run, attach to, automate, or troubleshoot a minimega instance.
-- Configure, launch, start, inspect, stop, or remove supported VM types.
-- Work with namespaces, scheduling, VLANs, taps, bridges, captures, or clusters.
-- Use miniccc command-and-control, file transfer, or miniweb.
-- Integrate through the command socket, Go client, generated Python module, or
-  higher-level orchestrators such as phēnix and FIREWHEEL.
-- Change code that defines minimega commands or externally visible behavior.
+Supporting files in this skill directory:
+
+- `references/configuration.md`: full detail on native flags and environment
+  variables, the Docker wrapper, the systemd unit, precedence, and help output.
+- `examples/minimal-kvm.mm`: a complete, runnable command file.
 
 ## Execution modes
 
@@ -38,163 +39,48 @@ minimega -base /path -e vm info  # target a non-default base
 default. For scripts and agents, prefer one-shot `-e` commands over an
 interactive prompt.
 
-The repository container provides an `mm` wrapper:
+The repository container provides an `mm` wrapper that runs `minimega -e`:
 
 ```bash
 docker exec minimega mm vm info
 ```
 
 Omit `-it` for non-interactive automation. The normal container deployment is
-privileged and mounts host devices; follow `../../docker/README.md`.
+privileged and mounts host devices; follow `docker/README.md`.
 
 ## Configuration and CLI help
 
-Read [AGENTS.md](../../AGENTS.md) before modifying configuration, startup flags,
-deployment defaults, the Docker wrapper, service units, or configuration
-methods. Keep every launcher aligned with the flags registered in
-[`cmd/minimega/main.go`](../../cmd/minimega/main.go) and
-[`pkg/minilog/minilog.go`](../../pkg/minilog/minilog.go).
+Keep every launcher aligned with the flags registered in `cmd/minimega/main.go`
+and `pkg/minilog/minilog.go`. The compiled `minimega -h` output is authoritative
+for flag names and defaults. `references/configuration.md` covers each mode in
+depth; the essentials are:
 
-### Native process
-
-The native binary does not load YAML, JSON, or TOML configuration files, and
-does not treat `.env` as a dotenv file. Local client modes have one exception:
-they read `MM_BASE` from `/etc/minimega/minimega.conf` when needed to find the
-daemon socket.
-Startup values come from compiled defaults, supported `MM_*` process environment
-variables, and command-line flags:
-
-| Purpose | Flags |
-|---|---|
-| Runtime state | `-base`, `-filepath`, `-cgroup` |
-| Mesh and VLANs | `-context`, `-degree`, `-msa`, `-broadcast`, `-port`, `-vlanrange`, `-headnode` |
-| Lifecycle | `-nostdin`, `-force`, `-recover`, `-panic`, `-hashfiles`, `-abssnapshot` |
-| Logging | `-level`, `-logfile`, `-v`, `-verbose` |
-| Alternate and client modes | `-e`, `-attach`, `-namespace`, `-pipe`, `-version`, `-cli`, `-completion`, `-suggest` |
-
-Use Go flag syntax: `-name=value` works for every flag, `-name value` works for
-non-boolean flags, and booleans use `-flag` or `-flag=false`. Parsing stops at
-the first non-flag argument or `--`; when a flag is repeated, the last parsed
-value wins. Put `-base` and `-namespace` before the command following `-e`.
-`-namespace` affects only `-e` and `-attach`. When `-recover=true`, minimega
-attempts recovery after mesh initialization even if `-force=true`; `-force`
-only takes precedence when removing an existing command socket. When `-base`
-changes while `-filepath` retains its default value, minimega rebases the file
-path to `<base>/files`.
-
-There is no automatic startup command file. Despite the `[file]...` text in the
-startup usage line, normal server startup ignores positional arguments. Apply
-runtime configuration explicitly after startup:
-
-```bash
-minimega -e read /path/to/experiment.mm
-minimega -e read /path/to/experiment.mm check
-```
-
-`read <file>` executes commands in order, stops at invalid syntax, does not stop
-when a valid command returns an error, and rejects nested `read` commands. The
-`check` form validates syntax without executing commands.
-
-The process recognizes these environment-backed flag defaults:
-`MM_BASE`, `MM_DEGREE`, `MM_MSA`, `MM_BROADCAST`, `MM_VLANRANGE`, `MM_PORT`,
-`MM_FORCE`, `MM_RECOVER`, `MM_DAEMON`, `MM_CONTEXT`, `MM_FILEPATH`,
-`MM_LOGLEVEL`, `MM_LOGFILE`, `MM_CGROUP`, `MM_PANIC`, and `MM_ABSSNAPSHOT`.
-Explicit command-line flags take precedence. For `-e`, `-attach`, and `-pipe`,
-when neither `MM_BASE` nor `-base` is set, minimega also reads `MM_BASE` from
-`/etc/minimega/minimega.conf`; other configuration-file values are not read in
-these client modes.
-
-The process explicitly honors `GOMAXPROCS`; inherited environment variables are
-also expanded from `$NAME` or `${NAME}` in runtime command string and list
-arguments. The `.env` mentioned in command help is a runtime minicli command,
-not a file; minimega does not discover or read dotenv files. Use `.env` to
-inspect or change the daemon's environment. An empty value unsets a variable,
-and changes last only for that process lifetime. `PATH` and tool-specific
-variables still affect discovery and execution of external helpers.
-
-### Effective precedence
-
-- **Native:** explicit CLI flags, then supported process environment variables,
-  then the compiled default. Repeated CLI flags use the last value.
-- **Runtime scripts:** commands execute sequentially, so later commands can
-  replace earlier runtime state.
-- **Docker:** for generated flags, a non-empty container environment value wins
-  over `/etc/default/minimega`, which wins over the wrapper default. A duplicate
-  flag in `MM_APPEND` wins because it is appended last; explicit flags then win
-  over native defaults.
-- **systemd:** systemd resolves `EnvironmentFile=` and substitutes those values
-  into explicit `ExecStart` flags; those flags win over native defaults.
-
-### Docker container
-
-The image runs [`docker/start-minimega.sh`](../../docker/start-minimega.sh) as
-its default command. The script starts Open vSwitch, waits for it, starts
-miniweb, then runs minimega with `-nostdin` and generated flags.
-
-- `MM_BASE`, `MM_FILEPATH`, `MM_BROADCAST`, `MM_VLANRANGE`, `MM_PORT`,
-  `MM_DEGREE`, `MM_CONTEXT`, `MM_LOGLEVEL`, `MM_LOGFILE`, `MM_FORCE`,
-  `MM_RECOVER`, `MM_CGROUP`, and `MM_ABSSNAPSHOT` map to same-purpose minimega
-  flags.
-- `MINIWEB_ROOT`, `MINIWEB_HOST`, and `MINIWEB_PORT` configure miniweb.
-- `OVS_APPEND` adds raw `ovs-ctl start` arguments. `OVS_HOST_IFACE` uses
-  `<bridge>:<port>[,<port>...]`.
-- `MM_APPEND` adds otherwise unsupported minimega flags, such as
-  `-msa=20 -hashfiles`.
-
-Set values with Docker `-e`, Compose `environment` or `env_file`, or a file
-mounted at `/etc/default/minimega`. Existing **non-empty** container environment
-values take precedence; an unset or empty value permits the file value, then the
-script default. The file parser accepts simple `KEY=value` lines, strips only
-surrounding double quotes, and does not source shell expressions.
-This container-only file is distinct from the host service's
-`/etc/minimega/minimega.conf`.
-
-The wrapper expands scalar configuration values without shell quoting, so paths
-and other single values cannot safely contain whitespace, glob characters, or
-shell syntax. `MM_APPEND` and `OVS_APPEND` are intentionally split on whitespace:
-spaces separate shell-safe argument tokens but cannot be preserved inside one
-argument. In `MM_APPEND`, a positional token stops parsing later tokens. Because
-it appears last, avoid accidentally duplicating generated flags unless an
-override is intentional.
-
-Docker defaults intentionally differ from native defaults, including
-`MM_DEGREE=1`, `MM_LOGLEVEL=info`, `MM_LOGFILE=/var/log/minimega.log`, and
-`MM_FORCE=true`. Additional container gotchas:
-
-- Changing `MM_PORT` or `MINIWEB_PORT` also requires matching published ports.
-- Changing `MM_BASE` breaks the `mm` wrapper and default Compose health check,
-  which connect through `/tmp/minimega`; use `minimega -base=<path> -e ...` and
-  update the health check.
-- Supplying a command after the image name replaces the Dockerfile `CMD` and
-  skips the Open vSwitch, miniweb, and minimega startup wrapper.
-
-### systemd service
-
-The packaged [`minimega.service`](../../misc/daemon/minimega.service) reads
-`/etc/minimega/minimega.conf` through `EnvironmentFile=` and maps its `MM_*`
-values to explicit startup flags; `MM_APPEND` is not supported. Keep the file to
-literal `KEY=value` assignments and check `readlink -f` before editing because a
-package may link it into `/opt/minimega`.
-
-Restart the service after changing the environment file. After changing the unit
-or a drop-in, run `systemctl daemon-reload` before restarting; replacing
-`ExecStart` requires first clearing it with an empty `ExecStart=`. Because the
-unit uses `Restart=on-success`, use `systemctl stop minimega` rather than runtime
-`quit` when the service must remain stopped.
-
-### Getting help
-
-```bash
-minimega -h                  # startup flags and compiled defaults
-minimega -e help             # runtime command summary
-minimega -e help vm config   # exact runtime command forms
-minimega -cli                # machine-readable runtime CLI as JSON, then exit
-minimega -completion bash    # generate bash, zsh, or fish completion
-```
-
-At an interactive or attached prompt, use `help` and `help <command>`. Pass the
-correct `-base=<path>` before `-e` when the daemon uses a non-default base.
-`-suggest` is an internal completion-script interface, not normal operator help.
+- **Sources.** The native binary reads compiled defaults, `MM_*` environment
+  variables (mapped in `cmd/minimega/environment.go`), and command-line flags,
+  in that order of increasing precedence. It does not load YAML, JSON, TOML, or
+  dotenv files. `-e`, `-attach`, and `-pipe` also read `MM_BASE` from
+  `/etc/minimega/minimega.conf` when neither `MM_BASE` nor `-base` is set.
+- **Flag syntax.** Go flag syntax; parsing stops at the first non-flag argument
+  or `--`, and the last repeated flag wins. Put `-base` and `-namespace` before
+  the command following `-e`.
+- **`-force` and `-recover`.** With `-recover=true`, recovery runs after mesh
+  initialization even if `-force=true`. The compiled `-h` text for `-recover`
+  says "only if -force is not set"; the implementation disagrees, so treat that
+  help string as stale.
+- **No startup command file.** Server startup ignores positional arguments.
+  Apply runtime configuration afterwards with `minimega -e read <file>`; the
+  `check` form validates syntax without executing. `read` stops at invalid
+  syntax, continues past a command that returns an error, and rejects nested
+  `read`. See `examples/minimal-kvm.mm`.
+- **Docker.** `docker/start-minimega.sh` generates flags from `MM_*` container
+  environment variables, then `/etc/default/minimega`, then script defaults.
+  `MM_APPEND` adds raw flags. Docker defaults differ from native defaults
+  (`MM_DEGREE=1`, `MM_LOGLEVEL=info`, `MM_FORCE=true`, a log file).
+- **systemd.** `misc/daemon/minimega.service` maps `/etc/minimega/minimega.conf`
+  to explicit `ExecStart` flags; `MM_APPEND` is not supported there.
+- **Help.** `minimega -h` for startup flags, `minimega -e help [command]` for
+  runtime commands, `minimega -cli` for the runtime CLI as JSON. Pass the
+  correct `-base=<path>` before `-e` when the daemon uses a non-default base.
 
 ## Core concepts
 
@@ -202,7 +88,9 @@ correct `-base=<path>` before `-e` when the daemon uses a non-default base.
 
 - `-base` controls runtime state and the local command socket.
 - `-filepath` controls files served by iomeshage; relative VM image paths resolve
-  beneath it. Use absolute paths when the file is elsewhere.
+  beneath it. Use absolute paths when the file is elsewhere. When `-base`
+  changes and `-filepath` keeps its default, the file path becomes
+  `<base>/files`.
 - `-context` separates mesh discovery groups. `-degree 0` disables automatic
   peer discovery; a positive degree maintains that many mesh connections.
 - `-broadcast` and UDP port `9000` control default mesh discovery.
@@ -248,10 +136,15 @@ clear vm config                   # reset current VM configuration
 ```
 
 KVM can boot from a disk, CD-ROM, or kernel/initrd pair. Bare-metal firmware and
-RTOS guests use KVM with `vm config baremetal true`; they require a kernel image
-and disabled backchannel, while QMP lifecycle control, serial sockets, and tap
-networking remain available. Set `vm config baremetal-network-driver <model>`
-for a board-integrated NIC that QEMU does not expose through device discovery.
+RTOS guests use KVM with `vm config baremetal true`. They require a kernel image
+and reject the miniccc backchannel, bidirectional copy and paste, virtio serial
+ports, disks, CD-ROMs, migrated VM state, and TPM devices, so clear those from
+`vm config` before launching. A bare-metal VM with any `vm config net` entry
+must also set `vm config baremetal-network-driver <model>`, because the
+board-integrated NIC is not exposed through QEMU device discovery; without the
+driver, launch fails. QMP lifecycle control, serial sockets, and tap networking
+remain available.
+
 Containers require a filesystem containing their init executable. Android VMs
 require an AVD name, KVM, and discoverable `emulator` and `adb` tools;
 `android-sdk` and `android-avd-dir` are optional overrides. Disk snapshot mode
@@ -271,8 +164,10 @@ scheduler.
   the command and produce stable, narrow output for automation.
 - Use `pkg/miniclient` for Go integrations instead of implementing the socket
   framing again.
-- `lib/minimega.py` is generated by `pyapigen`; regenerate it through
-  `scripts/build.bash`, never edit it directly.
+- `lib/minimega.py` is not checked in; `lib/` is ignored by git and the file
+  only exists after `scripts/build.bash` generates it with `pyapigen` from the
+  built binary. Never edit it directly, and do not report it missing from a
+  fresh checkout.
 - Use `phenix mm <minimega command...>` when debugging through a phēnix
   deployment.
 - Reproduce FIREWHEEL-generated commands directly in minimega when debugging
@@ -301,10 +196,14 @@ Consult command help before mutating state; subcommand requirements evolve.
 - **Use `disconnect`, not `quit`, from `-attach`.** `quit` stops the daemon.
 - **Match `-base` for `-e` and `-attach`.** The wrong base targets a different
   socket or reports no running instance.
+- **Relocating `MM_BASE` in Docker.** The `mm` wrapper and Compose health check
+  honor `MM_BASE` from the container environment, but not a value set only in
+  `/etc/default/minimega`; pass `-base=<path>` in that case and update the
+  `/tmp/minimega` volume mount if the host needs the socket or files.
 - **`vm launch` does not mean running.** Without namespace queueing it creates a
   VM, then `vm start` starts it; with queueing it only enqueues until flushed.
 - **`vm config` persists.** Clear or explicitly replace prior values before
-  launching a different VM class.
+  launching a different VM class; bare-metal launches reject leftover disks.
 - **Relative images use `-filepath`.** A path valid in the shell may not resolve
   as expected inside minimega or its container.
 - **Android capacity is finite.** Emulator console/ADB port allocation currently
@@ -330,12 +229,17 @@ Consult command help before mutating state; subcommand requirements evolve.
 
 ## References
 
-- `../../doc/content/articles/usage.md`: startup, scripts, command socket,
-  mesh operation, and logging.
-- `../../doc/content/articles/namespaces.md`: namespace scheduling.
-- `../../doc/content/articles/vmtypes.md`: KVM and container behavior.
-- `../../docker/README.md`: container operation and configuration.
-- [minimega API documentation](https://sandia-minimega.github.io/)
+Repository paths, relative to the minimega repository root:
+
+- `doc/content/articles/usage.md`: startup, scripts, command socket, mesh
+  operation, and logging.
+- `doc/content/articles/namespaces.md`: namespace scheduling.
+- `doc/content/articles/vmtypes.md`: KVM and container behavior.
+- `docker/README.md`: container operation and configuration.
+
+External:
+
+- [minimega API documentation](https://sandia-minimega.github.io/minimega/reference/minimega/)
 - [phēnix](https://github.com/sandialabs/sceptre-phenix): higher-level
   experiment orchestration.
 - [FIREWHEEL](https://github.com/sandialabs/firewheel): model-component-based
