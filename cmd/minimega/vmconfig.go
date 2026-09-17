@@ -274,7 +274,12 @@ func (vm *BaseConfig) ReadFieldConfig(r io.Reader, field, namespace string, conf
 	case "networks":
 		var activeConfig VMConfig
 		if config == nil {
-			activeConfig = GetOrCreateNamespace(namespace).vmConfig
+			ns, err := GetOrCreateNamespace(namespace)
+			if err != nil {
+				return err
+			}
+
+			activeConfig = ns.vmConfig
 		} else {
 			activeConfig = *config
 		}

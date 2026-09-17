@@ -599,21 +599,33 @@ func meshageVMLauncher() {
 		go func(m *meshage.Message) {
 			cmd := m.Body.(meshageVMLaunch)
 
-			ns := GetOrCreateNamespace(cmd.Namespace)
-
-			errs := []string{}
-			for _, err := range ns.Launch(cmd.From, cmd.QueuedVMs) {
-				errs = append(errs, err.Error())
-			}
-
 			to := []string{m.Source}
-			msg := meshageVMResponse{Errors: errs, TID: cmd.TID}
+			msg := meshageVMLaunchResponse(cmd)
 
 			if _, err := meshageNode.Set(to, msg); err != nil {
 				log.Errorln(err)
 			}
 		}(m)
 	}
+}
+
+// meshageVMLaunchResponse launches the VMs in cmd and returns the response to
+// send back to the scheduler. If the namespace in cmd does not exist and its
+// name is not valid, no VMs are launched and the response contains the error.
+func meshageVMLaunchResponse(cmd meshageVMLaunch) meshageVMResponse {
+	ns, err := GetOrCreateNamespace(cmd.Namespace)
+	if err != nil {
+		log.Error("invalid namespace from mesh: %v", err)
+
+		return meshageVMResponse{Errors: []string{err.Error()}, TID: cmd.TID}
+	}
+
+	errs := []string{}
+	for _, err := range ns.Launch(cmd.From, cmd.QueuedVMs) {
+		errs = append(errs, err.Error())
+	}
+
+	return meshageVMResponse{Errors: errs, TID: cmd.TID}
 }
 
 // globalVMs gets the VMs from all hosts in the mesh, filtered to the current

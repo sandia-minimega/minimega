@@ -831,7 +831,11 @@ func (vm *KvmVM) connectVNC() error {
 		defer l.Close()
 
 		// should never create...
-		ns := GetOrCreateNamespace(vm.Namespace)
+		ns, err := GetOrCreateNamespace(vm.Namespace)
+		if err != nil {
+			log.Error("unable to start vnc shim for vm %v: %v", vm.Name, err)
+			return
+		}
 
 		for {
 			// Sit waiting for new connections

@@ -31,12 +31,6 @@ func meshageHandler() {
 
 			// Copy the flags at each level of nested command
 			for c, c2 := cmd, &mCmd.Command; c != nil && c2 != nil; {
-				// Namespace is used to create one, so validate it here
-				if c2.Namespace != "" && !validName.MatchString(c2.Namespace) {
-					log.Error("invalid namespace from mesh: `%s`", c2.Namespace)
-					return
-				}
-
 				c.Record = c2.Record
 				c.Source = c2.Source
 				c.Namespace = c2.Namespace

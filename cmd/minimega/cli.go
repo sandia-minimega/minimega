@@ -98,7 +98,11 @@ func registerHandlers(name string, handlers []minicli.Handler) {
 // reduces boilerplate code with minicli handlers.
 func wrapSimpleCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
-		ns := resolveNamespace(c)
+		ns, err := resolveNamespace(c)
+		if err != nil {
+			respChan <- errResp(err)
+			return
+		}
 
 		resp := &minicli.Response{Host: hostname}
 		if err := fn(ns, c, resp); err != nil {
@@ -130,7 +134,11 @@ func wrapBroadcastCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 	localFunc := wrapSimpleCLI(fn)
 
 	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
-		ns := resolveNamespace(c)
+		ns, err := resolveNamespace(c)
+		if err != nil {
+			respChan <- errResp(err)
+			return
+		}
 
 		// Wrapped commands have two behaviors:
 		//   `fan out` -- send the command to all hosts in the active namespace
@@ -169,7 +177,11 @@ func wrapVMTargetCLI(fn wrappedCLIFunc) minicli.CLIFunc {
 	localFunc := wrapSimpleCLI(fn)
 
 	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
-		ns := resolveNamespace(c)
+		ns, err := resolveNamespace(c)
+		if err != nil {
+			respChan <- errResp(err)
+			return
+		}
 
 		// See note in wrapBroadcastCLI.
 		if c.Source != "" {

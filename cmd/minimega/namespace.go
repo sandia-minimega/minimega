@@ -277,7 +277,7 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 			return fmt.Errorf("vm already exists with name `%s`", name)
 		}
 
-		if name != "" && !validName.MatchString(name) {
+		if name != "" && !isValidName(name) {
 			return fmt.Errorf("%v: `%v`", validNameErr, name)
 		}
 	}
@@ -944,25 +944,32 @@ func GetNamespace() *Namespace {
 
 // resolveNamespace returns the namespace a command must run in: the one tagged
 // on the command itself, if any, otherwise the process-wide active namespace.
-func resolveNamespace(c *minicli.Command) *Namespace {
+// It returns an error if the tagged namespace does not exist and its name is
+// not valid.
+func resolveNamespace(c *minicli.Command) (*Namespace, error) {
 	if c != nil && c.Namespace != "" {
 		return GetOrCreateNamespace(c.Namespace)
 	}
 
-	return GetNamespace()
+	return GetNamespace(), nil
 }
 
 // GetOrCreateNamespace returns the specified namespace, creating one if it
-// doesn't already exist.
-func GetOrCreateNamespace(name string) *Namespace {
+// doesn't already exist. It returns an error if the namespace does not exist
+// and name is not a valid name (see isValidName).
+func GetOrCreateNamespace(name string) (*Namespace, error) {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
 
 	if _, ok := namespaces[name]; !ok {
+		if !isValidName(name) {
+			return nil, fmt.Errorf("%w: `%v`", validNameErr, name)
+		}
+
 		namespaces[name] = NewNamespace(name)
 	}
 
-	return namespaces[name]
+	return namespaces[name], nil
 }
 
 // SetNamespace sets the active namespace
