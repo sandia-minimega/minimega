@@ -1,227 +1,282 @@
 # protonuke
 
-> simple traffic generation
+protonuke is a standalone, configuration-free traffic generator for IP
+networks. One binary acts as a client for HTTP, HTTPS, SSH, SMTP, IRC, FTP,
+FTPS, and DNS, or, with `-serve`, as a server for the same protocols, so you
+can fill an experiment with plausible background traffic without installing
+web servers or mail systems in your guests. This page explains how protonuke
+picks targets and paces itself, lists every flag, and describes what each
+protocol does on the client and on the server side.
 
-<a id="TOC_1."></a>
+The packages install it as `/opt/minimega/bin/protonuke` with a symlink at
+`/usr/bin/protonuke`, the Docker image has it in `/opt/minimega/bin`, and a
+source build produces `bin/protonuke` plus a Windows
+build, `bin/protonuke.exe`. The usual place to run it is inside guests, so it
+is a natural addition to a [vmbetter](vmbetter.md) image; the
+[cc](cc.md) API can also push the binary into VMs and start it.
 
-## Introduction
+## How it works
 
-protonuke is a simple, standalone, configuration-less traffic generator for IP
-networks.
+Every flag that names a protocol enables that service. Without `-serve`,
+protonuke is a client and the remaining arguments are its targets; with
+`-serve` it starts a server for each enabled protocol and the targets are
+optional. protonuke servers work with any client, and protonuke clients work
+with any server that speaks the protocol.
 
-protonuke runs on Windows, Linux, MacOS operating systems, and x86-64 and ARM
-architectures. It supports HTTP, HTTPS, SSH, and SMTP protocols. For TLS
-enabled protocols (HTTPS and optionally SMTP), certificates are self-signed and
-generated at startup.
+Targets are hostnames, IP addresses, or CIDR subnets, combined with commas:
 
-protonuke also has servers for each of the protocols provided, and so can act
-as either server or client. protonuke servers do not require protonuke clients,
-and protonuke clients do not require protonuke servers. Each server/client has
-either a built-in corpus of data (for example, the SMTP client has a
-multi-lingual corpus of email), or generates content at runtime (the HTTP/S
-servers generate content, including images, at each pageload.) Most services
-can serve user content instead of the built-in services.
-
-All server/client modes are set with command line switches, and require no
-configuration.
-
-<a id="TOC_2."></a>
-
-## Client modes
-
-To use protonuke as a client, you must, at minimum, enable one or more services
-and provide at least one server to connect to. For example, to set protonuke to
-issue HTTP and HTTPS requests to google.com:
-
-```shell
-protonuke -http -https google.com
+```bash
+$ protonuke -http 10.0.0.0/24,mail.example.com,2001:db8::10
 ```
 
-Using default arguments otherwise, protonuke will connect over HTTP and HTTPS
-to google.com, issue transactions at a random rate, and periodically report on
-transaction statistics.
+A subnet expands to every address in it except the network and broadcast
+addresses, so a `/24` contributes 254 targets. Each enabled client protocol
+runs its own loop. Before every action the loop sleeps for a random interval
+drawn from a normal distribution with mean `-u` and standard deviation `-s`,
+clamped to `[-min, -max]`, then picks one target at random from the expanded
+list and performs one action: an HTTP page load, one email, one DNS query, and
+so on. protonuke does not contact all targets at once; a large subnet simply
+spreads the same rate of actions across more addresses. To go faster, lower
+`-u`; `-u 0` makes each loop act as fast as the network allows.
 
-<a id="TOC_2.1."></a>
+Every `-report` interval (10 seconds by default) protonuke prints a table of
+totals and per-minute rates for each enabled protocol; `-report 0` turns the
+reports off. `-level info` additionally logs every transaction with its
+duration.
 
-### Specifying hosts
+TLS-enabled servers (HTTPS, FTPS, SMTP) use a self-signed certificate that
+protonuke generates at startup, valid for a year and written to temporary
+files, unless you supply `-httptlscert` and `-httptlskey` (both are required
+together). Clients do not verify server certificates.
 
-For any of the client services, the final argument of the protonuke command
-line is the hosts protonuke should connect to. You can specify host names, IP
-addresses, or CIDR-notation subnets. You can stack any of these by listing
-hosts, seperated by commas. For example:
+## Flags
 
-```shell
-protonuke -http google.com,10.0.0.0/24,facebook.com
-```
+General:
 
-At runtime, protonuke will pick a random host within the list of provided hosts
-to issue a transaction on.
+| Flag | Default | Purpose |
+|---|---|---|
+| `-serve` | `false` | Run servers for the enabled protocols instead of clients. |
+| `-u` | `1s` | Mean time between actions, per protocol. |
+| `-s` | `0` | Standard deviation of the time between actions. |
+| `-min` | `0` | Shortest allowed interval. |
+| `-max` | `1m` | Longest allowed interval. |
+| `-report` | `10s` | Time between statistics reports; `0` disables them. |
+| `-ipv4` | `true` | Use IPv4. |
+| `-ipv6` | `true` | Use IPv6. Disable one of the two to force the other; at least one must stay enabled. |
+| `-tlsversion` | | Highest TLS version the HTTPS and FTPS clients will negotiate: `tls1.0`, `tls1.1`, or `tls1.2`. |
+| `-level`, `-logfile`, `-v` | `error`, none, `true` | Logging. |
 
-<a id="TOC_2.2."></a>
+HTTP and HTTPS:
 
-### Client protocols
+| Flag | Default | Purpose |
+|---|---|---|
+| `-http` | `false` | Enable HTTP (port 80). |
+| `-https` | `false` | Enable HTTPS (port 443). |
+| `-httproot <dir>` | | Server: serve this directory instead of the generated page. |
+| `-httpimagesize <size>` | `3MB` | Server: size of the generated `image.png`. Accepts a `B`, `KB`, or `MB` suffix; a bare number means megabytes. |
+| `-httpgzip` | `false` | Server: gzip the generated image. |
+| `-httpcookies` | `false` | Client: keep a cookie jar across requests. |
+| `-http-user-agent <string>` | | Client: send this `User-Agent` header. |
+| `-httptlscert <file>`, `-httptlskey <file>` | | Server: PEM certificate and key for HTTPS, also used by the FTPS and SMTP servers. |
 
-Client protocols can be stacked to enable multiple protocols on a single
-protonuke instance. For example, to use SSH and SMTP:
+SSH:
 
-```shell
-protonuke -ssh -smtp google.com
-```
+| Flag | Default | Purpose |
+|---|---|---|
+| `-ssh` | `false` | Enable SSH (port 22). |
 
-<a id="TOC_2.2.1."></a>
+SMTP:
 
-#### HTTP and HTTPS
+| Flag | Default | Purpose |
+|---|---|---|
+| `-smtp` | `false` | Enable SMTP (port 25). |
+| `-smtptls` | `true` | Client: attempt `STARTTLS` on each connection; fall back to plaintext if it fails. |
+| `-smtpmail <file>` | | Client: JSON file of messages to send instead of the built-in corpus. |
+| `-smtpuser <user>` | | Accepted for compatibility; the current code does not use it. |
 
-The HTTP and HTTPS protocols are enabled with the `-http` and `-https` flags.
-At runtime, protonuke will pick a host at random from the supplied list of
-hosts to connect to by issuing a simple HTTP GET. Returned HTML is parsed for
-CSS, javascript, and images, and those are downloaded from the server within
-that transaction. URLS from the returned HTML is added to the possible list of
-transactions to issue next, along with the list of provided hosts.
+IRC:
 
-<a id="TOC_2.2.2."></a>
+| Flag | Default | Purpose |
+|---|---|---|
+| `-irc` | `false` | Enable IRC. |
+| `-ircport <port>` | `6667` | Port for the IRC client and server. |
+| `-channels <list>` | `#general,#random` | Comma-separated channels the client may join. |
+| `-messages <file>` | | Client: text file, one message per line, used instead of the built-in lorem ipsum lines. |
+| `-markov` | `true` | Client: generate chat with a Markov chain trained on the messages; `-markov=false` sends the lines verbatim. |
 
-#### SSH
+FTP and FTPS:
 
-The SSH protocol will create a persistent connection to a host provided in the
-host list, picked at random just as the HTTP and HTTPS protocols. Enable the
-SSH protocol with `-ssh`. Active connections will periodically issue small
-chunks of data, similar to a user typing on a command line. Occasionally,
-connections are also dropped.
+| Flag | Default | Purpose |
+|---|---|---|
+| `-ftp` | `false` | Enable FTP (port 21). |
+| `-ftps` | `false` | Enable explicit FTPS (`AUTH TLS` on port 21). |
+| `-ftpfilesize <size>` | `500KB` | Server: size of the generated file that clients download. Same suffixes as `-httpimagesize`. |
 
-<a id="TOC_2.2.3."></a>
+DNS:
 
-#### SMTP
+| Flag | Default | Purpose |
+|---|---|---|
+| `-dns` | `false` | Enable DNS (UDP port 53). |
+| `-dnsv4` | `false` | Enable DNS; the client only asks for `A` records. |
+| `-dnsv6` | `false` | Enable DNS; the client only asks for `AAAA` records. |
+| `-random-hosts` | `false` | Server: answer `A` and `AAAA` queries with random addresses when no target of that family was given. |
 
-The SMTP protocol attempts to send pre-specified email from either the built-in
-corpus, or from a user provided JSON file containing email. By default, the
-SMTP protocol will attempt to use TLS on new connections, and fall back to
-plaintext if the server does not support TLS. To disable TLS, use
-`-smtptls=false`.
-
-By default, the username is randomized for each sent email. To override this
-with the built-in corpus, use `-smtpuser=<username>` to set a single username.
-
-The user can provide a JSON formatted corpus of email to use instead of the
-built-in corpus. Specify user-provided email with `-smtpmail=<file>`. For
-example:
-
-```text
-[
-    {
-        "To":"foo@mail.com",
-        "From":"bar@mail.com",
-        "Msg":"benign message"
-    },
-    {
-        "To":"victim@mail.com",
-        "From":"evil@example.com",
-        "Msg":"CONFIDENTIAL",
-        "File": "foo"
-    }
-]
-```
-
-The optional `File` field in the above JSON example allows you to specify a
-specific file, or directory of files to be used when sending that email. If a
-specific file is given, that file will be MIME encoded as part of the email. If
-a directory is given, then a random file from that directory will be chosen and
-sent. If no file or directory is given, no file will be sent.
-
-<a id="TOC_2.2.4."></a>
-
-#### IRC
-
-The clients will attempt to communicate with one another using Markov chains. By default,
-the clients will join rooms `#general` and `#random`, and their markov chains are fed with
-the 'lorem ipsump' text. Both of these parameters can be modified with user input.
-
-<a id="TOC_2.3."></a>
-
-### Additional client configuration options
-
-There are a number of additional client configuration options that impact all
-enabled protocols:
-
-- `-ipv4` Enable/disable IPv4 support. Enabled by default.
-- `-ipv6` Enable/disable IPv6 support. Enabled by default.
-- `-min`, `-max`, `-s`, `-u` Normal distribution parameters (minimum/maximum time, standard deviation, and mean) for timing between events.
-- `-report` Time between reporting event statistics.
-
-<a id="TOC_3."></a>
-
-## Server modes
-
-Server modes are enabled in a way similar to the client modes (`-http`,
-`-https`, etc.), and is enabled by specifying the `-serve` flag. Enabling
-`-serve` will enable the server for all specified protocols. By default, the
-server modes use built-in content generators for each protocol.
-
-<a id="TOC_3.1."></a>
+## Protocols
 
 ### HTTP and HTTPS
 
-The HTTP and HTTPS servers generate content for each incoming transaction from
-an internal content generator. Generated content includes generated URLs and
-images, as shown below.
+The client requests `http://<target>/` (or `https://`), reads the body, and
+fetches every `src=` reference it finds (images, scripts, style sheets). Every
+`href=` link is added to a cache of up to 128 URLs, and the next request picks
+a random entry from that cache, so the client wanders through a site instead
+of reloading its front page. Connections use a 30-second dial timeout;
+`-httpcookies` adds a cookie jar, `-http-user-agent` sets the header, and the
+HTTPS client accepts any certificate.
 
-![protonuke.png](protonuke.png)
+The server listens on port 80 and 443. Without `-httproot`, every `GET`
+returns a generated page with a heading, the request URI, three random links
+back to the same host, a hit counter, and `<img src=image.png>`; `image.png`
+is random noise of `-httpimagesize` bytes, and a client can ask for another
+size with `image.png?size=1MB`. A `POST` gets `202 Accepted`. Responses carry a
+`Server: protonuke/<revision>` header, and keep-alive is disabled so each
+request is a new connection. With `-httproot` the directory is served as is.
 
-User provided content can be served instead of the built-in webserver by
-specifying a directory with the `-httproot` flag.
+![The generated protonuke page in a browser](protonuke.png)
 
-The user can adjust the size of the image served in the built-in webserver by
-using the `-httpimagesize` flag. This argument takes a number in megabytes.
+### SSH
 
-The user can also specify a TLS certificate and key, instead of having
-protonuke generate a cert at launch time, by using the `-httptlscert` and
-`-httptlskey` flags.
+The client connects to `<target>:22` as user `protonuke` with password
+`password` and opens a shell. On each tick it opens a session if it has none;
+otherwise it opens another with 10% probability, closes a random session with
+10% probability, and the rest of the time types a random base64 string of up
+to 172 characters into a random session and waits for the echo, like a user at
+a prompt.
+The report counts bytes typed.
 
-<a id="TOC_3.2."></a>
+The server listens on port 22 with a fixed host key, accepts only
+`protonuke`/`password`, and presents a `> ` prompt that echoes each line
+back. It does not run commands.
 
-### SSH and SMTP
+### SMTP
 
-Both SSH and SMTP servers simply receive traffic from clients, and do not
-serve any specific content. SMTP servers will not relay mail. The SMTP
-server's status codes are RFC-compliant, but the accompanying descriptive
-text is unique to protonuke; this makes it easier to determine if you
-are connected to a protonuke SMTP server or some other server software.
+The client connects to `<target>:25`, picks a random message, and sends it.
+Messages come from a built-in corpus or from a `-smtpmail` JSON file:
 
-<a id="TOC_3.3."></a>
+```json
+[
+	{
+		"To": "foo@mail.com",
+		"From": "bar@mail.com",
+		"Subject": "foo",
+		"Msg": "benign message"
+	},
+	{
+		"To": "victim@mail.com",
+		"From": "evil@example.com",
+		"Subject": "foo",
+		"Msg": "CONFIDENTIAL",
+		"File": "foo"
+	}
+]
+```
+
+An empty `To` becomes a random user at the target host and an empty `From` a
+random user at `protonuke.org`. `File` names a file to attach, base64-encoded
+in a MIME part; if it is a directory, a random file inside it is chosen for
+each message. With `-smtptls` (the default) the client tries `STARTTLS` and
+continues in plaintext, with a warning, if the server declines.
+
+The server listens on port 25, greets with
+`220 protonuke: Less for outcasts, more for weirdos.`, offers `STARTTLS`, and
+accepts mail without relaying it. Its status codes follow the RFC but the text
+after them is protonuke's own, which makes it easy to tell from a real mail
+server.
 
 ### IRC
 
-IRC servers simply forward client traffic where relevant and do not
-serve any specific content. The default IRC port is 6667 but can be modified by user input.
+The client connects to one random target on `-ircport`, picks a nickname from
+a built-in list (appending a random number on collision), joins a random
+subset of `-channels`, and greets each channel with `yo`. With the default
+`-markov`, when another protonuke client in the channel answers, the two pair
+up and take turns talking, one message per tick, with text from a Markov chain
+trained on the built-in lorem ipsum lines or on the lines of `-messages`. With
+`-markov=false` there is no conversation: every tick the client sends one of
+those lines, unchanged, to a random channel it has joined. Private messages
+that mention the nickname get a greeting back.
 
-<a id="TOC_4."></a>
+The server is a plain IRC daemon on `-ircport` that relays traffic between
+clients and serves no content of its own.
+
+### FTP and FTPS
+
+The client connects to `<target>:21` and logs in as `anonymous` with password
+`anonymous` in plaintext; with `-ftps` it issues `AUTH TLS` only after that
+login (honouring `-tlsversion`), so the credentials are never protected. It then performs one random action per tick: `PWD`, `SYST`,
+`SIZE` and `LIST`, a `RETR` of `/tmp/ftpimage` whose content is discarded, or
+`QUIT`, after which the next tick reconnects.
+
+The server listens on port 21 and accepts any credentials. Every path it is
+asked for resolves to one generated PNG of `-ftpfilesize` bytes, uploads are
+accepted and dropped, and passive-mode transfers advertise the last
+non-loopback IPv4 address the host enumerates. `-ftps` enables explicit FTPS with the
+generated or supplied certificate.
+
+### DNS
+
+The client sends one UDP query per tick to `<target>:53` for a random domain
+from a built-in list. The record type is chosen at random from `A`, `AAAA`,
+`CNAME`, `MX`, `NS`, and `SOA` unless `-dnsv4` (always `A`) or `-dnsv6`
+(always `AAAA`) is set.
+
+The server answers authoritatively on UDP port 53 with a TTL of 59 seconds. An
+`A` or `AAAA` query is answered with one random entry from the target list, so
+`protonuke -serve -dns 10.0.0.0/24` hands out addresses in that subnet. The
+pick is not retried: if the chosen entry is not an address of the right family
+the answer is `NXDOMAIN` (or a random address when `-random-hosts` is set), so
+a mixed IPv4 and IPv6 target list produces intermittent `NXDOMAIN` replies. `CNAME`, `MX`,
+and `SOA` queries get synthesized records (`cname.<name>`, `mx.<name>`,
+`ns.<name>`); other types get an empty answer.
 
 ## Examples
 
-Serve all protocols with default arguments and debug logging:
+Serve every protocol with debug logging:
 
-```shell
-protonuke -http -https -ssh -smtp -irc -serve -level debug
+```bash
+$ protonuke -serve -http -https -ssh -smtp -irc -ftp -dns -level debug
 ```
 
-Serve HTTP and HTTPS with custom content - a large file in a simple index.html:
+Serve HTTP and HTTPS with your own content, here a single large image behind a
+minimal `index.html`:
 
-```shell
-mkdir www
-dd if=/dev/random of=www/bigfile.png count=1024 bs=1M
-echo "<img src=bigfile.png>" > www/index.html
-protonuke -httproot www -http -https -serve
+```bash
+$ mkdir www
+$ dd if=/dev/urandom of=www/bigfile.png count=1024 bs=1M
+$ echo "<img src=bigfile.png>" > www/index.html
+$ protonuke -serve -http -https -httproot www
 ```
 
-Start a client on all protocols, connecting to google.com:
+Generate traffic on every protocol towards one host:
 
-```shell
-protonuke -http -https -smtp -ssh -irc google.com
+```bash
+$ protonuke -http -https -smtp -ssh -irc -ftp -dns server.example.com
 ```
 
-Start a client on HTTP, connecting to hosts in a subnet, as well as google.com,
-and go as fast as possible by setting parameters on the normal distribution:
+Load a subnet plus one named host over HTTP as fast as possible:
 
-```shell
-protonuke -u 0 -http 10.0.0.0/24,google.com
+```bash
+$ protonuke -u 0 -http 10.0.0.0/24,www.example.com
 ```
+
+Send a curated set of emails, with attachments drawn from a directory, once
+every thirty seconds on average:
+
+```bash
+$ protonuke -smtp -smtpmail mail.json -u 30s -s 10s mail.example.com
+```
+
+## See also
+
+- [Command and control](cc.md) for pushing protonuke into VMs and starting it
+- [Building images with vmbetter](vmbetter.md)
+- [Capture and instrumentation](capture.md) for recording the traffic
+- [Tools overview](../tools.md)

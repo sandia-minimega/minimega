@@ -24,27 +24,34 @@ Home = "index.md"
 [[project.nav]]
 "Getting Started" = [
   { Installation = "articles/installing.md" },
-  { Quickstart = "articles/tutorials/quickstart.md" },
-  { "Using minimega" = "articles/usage.md" },
-  { Downloads = "articles/download.md" },
+  { Quickstart = "articles/quickstart.md" },
+  { "Running minimega" = "articles/running.md" },
+  { "Command line and scripting" = "articles/cli.md" },
+  { "Running in Docker" = "articles/docker.md" },
 ]
 
 [[project.nav]]
 "User Guides" = [
-  { "Cluster Setup" = "articles/cluster.md" },
-  { "File Management" = "articles/file.md" },
-  { Namespaces = "articles/namespaces.md" },
-  { "Virtual Machine Types" = "articles/vmtypes.md" },
+  { "VM lifecycle" = "articles/vm-lifecycle.md" },
+  { "Virtual machine types" = "articles/vmtypes.md" },
+  { "VM configuration reference" = "articles/vm-config-reference.md" },
   { "Android VMs" = "articles/android.md" },
-  { "Creating VMs" = "articles/newvm.md" },
-  { VLANs = "articles/vlans.md" },
-  { NAT = "articles/nat.md" },
-  { Routing = "articles/router.md" },
-  { "OSPF Costs" = "articles/ospf_cost.md" },
-  { "Port Mirroring" = "articles/mirror.md" },
+  { "Building images with vmbetter" = "articles/vmbetter.md" },
+  { "Disk images and the disk API" = "articles/disk-images.md" },
+  { "Creating VMs from install media" = "articles/newvm.md" },
+  { "Windows guests" = "articles/windows.md" },
+  { "Saving and restoring experiments" = "articles/save-restore.md" },
+  { Namespaces = "articles/namespaces.md" },
+  { "Host networking" = "articles/networking.md" },
+  { "Routing with minirouter" = "articles/router.md" },
+  { "Capture and instrumentation" = "articles/capture.md" },
+  { "Command and control" = "articles/cc.md" },
   { Plumbing = "articles/plumbing.md" },
   { VNC = "articles/vnc.md" },
-  { "Command and Control" = "articles/cc.md" },
+  { "File management" = "articles/file.md" },
+  { "Cluster setup" = "articles/cluster.md" },
+  { Troubleshooting = "articles/troubleshooting.md" },
+  { "Security considerations" = "articles/security.md" },
 ]
 
 [[project.nav]]
@@ -55,37 +62,40 @@ Tools = [
   { powerbot = "articles/powerbot.md" },
   { protonuke = "articles/protonuke.md" },
   { "Python API" = "articles/python.md" },
-  { Troubleshooting = "articles/troubleshooting.md" },
 ]
 
 [[project.nav]]
-Tutorials = [
-  { "Command and Control" = "articles/tutorials/cc.md" },
-  { vmbetter = "articles/tutorials/vmbetter.md" },
-]
-
-[[project.nav]]
-"Miniclass" = [
+Miniclass = [
   { Overview = "training/miniclass/index.md" },
-]
-
-[[project.nav]]
-"Mini101 Training" = [
-  { "Module 1 - Essentials" = "training/module01.md" },
-  { "Module 2 - Getting Running" = "training/module02.md" },
-  { "Module 2.5 - Better vmbetter" = "training/module02_5.md" },
-  { "Module 3 - VM Orchestration" = "training/module03.md" },
-  { "Module 4 - Experiment Visualization" = "training/module04.md" },
-  { "Module 5 - VM Networking" = "training/module05.md" },
-  { "Module 6 - Experimental Networks" = "training/module06.md" },
-  { "Module 7 - Command and Control" = "training/module07.md" },
-  { "Module 8 - Background Traffic" = "training/module08.md" },
-  { "Module 9 - Plumbing" = "training/module09.md" },
-  { "Module 10 - VNC" = "training/module10.md" },
-  { "Module 11 - Instrumentation" = "training/module11.md" },
-  { "Module 12 - VM Physics" = "training/module12.md" },
-  { "Module 13 - Namespaces" = "training/module13.md" },
-  { "Module 14 - Clusters" = "training/module14.md" },
+  { "Part I: Getting started" = [
+    { "1. Install and run minimega" = "training/miniclass/01-install.md" },
+    { "2. Get VM images" = "training/miniclass/02-images.md" },
+    { "3. The router sandwich" = "training/miniclass/03-router-sandwich.md" },
+    { "4. Configure, launch, and control VMs" = "training/miniclass/04-vms.md" },
+    { "5. See the experiment" = "training/miniclass/05-miniweb.md" },
+    { "6. Networking basics" = "training/miniclass/06-networking.md" },
+    { "7. Routers and services" = "training/miniclass/07-routers.md" },
+    { "8. Command and control" = "training/miniclass/08-cc.md" },
+    { "9. Save, replay, and clean up" = "training/miniclass/09-save-replay-cleanup.md" },
+    { "10. Troubleshooting" = "training/miniclass/10-troubleshooting.md" },
+  ] },
+  { "Part II: Going deeper" = [
+    { "11. Background traffic" = "training/miniclass/11-traffic.md" },
+    { "12. Capture and mirrors" = "training/miniclass/12-capture.md" },
+    { "13. VNC" = "training/miniclass/13-vnc.md" },
+    { "14. Runtime changes" = "training/miniclass/14-runtime-changes.md" },
+    { "15. Plumbing" = "training/miniclass/15-plumbing.md" },
+    { "16. Namespaces" = "training/miniclass/16-namespaces.md" },
+  ] },
+  { "Part III: Other guest types and scale" = [
+    { "17. Containers" = "training/miniclass/17-containers.md" },
+    { "18. Android VMs" = "training/miniclass/18-android.md" },
+    { "19. Specialty guests" = "training/miniclass/19-specialty-guests.md" },
+    { "20. Clusters" = "training/miniclass/20-clusters.md" },
+    { "21. Automation" = "training/miniclass/21-automation.md" },
+    { "22. Testing and contributing" = "training/miniclass/22-testing-contributing.md" },
+  ] },
+  { "Instructor syllabus" = "training/miniclass/syllabus.md" },
 ]
 
 [[project.nav]]
@@ -103,6 +113,7 @@ Development = [
 Legacy = [
   { Screenshots = "screenshots/index.md" },
   { Publications = "articles/publications.md" },
+  { "Historical miniclass" = "legacy/miniclass/index.md" },
   { Presentations = [
     { "Generalized Modeling" = "presentations/gt_2018.md" },
     { miniplumber = "presentations/miniplumber.md" },
