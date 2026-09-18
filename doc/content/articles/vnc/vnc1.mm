@@ -1,2 +1,2 @@
-# record the framebuffer of VM bar
-vnc record fb bar recording.fb
+# record the framebuffer of VM desktop
+vnc record fb desktop recording.fb
