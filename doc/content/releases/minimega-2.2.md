@@ -71,7 +71,7 @@ and the networkless backchannel options. When booting KVM based VMs, a
 virtio-serial device is created by default in `\\.\Global\cc`, and on container
 based VMs a UNIX domain socket is created in `/cc`.
 
-See the [cc](../articles/tutorials/cc.md) tutorial for more information.
+See the [cc](../articles/cc.md) tutorial for more information.
 
 <a id="TOC_2.2.2."></a>
 
@@ -80,7 +80,7 @@ See the [cc](../articles/tutorials/cc.md) tutorial for more information.
 A new `cc process` API has been added to inspect and kill processes started
 with `cc background`.
 
-See the [cc](../articles/tutorials/cc.md) tutorial for more information.
+See the [cc](../articles/cc.md) tutorial for more information.
 
 <a id="TOC_2.2.3."></a>
 

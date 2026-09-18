@@ -1,2 +1,2 @@
-# stop kb/mouse event playback 
-vnc stop bar
+# stop kb/mouse event playback
+vnc stop desktop

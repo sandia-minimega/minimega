@@ -1,16 +1,5 @@
 # Publications
 
-
-<a id="TOC_1."></a>
-
-## Publications
-
-List of publications by the minimega team, sorted by year in Chicago citation
-format. In the future, we may create a separate page for works that use
-minimega.
-
-<a id="TOC_2."></a>
-
 ## Papers
 
 Crussell, Jonathan, Thomas M. Kroeger, David Kavaler, Aaron Brown, and Cynthia Phillips. ["Lessons Learned from 10k Experiments to Compare Virtual and Physical Testbeds."](https://www.usenix.org/conference/cset19/presentation/crussell) In 12th USENIX Workshop on Cyber Security Experimentation and Test (CSET 19). 2019.
@@ -20,8 +9,6 @@ Crussell, Jonathan, Thomas M. Kroeger, Aaron Brown, and Cynthia Phillips. ["Virt
 Raybourn, Elaine M., Michael Kunz, David Fritz, and Vince Urias. ["A Zero-Entry Cyber Range Environment for Future Learning Ecosystems."](https://link.springer.com/chapter/10.1007/978-3-319-98935-8_5) In Cyber-Physical Systems Security, pp. 93-109. Springer, Cham, 2018.
 
 Bierma, Michael, Eric Gustafson, Jeremy Erickson, David Fritz, and Yung Ryn Choe. ["Andlantis: Large-scale Android dynamic analysis."](https://arxiv.org/pdf/1410.7751.pdf) In Workshop on Mobile Security Technologies (MOST). 2014.
-
-<a id="TOC_3."></a>
 
 ## Talks
 

@@ -38,7 +38,7 @@ This PR represents a full course series on using minimega, comprised of 15
 modules that cover nearly every aspect of using minimega and its various tools.
 
 Training course modules can be found at
-[Mini101 training](../training/module01.md).
+[Mini101 training](../training/miniclass/index.md).
 
 PR [#1404](https://github.com/sandia-minimega/minimega/v2/pull/1404).
 
