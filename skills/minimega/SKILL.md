@@ -330,12 +330,24 @@ Consult command help before mutating state; subcommand requirements evolve.
 
 ## References
 
-- `../../doc/content/articles/usage.md`: startup, scripts, command socket,
-  mesh operation, and logging.
+- `../../doc/content/articles/running.md`: startup flags, `MM_*`
+  environment, systemd service, attach and `-e`, recovery, and logging.
+- `../../doc/content/articles/cli.md`: builtins, scripts, `read`/`write`,
+  `background`, and the command socket.
+- `../../doc/content/articles/vm-lifecycle.md` and
+  `../../doc/content/articles/vm-config-reference.md`: VM lifecycle and
+  every `vm config` field.
+- `../../doc/content/articles/vmtypes.md`: KVM, container, Android, and
+  bare-metal behavior.
+- `../../doc/content/articles/networking.md`: netspec, VLAN aliases, taps,
+  bridges, dnsmasq, QoS, and NAT.
 - `../../doc/content/articles/namespaces.md`: namespace scheduling.
-- `../../doc/content/articles/vmtypes.md`: KVM and container behavior.
-- `../../docker/README.md`: container operation and configuration.
-- [minimega API documentation](https://sandia-minimega.github.io/)
+- `../../doc/content/articles/cluster.md`: deploy, mesh operation, and
+  multi-host networking.
+- `../../doc/content/articles/docker.md` and `../../docker/README.md`:
+  container operation and configuration.
+- `../../doc/content/training/miniclass/index.md`: the training course.
+- [minimega API documentation](https://sandia-minimega.github.io/minimega/reference/minimega/)
 - [phēnix](https://github.com/sandialabs/sceptre-phenix): higher-level
   experiment orchestration.
 - [FIREWHEEL](https://github.com/sandialabs/firewheel): model-component-based

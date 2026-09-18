@@ -1,9 +1,9 @@
 # set a disk image
-vm config disk foo.qcow2
+vm config disks foo.qc2
 
 # set some other common parameters
 vm config memory 4096
-vm config net 100
+vm config networks 100
 
 # launch one VM, named foo
 vm launch kvm foo

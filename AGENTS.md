@@ -63,7 +63,8 @@ Useful references are the
 [hosted documentation](https://sandia-minimega.github.io/minimega/), the
 [generated API documentation](https://sandia-minimega.github.io/minimega/reference/minimega/),
 [`doc/content/articles/installing.md`](doc/content/articles/installing.md),
-and [`doc/content/articles/usage.md`](doc/content/articles/usage.md).
+[`doc/content/articles/running.md`](doc/content/articles/running.md), and
+[`doc/content/articles/cli.md`](doc/content/articles/cli.md).
 
 ## Development and validation
 
@@ -140,9 +141,10 @@ fields, and never accept `.got` without reviewing it.
 
 - Files under [`doc/content/`](doc/content/) use Markdown for documentation
   content.
-- Files under [`doc/content/releases/`](doc/content/releases/) and
-  [`doc/content/presentations/`](doc/content/presentations/) are legacy
-  documentation; do not modify or update them.
+- Files under [`doc/content/releases/`](doc/content/releases/),
+  [`doc/content/presentations/`](doc/content/presentations/), and
+  [`doc/content/legacy/`](doc/content/legacy/) are legacy documentation; do
+  not modify or update them.
 - Do not run `go mod tidy`, regenerate `vendor/`, or change dependencies unless
   dependency maintenance is the task. Keep changed local forks under `packages/`
   aligned with their `vendor/` copies and preserve license notices.

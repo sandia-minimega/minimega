@@ -1,227 +1,225 @@
-# Plumbing with minimega
+# Plumbing
 
+Plumbing is minimega's facility for moving line-oriented data between VMs,
+processes on guests or hosts, and minimega instances. It is a distributed
+cousin of UNIX pipes: named pipes that any number of readers and writers can
+attach to from anywhere in the cluster, and pipelines that connect pipes
+through external programs. Use it when one program's output needs to drive
+another, whether both are in VMs, both on the host, or one of each.
 
-<a id="TOC_1."></a>
+You need a running minimega, and miniccc in any guest that should take part;
+see [Command and control](cc.md) for the guest side.
 
-## Introduction
+## Pipes
 
-Plumbing is a facility in minimega to enable communication between VMs,
-processes on guests or hosts, and instances of minimega. In short, it allows
-"plumbing" communication pathways for any element of a minimega ecosystem.
-Plumbing in minimega is similar in concept to unix pipes and the myriad other
-IPC mechanisms available in many programming languages and operating systems.
+A pipe is a named I/O point. Unlike a UNIX pipe it carries newline-delimited
+messages rather than a byte stream, which is what lets it have any number of
+readers and writers at once. A write is delivered to whichever readers
+the pipe's mode selects; if there are no readers the message is discarded.
+Nothing is buffered: a write blocks until every selected reader has consumed
+the message, so a slow reader slows every writer to the pipe.
 
-minimega's plumber is designed to interact with unix command line tools and
-provides a number of additional capabilities over unix pipes. The plumber
-allows for uni- and multi-cast pipelines, supports fan-in (multiple pipe
-inputs), message delivery modes for each pipe (broadcast, round-robin, random),
-and *per-reader* pipelines called vias. The plumber is fully distributed, and
-works seamlessly across instances of minimega and VMs. This means a VM on node
-X can, without additional configuration, attach to a pipeline on node Y. VMs
-and minimega instances can even read or write to pipes from other VMs.
+Each message is at most 1 MiB. `minimega -pipe` and `miniccc -pipe` exit with
+an error if a single input line exceeds that.
 
-<a id="TOC_2."></a>
+Pipes belong to the namespace they are created in, so the same name can be
+reused safely between experiments. To reach a pipe in another namespace, use
+`<namespace>//<pipe>`; the fully qualified name is what `pipe` displays.
 
-## plumbing semantics
+You can attach to a pipe from four places:
 
-The minimega plumber provides two plumbing primitives - *pipes* and
-*pipelines*. Pipes are I/O points, and support a number of delivery and
-read/write options. Pipelines are compositions of pipes and external programs.
+- the minimega CLI, with `pipe <name> <data>` to write;
+- the host shell, with `minimega -pipe <name>`, which connects standard input
+  and output to the pipe until standard input closes; a bare name means a
+  pipe in the default `minimega` namespace, so use `<namespace>//<name>` for
+  any other namespace;
+- a guest shell, with `miniccc -pipe <name>`, which does the same through the
+  cc connection;
+- a program started with `cc exec` or `cc background`, by prefixing the
+  command with `stdin=`, `stdout=` or `stderr=` pairs.
 
-<a id="TOC_2.1."></a>
+Start a reader on the host:
 
-### pipes
-
-Pipes are simply named I/O points, similar to a named pipe on a unix system.
-minimega pipes exchange newline delimited messages as opposed to a byte stream
-like unix pipes. By using messages, minimega pipes allow for any number of
-readers and writers to a sinlge named pipe. Messages are written and are
-delivered to any attached readers according to that pipe's current mode.
-Message writes are non-blocking, and if no readers are present on the pipe, the
-message is discarded. No buffering of messages takes place.
-
-Named pipes are also unique to the namespace they were created in, so it's safe
-to reuse pipe names between experiments.
-
-Pipes can be written to or read from on the minimega CLI, the host command
-line, attached to miniccc processes via the `cc` API, and from the VM command
-line via a miniccc switch. For example, we can read from a minimega pipe `foo`
-on the command line:
-
-```text
-minimega -pipe foo
+```bash
+$ minimega -pipe foo
 ```
 
-Invoking a pipe this way will block until standard in is closed. Let's write to
-the pipe now using the command line as well as the minimega CLI:
+Write from another shell and from the minimega prompt:
 
-```text
-echo "Hallo von minimega!" | minimega -pipe foo
+```bash
+$ echo "Hallo von minimega!" | minimega -pipe foo
 ```
 
-And from the minimega cli:
-
-```text
-miniemga$ pipe foo "Or would you rather use English?"
+```minimega
+minimega$ pipe foo "Or would you rather use English?"
 ```
 
-Meanwhile, back at our reader:
+The reader prints both lines. Exactly the same commands work from a VM with
+`miniccc -pipe foo`, and from any other minimega instance in the mesh.
 
-```text
-minimega -pipe foo
-Hallo von minimega!
-Or would you rather use English?
-```
+Attaching a guest program's streams directly:
 
-This exact same method can be used across distributed instances of minimega -
-simply attach to a named pipe as you would locally. You can even use pipes from
-connected miniccc clients running on VMs:
-
-```text
-miniccc -pipe foo
-```
-
-It's also possible to directly attach named pipes to standard input, output, or
-error streams on processes launched by the `cc` API, by specifying key/value
-pairs on the `exec` and `background` commands:
-
-```text
+```minimega
 minimega$ cc exec stdin=foo my_program
 minimega$ cc background stdin=foo stdout=bar my_program
 ```
 
-<a id="TOC_2.1.1."></a>
+### The pipe API
 
-#### The pipe API
-
-Named pipes are created on the first read, write, or mode selection on that
-pipe. To list current pipes, use the `pipe` API:
+A pipe comes into existence on its first read, write, mode change or via.
+`pipe` with no arguments lists the pipes in the current namespace:
 
 ```text
 minimega$ pipe
-name | mode        | readers | writers | via | last message
-bar  | all         | 1       | 1       |     |
-foo  | round-robin | 2       | 2       |     | a message!
+host | name          | mode        | readers | writers | count | via | previous
+mm1  | minimega//bar | all         | 1       | 1       | 3     |     | a message!
+mm1  | minimega//foo | round-robin | 2       | 2       | 12    |     | hello
 ```
 
-Using the `pipe` API, you can set the delivery mode (explained in the next
-section), write to a pipe, set vias (explained later), and delete pipes. When
-deleting a pipe, all attached readers will be closed (and receive an EOF).
+`count` is the number of messages the pipe has carried and `previous` is the
+last one. `clear pipe <name>` deletes a pipe and closes its readers, which
+receive an end of file; `clear pipe` alone deletes every pipe.
 
-<a id="TOC_2.1.2."></a>
+### Delivery modes
 
-#### multiplexing
+By default a message goes to every reader (`all`). The other two modes deliver
+each message to exactly one reader, including readers on other hosts, which
+turns a pipe into a work queue:
 
-By default, messages written to a pipe will be delivered to all readers. There
-are cases however, where you may want messages to be delivered to only one
-reader, similar to a load balancer. minimega pipes support three message
-delivery modes: all (the default one-to-many mode), round-robin, and random. In
-round-robin and random modes, messages written to a pipe will be delivered to
-exactly one reader (including distributed readers).
-
-To change the mode on a named pipe, use the `pipe` API:
-
-```text
+```minimega
 minimega$ pipe foo mode round-robin
+minimega$ pipe foo mode random
+minimega$ clear pipe foo mode
 ```
 
-<a id="TOC_2.1.3."></a>
+`clear pipe <name> mode` returns the pipe to `all`.
 
-#### vias
+### Logging a pipe
 
-Vias are single-stage, external programs that are invoked for **every** read that
-takes place on a named pipe. They are used in places where a value that is
-written to a pipe needs to be transformed in some way for every reader that
-message will be forwarded to. For example, say you want readers on pipe `foo`
-to have a unique, normally distributed floating point value based on a mean
-written to the pipe:
+To see what flows through a pipe without attaching a reader, turn on logging.
+Every message is then written to minimega's log at the `debug` level as
+`pipe <name>: <message>`:
+
+```minimega
+minimega$ log level debug
+minimega$ pipe foo log true
+minimega$ clear pipe foo log
+```
+
+### Vias
+
+A via is an external program run once for every reader on every write, with
+the message on its standard input and its output delivered to that reader in
+place of the original. Vias are for values that should differ per reader: for
+example, each reader on `foo` gets its own normally distributed sample around
+whatever mean was written.
 
 ![via.png](via.png)
 
-One approach would be to have the writer count the number of readers and
-generate N unique values based on the mean to a pipe with round-robin delivery.
-This is problematic as it requires the agent to check reader and pipe state at
-every potential write. Instead, we can have the pipe use a via to geneate
-unique values for every reader automatically when a write occurs:
-
-```text
-minimega$ pipe foo via "normal -stddev 5.0"
+```minimega
+minimega$ pipe foo via normal -stddev 5.0
 ```
 
-In the above example, "normal" is a program that takes, on standard input, a
-floating point value as a mean, and generates a single value on a normal
-distribution with the given mean and standard deviation. When a value is
-written to `foo`, minimega will invoke the "normal" program for every reader on
-the pipe, sending unique values to each:
+Here `normal` is a program that reads a mean from standard input and prints one
+sample. Writing `1.5` to `foo` now gives every reader a different value:
 
-```text
-# write a value to foo
-echo "1.5" | minimega -pipe foo
+```bash
+$ echo "1.5" | minimega -pipe foo
 
 # on node A
-minimega -pipe foo
+$ minimega -pipe foo
 2.35
 
 # on node B
-minimega -pipe foo
+$ minimega -pipe foo
 3.44
 ```
 
-<a id="TOC_2.2."></a>
+`clear pipe <name> via` removes the via. The program runs on the host where
+you issued `pipe <name> via` and must be on that host's `PATH`; writes made
+on other hosts are forwarded there first.
 
-### pipelines
+## Pipelines
 
-minimega provides the `plumb` API for creating pipelines of external processes
-and named pipes. Pipelines are constructed similar to unix pipelines, and
-follow the same basic semantics such as cascading standard I/O and signaling
-pipeline stages with EOF. However, minimega pipes are message-based and
-consume and emit newline delimited messages. Additionally, pipes support
-multiple readers and writers and delivery modes, so it's possible to construct
-arbitrary topologies of pipelines using multiple linear pipelines with the
-`plumb` API.
-
-For example, let's construct a simple, linear pipeline with the unix program "sed":
+`plumb` builds a pipeline from pipes and external programs, in the same order
+you would write a shell pipeline. Each argument that is not an executable on
+the host's `PATH` is taken to be a pipe. Programs run on the host where you
+issue `plumb`; the pipes at either end are distributed as usual, so readers
+anywhere in the experiment see the result.
 
 ```text
 minimega$ plumb foo "sed -u s/foo/moo/" bar
 minimega$ plumb
-pipeline
-foo sed -u s/foo/moo/ bar
+host | pipeline
+mm1  | minimega//foo sed -u s/foo/moo/ minimega//bar
 
 minimega$ pipe foo "the cow says foo"
-
 minimega$ pipe
-name | mode | readers | writers | via | last message
-bar  | all  | 0       | 1       |     | the cow says moo
-foo  | all  | 1       | 0       |     | the cow says foo
+host | name          | mode | readers | writers | count | via | previous
+mm1  | minimega//bar | all  | 0       | 1       | 1     |     | the cow says moo
+mm1  | minimega//foo | all  | 1       | 0       | 1     |     | the cow says foo
 ```
 
-In this example, we created a pipeline starting with a named pipe `foo`, then
-to an external process "sed -u s/foo/moo", and finally back to a named pipe
-`bar`. The plumber creates the pipeline, and starts any external processes. We
-can then write to the named pipe `foo` and see the result with the `pipe` API.
-In this example, all readers on `foo` would see the original message, and all
-readers on `bar` will see the message as modified by "sed".
+Use `-u` (unbuffered) with `sed` and the equivalent for other filters, or the
+program will hold output until its buffer fills.
 
-Also in this example, the pipeline stays running until one of the pipeline
-stages is closed. We can shutdown the entire pipeline using the minimega CLI
-either by clearing the plumber, or by simply closing the first pipe in the
-pipeline, `foo`:
+Because pipes accept multiple readers and writers, several linear pipelines
+compose into trees and fan-in:
 
-```text
-minimega$ plumb foo "sed s/foo/moo/" bar
+```minimega
+minimega$ plumb a b
+minimega$ plumb a c
+```
 
-minimega$ plumb
-pipeline
-foo sed s/foo/moo/ bar
+A pipeline runs until one of its stages closes. Stop it by clearing the first
+pipe, which sends end of file down the chain, or remove pipelines directly:
 
+```minimega
 minimega$ clear pipe foo
-minimega$ plumb
-minimega$
+minimega$ clear plumb minimega//foo sed -u s/foo/moo/ minimega//bar
+minimega$ clear plumb
 ```
 
-Named pipes in pipelines are distributed as usual, but external programs are
-invoked on the machine where the command is issued. This means that if you
-start a pipeline that uses `sed` and writes to pipeline `foo` on node X, the
-`sed` process will be launched only on node X, but readers anywhere in the
-experiment can read the value written to `foo`.
+`clear plumb` with a pipeline, written exactly as `plumb` lists it, removes
+that one; with no arguments it removes them all.
+
+!!! warning "Unguarded loops"
+    A pipeline whose output reaches its own input, such as `plumb foo cat foo`
+    or two pipelines that form a cycle, forwards the same message forever and
+    burns a CPU on every host involved. Feed loops through a stage that stops
+    on its own (`head -n 100`, `grep -m 1`) or write to a different pipe.
+
+## Copying a file between VMs
+
+Because both ends can be guests, a pipe is a quick way to move a text file
+between two VMs that share no network. On the receiver:
+
+```bash
+miniccc -pipe transfer > copy.txt
+```
+
+Then on the sender:
+
+```bash
+miniccc -pipe transfer < original.txt
+```
+
+The receiver does not exit on its own when the sender finishes: closing the
+sender's standard input only closes its writer, and `miniccc -pipe` exits when
+its own standard input closes, so end the receiver with Ctrl-D once the copy
+is complete. This is a
+line-oriented copy: each line is one message, so lines longer than 1 MiB
+abort the transfer, and the pipe adds a trailing newline to the final line if
+the original lacked one. For binary data or large files, use `cc send` and
+`cc recv` instead (see [Command and control](cc.md)).
+
+## See also
+
+- [Command and control](cc.md) for `cc exec` stream redirection and
+  `miniccc -pipe`.
+- [Command line and scripting](cli.md) for `minimega -pipe` and the command
+  socket.
+- Reference: [`pipe`](../reference/minimega.md#pipe),
+  [`plumb`](../reference/minimega.md#plumb),
+  [`clear pipe`](../reference/minimega.md#clear-pipe),
+  [`clear plumb`](../reference/minimega.md#clear-plumb).
