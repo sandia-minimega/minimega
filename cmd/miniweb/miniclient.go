@@ -5,7 +5,6 @@
 package main
 
 import (
-	"strings"
 	"sync"
 
 	"github.com/sandia-minimega/minimega/v2/pkg/miniclient"
@@ -29,22 +28,19 @@ func run(c *Command) chan *miniclient.Response {
 
 	var err error
 
-	if mm == nil {
-		if mm, err = miniclient.Dial(*f_base); err != nil {
-			log.Error("unable to dial: %v", err)
-			return noOp()
+	// a connection that saw any error, such as minimega going away during a
+	// request, cannot be reused, so drop it and redial
+	if mm != nil {
+		if err := mm.Error(); err != nil {
+			log.Info("redialing minimega after error: %v", err)
+			mm.Close()
+			mm = nil
 		}
 	}
 
-	// check if there's already an error and try to redial
-	if err := mm.Error(); err != nil {
-		s := err.Error()
-		if strings.Contains(s, "broken pipe") || strings.Contains(s, "no such file or directory") {
-			if mm, err = miniclient.Dial(*f_base); err != nil {
-				log.Error("unable to redial: %v", err)
-				return noOp()
-			}
-		} else {
+	if mm == nil {
+		if mm, err = miniclient.Dial(*f_base); err != nil {
+			log.Error("unable to dial: %v", err)
 			return noOp()
 		}
 	}

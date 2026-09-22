@@ -10,15 +10,25 @@ permissions:
 
 jobs:
   push-to-ghcr:
-    name: Build Docker image
+    name: Build ${{ matrix.target }} Docker image
     runs-on: ubuntu-latest
     timeout-minutes: 60
     concurrency:
-      group: docker-${{ github.event.pull_request.number || github.ref }}
+      group: docker-${{ matrix.target }}-${{ github.event.pull_request.number || github.ref }}
       cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     permissions:
       packages: write
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: minimega
+            image: ghcr.io/${{ github.repository }}
+            description: minimega is a tool for launching and managing virtual machines
+          - target: miniweb
+            image: ghcr.io/${{ github.repository_owner }}/miniweb
+            description: miniweb is the web interface for minimega
     steps:
       - name: Check out the repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -31,13 +41,15 @@ jobs:
         with:
           # list of Docker images to use as base name for tags
           images: |
-            ghcr.io/${{ github.repository }}
+            ${{ matrix.image }}
           labels: |
             org.opencontainers.image.vendor=Sandia National Laboratories
             org.opencontainers.image.authors=minimega dev team <minimega-dev@sandia.gov>
+            org.opencontainers.image.title=${{ matrix.target }}
             org.opencontainers.image.url=https://sandia-minimega.github.io/minimega/
             org.opencontainers.image.documentation=https://sandia-minimega.github.io/minimega/
-            org.opencontainers.image.description=minimega is a tool for launching and managing virtual machines
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.description=${{ matrix.description }}
             org.opencontainers.image.licenses=GPL-3.0
           # generate Docker tags based on the following events/attributes
           tags: |
@@ -59,6 +71,7 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile
+          target: ${{ matrix.target }}
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
