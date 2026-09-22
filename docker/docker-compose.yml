@@ -3,6 +3,7 @@ services:
     build:
       context: ../
       dockerfile: docker/Dockerfile
+      target: minimega
     image: minimega
     container_name: minimega
     hostname: minimega
@@ -15,6 +16,8 @@ services:
       options:
         max-file: "5"
         max-size: "10m"
+    # Port 9001 is published here, not on the miniweb service, because miniweb
+    # shares this container's network namespace.
     ports:
     - 9000:9000/udp
     - 9001:9001
@@ -26,3 +29,50 @@ services:
     - /var/log/minimega:/var/log/minimega
     healthcheck:
       test: mm version
+
+  miniweb:
+    build:
+      context: ../
+      dockerfile: docker/Dockerfile
+      target: miniweb
+    image: miniweb
+    container_name: miniweb
+    # miniweb proxies VNC and container consoles straight to the per-VM shim
+    # ports that minimega opens, so it shares the minimega network namespace.
+    # This also means `ports` and `hostname` cannot be set on this service.
+    network_mode: "service:minimega"
+    depends_on:
+    - minimega
+    restart: always
+    # miniweb only serves files, talks to the minimega socket, and binds an
+    # unprivileged port, so it needs no capabilities of its own.
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+    # Hardening for the reference deployment: nothing miniweb serves needs a
+    # writable image, so a compromise cannot rewrite the assets it hands to
+    # browsers. Drop `read_only` and `tmpfs` when developing or debugging in
+    # the container, where writing to the filesystem is the point. With
+    # `read_only` set, MINIWEB_LOGFILE has to point inside a mounted volume,
+    # such as /var/log/minimega.
+    read_only: true
+    tmpfs:
+    - /tmp
+    # The web console is off by default because it is an unauthenticated
+    # minimega command line. See "The web console" in README.md.
+    # environment:
+    #   MINIWEB_CONSOLE: /console-attach.sh
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "5"
+        max-size: "10m"
+    volumes:
+    - /etc/localtime:/etc/localtime:ro
+    - /tmp/minimega:/tmp/minimega
+    - /var/log/minimega:/var/log/minimega
+    # Uses the default MINIWEB_PORT, like the published port above; update
+    # both when changing it.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/9001"]
