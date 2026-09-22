@@ -127,33 +127,64 @@ variables still affect discovery and execution of external helpers.
 
 ### Docker container
 
-The image runs [`docker/start-minimega.sh`](../../docker/start-minimega.sh) as
-its default command. The script starts Open vSwitch, waits for it, starts
-miniweb, then runs minimega with `-nostdin` and generated flags.
+minimega and miniweb are separate images built from separate targets in
+[`docker/Dockerfile`](../../docker/Dockerfile): `--target minimega` and
+`--target miniweb`. A build with no `--target` produces the minimega image.
+
+The minimega image runs
+[`docker/start-minimega.sh`](../../docker/start-minimega.sh) as its default
+command. The script starts Open vSwitch, waits for it, then execs minimega with
+`-nostdin` and generated flags, so minimega runs as PID 1 and handles SIGTERM
+itself.
+
+The miniweb image runs
+[`docker/start-miniweb.sh`](../../docker/start-miniweb.sh), which execs miniweb
+as PID 1. miniweb needs the minimega socket directory (`/tmp/minimega` by
+default) and the minimega network namespace, because it proxies VNC and
+container consoles to per-VM shim ports. Compose uses
+`network_mode: "service:minimega"`; `docker run` uses
+`--network container:minimega`. Consequently the miniweb container publishes no
+ports, and `MINIWEB_PORT` is published by the minimega container instead.
 
 - `MM_BASE`, `MM_FILEPATH`, `MM_BROADCAST`, `MM_VLANRANGE`, `MM_PORT`,
   `MM_DEGREE`, `MM_CONTEXT`, `MM_LOGLEVEL`, `MM_LOGFILE`, `MM_FORCE`,
   `MM_RECOVER`, `MM_CGROUP`, and `MM_ABSSNAPSHOT` map to same-purpose minimega
   flags.
-- `MINIWEB_ROOT`, `MINIWEB_HOST`, and `MINIWEB_PORT` configure miniweb.
+- `MINIWEB_ROOT`, `MINIWEB_HOST`, `MINIWEB_PORT`, `MINIWEB_BASE`, and
+  `MINIWEB_LOGLEVEL` configure miniweb, and have defaults. `MINIWEB_LOGFILE`,
+  `MINIWEB_NAMESPACE`, `MINIWEB_PASSWORDS`, `MINIWEB_CERT`, `MINIWEB_KEY`, and
+  `MINIWEB_CONSOLE` have none; each maps to the same-named miniweb flag and is
+  only passed when non-empty. `MINIWEB_CONSOLE=/console-attach.sh` enables the
+  web console, which is an unauthenticated minimega command line unless
+  `MINIWEB_PASSWORDS` is also set. `MINIWEB_APPEND` adds raw miniweb flags. `MINIWEB_BASE` must match
+  the minimega container's `MM_BASE`.
+- The Compose `miniweb` service is hardened for the reference deployment:
+  `cap_drop: [ALL]`, `no-new-privileges`, `read_only: true`, and a tmpfs on
+  `/tmp`. With `read_only`, `MINIWEB_LOGFILE` must point inside a mounted
+  volume or miniweb exits with `read-only file system`. Removing the hardening
+  is supported, and expected when debugging inside the container.
 - `OVS_APPEND` adds raw `ovs-ctl start` arguments. `OVS_HOST_IFACE` uses
   `<bridge>:<port>[,<port>...]`.
 - `MM_APPEND` adds otherwise unsupported minimega flags, such as
   `-msa=20 -hashfiles`.
 
-Set values with Docker `-e`, Compose `environment` or `env_file`, or a file
-mounted at `/etc/default/minimega`. Existing **non-empty** container environment
-values take precedence; an unset or empty value permits the file value, then the
-script default. The file parser accepts simple `KEY=value` lines, strips only
-surrounding double quotes, and does not source shell expressions.
+Both startup scripts source
+[`docker/load-defaults.sh`](../../docker/load-defaults.sh), so this precedence
+is identical in both containers. Set values with Docker `-e`, Compose
+`environment` or `env_file`, or a file mounted at `/etc/default/minimega`.
+Existing **non-empty** container environment values take precedence; an unset
+or empty value permits the file value, then the script default. The file parser
+accepts simple `KEY=value` lines, strips only surrounding double quotes, and
+does not source shell expressions.
 This container-only file is distinct from the host service's
 `/etc/minimega/minimega.conf`.
 
 The wrapper expands scalar configuration values without shell quoting, so paths
 and other single values cannot safely contain whitespace, glob characters, or
-shell syntax. `MM_APPEND` and `OVS_APPEND` are intentionally split on whitespace:
-spaces separate shell-safe argument tokens but cannot be preserved inside one
-argument. In `MM_APPEND`, a positional token stops parsing later tokens. Because
+shell syntax. `MM_APPEND`, `MINIWEB_APPEND`, and `OVS_APPEND` are intentionally
+split on whitespace: spaces separate shell-safe argument tokens but cannot be
+preserved inside one argument. In `MM_APPEND`, a positional token stops parsing
+later tokens. Because
 it appears last, avoid accidentally duplicating generated flags unless an
 override is intentional.
 
@@ -161,12 +192,16 @@ Docker defaults intentionally differ from native defaults, including
 `MM_DEGREE=1`, `MM_LOGLEVEL=info`, `MM_LOGFILE=/var/log/minimega.log`, and
 `MM_FORCE=true`. Additional container gotchas:
 
-- Changing `MM_PORT` or `MINIWEB_PORT` also requires matching published ports.
+- Changing `MM_PORT` or `MINIWEB_PORT` also requires matching published ports,
+  both of which belong to the minimega container.
 - Changing `MM_BASE` breaks the `mm` wrapper and default Compose health check,
   which connect through `/tmp/minimega`; use `minimega -base=<path> -e ...` and
   update the health check.
 - Supplying a command after the image name replaces the Dockerfile `CMD` and
-  skips the Open vSwitch, miniweb, and minimega startup wrapper.
+  skips that image's startup wrapper.
+- The minimega image still ships the `miniweb` binary in `/opt/minimega/bin`,
+  but does not start it and does not carry the web assets or documentation;
+  those are in the miniweb image only.
 
 ### systemd service
 

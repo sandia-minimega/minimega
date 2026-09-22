@@ -3,32 +3,9 @@
 set -o pipefail
 
 # Check if there are values in /etc/default/minimega
-#   The order of precedence is:
-#     1. Existing environment variables
-#     2. Variables in /etc/default/minimega
-#     3. A set of defaults in this script
-if [[ -f "/etc/default/minimega" ]]; then
-  # Check if any variables are already set
-  while IFS='=' read -r key value; do
-    # Skip empty lines and comments
-    if [[ -n "$key" && -n "$value" && "$key" != \#* ]]; then
-      # Remove surrounding quotes
-      value="${value%\"}"
-      value="${value#\"}"
-
-      # Only set the variable if it is not already set
-      if [[ -z "${!key}" ]]; then
-        export "${key}=${value}"
-      fi
-    fi
-  done < <(grep -v '^#' "/etc/default/minimega")
-fi
+source /load-defaults.sh
 
 # Final default assignment (if these are not set already)
-: "${MINIWEB_ROOT:=/opt/minimega/web}"
-: "${MINIWEB_HOST:=0.0.0.0}"
-: "${MINIWEB_PORT:=9001}"
-
 : "${MM_BASE:=/tmp/minimega}"
 : "${MM_FILEPATH:=/tmp/minimega/files}"
 : "${MM_BROADCAST:=255.255.255.255}"
@@ -49,8 +26,6 @@ fi
 
 MM_SOCKET="${MM_BASE}/minimega"
 MM_PIDFILE="${MM_BASE}/minimega.pid"
-MINIWEB_PID=""
-MINIMEGA_PID=""
 
 # Remove stale minimega socket/PID state left behind by crashes or container stops.
 cleanup_stale_minimega_state() {
@@ -68,24 +43,6 @@ cleanup_stale_minimega_state() {
     rm -f "${MM_SOCKET}"
   fi
 }
-
-# Stop the background processes we started and clean any stale state before exit.
-shutdown() {
-  if [[ -n "${MINIMEGA_PID}" ]] && kill -0 "${MINIMEGA_PID}" 2>/dev/null; then
-    kill "${MINIMEGA_PID}"
-    wait "${MINIMEGA_PID}"
-  fi
-
-  if [[ -n "${MINIWEB_PID}" ]] && kill -0 "${MINIWEB_PID}" 2>/dev/null; then
-    kill "${MINIWEB_PID}"
-    wait "${MINIWEB_PID}"
-  fi
-
-  cleanup_stale_minimega_state
-}
-
-trap shutdown EXIT
-trap 'exit 143' TERM INT
 
 cleanup_stale_minimega_state
 
@@ -139,13 +96,13 @@ if [[ -v "OVS_HOST_IFACE" ]]; then
   fi
 fi
 
-echo "[$(date --rfc-3339=seconds)] starting miniweb..." | tee -a ${MM_LOGFILE}
-/opt/minimega/bin/miniweb -root=${MINIWEB_ROOT} -addr=${MINIWEB_HOST}:${MINIWEB_PORT} &
-MINIWEB_PID=$!
-echo "[$(date --rfc-3339=seconds)] miniweb started on ${MINIWEB_HOST}:${MINIWEB_PORT}" | tee -a ${MM_LOGFILE}
-
 echo "[$(date --rfc-3339=seconds)] starting minimega..." | tee -a ${MM_LOGFILE}
-/opt/minimega/bin/minimega \
+
+# Replace this script with minimega so that it runs as PID 1 and receives
+# signals from Docker directly. minimega handles SIGTERM itself: it tears down
+# namespaces and bridges, then removes its socket and PID file. Any state left
+# behind by a crash or a SIGKILL is cleaned up by the startup check above.
+exec /opt/minimega/bin/minimega \
   -nostdin \
   -force=${MM_FORCE} \
   -recover=${MM_RECOVER} \
@@ -160,7 +117,4 @@ echo "[$(date --rfc-3339=seconds)] starting minimega..." | tee -a ${MM_LOGFILE}
   -logfile=${MM_LOGFILE} \
   -cgroup=${MM_CGROUP} \
   -abssnapshot=${MM_ABSSNAPSHOT} \
-  ${MM_APPEND} &
-MINIMEGA_PID=$!
-echo "[$(date --rfc-3339=seconds)] minimega started with PID ${MINIMEGA_PID}" | tee -a ${MM_LOGFILE}
-wait "${MINIMEGA_PID}"
+  ${MM_APPEND}

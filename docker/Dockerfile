@@ -38,8 +38,44 @@ COPY --from=gobuilder /minimega/.git ./.git
 RUN python scripts/zensical_build.py build --strict
 
 
+# -- miniweb image --
+FROM ${BASE_IMAGE} AS miniweb
+
+ENV DEBIAN_FRONTEND="noninteractive" \
+    PATH="$PATH:/opt/minimega/bin"
+
+# miniweb serves static files and proxies to minimega over its Unix socket. The
+# only package it needs is libpcap, which the minimega binary below links
+# against; miniweb itself needs nothing beyond the base image.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends libpcap0.8 \
+  && apt-get clean -y \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=gobuilder /minimega/bin/miniweb /opt/minimega/bin/miniweb
+
+# The minimega binary is included so the web console can work (MINIWEB_CONSOLE).
+# miniweb spawns it as `minimega -attach`, which is a client that talks to the
+# minimega container over the shared command socket.
+COPY --from=gobuilder /minimega/bin/minimega /opt/minimega/bin/minimega
+
+# Copy files from source tree
+COPY ./web /opt/minimega/web
+COPY --from=docbuilder /minimega/site /opt/minimega/web/docs
+COPY ./docker/load-defaults.sh /load-defaults.sh
+COPY ./docker/start-miniweb.sh /start-miniweb.sh
+COPY ./docker/console-attach.sh /console-attach.sh
+
+RUN ln -s /opt/minimega/web/docs /opt/minimega/docs \
+  && chmod +x /start-miniweb.sh /console-attach.sh
+
+WORKDIR /opt/minimega
+
+CMD ["/start-miniweb.sh"]
+
+
 # -- minimega image --
-FROM ${BASE_IMAGE}
+FROM ${BASE_IMAGE} AS minimega
 
 ENV DEBIAN_FRONTEND="noninteractive" \
     PATH="$PATH:/opt/minimega/bin"
@@ -59,6 +95,8 @@ RUN apt-get update \
 # While this includes some tools like minitest that generally aren't
 # needed in a deployment, the disk utilization difference is minimal,
 # and ensures any future tools get included in the Docker image.
+# miniweb is included for the same reason, but it is not started here; it
+# runs in its own container built from the miniweb stage above.
 COPY --from=gobuilder /minimega/bin/ /opt/minimega/bin/
 
 # Pre-generate the bash tab-completion script so it's available out of the
@@ -76,13 +114,11 @@ COPY --from=gobuilder /minimega/README.md /opt/minimega/lib/README.md
 COPY --from=gobuilder /minimega/VERSION   /opt/minimega/lib/VERSION
 
 # Copy files from source tree
-COPY ./web /opt/minimega/web
-COPY --from=docbuilder /minimega/site /opt/minimega/web/docs
 COPY ./docker/mm /usr/local/bin/mm
+COPY ./docker/load-defaults.sh /load-defaults.sh
 COPY ./docker/start-minimega.sh /start-minimega.sh
 
-RUN ln -s /opt/minimega/web/docs /opt/minimega/docs \
-  && chmod +x /usr/local/bin/mm \
+RUN chmod +x /usr/local/bin/mm \
   && chmod +x /start-minimega.sh
 
 WORKDIR /opt/minimega

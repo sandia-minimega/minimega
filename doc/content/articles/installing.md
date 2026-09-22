@@ -83,9 +83,12 @@ Windows binaries of several tools.
 
 ### Docker container
 
-The container image includes minimega, its runtime dependencies, miniweb, and
-this documentation. It requires Linux host access to KVM, Open vSwitch, devices,
-and networking, so run it as a privileged container:
+minimega and miniweb ship as two images. The minimega image includes minimega
+and its runtime dependencies; the miniweb image includes miniweb, the web
+assets, and this documentation.
+
+minimega requires Linux host access to KVM, Open vSwitch, devices, and
+networking, so run it as a privileged container:
 
 ```bash
 docker run -d \
@@ -102,6 +105,24 @@ docker run -d \
   --health-cmd "mm version" \
   ghcr.io/sandia-minimega/minimega:master
 ```
+
+miniweb is optional. It shares the minimega container's network namespace so it
+can proxy VNC and container consoles, which is why it publishes no ports of its
+own and why the minimega container above publishes 9001:
+
+```bash
+docker run -d \
+  --name miniweb \
+  --network container:minimega \
+  -v /etc/localtime:/etc/localtime:ro \
+  -v /tmp/minimega:/tmp/minimega \
+  -v /var/log/minimega:/var/log/minimega \
+  ghcr.io/sandia-minimega/miniweb:master
+```
+
+The miniweb web console is off by default. Add
+`-e MINIWEB_CONSOLE=/console-attach.sh` to enable it, keeping in mind that it
+exposes a full minimega command line to anyone who can reach miniweb.
 
 See the
 [Docker guide](https://github.com/sandia-minimega/minimega/blob/master/docker/README.md)
