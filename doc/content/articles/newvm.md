@@ -1,190 +1,139 @@
-# Building VMs with vmbetter
+# Creating VMs from install media
 
+This page walks through installing an operating system from an ISO into a disk
+image that then serves as a reusable base for many VMs, and through adding
+miniccc to the result. Use it when you need a full distribution, vendor
+software, or a desktop that the minimal images from
+[vmbetter](vmbetter.md) do not provide. For Windows-specific driver and
+service steps, continue with [Windows guests](windows.md).
 
-<a id="TOC_1."></a>
+You need a running minimega (see [Installation](installing.md)), an install
+ISO in minimega's files directory (`/tmp/minimega/files` by default), and a
+way to see the console: [miniweb](miniweb.md) or a [VNC](vnc.md) client.
 
-## Introduction
+## Create the disk and boot the installer
 
-Before you can use minimega, you must build disk images or RAM disks for your
-VMs. The minimega distribution includes `vmbetter`, which can build several
-minimal RAM disks (see
-[the vmbetter tutorial for more information](tutorials/vmbetter.md)).
-These work well for generic experiments but sometimes, you need more than a
-minimal install. This article describes the process to build a VM disk from an
-install CD.
+Create an empty qcow2 image, attach it and the ISO, and turn snapshot mode off
+so the installer's writes land in the image rather than in a temporary
+overlay:
 
-<a id="TOC_2."></a>
-
-## Install CD
-
-First, you must obtain an install CD as an ISO image. This can be downloaded
-from the web or provided by a vendor.
-
-<a id="TOC_3."></a>
-
-## Starting a VM
-
-In order to perform the install, we create a new qcow and launch a VM with it
-and the cdrom:
-
-```text
-disk create qcow2 ubuntu.qcow2 20G
-vm config disk ubuntu.qcow2
-vm config cdrom ubuntu.iso
-vm config snapshot false
-vm launch kvm ubuntu
-vm start all
+```minimega
+minimega$ disk create qcow2 debian-base.qc2 20G
+minimega$ vm config disks debian-base.qc2
+minimega$ vm config cdrom debian-13.iso
+minimega$ vm config snapshot false
+minimega$ vm launch kvm installer
+minimega$ vm start installer
 ```
 
-Importantly, we set `snapshot=false` so that any changes we make to the disk
-persist. Without this flag, all the changes would disappear when we killed the
-VM.
+The qcow2 file starts small and grows as the guest writes; `20G` is only the
+size the guest sees. When `vm config cdrom` is set, the CD is automatically the
+boot device, so the installer comes up first. Adjust `vm config memory` and
+`vm config vcpus` if the installer needs more than the defaults (2048 MB and
+one vCPU).
 
-<a id="TOC_3.1."></a>
+Open the VM's console in miniweb and complete the installation as you would on
+hardware. If the installer needs network access to fetch packages, launch
+the VM with `vm config networks 100` and give VLAN 100 a tap, DHCP, and NAT as
+described in [Host networking](networking.md).
 
-### Network-based install
+When the installer asks to reboot, either eject the ISO so the guest boots from
+disk, or shut down and relaunch without the `cdrom` setting:
 
-Some installers make use the Internet to pull more recent packages or software.
-See [this article](nat.md) for more information.
+```minimega
+minimega$ vm cdrom eject installer
+```
 
-<a id="TOC_4."></a>
+## Add miniccc
 
-## Perform the install
+Most experiments want miniccc in the image so that the [command and
+control](cc.md) API works. The simplest way is to shut the VM down and inject
+the binary and a service unit straight into the disk image with
+`disk inject`, which needs no network and no console:
 
-The VM should now be running and the installer will be waiting for user input.
-Start `miniweb` and click through the installer using the web interface.
-
-<a id="TOC_5."></a>
-
-## Post-install configuration
-
-Once the VM is installed, you may make additional changes to the filesystem in
-order to make persistent changes. This could mean installing additional
-software or configurations.
-
-<a id="TOC_5.1."></a>
-
-### Adding miniccc to VMs
-
-Typically, we add `miniccc` to our VM images to facilitate experiment control.
-First, we must load the binary onto the VM. This can be done in a number of
-different ways including over the network (if the VM is launched with an
-interface) or via the `hotplug` API.
-
-Once `miniccc` is on the VM, we must configure it to start automatically.
-
-<a id="TOC_5.1.1."></a>
-
-#### init Scripts (Linux)
-
-There are several examples of integrating miniccc into vmbetter-built VMs in
-the repo (see `misc/vmbetter_configs/`).
-
-<a id="TOC_5.1.2."></a>
-
-#### systemd Integration (Linux)
-
-To start miniccc automatically with systemd, add the following to
-`/etc/systemd/system/miniccc.service`:
-
-```text
+```text title="miniccc.service"
 [Unit]
 Description=miniccc
 
 [Service]
-ExecStart=/miniccc -v=false -serial /dev/virtio-ports/cc -logfile /var/log/miniccc.log
+ExecStart=/usr/local/bin/miniccc -v=false -serial /dev/virtio-ports/cc -logfile /var/log/miniccc.log
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-You may need to adjust the ExecStart command if you copied miniccc elsewhere.
-And then enable the service:
-
-```text
-systemctl enable miniccc.service
+```minimega
+minimega$ disk inject debian-base.qc2 files /opt/minimega/bin/miniccc:/usr/local/bin/miniccc /tmp/minimega/files/miniccc.service:/etc/systemd/system/miniccc.service
 ```
 
-This will start miniccc whenever the VM starts. If you are adding to a VM with
-snapshot=false, you should now shutdown the VM and save the disk image.
+systemd enables a unit through a symlink in
+`/etc/systemd/system/multi-user.target.wants/`. Either boot the VM once more
+with `snapshot false` and run `systemctl enable miniccc`, or inject the symlink
+too: create it on the host with
+`ln -s /etc/systemd/system/miniccc.service /tmp/miniccc.link` and add
+`/tmp/miniccc.link:/etc/systemd/system/multi-user.target.wants/miniccc.service`
+to the `files` list. `disk inject` picks the first partition when the image
+has only one; otherwise name it with a suffix such as `debian-base.qc2:2`.
+The full rules are in [Disk images and the disk API](disk-images.md).
 
-<a id="TOC_5.1.3."></a>
+If you would rather copy files into a running guest, the alternatives are:
 
-#### Task Scheduler (Windows)
+- `vm hotplug add <vm> <image>` attaches a USB disk. Build one with
+  `disk create raw usb.img 64M`, format it (`mkfs.vfat usb.img`), and put the
+  files on it with `disk inject usb.img:none files ...`.
+- A network path, when the VM has an interface: fetch from a web server on the
+  host tap, or `scp` in.
+- The [vmbetter](vmbetter.md) overlays, if you are building rather than
+  installing.
 
-The built-in Task Scheduler on Windows can be configured to run `miniccc.exe`
-on startup.
+Use the `miniccc` from the same minimega release as the server; mismatched
+versions log a warning at connect time and may misbehave.
 
-<a id="TOC_6."></a>
+## Finish the image
 
-## Final steps
+Before shutting down for the last time:
 
-<a id="TOC_6.1."></a>
+- Remove package caches (`apt clean`) and anything else you do not want in
+  every clone.
+- Give clones distinct identities: clear `/etc/machine-id` and remove
+  `/etc/ssh/ssh_host_*` so they regenerate on first boot. On Windows, run
+  Sysprep instead (see [Windows guests](windows.md)).
+- If the guest uses systemd's predictable interface names, its NIC may be
+  `ens3` on one `vm config` and `enp0s4` on another because the name follows
+  the PCI slot. Adding `net.ifnames=0` to the guest's kernel command line keeps
+  it `eth0`.
 
-### Clean up
+Shut the guest down from inside using its own shutdown command and wait for
+`vm info` to show state `QUIT` so the filesystem is consistent, then flush the
+VM. Zero-filling free space and converting the image afterwards shrinks the
+file; see [Disk images and the disk API](disk-images.md).
 
-To make the image smaller, you may wish to remove any cached files (e.g. run
-`apt clean`).
-
-<a id="TOC_6.2."></a>
-
-### Sysprep (Windows)
-
-Before finalizing a Windows VM, it is a good idea to use Sysprep to generalize
-the VM. This removes computer-specific information so that when you launch
-multiple VMs from the same image, they each have a different identifier.
-
-<a id="TOC_6.3."></a>
-
-### Shutdown
-
-Finally, shutdown the VM from within the VM using the standard shutdown
-mechanism. Wait for the VM to fully shutdown to ensure that the filesystem is
-in a consistent state. minimega will update the VM state to `quit` when the VM
-has fully powered off. You may now call `vm flush` to remove the VM.
-
-The image should now be ready to use:
-
-```text
-vm config disk ubuntu.qcow2
-vm launch kvm ubuntu[0-3]
-vm start all
+```minimega
+minimega$ vm flush
 ```
 
-Note that further changes can be made by launching the VM with
-`snapshot=false`.
+The image is now a base. Snapshot mode is on by default, so any number of VMs
+can share it without modifying it:
 
-<a id="TOC_7."></a>
-
-## Optional: multi-stage builds
-
-Occasionally builds are complex enough to require manual intervention between
-the initial install and the final packaging. To facilitate this, `vmbetter` is
-roughly split into two stages (build and package). You can use the `-1` and
-`-2` flags, along with `chroot` to perform post-install activities before
-having `vmbetter` build the final image.
-
-To begin, use any arguments as you normally would, and add the `-1` flag. After
-the deployment, `vmbetter` will create a `<config>_stage1` directory, named
-after the config file you used. For example:
-
-```text
-vmbetter -1 miniccc.conf
-ls miniccc_stage1
+```minimega
+minimega$ vm config disks debian-base.qc2
+minimega$ vm launch kvm node[1-8]
+minimega$ vm start all
 ```
 
-From here, you can use `chroot` to enter the filesystem, make changes, and then
-finalize the build:
+To change the base later, launch it once more with `vm config snapshot false`,
+make the change, and shut down cleanly. To keep the original untouched, take a
+`disk snapshot` first and modify the snapshot instead.
 
-```text
-chroot miniccc_stage1
-touch foo
-exit
-```
+## See also
 
-When your changes are complete - you can have vmbetter finalize the build by
-using the `-2` flag (along with the original config file):
-
-```text
-vmbetter -2 miniccc_stage1 miniccc.conf
-```
+- [Disk images and the disk API](disk-images.md)
+- [Windows guests](windows.md)
+- [Building images with vmbetter](vmbetter.md)
+- [Command and control](cc.md)
+- [Host networking](networking.md)
+- Reference: [`vm config cdrom`](../reference/minimega.md#vm-config-cdrom),
+  [`vm config disks`](../reference/minimega.md#vm-config-disks),
+  [`vm config snapshot`](../reference/minimega.md#vm-config-snapshot),
+  [`vm cdrom`](../reference/minimega.md#vm-cdrom),
+  [`vm hotplug`](../reference/minimega.md#vm-hotplug)

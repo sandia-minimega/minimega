@@ -1,311 +1,321 @@
-# Creating routers with minimega
+# Routing with minirouter
 
+minirouter is a small daemon that runs inside a VM and turns it into a router you configure from the minimega prompt: interface addresses, DHCP, DNS, IPv6 router advertisements, static routes, OSPF, BGP and a basic firewall. minimega reaches it over the [command and control](cc.md) channel, so a router VM needs no management network and its whole configuration is part of the experiment. This page covers how the pieces fit together, where to get a minirouter image, the `router` API, and three worked topologies.
 
-<a id="TOC_1."></a>
+You need miniccc working first, because that is how configuration reaches the VM, and you should know how [VLANs and taps](networking.md) work, since a router is only useful between two of them.
 
-## Introduction
+## How it works
 
-`minirouter` is a simple tool, run in a VM, that orchestrates various router
-functions such as DHCP, DNS, IPv4/IPv6 assignments, and, of course, routing.
-The `minirouter` tool is interfaced by minimega's `router` API, described
-below, and the minimega distribution provides a prebuilt `minirouter` container
-image.
+A minirouter VM runs two of minimega's agents: miniccc, which provides the back-channel, and minirouter, which listens on a Unix socket (`/tmp/minirouter/minirouter` by default) for configuration. Each `router <vm> ...` command only edits a description held by minimega. `router <vm> commit` writes that description to a file named `minirouter-<vm>` in the iomeshage files directory (under the namespace's subdirectory when a namespace is active) and queues three cc commands for the VM: remove any earlier copy under `/tmp/miniccc/files/`, send the new file, and run `minirouter -u /tmp/miniccc/files/minirouter-<vm>`. The `-u` invocation feeds the file into the running daemon's socket; the daemon then rewrites the configuration of the programs it drives and restarts them, and reports back through VM tags.
 
-`minirouter` currently supports several protocols and capabilities including
-DHCP, DNS, router advertisements, OSPF, and static routes. It can route in
-excess of 40 gigabits per second when running as a container.
-
-<a id="TOC_2."></a>
-
-## Obtaining a minirouter image
-
-`minirouter` can run on bare metal, as a container, or a KVM image.
-
-<a id="TOC_2.1."></a>
-
-### Prebuilt container image
-
-A prebuilt, busybox-based, container image is available
-[here](https://storage.googleapis.com/minimega-files/minimega-2.3-minirouter.tar.bz2).
-This image can be built using the build script in `misc/minirouter` in the
-minimega repo. The minirouter image is configured to start miniccc and
-minirouter at startup.
-
-<a id="TOC_2.2."></a>
-
-### Building a KVM image
-
-You can also build a disk image for booting in KVM using vmbetter (see
-[the vmbetter tutorial for more information](tutorials/vmbetter.md))
-
-```text
-$ ./bin/vmbetter -branch stable -level debug misc/vmbetter_configs/minirouter.conf
+```mermaid
+sequenceDiagram
+    participant P as minimega prompt
+    participant M as minimega
+    participant C as miniccc in VM
+    participant R as minirouter in VM
+    P->>M: router r0 interface 0 10.0.0.1/24
+    P->>M: router r0 commit
+    M->>M: write files/minirouter-r0
+    M->>C: rm old file, send file, exec minirouter -u
+    C->>R: minirouter -u /tmp/miniccc/files/minirouter-r0
+    R->>R: rewrite bird and dnsmasq configs, set addresses, restart
+    R-->>M: status via miniccc -tag
 ```
 
-<a id="TOC_2.3."></a>
+| Function | Program minirouter drives |
+|---|---|
+| Interface addresses, loopbacks | `ip`, `dhclient` |
+| Default gateway | `route` |
+| DHCP, DNS, router advertisements | `dnsmasq` |
+| Static routes, OSPF, BGP | `bird` and `bird6` ([BIRD 1.x](https://bird.network.cz/?get_doc&v=16&f=bird.html)) |
+| Firewall | `iptables` |
 
-### Running minirouter without an image
+Because delivery is asynchronous, the VM must be running with miniccc connected before the commit does anything, and changes take a few seconds to land. `router <vm>` with no subcommand prints the description minimega holds together with the log lines the router has sent back, and `vm info` shows the router's addresses once they are configured.
 
-minirouter is simply a Linux binary that can run on any Linux system. You
-do not specifically need to build an image to run it, although it is
-more convenient.
+minirouter itself takes a few flags, all with sensible defaults: `-path` for its socket directory, `-miniccc` for the miniccc binary it calls to send logs and tags back (`/miniccc`), `-force` to start even if a stale socket exists, `-u <file>` to push a configuration file into a running instance, and `-cli` to print its command grammar. The [minirouter reference](../reference/minirouter.md) lists that grammar; you never type it yourself, but it is what a committed file contains.
 
-To use minirouter, you must have the miniccc agent running, and
-minirouter must be able to access the miniccc tool and files directory
-(see `minirouter -h` for default paths).
+## Getting a minirouter image
 
-`minirouter` uses `iptool`, `dnsmasq`, `dhclient`, and `bird`, all of which
-must be installed but not already running. `minirouter` must run as root.
+minirouter runs as a container, as a KVM guest, or on any Linux system that has miniccc plus `ip`, `dhclient`, `dnsmasq`, `bird`, `bird6` and `iptables` installed and not already running. Containers are the usual choice: they start instantly and route at line rate, well beyond what an emulated NIC in a KVM guest manages.
 
-Beyond these few requirements, `minirouter` should run on most linux
-systems.
+### Container root filesystem
 
-<a id="TOC_3."></a>
+`misc/uminirouter/build.bash` in the source tree builds a minimal busybox-based root filesystem. Run it on a Debian or Ubuntu host that has `bird`, `dnsmasq` and `isc-dhcp-client` installed and a built `bin/minirouter` and `bin/miniccc` in the checkout:
 
-## Starting minirouter
-
-VMs running the `minirouter` tool must have `miniccc` running as well (this is
-already configured in the prebuilt `minirouter` image). Configuring a
-`minirouter` image is similar to describing and launching a VM in minimega. One
-first describes the router parameters, and then commits the configuration,
-which causes the minirouter tool to set IPs and start other necessary tools on
-the router VM. `minirouter` VMs must be running before configuring the router,
-and configurations can be updated at runtime.
-
-The `router` API requires a VM name or ID when configuring a router. For
-example, to set a static IP on a running `minirouter` VM named 'foo':
-
-```text
-minimega$ router foo interface 0 10.0.0.1/24
-minimega$ router foo commit
+```bash
+$ cd misc/uminirouter
+$ ./build.bash
 ```
 
-While the first command above sets the configuration for the router image, the
-second line actually commits the configuration by sending commands to
-minirouter over the command and control layer in minimega. Multiple
-configuration commands can be issued and then later committed with a single
-`commit` command.
+It produces `uminirouterfs/` and `uminirouterfs.tar.gz`. The directory's `init` starts miniccc and minirouter. Its `preinit` turns on IPv4 and IPv6 forwarding and has to be given to minimega separately, because a container's `/proc` is read-only once it is running and forwarding can only be switched on during setup, which is what `vm config preinit` is for:
 
-<a id="TOC_4."></a>
-
-## Interfaces
-
-Routers often have statically assigned IP addresses and `minirouter`
-supports both IPv4 and IPv6 address specification using the `interface` API.
-For example, to add the IP 10.0.0.1/24 to the second interface on a
-`minirouter` VM:
-
-```text
-minimega$ vm config net a b
-
-# add an ip to interface b (index 1)
-minimega$ router foo interface 1 10.0.0.1/24
+```minimega
+vm config filesystem /root/uminirouterfs
+vm config preinit /root/uminirouterfs/preinit
+vm launch container r0
 ```
 
-Multiple addresses can be added to the same interface as well:
+`vm config filesystem tar:uminirouterfs.tar.gz` unpacks the tarball from the iomeshage directory on whichever host launches the container, which is convenient on a cluster. The Debian-based alternative is `misc/vmbetter_configs/minirouter_container.conf`, built with `vmbetter -rootfs`; it installs `bird` and `dnsmasq` from packages, adds sshd and a full userland, and uses the same kind of init.
 
-```text
-minimega$ router foo interface 0 10.0.0.1/24
-minimega$ router foo interface 0 2001:1::1/64
+### KVM image
+
+`misc/vmbetter_configs/minirouter.conf` builds a kernel and initrd pair whose init enables forwarding and starts sshd, miniccc on the virtio serial port and minirouter:
+
+```bash
+$ vmbetter misc/vmbetter_configs/minirouter.conf
 ```
 
-minirouter can also assign loopback interfaces. These types of interfaces are
-useful in routing processes (i.e. OSPF)
+The overlay only contains the init script, so copy `bin/miniccc` and `bin/minirouter` into `misc/vmbetter_configs/minirouter_overlay/` before building. Boot the result with `vm config kernel minirouter.kernel` and `vm config initrd minirouter.initrd`, and give the VM enough memory for a full Debian userland. [Building images with vmbetter](vmbetter.md) covers the tool.
 
-```text
-minimega$ router foo interface 1 11.0.0.1/32 lo
+## Configuring a router
+
+The pattern is always the same: describe, then commit.
+
+```minimega
+router r0 interface 0 10.0.0.1/24
+router r0 dhcp 10.0.0.0 range 10.0.0.100 10.0.0.200
+router r0 commit
 ```
 
-<a id="TOC_5."></a>
+You can commit as often as you like; each commit sends the complete description, so a change to a running router is just another commit. `router r0 log level debug` raises the router's own log level before the next commit if you need to see what it is doing, and `router r0 rid 10.0.0.1` sets the 32-bit router ID used by OSPF and BGP.
 
-## DHCP and DNS
+### Interfaces
 
-We use [dnsmasq](http://www.thekelleys.org.uk/dnsmasq/doc.html) to provide
-DHCP, router advertisements, and DNS capabilities in `minirouter`. dnsmasq has
-extensive support for various DHCP and DNS options, and `minirouter` uses a
-subset of common capabilities.
+Interfaces are numbered by their position in the router VM's `vm config networks`. Give an interface a static IPv4 or IPv6 address, or let it ask for one with DHCP, and add as many addresses to it as you need:
 
-<a id="TOC_5.1."></a>
+```minimega
+vm config networks wan lan
+# ...
+router r0 interface 0 dhcp
+router r0 interface 1 192.168.1.1/24
+router r0 interface 1 2001:db8:1::1/64
+```
+
+A loopback address is often wanted for routing protocols; the `lo` keyword puts it on the loopback interface instead, and the index is then only a label:
+
+```minimega
+router r0 interface 2 10.255.0.1/32 lo
+```
+
+`router r0 gw <ip>` sets a default gateway and `router r0 upstream <ip>` the DNS server that the router's own resolver forwards to.
 
 ### DHCP
 
-`minirouter` supports DHCP assignment of connected clients and supports both IP
-range and static IP assignment. `minirouter` also supports several DHCP
-options such as setting the default gateway and nameserver.
+Each DHCP server on a router is identified by the network it serves, which is also the tag dnsmasq groups its options under. Add a range, static leases, and the gateway and DNS server to advertise:
 
-For example, to serve the IP range 10.0.0.2 - 10.0.0.254 on a 10.0.0.0/24
-network, specify the network prefix and DHCP range:
-
-```text
-minimega$ router foo dhcp 10.0.0.0 range 10.0.0.2 10.0.0.254
+```minimega
+router r0 dhcp 192.168.1.0 range 192.168.1.100 192.168.1.200
+router r0 dhcp 192.168.1.0 static 00:11:22:33:44:55 192.168.1.10
+router r0 dhcp 192.168.1.0 router 192.168.1.1
+router r0 dhcp 192.168.1.0 dns 192.168.1.1
 ```
 
-You can also specify static IP assignments with a MAC/IP address pair:
+A router can serve several networks; use a different network for each interface it should serve. A server with static entries but no range hands out only the static leases.
 
-```text
-minimega$ router foo dhcp 10.0.0.0 static 00:11:22:33:44:55 10.0.0.100
+### DNS and router advertisements
+
+`router r0 dns <ip> <hostname>` adds an A or AAAA record served by the router's dnsmasq, and `router r0 ra <prefix>` enables IPv6 router advertisements for a /64 so hosts can configure themselves with SLAAC:
+
+```minimega
+router r0 dns 192.168.1.10 fileserver.lan
+router r0 dns 2001:db8:1::10 fileserver.lan
+router r0 ra 2001:db8:1::
 ```
-
-Additionally, you can specify the default gateway and nameserver:
-
-```text
-minimega$ router foo dhcp 10.0.0.0 router 10.0.0.254
-minimega$ router foo dhcp 10.0.0.0 dns 8.8.8.8
-```
-
-All of these DHCP options can be used together in a single DHCP specification,
-and multiple DHCP servers can be specified on a single `minirouter` instance
-(for serving DHCP on multiple interfaces/networks).
-
-<a id="TOC_5.2."></a>
-
-### IPv6 Router Advertisements
-
-`minirouter` supports IPv6 router advertisements using the Neighbor Discovery
-Protocol to enable
-[SLAAC](https://en.wikipedia.org/wiki/IPv6#Stateless_address_autoconfiguration_.28SLAAC.29)
-addressing. To enable route advertisements simply provide the subnet. Only the
-subnet prefix is required as SLAAC addressing requires a /64 and is implied.
-
-```text
-minimega$ router foo ra 2001:1:2:3::
-```
-
-<a id="TOC_5.3."></a>
-
-### DNS
-
-`minirouter` provides a simple mechanism to add `A` or `AAAA` records for
-any host/IP (including IPv6) pair. Simply specify the host and IP address of
-the record:
-
-```text
-minimega$ router foo dns 1.2.3.4 foo.com
-```
-
-<a id="TOC_6."></a>
-
-## Routing
-
-`minirouter` uses the [bird routing daemon](http://bird.network.cz/) to
-provide routing using a variety of protocols. Currently, `minirouter` only
-supports static, OSPF and bgp routes.
-
-Bird is a lightweight routing daemon that scales well. In our tests we were
-able to scale minirouter with bird to at least 40 gigabit.
-
-<a id="TOC_6.1."></a>
 
 ### Static routes
 
-`minirouter` makes possible adding IPv4 or IPv6 static routes by simply
-specifying the destination network and net-hop IP. For example, to add a
-static IPv4 route for the 1.2.3.0/24 network via 1.2.3.254:
+A static route is a destination and a next hop, IPv4 or IPv6:
 
-```text
-minimega$ router foo route static 1.2.3.0/24 1.2.3.254
+```minimega
+router r0 route static 192.168.2.0/24 10.0.0.2
+router r0 route static 0.0.0.0/0 10.0.0.254
+router r0 route static 2001:db8:2::/64 2001:db8::2
 ```
 
-Or to specify a default route:
-
-```text
-minimega$ router foo route static 0.0.0.0/0 1.2.3.254
-```
-
-IPv6 routes are added in the same way:
-
-```text
-minimega$ router foo route static 2001:1:2:3::/64 2001:1:2:3::1
-```
-
-You can also give names to static routes so you can combine multple routes
-under a single name. By doing so you can create simple filter or advertise
-this route in routing processes like OSPF and BGP. For example, setting a
-static route with the name bar-route
-
-```text
-minimega$ router foo route static 1.2.3.0/24 1.2.3.254 bar-route
-```
-
-<a id="TOC_6.2."></a>
+A third argument names the route. Named routes are what OSPF and BGP export filters refer to, and the pattern `router r0 route static 10.0.0.0/24 0 lan-routes`, with `0` as the next hop, is the documented way to define a named prefix purely to advertise it.
 
 ### OSPF
 
-`minirouter` provides basic support for OSPF and OSPFv3 (IPv6 enabled OSPF) by
-specifying the OSPF area and **interface** to include in the area. OSPF generally
-supports specifying networks and many other options, which `minirouter` may add
-in the future. Specifying an interface (and all of the networks on
-that interface) is provided. Both OSPF and OSPFv3 are enabled by `minirouter`.
-You can also specify specific networks or static routes into the OSPF process.
+OSPF (and OSPFv3 for IPv6, enabled together) is configured per area and per interface index. Every network on a listed interface takes part:
 
-Interfaces are identified by the index in which they were added by the
-`vm config net` API. For example, to add the first and third network of the
-router VM to area 0 in an OSPF route:
-
-```text
-minimega$ vm config net a b c
-
-# add interface 'a', index 0
-minimega$ router foo route ospf 0 0
-
-# add interface 'c', index 2
-minimega$ router foo route ospf 0 2
+```minimega
+vm config networks a b c
+# ...
+router r0 route ospf 0 0      # interface a into area 0
+router r0 route ospf 0 2      # interface c into area 0
 ```
 
-Now lets say you want to advertise a network that is on index 1 but you do not
-want interface 1 to participate in OSPF (i.e. its an Internet facing interface)
+To advertise a prefix without running OSPF on the interface that carries it, or to advertise a named static route, use `export` with the area:
 
-```text
-# advertise network 10.0.0.0/24 in OSPF area 0
-minimega$router foo route ospf 0 export 10.0.0.0/24
+```minimega
+router r0 route ospf 0 export 10.0.0.0/24
+router r0 route static 0.0.0.0/0 10.0.0.254 default-route
+router r0 route ospf 0 export default-route
 ```
 
-Say you want to advertise a specific static route(s) into the ospf process.
-The export command provides this functionality
+#### Link cost and other interface options
 
-```text
-# advertise network default route 0.0.0.0/0 in OSPF area 0
-minimega$router foo route static 0.0.0.0/0 1.2.3.254 default-route
-minimega$router foo route ospf export default-route
+OSPF picks paths by summed interface cost, and BIRD's default cost for every interface is 10. Any interface option BIRD accepts can be set with a fifth and sixth argument; the option and value are copied verbatim into the interface block of the generated configuration:
+
+```minimega
+router routerA route ospf 0 1 cost 20
+router routerA commit
 ```
 
-<a id="TOC_6.3."></a>
+Costs are the usual way to steer traffic in a test network; `hello`, `dead`, `priority` and the other options in BIRD's OSPF interface section work the same way. [OSPF and link cost](#ospf-and-link-cost) below walks through a triangle where changing one cost moves the path.
 
 ### BGP
 
-‘minirouter’ provides basic support for BGP on IPv4 Networks. Each BGP peering
-relationship or process needs to have a name, local information, neighbor
-information and whats being exported. The local and neighbor information will
-be IP address and AS numbers. You can additionally set up whats being exported
-i.e. all learned routes or just routes specified. The filter keyword allows you
-to use named static routes for simple route filtering. More advanced route
-filtering is planned. Route reflection can also be configured if you want to
-configure a particular router to be a route reflector server by default all
-routers are BGP route clients.
+A BGP session is a named process with a local address and AS, a neighbor address and AS, and an export policy. `export all all` advertises everything the router knows; `export filter <name>` advertises only a named static route. `rrclient` marks the neighbor as a route-reflector client:
 
-For example R1 has an ip of 10.0.0.1 in AS 100 and R2 has an IP of 20.0.0.1 in
-AS 20. We would like R1 just to announce the 10.0.0.0/24 network to R2 while on
-R2 we want to advertise all learned routes. We could also optionally add
-additional routes by adding more export statements to R2
+```minimega
+router r1 route static 10.0.0.0/24 0 r1-lan
+router r1 route bgp to-r2 local 10.0.0.1 100
+router r1 route bgp to-r2 neighbor 10.0.1.1 200
+router r1 route bgp to-r2 export filter r1-lan
 
-To configure BGP:
-
-```text
-#Set up routes to be advertised by BGP
-minimega$router R1 route static 10.0.0.0/24 0 bar-route
-
-#BGP Config
-minimega$router R1 route bgp BgpToR2 local 10.0.0.1 100
-minimega$router R1 route bgp BgpToR2 neighbor 20.0.0.1 200
-minimega$router R1 route bgp BgpToR2 export filter bar-route
-
-minimega$router R2 route bgp BgpToR1 local 20.0.0.1 200
-minimega$router R2 route bgp BgpToR1 neighbor 10.0.0.1 100
-minimega$router R2 route bgp BgpToR1 export all
+router r2 route bgp to-r1 local 10.0.1.1 200
+router r2 route bgp to-r1 neighbor 10.0.0.1 100
+router r2 route bgp to-r1 export all all
+router r2 route bgp to-r1 rrclient
 ```
 
-To configure route reflection:
+!!! note "`export all` takes a trailing token"
+    The command pattern is `export <all,filter> <filtername>`, so a third word
+    is mandatory even for `all`. It is ignored in that case, which is why the
+    example writes `export all all`; `export all` on its own matches no pattern
+    and is rejected.
+
+### Firewall
+
+The `fw` subcommands generate iptables rules on the router. They only work on KVM routers; minimega refuses them for container VMs before anything reaches the router, because a container cannot load netfilter modules of its own. The stock `misc/vmbetter_configs/minirouter.conf` installs `dnsmasq` and `bird` but not `iptables`, so add `iptables` to its `packages` line and rebuild the image before using `fw`; on an image without it, every `fw` rule fails when the router applies the commit. Set the default policy for forwarded traffic, then allow or deny flows per interface. `in` and `out` are relative to the interface at the given index, so a rule for traffic toward a host on interface 0's network is an `out` rule on interface 0. The endpoint is an address with an optional `:port`, and the source may be omitted:
+
+```minimega
+router fw0 fw default drop
+router fw0 fw accept out 0 192.168.0.5:80 tcp
+router fw0 fw accept in 1 192.168.0.0/24 0.0.0.0/0 udp
+```
+
+Chains group rules so they can be applied to more than one interface:
+
+```minimega
+router fw0 fw chain allow-http default action drop
+router fw0 fw chain allow-http action accept 192.168.0.5:80 tcp
+router fw0 fw chain allow-http apply out 0
+```
+
+### Removing configuration
+
+Every subcommand has a `clear router <vm> ...` counterpart that removes that piece of the description: `clear router r0 dhcp 192.168.1.0`, `clear router r0 route ospf 0`, `clear router r0 interface 1`, `clear router r0 fw`, and so on down to single entries such as `clear router r0 dhcp 192.168.1.0 static 00:11:22:33:44:55`. `clear router r0` empties the whole description and `clear router` forgets every router in the namespace. Clearing only edits the description; commit to make the router match.
+
+## A first router
+
+One container between an outside network and a client LAN, with DHCP, a static lease and a name:
+
+```minimega title="router-basic.mm"
+--8<-- "articles/router/router-basic.mm"
+```
+
+[Download this example](router/router-basic.mm){ download="router-basic.mm" }
+
+Launch a client on `lan` with DHCP and it gets an address in the range, `192.168.1.1` as its gateway and resolver, and can resolve `fileserver.lan`. With a host tap at `10.0.0.1` on `wan` and NAT as shown in [Host networking](networking.md), the client also reaches the outside world through the router.
+
+## Two routers with static routes
+
+Two routers share a transit link and each serves a LAN; a static route on each points at the other's LAN:
+
+```minimega title="router-static.mm"
+--8<-- "articles/router/router-static.mm"
+```
+
+[Download this example](router/router-static.mm){ download="router-static.mm" }
+
+The client VMs boot with DHCP from their own router, and `a1` can reach `b1` through both routers. Replacing the two `route static` lines with `route ospf 0 0` and `route ospf 0 1` on each router gives the same result and keeps working as you add links.
+
+## OSPF and link cost
+
+Three routers form a triangle with every interface in area 0:
+
+```minimega title="router-ospf.mm"
+--8<-- "articles/router/router-ospf.mm"
+```
+
+[Download this example](router/router-ospf.mm){ download="router-ospf.mm" }
+
+From `routerA` there are two equal-cost ways to reach `10.0.2.1`, routerB's address on the `bc` link: straight to B over `ab`, or through C. A traceroute from routerA's console, opened through [miniweb](miniweb.md), shows which one OSPF chose in this run:
 
 ```text
-minimega$router R2 route bgp BgpToR1 rrclient
+/ # traceroute 10.0.2.1
+traceroute to 10.0.2.1 (10.0.2.1), 30 hops max, 46 byte packets
+ 1  10.0.1.2 (10.0.1.2)  0.009 ms  0.005 ms  0.005 ms
+ 2  10.0.2.1 (10.0.2.1)  0.005 ms  0.005 ms  0.005 ms
 ```
+
+Raise the cost of A's interface 1, the `ac` link, from the default 10 to 20 and commit:
+
+```minimega
+router routerA route ospf 0 1 cost 20
+router routerA commit
+```
+
+After OSPF reconverges, a few seconds later, the path through C costs 30 against 20 straight to B, and the traceroute shows a single hop:
+
+```text
+/ # traceroute 10.0.2.1
+traceroute to 10.0.2.1 (10.0.2.1), 30 hops max, 46 byte packets
+ 1  10.0.2.1 (10.0.2.1)  0.009 ms  0.005 ms  0.006 ms
+```
+
+## Appendix: a larger OSPF network
+
+Six routers, nine transit links and six client LANs, all in area 0. The script pins the VLAN range so that the aliases land on predictable tags:
+
+```mermaid
+graph LR
+    l1 ---|A| r0
+    l2 ---|D| r1
+    l3 ---|K| r4
+    l4 ---|F| r2
+    l5 ---|H| r3
+    l6 ---|J| r5
+    r0 ---|B| r1
+    r0 ---|B2| r4
+    r0 ---|C| r3
+    r1 ---|B3| r4
+    r1 ---|E| r2
+    r2 ---|G| r4
+    r2 ---|G2| r3
+    r3 ---|G3| r4
+    r3 ---|I| r5
+```
+
+```minimega title="router-ospf-large.mm"
+--8<-- "articles/router/router-ospf-large.mm"
+```
+
+[Download this example](router/router-ospf-large.mm){ download="router-ospf-large.mm" }
+
+Once every router has committed, `vm info` shows the layout, and every client can reach every other client. If a router or a link goes down, OSPF reroutes around it without further commits:
+
+| VM | VLANs | Addresses |
+|---|---|---|
+| r0 | A (1500), B (1501), B2 (1502), C (1503) | 10.1.0.1, 10.21.0.1, 10.22.0.1, 10.3.0.1 |
+| r1 | D (1504), B (1501), B3 (1505), E (1506) | 10.4.0.1, 10.21.0.2, 10.23.0.1, 10.5.0.1 |
+| r2 | E (1506), G (1507), G2 (1508), F (1509) | 10.5.0.2, 10.71.0.1, 10.72.0.1, 10.6.0.1 |
+| r3 | C (1503), G3 (1510), G2 (1508), H (1511), I (1512) | 10.3.0.2, 10.73.0.1, 10.72.0.2, 10.8.0.1, 10.9.0.1 |
+| r4 | B3 (1505), K (1513), G (1507), G3 (1510), B2 (1502) | 10.23.0.2, 10.11.0.1, 10.71.0.2, 10.73.0.2, 10.22.0.2 |
+| r5 | I (1512), J (1514) | 10.9.0.2, 10.10.0.1 |
+| l1 to l6 | A, D, K, F, H, J | one DHCP lease each from the local router |
+
+## When the router does not respond
+
+`vm info` must show `cc_active` true for the router VM before a commit can be delivered; if it is not, the image is not starting miniccc or the serial channel is missing (see [Command and control](cc.md)). `router <vm>` prints the router's log lines once it has reported in; `router <vm> log level debug` followed by a commit makes them verbose. A router that accepts addresses but does not forward has forwarding turned off: for the busybox container that means the `preinit` was not passed, for a KVM image that the init did not set `net.ipv4.ip_forward`. If routes never appear, check that `bird` and `bird6` exist in the image and that no other instance of them or of dnsmasq was already running when minirouter started.
+
+## See also
+
+- [Host networking](networking.md): VLANs, host taps, NAT from the host.
+- [Command and control](cc.md): the channel the router is configured over.
+- [Building images with vmbetter](vmbetter.md): building the KVM and container images.
+- [Virtual machine types](vmtypes.md): container versus KVM behaviour.
+- Reference: [`router`](../reference/minimega.md#router), [`clear router`](../reference/minimega.md#clear-router), [minirouter API](../reference/minirouter.md).

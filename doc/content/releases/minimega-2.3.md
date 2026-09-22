@@ -44,7 +44,7 @@ In order to better support experiment portability, minimega now supports VLAN
 aliases. Instead of manually specifying VLAN numbers, users may now supply an
 alias which minimega will map to a VLAN. This mapping is per-namespace so the
 same alias can exist in multiple namespaces. For more information, see the
-[VLAN article](../articles/vlans.md).
+[VLAN article](../articles/networking.md).
 
 <a id="TOC_2.1.4."></a>
 
