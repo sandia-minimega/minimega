@@ -73,6 +73,22 @@ func mustAuth(f http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
+		// only the most specific (longest path) entries govern this
+		// resource -- otherwise credentials valid for a broader path
+		// (e.g. "/") would also authorize access to a more specific,
+		// separately-protected path (e.g. "/admin") that they were
+		// never granted permission to
+		specific := matches[:1]
+		for _, m := range matches[1:] {
+			switch {
+			case len(m.Path) > len(specific[0].Path):
+				specific = []PasswordEntry{m}
+			case len(m.Path) == len(specific[0].Path):
+				specific = append(specific, m)
+			}
+		}
+		matches = specific
+
 		// test all the matches and call f if any match credentials
 		username, password, ok := r.BasicAuth()
 		if ok {
