@@ -64,6 +64,9 @@ own socket and PID file; anything left behind by a crash is cleaned up the next
 time the script runs. This means the minimega logs will be available in the
 container logs via Docker (`docker logs minimega`).
 
+Pass `--init` to `docker run` so processes reparented to PID 1 are reaped. The
+Compose file sets `init: true` for the same reason.
+
 Port 9001 is published here even though minimega itself does not listen on it,
 because the miniweb container below shares this container's network namespace.
 Omit `-p 9001:9001` if you do not intend to run miniweb.

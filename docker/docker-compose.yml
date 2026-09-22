@@ -11,6 +11,9 @@ services:
     cap_add:
     - ALL
     restart: always
+    # Run an init process as PID 1 so `docker stop` is not left waiting on
+    # orphaned children, and so reparented processes get reaped.
+    init: true
     logging:
       driver: "json-file"
       options:
@@ -44,6 +47,9 @@ services:
     depends_on:
     - minimega
     restart: always
+    # miniweb spawns a minimega client per web console; an init process reaps
+    # the ones whose browser tab goes away before the websocket closes.
+    init: true
     # miniweb only serves files, talks to the minimega socket, and binds an
     # unprivileged port, so it needs no capabilities of its own.
     cap_drop:
