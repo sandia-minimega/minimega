@@ -135,5 +135,14 @@ func (s *Server) DisconnectUFS(uuid string) error {
 }
 
 func (c *client) ufsMessage(m *Message) {
-	c.ufsConn.Write(m.Tunnel)
+	c.Lock()
+	conn := c.ufsConn
+	c.Unlock()
+
+	if conn == nil {
+		log.Debug("dropping ufs message for %v: no active connection", c.UUID)
+		return
+	}
+
+	conn.Write(m.Tunnel)
 }
