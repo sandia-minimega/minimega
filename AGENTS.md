@@ -173,7 +173,10 @@ When changing [`cmd/minimega/`](cmd/minimega/):
 When build inputs, generated outputs, dependencies, or packaging change, update
 every affected workflow under [`.github/workflows/`](.github/workflows/). Do not
 publish artifacts, change `VERSION`, create tags, or use release credentials
-unless explicitly requested.
+unless explicitly requested. Packages that a fork's own workflows publish to
+that fork's registry when you push a branch to the fork (for example
+`ghcr.io/<fork-owner>/minimega:<branch>`) are exempt; pushing branches to a
+fork is allowed.
 
 - Follow [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md) and
   [`.github/pull_request_template.md`](.github/pull_request_template.md).
