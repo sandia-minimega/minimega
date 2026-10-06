@@ -67,12 +67,17 @@ type Command struct {
 	Prefix string
 
 	// Once specifies whether or not this command should only be sent to clients
-	// once, or if it should be sent after client reconnections.
+	// once. When set, each client runs the command a single time and does not
+	// run it again after reconnecting, for example after a reboot. Clients that
+	// connect after the command was posted still run it.
 	Once bool
 
-	// Sent tracks whether or not this command has been sent already. Only used
-	// when Once is enabled.
-	Sent bool
+	// sentTo records the UUID of every client that this command was
+	// successfully sent to. Only consulted when Once is enabled, where it
+	// suppresses redelivery to a client that already ran the command. Tracking
+	// is per client rather than global so that a command posted before a client
+	// connects is still delivered when that client shows up.
+	sentTo map[string]bool
 
 	// plumber connections
 	Stdin  string
@@ -131,7 +136,25 @@ func (f *Filter) String() string {
 	return strings.Join(res, " && ")
 }
 
-// Creates a copy of c.
+// sentToClient reports whether this command was already successfully sent to
+// the given client. Only meaningful when Once is set. Callers must serialize
+// access against markSentToClient.
+func (c *Command) sentToClient(uuid string) bool {
+	return c.sentTo[uuid]
+}
+
+// markSentToClient records that this command was successfully sent to the given
+// client. Callers must serialize access against sentToClient.
+func (c *Command) markSentToClient(uuid string) {
+	if c.sentTo == nil {
+		c.sentTo = make(map[string]bool)
+	}
+
+	c.sentTo[uuid] = true
+}
+
+// Creates a copy of c. The copy is safe to hand to callers outside of ron; it
+// intentionally omits the internal per-client delivery bookkeeping.
 func (c *Command) Copy() *Command {
 	c2 := &Command{
 		ID:         c.ID,
@@ -141,7 +164,6 @@ func (c *Command) Copy() *Command {
 		Prefix:     c.Prefix,
 		Issued:     c.Issued,
 		Once:       c.Once,
-		Sent:       c.Sent,
 		Stdin:      c.Stdin,
 		Stdout:     c.Stdout,
 		Stderr:     c.Stderr,

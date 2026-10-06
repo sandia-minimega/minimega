@@ -532,7 +532,9 @@ func (s *Server) ClearCommands() {
 	s.commands = make(map[int]*Command)
 
 	for _, c := range s.clients {
-		c.maxCommandID = 0
+		c.Lock()
+		c.resetDelivered()
+		c.Unlock()
 	}
 }
 
@@ -958,6 +960,10 @@ func (s *Server) removeClient(uuid string) {
 
 // sendCommands send a commands message to the specified UUID. If UUID is not
 // specified, the message is sent to all active clients.
+//
+// Commands marked Once are included here unconditionally; route filters them
+// per client based on what was actually delivered. Suppressing them at this
+// point would drop commands posted before any client connected.
 func (s *Server) sendCommands(uuid string) {
 	s.commandLock.Lock()
 	defer s.commandLock.Unlock()
@@ -969,10 +975,7 @@ func (s *Server) sendCommands(uuid string) {
 	}
 
 	for k, v := range s.commands {
-		if !v.Once || !v.Sent {
-			m.Commands[k] = v.Copy()
-			v.Sent = true
-		}
+		m.Commands[k] = v.Copy()
 	}
 
 	s.route(m)
@@ -1047,15 +1050,14 @@ func (s *Server) sendFile(c *client, filename string) error {
 	return SendFile(dir, fpath, 0, PART_SIZE, c.sendMessage)
 }
 
-// route an outgoing message to one or all clients, according to UUID
+// route an outgoing message to one or all clients, according to UUID.
+//
+// The caller must hold commandLock, since route reads and updates per-command
+// delivery bookkeeping.
 func (s *Server) route(m *Message) {
-	var maxCommandID int
-	var issuedLock sync.Mutex
-	for i := range m.Commands {
-		if i > maxCommandID {
-			maxCommandID = i
-		}
-	}
+	// deliveryLock guards the per-command delivery bookkeeping (Issued and
+	// sentTo), which is shared across the parallel handleUUID goroutines
+	var deliveryLock sync.Mutex
 
 	handleUUID := func(uuid string) {
 		// create locally scoped pointer to message
@@ -1067,12 +1069,28 @@ func (s *Server) route(m *Message) {
 			return
 		}
 
-		if c.maxCommandID == maxCommandID {
-			log.Info("no commands for %v", uuid)
-			return
-		}
-
 		if m.Type == MESSAGE_COMMAND {
+			deliveryLock.Lock()
+			c.Lock()
+			hasUnsent := false
+			for id, cmd := range m.Commands {
+				if c.hasDelivered(id) {
+					continue
+				}
+				if cmd.Once && s.commands[id].sentToClient(uuid) {
+					continue
+				}
+				hasUnsent = true
+				break
+			}
+			c.Unlock()
+			deliveryLock.Unlock()
+
+			if !hasUnsent {
+				log.Info("no commands for %v", uuid)
+				return
+			}
+
 			if s.UseVMs {
 				vm, ok := s.vms[uuid]
 				if !ok {
@@ -1102,13 +1120,24 @@ func (s *Server) route(m *Message) {
 			m2.Commands = map[int]*Command{}
 
 			// filter the commands to relevant ones
+			deliveryLock.Lock()
+			c.Lock()
 			for i, cmd := range m.Commands {
-				if c.Matches(cmd.Filter) && i > c.maxCommandID {
-					m2.Commands[i] = cmd
+				if c.hasDelivered(i) || !c.Matches(cmd.Filter) {
+					continue
 				}
-			}
 
-			c.maxCommandID = maxCommandID
+				// a Once command is suppressed only for clients that already
+				// received it, so that clients connecting after the command was
+				// posted still run it exactly one time
+				if cmd.Once && s.commands[i].sentToClient(uuid) {
+					continue
+				}
+
+				m2.Commands[i] = cmd
+			}
+			c.Unlock()
+			deliveryLock.Unlock()
 
 			if len(m2.Commands) == 0 {
 				log.Info("no commands for %v", uuid)
@@ -1125,10 +1154,24 @@ func (s *Server) route(m *Message) {
 				log.Info("unable to send message to %v: %v", uuid, err)
 			}
 		} else if m.Type == MESSAGE_COMMAND {
-			issuedLock.Lock()
-			defer issuedLock.Unlock()
+			deliveryLock.Lock()
+			defer deliveryLock.Unlock()
+
+			c.Lock()
+			defer c.Unlock()
+
+			// only record delivery once the message is actually on the wire, so
+			// that a failed send does not consume a Once command or record
+			// delivery for commands the client never received
 			for id := range m.Commands {
-				s.commands[id].Issued++
+				cmd := s.commands[id]
+
+				cmd.Issued++
+				if cmd.Once {
+					cmd.markSentToClient(uuid)
+				}
+
+				c.recordDelivered(id)
 			}
 		}
 	}

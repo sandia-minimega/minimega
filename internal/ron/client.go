@@ -60,6 +60,11 @@ type client struct {
 	// client. Should be reset if the command counter is reset.
 	maxCommandID int
 
+	// deliveredCommands tracks command IDs that have been delivered to this
+	// client during the current connection session. Reset when the client
+	// reconnects or commands are cleared.
+	deliveredCommands map[int]bool
+
 	// mangled is true if qemu flipped octets on us
 	mangled bool
 
@@ -83,6 +88,27 @@ func (c *client) sendMessage(m *Message) error {
 	defer c.writeMu.Unlock()
 
 	return c.enc.Encode(m)
+}
+
+func (c *client) hasDelivered(id int) bool {
+	return c.deliveredCommands != nil && c.deliveredCommands[id]
+}
+
+func (c *client) recordDelivered(id int) {
+	if c.deliveredCommands == nil {
+		c.deliveredCommands = make(map[int]bool)
+	}
+	c.deliveredCommands[id] = true
+	if id > c.maxCommandID {
+		c.maxCommandID = id
+	}
+}
+
+// resetDelivered clears the delivered command history and watermark for this
+// client connection session.
+func (c *client) resetDelivered() {
+	c.maxCommandID = 0
+	c.deliveredCommands = nil
 }
 
 // Matches tests whether all the filters match the client.
