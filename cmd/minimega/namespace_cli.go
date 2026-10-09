@@ -31,7 +31,11 @@ With no arguments, "namespace" prints summary info about namespaces:
 - active : active or not
 
 When a namespace is specified, it changes the active namespace or runs a single
-command in the different namespace.`,
+command in the different namespace.
+
+Namespace names may only contain letters, numbers, hyphens, underscores, and
+periods. The names "." and ".." are rejected because the namespace name is used
+as a directory name.`,
 		Patterns: []string{
 			"namespace [name]",
 			"namespace <name> (command)",
@@ -149,7 +153,7 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 
 	if name, ok := c.StringArgs["name"]; ok {
 		// check the name is sane
-		if !validName.MatchString(name) {
+		if !isValidName(name) {
 			resp.Error = validNameErr.Error()
 			respChan <- minicli.Responses{resp}
 			return

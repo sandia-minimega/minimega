@@ -30,3 +30,7 @@ namespace ns3
 namespace ns3
 clear namespace
 clear namespace
+
+# Names that would escape or alias the namespace directory are rejected
+namespace .
+namespace ..
