@@ -308,6 +308,7 @@ var (
 	containerInitLock    sync.Mutex
 	containerInitOnce    bool
 	containerInitSuccess bool
+	containerInitErr     error
 )
 
 func containerInit() error {
@@ -315,20 +316,30 @@ func containerInit() error {
 	defer containerInitLock.Unlock()
 
 	if containerInitOnce {
-		return nil
+		return containerInitErr
 	}
 	containerInitOnce = true
 
-	// create minimega freezer and memory cgroups
 	log.Debug("cgroup init: %v", *f_cgroup)
 
-	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega")
-	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega")
-	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega")
-	cgroupCPU := filepath.Join(*f_cgroup, "cpu", "minimega")
-	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
+	// clean potentially old cgroup noise before configuring the hierarchy
+	containerCleanCgroupDirs()
 
-	for _, cgroup := range cgroups {
+	if containerCgroupV2(*f_cgroup) {
+		containerInitErr = containerInitV2(*f_cgroup)
+	} else {
+		containerInitErr = containerInitV1(*f_cgroup)
+	}
+	if containerInitErr != nil {
+		return containerInitErr
+	}
+
+	containerInitSuccess = true
+	return nil
+}
+
+func containerInitV1(root string) error {
+	for _, cgroup := range containerCgroupParents(root) {
 		if err := os.MkdirAll(cgroup, 0755); err != nil {
 			return fmt.Errorf("cgroup mkdir: %v", err)
 		}
@@ -339,25 +350,40 @@ func containerInit() error {
 		}
 	}
 
+	cgroupMemory := containerCgroupParent(root, "memory")
 	if err := ioutil.WriteFile(filepath.Join(cgroupMemory, "memory.use_hierarchy"), []byte("1"), 0664); err != nil {
 		return fmt.Errorf("setting use_hierarchy: %v", err)
 	}
 
-	// clean potentially old cgroup noise
-	containerCleanCgroupDirs()
+	return nil
+}
 
-	containerInitSuccess = true
+func containerInitV2(root string) error {
+	if err := enableCgroupV2Controllers(root); err != nil {
+		return err
+	}
+
+	cgroup := containerCgroupParent(root, "")
+	if err := os.MkdirAll(cgroup, 0755); err != nil {
+		return fmt.Errorf("cgroup mkdir: %v", err)
+	}
+	if err := enableCgroupV2Controllers(cgroup); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func enableCgroupV2Controllers(cgroup string) error {
+	subtreeControl := filepath.Join(cgroup, "cgroup.subtree_control")
+	if err := ioutil.WriteFile(subtreeControl, []byte("+cpu +memory"), 0644); err != nil {
+		return fmt.Errorf("enabling cgroup v2 controllers in %q: %v", cgroup, err)
+	}
 	return nil
 }
 
 func containerTeardown() {
-	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega")
-	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega")
-	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega")
-	cgroupCPU := filepath.Join(*f_cgroup, "cpu", "minimega")
-	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
-
-	for _, cgroup := range cgroups {
+	for _, cgroup := range containerCgroupParents(*f_cgroup) {
 		if err := os.Remove(cgroup); err != nil {
 			if containerInitSuccess {
 				log.Errorln(err)
@@ -1015,10 +1041,7 @@ func (vm *ContainerVM) launch() error {
 		defer vm.cond.Signal()
 
 		cgroupFreezer := vm.cgroup("freezer")
-		cgroupMemory := vm.cgroup("memory")
-		cgroupDevices := vm.cgroup("devices")
-		cgroupCPU := vm.cgroup("cpu")
-		cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
+		cgroups := containerCgroupPaths(*f_cgroup, strconv.Itoa(vm.ID))
 
 		select {
 		case err := <-errChan:
@@ -1048,7 +1071,7 @@ func (vm *ContainerVM) launch() error {
 			// wait for the taskset to actually exit (from uninterruptible
 			// sleep state).
 			for {
-				t, err := ioutil.ReadFile(filepath.Join(cgroupFreezer, "tasks"))
+				t, err := ioutil.ReadFile(containerCgroupProcessFile(*f_cgroup, cgroupFreezer))
 				if err != nil {
 					vm.setErrorf("unable to read tasks: %v", err)
 					break
@@ -1363,8 +1386,8 @@ func (vm *ContainerVM) console(pseudotty *os.File) {
 }
 
 func (vm *ContainerVM) freeze() error {
-	freezer := filepath.Join(vm.cgroup("freezer"), "freezer.state")
-	if err := ioutil.WriteFile(freezer, []byte("FROZEN"), 0644); err != nil {
+	freezer, value := containerCgroupFreezeSetting(*f_cgroup, vm.cgroup("freezer"), true)
+	if err := ioutil.WriteFile(freezer, []byte(value), 0644); err != nil {
 		return fmt.Errorf("freezer: %v", err)
 	}
 
@@ -1372,8 +1395,8 @@ func (vm *ContainerVM) freeze() error {
 }
 
 func (vm *ContainerVM) thaw() error {
-	freezer := filepath.Join(vm.cgroup("freezer"), "freezer.state")
-	if err := ioutil.WriteFile(freezer, []byte("THAWED"), 0644); err != nil {
+	freezer, value := containerCgroupFreezeSetting(*f_cgroup, vm.cgroup("freezer"), false)
+	if err := ioutil.WriteFile(freezer, []byte(value), 0644); err != nil {
 		return fmt.Errorf("freezer: %v", err)
 	}
 
@@ -1381,7 +1404,7 @@ func (vm *ContainerVM) thaw() error {
 }
 
 func (vm *ContainerVM) cgroup(s string) string {
-	return filepath.Join(*f_cgroup, s, "minimega", strconv.Itoa(vm.ID))
+	return filepath.Join(containerCgroupParent(*f_cgroup, s), strconv.Itoa(vm.ID))
 }
 
 func (vm *ContainerVM) ProcStats() (map[int]*ProcStats, error) {
@@ -1507,15 +1530,22 @@ func containerChroot(fsPath string) error {
 }
 
 func containerPopulateCgroups(vmID, vcpus, memory int) error {
-	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega", strconv.Itoa(vmID))
-	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega", strconv.Itoa(vmID))
-	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega", strconv.Itoa(vmID))
-	cgroupCPU := filepath.Join(*f_cgroup, "cpu", "minimega", strconv.Itoa(vmID))
-	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
+	if containerCgroupV2(*f_cgroup) {
+		return containerPopulateCgroupsV2(*f_cgroup, vmID, vcpus, memory)
+	}
+	return containerPopulateCgroupsV1(*f_cgroup, vmID, vcpus, memory)
+}
+
+func containerPopulateCgroupsV1(root string, vmID, vcpus, memory int) error {
+	id := strconv.Itoa(vmID)
+	cgroupMemory := filepath.Join(containerCgroupParent(root, "memory"), id)
+	cgroupDevices := filepath.Join(containerCgroupParent(root, "devices"), id)
+	cgroupCPU := filepath.Join(containerCgroupParent(root, "cpu"), id)
+	cgroups := containerCgroupPaths(root, id)
 
 	for _, cgroup := range cgroups {
 		if err := os.MkdirAll(cgroup, 0755); err != nil {
-			return err
+			return fmt.Errorf("creating cgroup %q: %v", cgroup, err)
 		}
 	}
 
@@ -1523,11 +1553,11 @@ func containerPopulateCgroups(vmID, vcpus, memory int) error {
 	deny := filepath.Join(cgroupDevices, "devices.deny")
 	allow := filepath.Join(cgroupDevices, "devices.allow")
 	if err := ioutil.WriteFile(deny, []byte("a"), 0200); err != nil {
-		return err
+		return fmt.Errorf("setting device deny list: %v", err)
 	}
 	for _, a := range containerDevices {
 		if err := ioutil.WriteFile(allow, []byte(a), 0200); err != nil {
-			return err
+			return fmt.Errorf("allowing device %q: %v", a, err)
 		}
 	}
 
@@ -1543,25 +1573,58 @@ func containerPopulateCgroups(vmID, vcpus, memory int) error {
 	quota := int64(vcpus) * time.Second.Nanoseconds() / 1000
 	cfsPeriod := filepath.Join(cgroupCPU, "cpu.cfs_period_us")
 	if err := ioutil.WriteFile(cfsPeriod, []byte(strconv.FormatInt(period, 10)), 0644); err != nil {
-		return err
+		return fmt.Errorf("setting CPU period: %v", err)
 	}
 	cfsQuota := filepath.Join(cgroupCPU, "cpu.cfs_quota_us")
 	if err := ioutil.WriteFile(cfsQuota, []byte(strconv.FormatInt(quota, 10)), 0644); err != nil {
-		return err
+		return fmt.Errorf("setting CPU quota: %v", err)
 	}
 
 	// memory
 	memLimit := filepath.Join(cgroupMemory, "memory.limit_in_bytes")
 	if err := ioutil.WriteFile(memLimit, []byte(fmt.Sprintf("%vM", memory)), 0644); err != nil {
-		return err
+		return fmt.Errorf("setting memory limit: %v", err)
 	}
 
 	// associate the pid with these permissions
 	for _, cgroup := range cgroups {
 		tasks := filepath.Join(cgroup, "cgroup.procs")
 		if err := ioutil.WriteFile(tasks, []byte(fmt.Sprintf("%v", os.Getpid())), 0644); err != nil {
-			return err
+			return fmt.Errorf("adding process to cgroup %q: %v", cgroup, err)
 		}
+	}
+
+	return nil
+}
+
+func containerPopulateCgroupsV2(root string, vmID, vcpus, memory int) error {
+	return containerPopulateCgroupsV2WithDeviceFilter(root, vmID, vcpus, memory, containerAttachDeviceFilter)
+}
+
+func containerPopulateCgroupsV2WithDeviceFilter(root string, vmID, vcpus, memory int, attachDeviceFilter func(string, []string) error) error {
+	cgroup := filepath.Join(containerCgroupParent(root, ""), strconv.Itoa(vmID))
+	if err := os.MkdirAll(cgroup, 0755); err != nil {
+		return fmt.Errorf("creating cgroup %q: %v", cgroup, err)
+	}
+
+	period := time.Second.Nanoseconds() / 1000
+	quota := int64(vcpus) * period
+	cpuMax := fmt.Sprintf("%d %d", quota, period)
+	if err := ioutil.WriteFile(filepath.Join(cgroup, "cpu.max"), []byte(cpuMax), 0644); err != nil {
+		return fmt.Errorf("setting CPU limit: %v", err)
+	}
+
+	memoryBytes := uint64(memory) * 1024 * 1024
+	if err := ioutil.WriteFile(filepath.Join(cgroup, "memory.max"), []byte(strconv.FormatUint(memoryBytes, 10)), 0644); err != nil {
+		return fmt.Errorf("setting memory limit: %v", err)
+	}
+
+	if err := attachDeviceFilter(cgroup, containerDevices); err != nil {
+		return fmt.Errorf("setting device allow list: %v", err)
+	}
+
+	if err := ioutil.WriteFile(filepath.Join(cgroup, "cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0644); err != nil {
+		return fmt.Errorf("adding process to cgroup %q: %v", cgroup, err)
 	}
 
 	return nil
@@ -1724,19 +1787,11 @@ func containerMountVolumes(fsPath string, volumes []string) error {
 // aggressively cleanup container cruff, called by the nuke api
 func containerNuke() {
 	// walk minimega cgroups for tasks, killing each one
-	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega")
-	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega")
-	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega")
-	cgroupCPU := filepath.Join(*f_cgroup, "cpu", "minimega")
-
-	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
-
-	for _, cgroup := range cgroups {
-		if _, err := os.Stat(cgroup); err == nil {
-			err := filepath.Walk(cgroup, containerNukeWalker)
-			if err != nil {
-				log.Errorln(err)
-			}
+	cgroup := containerCgroupParent(*f_cgroup, "freezer")
+	if _, err := os.Stat(cgroup); err == nil {
+		err := filepath.Walk(cgroup, containerNukeWalker)
+		if err != nil {
+			log.Errorln(err)
 		}
 	}
 
@@ -1786,8 +1841,8 @@ func containerNukeWalker(path string, info os.FileInfo, err error) error {
 
 	log.Debug("walking file: %v", path)
 
-	switch info.Name() {
-	case "tasks":
+	processFile := filepath.Base(containerCgroupProcessFile(*f_cgroup, path))
+	if info.Name() == processFile {
 		d, err := ioutil.ReadFile(path)
 		if err != nil {
 			return nil
@@ -1801,8 +1856,9 @@ func containerNukeWalker(path string, info os.FileInfo, err error) error {
 			pathFields := strings.Split(path, string(os.PathSeparator))
 			vmID := pathFields[len(pathFields)-2]
 
-			freezer := filepath.Join(*f_cgroup, "freezer", "minimega", vmID, "freezer.state")
-			if err := ioutil.WriteFile(freezer, []byte("THAWED"), 0644); err != nil {
+			cgroup := filepath.Join(containerCgroupParent(*f_cgroup, "freezer"), vmID)
+			freezer, value := containerCgroupFreezeSetting(*f_cgroup, cgroup, false)
+			if err := ioutil.WriteFile(freezer, []byte(value), 0644); err != nil {
 				log.Debugln(err)
 			}
 
@@ -1822,13 +1878,7 @@ func containerNukeWalker(path string, info os.FileInfo, err error) error {
 
 // remove state across cgroup mounts
 func containerCleanCgroupDirs() {
-	paths := []string{
-		filepath.Join(*f_cgroup, "freezer", "minimega"),
-		filepath.Join(*f_cgroup, "memory", "minimega"),
-		filepath.Join(*f_cgroup, "devices", "minimega"),
-		filepath.Join(*f_cgroup, "cpu", "minimega"),
-	}
-	for _, d := range paths {
+	for _, d := range containerCgroupParents(*f_cgroup) {
 		_, err := os.Stat(d)
 		if err != nil {
 			continue
@@ -1864,4 +1914,60 @@ func containerCleanCgroupDirs() {
 			log.Errorln(err)
 		}
 	}
+}
+
+func containerCgroupV2(root string) bool {
+	_, err := os.Stat(filepath.Join(root, "cgroup.controllers"))
+	return err == nil
+}
+
+func containerCgroupParent(root, controller string) string {
+	if containerCgroupV2(root) {
+		return filepath.Join(root, "minimega")
+	}
+	return filepath.Join(root, controller, "minimega")
+}
+
+func containerCgroupParents(root string) []string {
+	if containerCgroupV2(root) {
+		return []string{containerCgroupParent(root, "")}
+	}
+	return []string{
+		containerCgroupParent(root, "freezer"),
+		containerCgroupParent(root, "memory"),
+		containerCgroupParent(root, "devices"),
+		containerCgroupParent(root, "cpu"),
+	}
+}
+
+func containerCgroupPaths(root, id string) []string {
+	parents := containerCgroupParents(root)
+	paths := make([]string, 0, len(parents))
+	for _, parent := range parents {
+		paths = append(paths, filepath.Join(parent, id))
+	}
+	return paths
+}
+
+func containerCgroupProcessFile(root, cgroup string) string {
+	if containerCgroupV2(root) {
+		return filepath.Join(cgroup, "cgroup.procs")
+	}
+	return filepath.Join(cgroup, "tasks")
+}
+
+func containerCgroupFreezeSetting(root, cgroup string, freeze bool) (string, string) {
+	if containerCgroupV2(root) {
+		value := "0"
+		if freeze {
+			value = "1"
+		}
+		return filepath.Join(cgroup, "cgroup.freeze"), value
+	}
+
+	value := "THAWED"
+	if freeze {
+		value = "FROZEN"
+	}
+	return filepath.Join(cgroup, "freezer.state"), value
 }
