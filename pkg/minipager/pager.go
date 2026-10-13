@@ -66,16 +66,27 @@ func (_ defaultPager) Page(output string) {
 }
 
 func termSize() *winsize {
-	ws := &winsize{}
-	res, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(syscall.Stdout),
-		uintptr(syscall.TIOCGWINSZ),
-		uintptr(unsafe.Pointer(ws)))
-
-	if int(res) == -1 {
+	ws, errno := getWinsize()
+	if errno != 0 {
 		log.Error("unable to determine terminal size (errno: %d)", errno)
 		return nil
 	}
 
 	return ws
+}
+
+// IsTerminal reports whether stdout is a terminal.
+func IsTerminal() bool {
+	_, errno := getWinsize()
+	return errno == 0
+}
+
+func getWinsize() (*winsize, syscall.Errno) {
+	ws := &winsize{}
+	_, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
+		uintptr(syscall.Stdout),
+		uintptr(syscall.TIOCGWINSZ),
+		uintptr(unsafe.Pointer(ws)))
+
+	return ws, errno
 }

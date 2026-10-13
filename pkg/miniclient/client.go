@@ -34,6 +34,10 @@ type Request struct {
 	Command   string
 	Suggest   string
 	PlumbPipe string
+
+	// TTY is set if the client prints to a terminal, enabling column width
+	// limits on rendered output.
+	TTY bool `json:",omitempty"`
 }
 
 type Response struct {
@@ -66,6 +70,9 @@ type Conn struct {
 
 	// Set the Pager to use for long output messages
 	Pager minipager.Pager
+
+	// TTY is sent with commands, see Request.TTY
+	TTY bool
 }
 
 func Dial(base string) (*Conn, error) {
@@ -193,7 +200,7 @@ func (mm *Conn) Run(cmd string) chan *Response {
 
 	mm.lock.Lock()
 
-	err := mm.enc.Encode(Request{Command: cmd})
+	err := mm.enc.Encode(Request{Command: cmd, TTY: mm.TTY})
 	if err != nil {
 		mm.err = fmt.Errorf("local command gob encode: %v", err)
 

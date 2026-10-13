@@ -425,6 +425,8 @@ func cliLocal(input *liner.State) {
 	input.SetTabCompletionStyle(liner.TabPrints)
 	input.SetCompleter(cliCompleter)
 
+	tty := minipager.IsTerminal()
+
 	for {
 		ns := GetNamespace()
 
@@ -478,7 +480,11 @@ func cliLocal(input *liner.State) {
 
 		for resp := range runCommands(cmd) {
 			// print the responses
-			minipager.DefaultPager.Page(resp.String())
+			if tty {
+				minipager.DefaultPager.Page(resp.String())
+			} else {
+				minipager.DefaultPager.Page(resp.FullString())
+			}
 
 			errs := resp.Error()
 			if errs != "" {

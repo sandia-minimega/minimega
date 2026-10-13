@@ -110,7 +110,7 @@ func commandSocketHandle(c net.Conn) {
 				Host:  hostname,
 				Error: "must specify either command or suggest",
 			}
-			err = sendLocalResp(enc, minicli.Responses{resp}, false)
+			err = sendLocalResp(enc, minicli.Responses{resp}, false, r.TTY)
 			continue
 		}
 
@@ -129,14 +129,14 @@ func commandSocketHandle(c net.Conn) {
 				Host:  hostname,
 				Error: err.Error(),
 			}
-			err = sendLocalResp(enc, minicli.Responses{resp}, false)
+			err = sendLocalResp(enc, minicli.Responses{resp}, false, r.TTY)
 			continue
 		}
 
 		// No command was returned, must have been a blank line or a comment
 		// line. Either way, don't try to run a nil command.
 		if cmd == nil {
-			err = sendLocalResp(enc, nil, false)
+			err = sendLocalResp(enc, nil, false, r.TTY)
 			continue
 		}
 
@@ -168,7 +168,7 @@ func commandSocketHandle(c net.Conn) {
 		// channel to ensure that we release any locks acquired by cmd.
 		for resp := range runCommands(cmd) {
 			if prev != nil && err == nil {
-				err = sendLocalResp(enc, prev, true)
+				err = sendLocalResp(enc, prev, true, r.TTY)
 			} else if err != nil && len(resp) > 0 {
 				log.Info("dropping resp from %v", resp[0].Host)
 			}
@@ -177,7 +177,7 @@ func commandSocketHandle(c net.Conn) {
 		}
 
 		if err == nil {
-			err = sendLocalResp(enc, prev, false)
+			err = sendLocalResp(enc, prev, false, r.TTY)
 		}
 	}
 
@@ -205,13 +205,19 @@ func readLocalRequest(dec *json.Decoder) (*miniclient.Request, error) {
 	return &r, nil
 }
 
-func sendLocalResp(enc *json.Encoder, resp minicli.Responses, more bool) error {
+// sendLocalResp sends resp to the client. Column width limits only apply when
+// the client prints to a terminal.
+func sendLocalResp(enc *json.Encoder, resp minicli.Responses, more, tty bool) error {
 	r := miniclient.Response{
 		More: more,
 	}
 	if resp != nil {
 		r.Resp = resp
-		r.Rendered = resp.String()
+		if tty {
+			r.Rendered = resp.String()
+		} else {
+			r.Rendered = resp.FullString()
+		}
 	}
 
 	return enc.Encode(&r)

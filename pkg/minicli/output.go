@@ -15,9 +15,12 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"unicode/utf8"
 
 	"github.com/sandia-minimega/minimega/v2/pkg/ranges"
 )
+
+const ellipsis = "..."
 
 type table [][]string
 
@@ -106,6 +109,40 @@ func (r Responses) String() string {
 
 	resp := buf.String()
 	return strings.TrimSpace(resp)
+}
+
+// FullString returns String without the column width limit.
+func (r Responses) FullString() string {
+	if len(r) == 0 {
+		return ""
+	}
+
+	orig := r[0].Flags
+	f := copyFlags()
+	if orig != nil {
+		*f = *orig
+	}
+	f.Width = 0
+
+	r[0].Flags = f
+	defer func() { r[0].Flags = orig }()
+
+	return r.String()
+}
+
+// truncate shortens s to at most w runes, ending with an ellipsis. w <= 0
+// disables truncation.
+func truncate(s string, w int) string {
+	if w <= 0 || utf8.RuneCountInString(s) <= w {
+		return s
+	}
+
+	runes := []rune(s)
+	if w <= len(ellipsis) {
+		return string(runes[:w])
+	}
+
+	return string(runes[:w-len(ellipsis)]) + ellipsis
 }
 
 // Error returns a string containing all the errors in the responses
@@ -218,12 +255,14 @@ func (r Responses) printTabular(buf io.Writer, header []string, data [][]string)
 	w.Init(buf, 5, 0, 1, ' ', 0)
 	defer w.Flush()
 
+	width := r.width()
+
 	if r.headers() {
 		for i, h := range header {
 			if i != 0 {
 				io.WriteString(w, "\t| ")
 			}
-			io.WriteString(w, h)
+			io.WriteString(w, truncate(h, width))
 		}
 		io.WriteString(w, "\n")
 	}
@@ -233,7 +272,7 @@ func (r Responses) printTabular(buf io.Writer, header []string, data [][]string)
 			if i != 0 {
 				io.WriteString(w, "\t| ")
 			}
-			io.WriteString(w, v)
+			io.WriteString(w, truncate(v, width))
 		}
 		io.WriteString(w, "\n")
 	}

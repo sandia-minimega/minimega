@@ -162,6 +162,8 @@ scheduler.
   meshage use the same command set.
 - Output modifiers such as `.columns`, `.filter`, and `.annotate false` precede
   the command and produce stable, narrow output for automation.
+- Terminal output truncates table columns to `.width` characters (default
+  200); `.width 0`, piped output, `.csv true`, and `.json true` show all data.
 - Use `pkg/miniclient` for Go integrations instead of implementing the socket
   framing again.
 - `lib/minimega.py` is not checked in; `lib/` is ignored by git and the file
