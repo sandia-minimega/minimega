@@ -187,7 +187,7 @@ func sendLocalResp(enc *json.Encoder, resp minicli.Responses, more bool) error {
 	}
 	if resp != nil {
 		r.Resp = resp
-		r.Rendered = resp.String()
+		r.Rendered = resp.FullString()
 	}
 
 	return enc.Encode(&r)

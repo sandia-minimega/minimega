@@ -33,7 +33,11 @@ type Flags struct {
 	Preprocess bool
 	Mode       int
 	Record     bool
+	Width      int // max tabular column width, 0 for unlimited
 }
+
+// DefaultWidth is the default max tabular column width.
+const DefaultWidth = 50
 
 var flagsLock sync.Mutex
 
@@ -50,6 +54,7 @@ var defaultFlags = Flags{
 	Sort:       true,
 	Preprocess: true,
 	Mode:       defaultMode,
+	Width:      DefaultWidth,
 
 	// Command flags
 	Record: true,

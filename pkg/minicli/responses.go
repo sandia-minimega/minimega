@@ -113,3 +113,11 @@ func (r Responses) sort() bool {
 func (r Responses) headers() bool {
 	return len(r) > 0 && r[0].Headers
 }
+
+func (r Responses) width() int {
+	if len(r) == 0 {
+		return 0
+	}
+
+	return r[0].Width
+}

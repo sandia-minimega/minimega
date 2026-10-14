@@ -9,22 +9,14 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"syscall"
-	"unsafe"
+
+	"golang.org/x/term"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
 type Pager interface {
 	Page(output string)
-}
-
-// Copy of winsize struct defined by iotctl.h
-type winsize struct {
-	Row    uint16
-	Col    uint16
-	Xpixel uint16
-	Ypixel uint16
 }
 
 var DefaultPager Pager = &defaultPager{}
@@ -36,15 +28,16 @@ func (_ defaultPager) Page(output string) {
 		return
 	}
 
-	size := termSize()
-	if size == nil {
+	_, rows, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil {
+		log.Error("unable to determine terminal size: %v", err)
 		fmt.Println(output)
 		return
 	}
 
 	lines := strings.Count(output, "\n")
 
-	if lines < 2*int(size.Row) {
+	if lines < 2*rows {
 		fmt.Println(output)
 		return
 	}
@@ -65,17 +58,7 @@ func (_ defaultPager) Page(output string) {
 	}
 }
 
-func termSize() *winsize {
-	ws := &winsize{}
-	res, _, errno := syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(syscall.Stdout),
-		uintptr(syscall.TIOCGWINSZ),
-		uintptr(unsafe.Pointer(ws)))
-
-	if int(res) == -1 {
-		log.Error("unable to determine terminal size (errno: %d)", errno)
-		return nil
-	}
-
-	return ws
+// IsTerminal reports whether stdout is a terminal.
+func IsTerminal() bool {
+	return term.IsTerminal(int(os.Stdout.Fd()))
 }
