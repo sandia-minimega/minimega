@@ -114,6 +114,24 @@ Compression is not applied when the output mode is JSON.`,
 			cliFlagHelper(c, out, func(f *Flags) *bool { return &f.Compress })
 		},
 	},
+	{ // width
+		HelpShort: "set the max column width for tabular data",
+		HelpLong: `
+Set the max column width, in characters, for pretty-printed tabular data.
+Longer values are truncated with "...". Use 0 to show all data. With no
+argument, prints the current width. For example, to show all data for one
+command:
+
+	.width 0 cc clients
+
+Only applies when output is printed to a terminal; piped output, csv mode, and
+JSON mode always include all data.`,
+		Patterns: []string{
+			".width [width]",
+			".width <width> (command)",
+		},
+		Call: cliWidth,
+	},
 	{ // filter
 		HelpShort: "filter tabular data by column value",
 		HelpLong: `
@@ -518,6 +536,55 @@ func cliFlagHelper(c *Command, out chan<- Responses, get func(*Flags) *bool) {
 			}
 
 			*get(r[0].Flags) = c.BoolArgs["true"]
+		}
+
+		out <- r
+	}
+}
+
+func cliWidth(c *Command, out chan<- Responses) {
+	s, set := c.StringArgs["width"]
+
+	var width int
+	if set {
+		var err error
+		width, err = strconv.Atoi(s)
+		if err != nil || width < 0 {
+			out <- Responses{&Response{
+				Host:  hostname,
+				Error: fmt.Sprintf("invalid width `%v`, expected integer >= 0", s),
+			}}
+			return
+		}
+	}
+
+	if c.Subcommand == nil {
+		resp := &Response{
+			Host: hostname,
+		}
+
+		flagsLock.Lock()
+
+		if set {
+			defaultFlags.Width = width
+		} else {
+			resp.Response = strconv.Itoa(defaultFlags.Width)
+		}
+		flagsLock.Unlock()
+
+		out <- Responses{resp}
+		return
+	}
+
+	c.Subcommand.SetRecord(false)
+
+	for r := range ProcessCommand(c.Subcommand) {
+		if len(r) > 0 {
+			if r[0].Flags == nil {
+				r[0].Flags = copyFlags()
+			}
+
+			r[0].Width = width
 		}
 
 		out <- r

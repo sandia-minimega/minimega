@@ -15,9 +15,12 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"unicode/utf8"
 
 	"github.com/sandia-minimega/minimega/v2/pkg/ranges"
 )
+
+const ellipsis = "..."
 
 type table [][]string
 
@@ -48,14 +51,25 @@ func (t table) Less(i, j int) bool {
 
 // Return a string representation using the current output mode
 func (r Responses) String() string {
+	return r.format(false)
+}
+
+// FullString returns String without the column width limit.
+func (r Responses) FullString() string {
+	return r.format(true)
+}
+
+func (r Responses) format(full bool) string {
 	if len(r) == 0 {
 		return ""
 	}
 
-	// Copy the global settings where the overrides are not set
+	// Apply defaults to a local copy without changing the response.
 	if r[0].Flags == nil {
-		r[0].Flags = new(Flags)
-		*r[0].Flags = defaultFlags
+		first := *r[0]
+		first.Flags = copyFlags()
+		r = append(Responses(nil), r...)
+		r[0] = &first
 	}
 
 	if r.json() {
@@ -88,7 +102,11 @@ func (r Responses) String() string {
 	var buf bytes.Buffer
 
 	if tabular && count > 0 {
-		r.tabularString(&buf, header)
+		width := r.width()
+		if full {
+			width = 0
+		}
+		r.tabularString(&buf, header, width)
 	} else if r.compress() && len(r) > 1 {
 		r.compressString(&buf)
 	} else {
@@ -106,6 +124,23 @@ func (r Responses) String() string {
 
 	resp := buf.String()
 	return strings.TrimSpace(resp)
+}
+
+// truncate shortens s to at most w runes, ending with an ellipsis. w <= 0
+// disables truncation.
+func truncate(s string, w int) string {
+	if w <= 0 || utf8.RuneCountInString(s) <= w {
+		return s
+	}
+
+	runes := []rune(s)
+	lenElipsis := len(ellipsis)
+	// If the width is so small that we can't even fit ellipsis, just return the first w runes.
+	if w <= lenElipsis {
+		return string(runes[:w])
+	}
+
+	return string(runes[:w-lenElipsis]) + ellipsis
 }
 
 // Error returns a string containing all the errors in the responses
@@ -127,7 +162,7 @@ func (r Responses) Error() string {
 	return strings.TrimSpace(buf.String())
 }
 
-func (r Responses) tabularString(buf io.Writer, header []string) {
+func (r Responses) tabularString(buf io.Writer, header []string, width int) {
 	annotate := r.annotate()
 
 	// Add extra header for host if annotate is set
@@ -155,7 +190,7 @@ func (r Responses) tabularString(buf io.Writer, header []string) {
 	if r.csv() {
 		r.printCSV(buf, header, data)
 	} else {
-		r.printTabular(buf, header, data)
+		r.printTabular(buf, header, data, width)
 	}
 }
 
@@ -213,7 +248,7 @@ func (r Responses) compressString(buf io.Writer) {
 	}
 }
 
-func (r Responses) printTabular(buf io.Writer, header []string, data [][]string) {
+func (r Responses) printTabular(buf io.Writer, header []string, data [][]string, width int) {
 	w := new(tabwriter.Writer)
 	w.Init(buf, 5, 0, 1, ' ', 0)
 	defer w.Flush()
@@ -223,7 +258,7 @@ func (r Responses) printTabular(buf io.Writer, header []string, data [][]string)
 			if i != 0 {
 				io.WriteString(w, "\t| ")
 			}
-			io.WriteString(w, h)
+			io.WriteString(w, truncate(h, width))
 		}
 		io.WriteString(w, "\n")
 	}
@@ -233,7 +268,7 @@ func (r Responses) printTabular(buf io.Writer, header []string, data [][]string)
 			if i != 0 {
 				io.WriteString(w, "\t| ")
 			}
-			io.WriteString(w, v)
+			io.WriteString(w, truncate(v, width))
 		}
 		io.WriteString(w, "\n")
 	}

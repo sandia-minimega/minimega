@@ -222,6 +222,7 @@ func main() {
 			log.Fatalln(err)
 		}
 		mm.Pager = minipager.DefaultPager
+		mm.TTY = minipager.IsTerminal()
 
 		if *f_e {
 			parts := []string{}

@@ -392,6 +392,15 @@ display the output in csv:
 .csv true .compress false mesh send host
 ```
 
+Pretty-printed tables limit each column to 50 characters by default; longer
+values are truncated with `...`. This limit only applies when output is printed
+to a terminal, so piped output, csv mode, and JSON mode always include all data.
+Use `.width` to view or change the limit, and `.width 0` to show all data:
+
+```text
+.width 0 cc clients
+```
+
 Other builtins allow searching, sorting, and arraning (and removing) columns
 from tabular data. See the API help, or the minimega `help` command for more
 information on builtins.
