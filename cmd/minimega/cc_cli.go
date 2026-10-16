@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,6 +31,13 @@ type ccMount struct {
 	Addr string
 	// Path where the filesystem is mounted
 	Path string
+}
+
+func init() {
+	// for serializing Data across the mesh
+	gob.Register([]ron.Command{})
+	gob.Register([]ron.ClientInfo{})
+	gob.Register([]ron.ClientResponse{})
 }
 
 var ccCLIHandlers = []minicli.Handler{
@@ -359,20 +367,37 @@ func cliCCResponses(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 
 	if s == Wildcard {
 		r, err := ns.ccServer.GetResponses(raw)
-		if err == nil {
-			resp.Response = r
+		if err != nil {
+			return err
 		}
-		return err
+
+		data, err := ns.ccServer.GetClientResponses(nil)
+		if err != nil {
+			return err
+		}
+
+		resp.Response = r
+		resp.Data = data
+		return nil
 	} else if v, err := strconv.Atoi(s); err == nil {
 		r, err := ns.ccServer.GetResponse(v, raw)
-		if err == nil {
-			resp.Response = r
+		if err != nil {
+			return err
 		}
-		return err
+
+		data, err := ns.ccServer.GetClientResponses(&v)
+		if err != nil {
+			return err
+		}
+
+		resp.Response = r
+		resp.Data = data
+		return nil
 	}
 
 	// must be searching for a prefix
 	var match bool
+	data := []ron.ClientResponse{}
 
 	for _, c := range ns.ccServer.GetCommands() {
 		if c.Prefix == s {
@@ -381,7 +406,13 @@ func cliCCResponses(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 				return err
 			}
 
+			d, err := ns.ccServer.GetClientResponses(&c.ID)
+			if err != nil {
+				return err
+			}
+
 			resp.Response += s + "\n"
+			data = append(data, d...)
 
 			match = true
 		}
@@ -390,6 +421,14 @@ func cliCCResponses(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 	if !match {
 		return fmt.Errorf("no such prefix: `%v`", s)
 	}
+
+	sort.Slice(data, func(i, j int) bool {
+		if data[i].ID != data[j].ID {
+			return data[i].ID < data[j].ID
+		}
+		return data[i].UUID < data[j].UUID
+	})
+	resp.Data = data
 
 	return nil
 }
@@ -767,6 +806,8 @@ func cliCCClients(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		"uuid", "hostname", "arch", "os", "ip", "mac",
 	}
 
+	resp.Data = ns.ccServer.GetClientInfo()
+
 	for _, c := range ns.ccServer.GetClients() {
 		row := []string{
 			c.UUID,
@@ -800,8 +841,11 @@ func cliCCCommand(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	}
 	sort.Ints(ids)
 
+	data := make([]ron.Command, 0, len(ids))
+
 	for _, id := range ids {
 		v := commands[id]
+		data = append(data, *v)
 		row := []string{
 			strconv.Itoa(v.ID),
 			v.Prefix,
@@ -830,6 +874,8 @@ func cliCCCommand(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 
 		resp.Tabular = append(resp.Tabular, row)
 	}
+
+	resp.Data = data
 
 	return nil
 }
