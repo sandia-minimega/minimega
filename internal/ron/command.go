@@ -94,6 +94,15 @@ type Response struct {
 	RecordExitCode bool
 }
 
+// ClientResponse is the output a client recorded for a command, as stored in
+// the responses directory.
+type ClientResponse struct {
+	ID     int
+	UUID   string
+	Stdout string
+	Stderr string
+}
+
 type ConnTest struct {
 	Endpoint string
 	Wait     time.Duration
