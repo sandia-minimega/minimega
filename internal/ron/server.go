@@ -428,6 +428,98 @@ func (s *Server) GetResponses(raw bool) (string, error) {
 	return res, err
 }
 
+// GetClientResponses returns the stdout and stderr recorded for each client
+// that responded to command id, or to every command if id is nil. Results are
+// sorted by command ID then client UUID.
+func (s *Server) GetClientResponses(id *int) ([]ClientResponse, error) {
+	res := []ClientResponse{}
+
+	var ids []int
+	if id != nil {
+		ids = append(ids, *id)
+	} else {
+		entries, err := os.ReadDir(s.responsePath(nil))
+		if os.IsNotExist(err) {
+			return res, nil
+		} else if err != nil {
+			return nil, err
+		}
+
+		for _, e := range entries {
+			if v, err := strconv.Atoi(e.Name()); err == nil && e.IsDir() {
+				ids = append(ids, v)
+			}
+		}
+	}
+
+	for _, v := range ids {
+		base := s.responsePath(&v)
+
+		entries, err := os.ReadDir(base)
+		if os.IsNotExist(err) && id != nil {
+			return nil, fmt.Errorf("no responses for %v", v)
+		} else if err != nil {
+			return nil, err
+		}
+
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+
+			r := ClientResponse{ID: v, UUID: e.Name()}
+
+			for name, dst := range map[string]*string{"stdout": &r.Stdout, "stderr": &r.Stderr} {
+				path := filepath.Join(base, e.Name(), name)
+
+				// a received file may have created a directory with this name
+				if fi, err := os.Stat(path); os.IsNotExist(err) || (err == nil && !fi.Mode().IsRegular()) {
+					continue
+				}
+
+				data, err := os.ReadFile(path)
+				if err != nil {
+					return nil, err
+				}
+				*dst = string(data)
+			}
+
+			res = append(res, r)
+		}
+	}
+
+	sort.Slice(res, func(i, j int) bool {
+		if res[i].ID != res[j].ID {
+			return res[i].ID < res[j].ID
+		}
+		return res[i].UUID < res[j].UUID
+	})
+
+	return res, nil
+}
+
+// GetClientInfo returns a serializable summary of every active client, sorted
+// by UUID.
+func (s *Server) GetClientInfo() []ClientInfo {
+	res := []ClientInfo{}
+
+	for _, c := range s.GetClients() {
+		res = append(res, ClientInfo{
+			UUID:     c.UUID,
+			Hostname: c.Hostname,
+			Arch:     c.Arch,
+			OS:       c.OS,
+			Version:  c.Version,
+			IPs:      c.IPs,
+			MACs:     c.MACs,
+		})
+	}
+
+	sort.Slice(res, func(i, j int) bool { return res[i].UUID < res[j].UUID })
+
+	return res
+}
+
 // GetClients returns a list of every active client
 func (s *Server) GetClients() map[string]*Client {
 	s.clientLock.Lock()
