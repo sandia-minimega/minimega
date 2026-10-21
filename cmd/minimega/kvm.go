@@ -392,7 +392,12 @@ func NewKVM(name, namespace string, config VMConfig) (*KvmVM, error) {
 
 	vm := new(KvmVM)
 
-	vm.BaseVM = NewBaseVM(name, namespace, config)
+	var err error
+	vm.BaseVM, err = NewBaseVM(name, namespace, config)
+	if err != nil {
+		return nil, err
+	}
+
 	vm.Type = KVM
 
 	vm.KVMConfig = config.KVMConfig.Copy() // deep-copy configured fields
@@ -1186,7 +1191,12 @@ func (vm *KvmVM) AddNIC(nic NetConfig) error {
 	defer vm.lock.Unlock()
 
 	if nic.MAC == "" {
-		nic.MAC = randomMac()
+		mac, err := randomMac()
+		if err != nil {
+			return err
+		}
+
+		nic.MAC = mac
 	}
 	var err error
 	nic.Tap, err = vm.createTapName(nic.Bridge)

@@ -69,7 +69,12 @@ var (
 func NewAndroid(name, namespace string, config VMConfig) (*AndroidVM, error) {
 	vm := new(AndroidVM)
 
-	vm.BaseVM = NewBaseVM(name, namespace, config)
+	var err error
+	vm.BaseVM, err = NewBaseVM(name, namespace, config)
+	if err != nil {
+		return nil, err
+	}
+
 	vm.Type = ANDROID
 
 	vm.KVMConfig = config.KVMConfig.Copy()
@@ -829,7 +834,12 @@ func (vm *AndroidVM) AddNIC(nic NetConfig) error {
 	defer vm.lock.Unlock()
 
 	if nic.MAC == "" {
-		nic.MAC = randomMac()
+		mac, err := randomMac()
+		if err != nil {
+			return err
+		}
+
+		nic.MAC = mac
 	}
 
 	// Android Emulator's backend QEMU does not support minimega's default

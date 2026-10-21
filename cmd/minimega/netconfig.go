@@ -1,6 +1,6 @@
-// Copyright (2012) Sandia Corporation.
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
-// the U.S. Government retains certain rights in this software.
+// Copyright 2012-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+// Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain
+// rights in this software.
 
 package main
 
@@ -19,10 +19,63 @@ import (
 
 var validMACPrefix [][3]byte
 
+const (
+	macMulticastBit = 0x01 // I/G bit: group (multicast/broadcast) address
+	macLocalBit     = 0x02 // U/L bit: locally administered address
+)
+
 func init() {
-	for k, _ := range macs.ValidMACPrefixMap {
+	for k := range macs.ValidMACPrefixMap {
+		// Skip multicast OUIs, locally administered OUIs, and IANA's OUI
+		// (VRRP/CARP, not real NICs).
+		if k[0]&macMulticastBit != 0 || k[0]&macLocalBit != 0 || k == ianaMACPrefix {
+			continue
+		}
+
 		validMACPrefix = append(validMACPrefix, k)
 	}
+}
+
+var ianaMACPrefix = [3]byte{0x00, 0x00, 0x5e}
+
+// fhrpMACRanges are first hop redundancy protocol virtual router addresses; a
+// NIC sharing one breaks ARP and forwarding for that router on its VLAN.
+var fhrpMACRanges = []struct {
+	prefix [6]byte
+	mask   [6]byte
+}{
+	// HSRPv1: 00:00:0c:07:ac:xx
+	{[6]byte{0x00, 0x00, 0x0c, 0x07, 0xac, 0x00}, [6]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0x00}},
+	// HSRPv2 IPv4: 00:00:0c:9f:f0:00 - 00:00:0c:9f:ff:ff
+	{[6]byte{0x00, 0x00, 0x0c, 0x9f, 0xf0, 0x00}, [6]byte{0xff, 0xff, 0xff, 0xff, 0xf0, 0x00}},
+	// HSRP IPv6: 00:05:73:a0:00:00 - 00:05:73:a0:0f:ff
+	{[6]byte{0x00, 0x05, 0x73, 0xa0, 0x00, 0x00}, [6]byte{0xff, 0xff, 0xff, 0xff, 0xf0, 0x00}},
+	// GLBP: 00:07:b4:00:xx:xx
+	{[6]byte{0x00, 0x07, 0xb4, 0x00, 0x00, 0x00}, [6]byte{0xff, 0xff, 0xff, 0xff, 0x00, 0x00}},
+}
+
+// isUsableRandomMAC returns true if mac is a non-zero, universally administered
+// unicast address outside IANA's OUI and the first hop redundancy ranges.
+func isUsableRandomMAC(mac [6]byte) bool {
+	if mac == [6]byte{} || mac[0]&(macMulticastBit|macLocalBit) != 0 || [3]byte(mac[:3]) == ianaMACPrefix {
+		return false
+	}
+
+	for _, r := range fhrpMACRanges {
+		match := true
+		for i := range mac {
+			if mac[i]&r.mask[i] != r.prefix[i] {
+				match = false
+				break
+			}
+		}
+
+		if match {
+			return false
+		}
+	}
+
+	return true
 }
 
 // NetConfig contains all the network-related config for an interface. The IP

@@ -1,6 +1,6 @@
-// Copyright (2012) Sandia Corporation.
-// Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
-// the U.S. Government retains certain rights in this software.
+// Copyright 2012-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+// Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain
+// rights in this software.
 
 package main
 
@@ -15,6 +15,7 @@ import (
 	"io"
 	"math"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -113,16 +114,30 @@ func generateUUID() string {
 	return string(uuid)
 }
 
+// randomMACAttempts bounds randomMac's retries; a usable address is rejected
+// far less than once in a million draws, so running out means a logic error.
+const randomMACAttempts = 100
+
 // generate a random mac address and return as a string
-func randomMac() string {
+func randomMac() (string, error) {
+	if len(validMACPrefix) == 0 {
+		return "", errors.New("no usable MAC prefixes")
+	}
+
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	//
-	prefix := validMACPrefix[r.Intn(len(validMACPrefix))]
+	for range randomMACAttempts {
+		prefix := validMACPrefix[r.Intn(len(validMACPrefix))]
+		hw := [6]byte{prefix[0], prefix[1], prefix[2], byte(r.Intn(256)), byte(r.Intn(256)), byte(r.Intn(256))}
 
-	mac := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x", prefix[0], prefix[1], prefix[2], r.Intn(256), r.Intn(256), r.Intn(256))
-	log.Info("generated mac: %v", mac)
-	return mac
+		if isUsableRandomMAC(hw) {
+			mac := net.HardwareAddr(hw[:]).String()
+			log.Info("generated mac: %v", mac)
+			return mac, nil
+		}
+	}
+
+	return "", fmt.Errorf("no usable MAC generated in %v attempts", randomMACAttempts)
 }
 
 // Return true if any string in a string slice contains str

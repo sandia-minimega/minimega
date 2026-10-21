@@ -1,10 +1,11 @@
-// Copyright 2015-2023 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
+// Copyright 2015-2026 National Technology & Engineering Solutions of Sandia, LLC (NTESS).
 // Under the terms of Contract DE-NA0003525 with NTESS, the U.S. Government retains certain
 // rights in this software.
 
 package main
 
 import (
+	"net"
 	"testing"
 )
 
@@ -129,5 +130,93 @@ func TestParseBondConfig(t *testing.T) {
 		if got != s {
 			t.Fatalf("unequal: `%v` != `%v`", s, got)
 		}
+	}
+}
+
+func TestValidMACPrefix(t *testing.T) {
+	for _, p := range validMACPrefix {
+		if p[0]&macMulticastBit != 0 {
+			t.Errorf("validMACPrefix has multicast OUI %02x:%02x:%02x", p[0], p[1], p[2])
+		}
+
+		if p[0]&macLocalBit != 0 {
+			t.Errorf("validMACPrefix has locally administered OUI %02x:%02x:%02x", p[0], p[1], p[2])
+		}
+
+		if p == ianaMACPrefix {
+			t.Errorf("validMACPrefix has IANA OUI %02x:%02x:%02x", p[0], p[1], p[2])
+		}
+	}
+}
+
+func TestIsUsableRandomMAC(t *testing.T) {
+	examples := map[string]bool{
+		// ordinary vendor addresses, including ones just outside each FHRP range
+		"00:00:0c:12:34:56": true,
+		"00:00:0c:07:ab:ff": true, // below HSRPv1
+		"00:00:0c:9f:ef:ff": true, // below HSRPv2 IPv4
+		"00:05:73:a0:10:00": true, // above HSRP IPv6
+		"00:07:b4:01:00:00": true, // above GLBP
+		"00:00:00:00:00:01": true, // all-zero prefix, non-zero address
+
+		// all-zero address
+		"00:00:00:00:00:00": false,
+
+		// I/G (multicast) bit
+		"11:00:aa:12:34:56": false,
+		"ff:ff:ff:ff:ff:ff": false, // broadcast
+
+		// U/L (locally administered) bit
+		"02:00:00:00:00:01": false,
+		"aa:00:04:00:00:01": false, // DECnet
+
+		// IANA OUI
+		"00:00:5e:00:01:01": false, // VRRP/CARP
+		"00:00:5e:12:34:56": false,
+
+		// first and last address of each FHRP range
+		"00:00:0c:07:ac:00": false, // HSRPv1
+		"00:00:0c:07:ac:ff": false,
+		"00:00:0c:9f:f0:00": false, // HSRPv2 IPv4
+		"00:00:0c:9f:ff:ff": false,
+		"00:05:73:a0:00:00": false, // HSRP IPv6
+		"00:05:73:a0:0f:ff": false,
+		"00:07:b4:00:00:00": false, // GLBP
+		"00:07:b4:00:ff:ff": false,
+	}
+
+	for mac, want := range examples {
+		hw, err := net.ParseMAC(mac)
+		if err != nil {
+			t.Fatalf("bad example %q: %v", mac, err)
+		}
+
+		if got := isUsableRandomMAC([6]byte(hw)); got != want {
+			t.Errorf("isUsableRandomMAC(%v) = %v, want %v", mac, got, want)
+		}
+	}
+}
+
+func TestRandomMac(t *testing.T) {
+	for range 1000 {
+		mac, err := randomMac()
+		if err != nil {
+			t.Fatalf("randomMac() error: %v", err)
+		}
+
+		hw, err := net.ParseMAC(mac)
+		if err != nil || len(hw) != 6 || !isUsableRandomMAC([6]byte(hw)) {
+			t.Fatalf("randomMac() = %q (err %v), want a usable address", mac, err)
+		}
+	}
+}
+
+func TestRandomMacNoPrefixes(t *testing.T) {
+	saved := validMACPrefix
+	validMACPrefix = nil
+	defer func() { validMACPrefix = saved }()
+
+	if mac, err := randomMac(); err == nil {
+		t.Fatalf("randomMac() = %q, want an error with no prefixes", mac)
 	}
 }
