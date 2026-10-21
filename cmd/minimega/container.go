@@ -653,7 +653,12 @@ func (vm *ContainerVM) Config() *BaseConfig {
 func NewContainer(name, namespace string, config VMConfig) (*ContainerVM, error) {
 	vm := new(ContainerVM)
 
-	vm.BaseVM = NewBaseVM(name, namespace, config)
+	var err error
+	vm.BaseVM, err = NewBaseVM(name, namespace, config)
+	if err != nil {
+		return nil, err
+	}
+
 	vm.Type = CONTAINER
 
 	vm.ContainerConfig = config.ContainerConfig.Copy() // deep-copy configured fields

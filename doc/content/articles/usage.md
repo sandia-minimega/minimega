@@ -700,7 +700,7 @@ minimega$ vm launch kvm 2
 This will launch two VMs with a single ethernet device on a virtual
 network called `experiment`. If, for example, one of the VMs is running a
 DHCP server, the others will be able to obtain a lease from that VM. When
-VMs are created, MAC addresses are assigned randomly:
+VMs are created, MAC addresses are assigned randomly (with a few exclusions):
 
 ```text
 minimega$ .columns id,mac vm info

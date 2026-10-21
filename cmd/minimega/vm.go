@@ -190,7 +190,7 @@ func NewVM(name, namespace string, vmType VMType, config VMConfig) (VM, error) {
 
 // NewBaseVM creates a new VM, copying the specified configs. After a VM is
 // created, it can be Launched.
-func NewBaseVM(name, namespace string, config VMConfig) *BaseVM {
+func NewBaseVM(name, namespace string, config VMConfig) (*BaseVM, error) {
 	vm := new(BaseVM)
 
 	vm.BaseConfig = config.BaseConfig.Copy() // deep-copy configured fields
@@ -219,7 +219,12 @@ func NewBaseVM(name, namespace string, config VMConfig) *BaseVM {
 	// 0.016% chance of collisions when running 10K VMs (one interface/VM).
 	for i := range vm.Networks {
 		if vm.Networks[i].MAC == "" {
-			vm.Networks[i].MAC = randomMac()
+			mac, err := randomMac()
+			if err != nil {
+				return nil, err
+			}
+
+			vm.Networks[i].MAC = mac
 		}
 	}
 
@@ -236,7 +241,7 @@ func NewBaseVM(name, namespace string, config VMConfig) *BaseVM {
 	// called on a new VM is Launch.
 	vm.lock.Lock()
 
-	return vm
+	return vm, nil
 }
 
 // copy a BaseVM... assume that lock is held.
