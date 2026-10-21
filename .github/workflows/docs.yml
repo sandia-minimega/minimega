@@ -60,6 +60,7 @@ jobs:
         run: |
           python scripts/check-docs.py doc/content
           python -m unittest discover -s doc/pygments_minimega -p 'test_*.py'
+          python -m unittest discover -s lib -p 'test_*.py'
           python -c "from pygments.lexers import get_lexer_by_name; get_lexer_by_name('minimega')"
 
       - name: Build site
