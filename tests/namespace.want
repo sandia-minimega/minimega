@@ -54,3 +54,9 @@ E: already in namespace: ns3
 ## clear namespace
 ## clear namespace
 E: already in namespace: minimega
+
+## # Names that would escape or alias the namespace directory are rejected
+## namespace .
+E: invalid name; must only include letters, numbers, hyphens, underscores, and periods, and must not be "." or ".."
+## namespace ..
+E: invalid name; must only include letters, numbers, hyphens, underscores, and periods, and must not be "." or ".."
