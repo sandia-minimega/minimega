@@ -41,6 +41,17 @@ type Client struct {
 	LastCommandID int
 }
 
+// ClientInfo is the serializable summary of a Client reported to users.
+type ClientInfo struct {
+	UUID     string
+	Hostname string
+	Arch     string
+	OS       string
+	Version  string
+	IPs      []string
+	MACs     []string
+}
+
 type client struct {
 	*Client    // embed
 	sync.Mutex // embed
