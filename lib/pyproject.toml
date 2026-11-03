@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "minimega"
+dynamic = ["version", "readme"]
+authors = [
+  { name = "minimega dev team", email = "minimega-dev@sandia.gov" },
+]
+description = "Python API for minimega"
+license = "GPL-3.0-only"
+requires-python = ">=3.10"
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Information Technology",
+  "Intended Audience :: Telecommunications Industry",
+  "Intended Audience :: Science/Research",
+  "Natural Language :: English",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Topic :: Internet",
+  "Topic :: Scientific/Engineering",
+  "Topic :: System :: Clustering",
+  "Topic :: System :: Distributed Computing",
+  "Topic :: System :: Emulators",
+  "Topic :: System :: Networking",
+  "Topic :: System :: Operating System",
+  "Topic :: Utilities",
+]
+
+[project.urls]
+homepage = "https://sandia-minimega.github.io/minimega/"
+repository = "https://github.com/sandia-minimega/minimega"
+changelog = "https://github.com/sandia-minimega/minimega/releases/"
+documentation = "https://sandia-minimega.github.io/minimega/"
+issues = "https://github.com/sandia-minimega/minimega/issues"
+
+[tool.setuptools]
+py-modules = ["minimega"]
+
+[tool.setuptools.dynamic]
+readme = {file = ["README.md"], content-type = "text/markdown"}
+version = {file = ["VERSION"]}

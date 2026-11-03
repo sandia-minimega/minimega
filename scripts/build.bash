@@ -63,13 +63,9 @@ fi
 if [ ! -z "$py_path" ]; then
     echo "BUILD PYTHON DIST"
     $py_path -m pip install build
-    cp $ROOT_DIR/README.md $ROOT_DIR/lib/
-    cp $ROOT_DIR/VERSION $ROOT_DIR/lib/
     pushd $ROOT_DIR/lib
     $py_path -m build
     popd
-    rm $ROOT_DIR/lib/README.md
-    rm $ROOT_DIR/lib/VERSION
 fi
 
 unset GOOS
