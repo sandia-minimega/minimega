@@ -13,27 +13,27 @@ minimega includes Python bindings for its CLI that interact with minimega using 
 
 The `pyapigen` tool generates `minimega.py` which can be imported into scripts. The Python bindings include docstrings for every minimega command - see `help(minimega)` for a full listing. you can also use pip to install the python module minimega. Here's a simple example of a script to launch 10 VMs, display their info, and then kill them:
 
-```
+```python
 import minimega
 
 mm = minimega.connect(debug=True)
 
-print 'launching vms'
+print('launching vms')
 mm.vm_launch_kvm(10)
 
-print 'vm info:'
+print('vm info:')
 minimega.print_rows(mm.vm_info())
 
-print 'starting vms'
+print('starting vms')
 mm.vm_start('all')
 
-print 'vm info:'
+print('vm info:')
 minimega.print_rows(mm.vm_info())
 
-print 'killing vms'
+print('killing vms')
 mm.vm_kill('all')
 
-print 'flushing vms'
+print('flushing vms')
 mm.vm_flush()
 ```
 
@@ -60,6 +60,14 @@ __init__(self, path, raise_errors, debug, namespace, timeout) unbound minimega.m
 ```
 
 By default, the domain socket is only read/writable by root so the Python script must run as root (or the domain socket can be chmod'd appropriately).
+
+## Threading and multiprocessing
+
+A `minimega` client object owns a live socket connection, lock, and response state. One connection is serial: all responses from one command must be read before another command can be issued.
+
+Use one connection per process. Do not pickle a connected client or share it across `multiprocessing` workers. Instead, call `minimega.connect(...)` inside each worker process.
+
+The `namespace()` helper creates a shallow wrapper around the same underlying connection. It is a convenience for namespace scoping, not a separate transport or process-isolation boundary.
 
 ## Running commands
 

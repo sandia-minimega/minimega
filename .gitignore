@@ -73,7 +73,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -303,6 +302,7 @@ opencode_config.*
 bin
 volatile
 internal/version/version.go
+lib/VERSION
 doc/content/reference/minimega.md
 doc/content/reference/minirouter.md
 
