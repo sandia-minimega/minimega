@@ -494,6 +494,11 @@ func (r *Router) Commit(ns *Namespace) error {
 		path = filepath.Join(*f_iomBase, namespace)
 	}
 
+	// the namespace folder may not exist yet
+	if err := os.MkdirAll(path, 0775); err != nil {
+		return err
+	}
+
 	f, err := os.Create(filepath.Join(path, filename))
 	if err != nil {
 		return err

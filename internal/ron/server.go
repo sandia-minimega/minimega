@@ -68,6 +68,8 @@ type Server struct {
 
 	responses chan *Client // queue of incoming responses, consumed by the response processor
 
+	handlerDone chan struct{} // closed when responseHandler returns
+
 	plumber *miniplumber.Plumber
 
 	// set to non-zero value by Server.Destroy
@@ -88,10 +90,12 @@ func NewServer(path, subpath string, plumber *miniplumber.Plumber) (*Server, err
 		subpath:       subpath,
 		lastBroadcast: time.Now(),
 		responses:     make(chan *Client, 1024),
+		handlerDone:   make(chan struct{}),
 		plumber:       plumber,
 	}
 
-	if err := os.MkdirAll(s.responsePath(nil), 0775); err != nil {
+	// the response folder is created when the first response or file arrives
+	if err := os.MkdirAll(s.path, 0775); err != nil {
 		return nil, err
 	}
 
@@ -147,6 +151,60 @@ func (s *Server) Destroy() {
 		time.Sleep(5 * time.Second)
 	}
 	close(s.responses)
+
+	// wait for queued responses to be written before removing empty folders
+	if s.handlerDone != nil {
+		<-s.handlerDone
+	}
+
+	s.removeEmptyDirs()
+}
+
+// removeEmptyDirs removes the response folder and then the subpath folder if
+// they are empty. It removes only folders below s.path, never s.path itself
+// or a folder that is not empty.
+func (s *Server) removeEmptyDirs() {
+	for _, dir := range []string{s.responsePath(nil), filepath.Join(s.path, s.subpath)} {
+		if !isSubdir(s.path, dir) {
+			continue
+		}
+
+		if err := removeDirIfEmpty(dir); err != nil {
+			log.Warn("unable to remove empty folder %v: %v", dir, err)
+		}
+	}
+}
+
+// isSubdir returns true if dir is below base and is not base itself.
+func isSubdir(base, dir string) bool {
+	rel, err := filepath.Rel(base, dir)
+	if err != nil {
+		return false
+	}
+
+	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// removeDirIfEmpty removes dir if it exists and is empty.
+func removeDirIfEmpty(dir string) error {
+	f, err := os.Open(dir)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	_, err = f.Readdirnames(1)
+	f.Close()
+
+	if err == nil {
+		// dir is not empty
+		return nil
+	} else if err != io.EOF {
+		return err
+	}
+
+	return os.Remove(dir)
 }
 
 // Listen starts accepting TCP connections on the specified port, accepting
@@ -629,6 +687,22 @@ func (s *Server) responsePath(id *int) string {
 	return filepath.Join(s.path, s.subpath, RESPONSE_PATH, strconv.Itoa(*id))
 }
 
+// makeResponseDir creates the response folder and its parents if they do not
+// exist.
+func (s *Server) makeResponseDir() error {
+	return os.MkdirAll(s.responsePath(nil), 0775)
+}
+
+// recvFile writes part of a file that a client sent to the response folder.
+func (s *Server) recvFile(uuid string, f *File) error {
+	if err := s.makeResponseDir(); err != nil {
+		return err
+	}
+
+	fpath := filepath.Join(s.responsePath(&f.ID), uuid, f.Name)
+	return f.Recv(fpath)
+}
+
 // serve
 func (s *Server) serve(addr string, ln net.Listener) {
 	defer func() {
@@ -874,8 +948,7 @@ func (s *Server) clientHandler(c *client) {
 					err = s.sendFile(c, m.File.Name)
 				} else {
 					// client sent file
-					fpath := filepath.Join(s.responsePath(&m.File.ID), c.UUID, m.File.Name)
-					err = m.File.Recv(fpath)
+					err = s.recvFile(c.UUID, m.File)
 				}
 			case MESSAGE_CLIENT:
 				if c.mangled {
@@ -1160,6 +1233,8 @@ func (s *Server) route(m *Message) {
 
 // process responses, writing files when necessary
 func (s *Server) responseHandler() {
+	defer close(s.handlerDone)
+
 	for cin := range s.responses {
 		log.Debug("responseHandler: %v", cin.UUID)
 
@@ -1172,6 +1247,11 @@ func (s *Server) responseHandler() {
 			s.commandCheckIn(v.ID, cin.UUID)
 
 			path := filepath.Join(s.responsePath(&v.ID), cin.UUID)
+
+			if err := s.makeResponseDir(); err != nil {
+				log.Error("could not record response %v for %v: %v", v.ID, cin.UUID, err)
+				continue
+			}
 
 			if err := os.MkdirAll(path, os.FileMode(0770)); err != nil {
 				log.Error("could not record response %v for %v: %v", v.ID, cin.UUID, err)
