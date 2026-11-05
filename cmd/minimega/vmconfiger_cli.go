@@ -1318,7 +1318,7 @@ Default: empty map
 				mask = k
 			}
 
-			ns.vmConfig.Clear(mask)
+			ns.clearVMConfig(mask)
 
 			return nil
 		}),

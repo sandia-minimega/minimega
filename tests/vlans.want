@@ -77,3 +77,20 @@ A     | 104
 B     | 120
 ## vm config net
 [B]
+
+## # Blacklist
+## vlans blacklist
+vlan
+101
+## clear vlans blacklist 101
+## vlans blacklist
+## clear vlans blacklist 101
+E: VLAN 101 is not blacklisted
+## clear vlans blacklist 4096
+E: invalid VLAN (0 <= vlan < 4096)
+## vm config net 333
+## clear vlans blacklist 333
+E: VLAN 333 is in use by vm config in namespace foo
+## clear vm config net
+## clear vlans blacklist 333
+## vlans blacklist

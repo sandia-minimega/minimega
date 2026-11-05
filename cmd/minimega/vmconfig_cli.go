@@ -279,10 +279,16 @@ Remove tags in the same manner as "clear vm tag".`,
 func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	if c.BoolArgs["save"] {
 		// Save the current config
+		ns.configLock.Lock()
+		defer ns.configLock.Unlock()
+
 		ns.savedVMConfig[c.StringArgs["name"]] = ns.vmConfig.Copy()
 
 		return nil
 	} else if c.BoolArgs["restore"] {
+		ns.configLock.Lock()
+		defer ns.configLock.Unlock()
+
 		if name, ok := c.StringArgs["name"]; ok {
 			// Try to restore an existing config
 			if _, ok := ns.savedVMConfig[name]; !ok {
@@ -321,6 +327,8 @@ func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 			return vmNotFound(name)
 		}
 
+		ns.configLock.Lock()
+
 		switch vm := found.(type) {
 		case *KvmVM:
 			ns.vmConfig.BaseConfig = vm.BaseConfig.Copy()
@@ -353,6 +361,11 @@ func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 			nets = append(nets, nic.Raw)
 		}
 
+		// The VM can stop using its VLANs, so look up the VLANs again before use
+		ns.vmConfig.Networks = NetConfigs{}
+
+		ns.configLock.Unlock()
+
 		if err := ns.processVMNets(nets); err != nil {
 			return err
 		}
@@ -369,6 +382,14 @@ func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	// Print the config
 	resp.Response = ns.vmConfig.String(ns.Name)
 	return nil
+}
+
+// clearVMConfig clears the fields of the active vmConfig that match mask.
+func (n *Namespace) clearVMConfig(mask string) {
+	n.configLock.Lock()
+	defer n.configLock.Unlock()
+
+	n.vmConfig.Clear(mask)
 }
 
 func cliVMConfigDisk(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

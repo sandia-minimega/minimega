@@ -149,6 +149,16 @@ vlan
 1001
 ```
 
+To remove one identifier from the blacklist, use `clear vlans blacklist`. The
+command fails if the identifier is not blacklisted or in use:
+
+```text
+minimega$ clear vlans blacklist 1000
+minimega$ vlans blacklist
+vlan
+1001
+```
+
 <a id="TOC_9."></a>
 
 ## Creating host taps

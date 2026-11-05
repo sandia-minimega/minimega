@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -77,6 +78,17 @@ type Namespace struct {
 
 	vmConfig      VMConfig
 	savedVMConfig map[string]VMConfig
+
+	// configLock protects savedVMConfig, queue, launching, and the writes that
+	// replace vmConfig, its BaseConfig, or its Networks. Hold it to read them
+	// from a different goroutine. "ns add-hosts" and "ns del-hosts" also hold it
+	// when they change Hosts, and vmInfoCommands holds it to read Hosts. Other
+	// readers of Hosts do not hold it.
+	configLock sync.Mutex
+
+	// launching counts the queued VMs that are launching. These VMs can be
+	// absent from queue and from VMs.
+	launching map[*QueuedVMs]int
 
 	captures // embed captures for this namespace
 
@@ -287,7 +299,7 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 	}
 
 	// add in all the queued VM names and then recheck
-	for _, q := range n.queue {
+	for _, q := range n.queued() {
 		for _, name := range q.Names {
 			takenName[name] = true
 		}
@@ -304,6 +316,9 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 		return fmt.Errorf("vm already queued with UUID `%s`", vmConfig.UUID)
 	}
 
+	n.configLock.Lock()
+	defer n.configLock.Unlock()
+
 	n.queue = append(n.queue, &QueuedVMs{
 		VMConfig: vmConfig,
 		VMType:   vmType,
@@ -311,6 +326,49 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 	})
 
 	return nil
+}
+
+// queued returns a copy of queue.
+func (n *Namespace) queued() []*QueuedVMs {
+	n.configLock.Lock()
+	defer n.configLock.Unlock()
+
+	return slices.Clone(n.queue)
+}
+
+// queuedLaunching returns a copy of queue. Until done, the copied VMs also count
+// as launching VMs so that "clear vlans blacklist" finds their VLANs.
+func (n *Namespace) queuedLaunching() (queue []*QueuedVMs, done func()) {
+	n.configLock.Lock()
+	defer n.configLock.Unlock()
+
+	queue = slices.Clone(n.queue)
+	n.addLaunching(queue)
+
+	return queue, func() { n.endLaunch(queue) }
+}
+
+// copyVMConfig returns a copy of the VM configuration, or of the saved VM
+// configuration name if name is not empty. Until done, the copy counts as
+// launching VMs so that "clear vlans blacklist" finds its VLANs.
+func (n *Namespace) copyVMConfig(name string) (config VMConfig, done func(), err error) {
+	n.configLock.Lock()
+	defer n.configLock.Unlock()
+
+	config = n.vmConfig
+	if name != "" {
+		var ok bool
+		if config, ok = n.savedVMConfig[name]; !ok {
+			return VMConfig{}, nil, fmt.Errorf("config %v does not exist", name)
+		}
+	}
+
+	config = config.Copy()
+
+	pending := []*QueuedVMs{{VMConfig: config}}
+	n.addLaunching(pending)
+
+	return config, func() { n.endLaunch(pending) }, nil
 }
 
 // hostStats returns stats from hosts in the namespace.
@@ -348,13 +406,17 @@ func (n *Namespace) Schedule(dryRun bool) error {
 		return errors.New("namespace must contain at least one host to launch VMs")
 	}
 
-	if len(n.queue) == 0 {
+	// Keep the snapshot in launching because a flush can remove it from queue
+	queue, done := n.queuedLaunching()
+	defer done()
+
+	if len(queue) == 0 {
 		return errors.New("namespace must contain at least one queued VM to launch VMs")
 	}
 
 	// already have assignment so if we're not doing a dry run, run it
 	if n.assignment != nil && !dryRun {
-		if err := n.schedule(n.assignment); err != nil {
+		if err := n.schedule(n.assignment, queue); err != nil {
 			return err
 		}
 
@@ -375,7 +437,7 @@ func (n *Namespace) Schedule(dryRun bool) error {
 
 	// resolve any "colocated" VMs for VMs that are already launched
 	for _, vm := range globalVMs(n) {
-		for _, q := range n.queue {
+		for _, q := range queue {
 			if q.Colocate == vm.GetName() {
 				q.Schedule = vm.GetHost()
 			}
@@ -383,7 +445,7 @@ func (n *Namespace) Schedule(dryRun bool) error {
 	}
 
 	// Create the host -> VMs assignment
-	assignment, err := schedule(n.queue, hostStats, hostSorter)
+	assignment, err := schedule(queue, hostStats, hostSorter)
 	if err != nil {
 		return err
 	}
@@ -393,17 +455,25 @@ func (n *Namespace) Schedule(dryRun bool) error {
 		return nil
 	}
 
-	return n.schedule(assignment)
+	return n.schedule(assignment, queue)
 }
 
-func (n *Namespace) schedule(assignment map[string][]*QueuedVMs) error {
+// schedule launches the VMs in assignment. queue is the copy of the queue that
+// Schedule used to make the assignment.
+func (n *Namespace) schedule(assignment map[string][]*QueuedVMs, queue []*QueuedVMs) error {
 	total := 0
-	for _, q := range n.queue {
+	for _, q := range queue {
 		total += len(q.Names)
 	}
 
-	// Clear the queuedVMs -- we're just about to launch them (hopefully!)
-	n.queue = nil
+	// Remove the queuedVMs -- we're just about to launch them (hopefully!)
+	var launching []*QueuedVMs
+	for _, queue := range assignment {
+		launching = append(launching, queue...)
+	}
+
+	n.startLaunch(launching, queue)
+	defer n.endLaunch(launching)
 
 	stats := &scheduleStat{
 		total: total,
@@ -470,6 +540,10 @@ func (n *Namespace) schedule(assignment map[string][]*QueuedVMs) error {
 
 // Reschedule
 func (n *Namespace) Reschedule(target, dst string) error {
+	// Reschedule changes the queued VMs
+	n.configLock.Lock()
+	defer n.configLock.Unlock()
+
 	if n.assignment == nil {
 		return errors.New("must run dry-run first")
 	}
@@ -523,6 +597,9 @@ Outer:
 // Launch wraps VMs.Launch, registering the launched VMs with ron. It blocks
 // until all the VMs are launched.
 func (n *Namespace) Launch(requestor string, q *QueuedVMs) []error {
+	n.startLaunch([]*QueuedVMs{q}, nil)
+	defer n.endLaunch([]*QueuedVMs{q})
+
 	// collect all the errors
 	errs := []error{}
 	for err := range n.VMs.Launch(requestor, n.Name, q) {
@@ -530,6 +607,46 @@ func (n *Namespace) Launch(requestor string, q *QueuedVMs) []error {
 	}
 
 	return errs
+}
+
+// startLaunch adds qs to launching until endLaunch. Also removes the VMs in
+// dequeue from queue in the same step so that the VMs are always in queue or
+// launching. The VMs that other commands add to queue stay in queue.
+func (n *Namespace) startLaunch(qs, dequeue []*QueuedVMs) {
+	n.configLock.Lock()
+	defer n.configLock.Unlock()
+
+	if len(dequeue) > 0 {
+		n.queue = slices.DeleteFunc(slices.Clone(n.queue), func(q *QueuedVMs) bool {
+			return slices.Contains(dequeue, q)
+		})
+	}
+
+	n.addLaunching(qs)
+}
+
+// addLaunching adds qs to launching. The caller must hold configLock.
+func (n *Namespace) addLaunching(qs []*QueuedVMs) {
+	if n.launching == nil {
+		n.launching = map[*QueuedVMs]int{}
+	}
+
+	for _, q := range qs {
+		n.launching[q]++
+	}
+}
+
+// endLaunch removes qs from launching.
+func (n *Namespace) endLaunch(qs []*QueuedVMs) {
+	n.configLock.Lock()
+	defer n.configLock.Unlock()
+
+	for _, q := range qs {
+		n.launching[q]--
+		if n.launching[q] <= 0 {
+			delete(n.launching, q)
+		}
+	}
 }
 
 // NewCommand takes a command, adds the current filter and prefix, and then
@@ -616,6 +733,9 @@ func (n *Namespace) processVMDisks(vals []string) error {
 
 // processVMNets parses a list of netspecs using processVMNet and updates the
 // active vmConfig.
+//
+// LOCK: The caller should call vlanUseLock.Use and end the use after it stores
+// the NetConfigs.
 func (n *Namespace) parseVMNets(vals []string) ([]NetConfig, error) {
 	// get valid NIC drivers for current qemu/machine
 	nics, err := qemuNICsForConfig(n.vmConfig)
@@ -633,13 +753,13 @@ func (n *Namespace) parseVMNets(vals []string) ([]NetConfig, error) {
 	for _, spec := range vals {
 		nic, err := ParseNetConfig(spec, nics)
 		if err != nil {
-			n.vmConfig.Networks = NetConfigs{}
+			n.setVMNetworks(NetConfigs{})
 			return nil, err
 		}
 
 		vlan, err := lookupVLAN(n.Name, nic.Alias)
 		if err != nil {
-			n.vmConfig.Networks = NetConfigs{}
+			n.setVMNetworks(NetConfigs{})
 			return nil, err
 		}
 
@@ -673,17 +793,25 @@ func (n *Namespace) parseVMBonds(vals []string) ([]BondConfig, error) {
 // processVMNets parses a list of netspecs using parseVMNet and updates the
 // active vmConfig.
 func (n *Namespace) processVMNets(vals []string) error {
-	n.vmConfig.Networks = NetConfigs{}
+	done := vlanUseLock.Use()
+	defer done()
 
 	nics, err := n.parseVMNets(vals)
 	if err != nil {
+		n.setVMNetworks(NetConfigs{})
 		return err
 	}
 
-	for _, nic := range nics {
-		n.vmConfig.Networks = append(n.vmConfig.Networks, nic)
-	}
+	n.setVMNetworks(nics)
 	return nil
+}
+
+// setVMNetworks sets the NICs of the active vmConfig.
+func (n *Namespace) setVMNetworks(nics NetConfigs) {
+	n.configLock.Lock()
+	defer n.configLock.Unlock()
+
+	n.vmConfig.Networks = nics
 }
 
 // processVMBonds parses a list of bondspecs using parseVMBonds and updates the
@@ -1031,6 +1159,19 @@ func ListNamespaces() []string {
 
 	// make sure the order is always the same
 	sort.Strings(res)
+
+	return res
+}
+
+// allNamespaces returns all the namespaces.
+func allNamespaces() []*Namespace {
+	namespaceLock.Lock()
+	defer namespaceLock.Unlock()
+
+	res := []*Namespace{}
+	for _, ns := range namespaces {
+		res = append(res, ns)
+	}
 
 	return res
 }
