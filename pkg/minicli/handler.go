@@ -33,6 +33,10 @@ type Handler struct {
 	// three arguments: the raw input string, the variable name (e.g. "vm"),
 	// and the user's input for the variable so far.
 	Suggest SuggestFunc `json:"-"`
+
+	// Hidden handlers parse and run like any other handler, but help
+	// listings, suggestions, and Doc output do not include them.
+	Hidden bool `json:"-"`
 }
 
 func (h *Handler) parsePatterns() error {

@@ -42,6 +42,9 @@ fi
 : "${MM_RECOVER:=false}"
 : "${MM_CGROUP:=/sys/fs/cgroup}"
 : "${MM_ABSSNAPSHOT:=false}"
+: "${MM_FIRECRACKER_DIR:=/var/lib/minimega/firecracker}"
+: "${MM_FIRECRACKER_UID_BASE:=2000000000}"
+: "${MM_FIRECRACKER_LAUNCH_PARALLEL:=0}"
 : "${MM_APPEND:=}"
 
 : "${OVS_APPEND:=}"
@@ -160,6 +163,9 @@ echo "[$(date --rfc-3339=seconds)] starting minimega..." | tee -a ${MM_LOGFILE}
   -logfile=${MM_LOGFILE} \
   -cgroup=${MM_CGROUP} \
   -abssnapshot=${MM_ABSSNAPSHOT} \
+  -firecracker-dir=${MM_FIRECRACKER_DIR} \
+  -firecracker-uid-base=${MM_FIRECRACKER_UID_BASE} \
+  -firecracker-launch-parallel=${MM_FIRECRACKER_LAUNCH_PARALLEL} \
   ${MM_APPEND} &
 MINIMEGA_PID=$!
 echo "[$(date --rfc-3339=seconds)] minimega started with PID ${MINIMEGA_PID}" | tee -a ${MM_LOGFILE}

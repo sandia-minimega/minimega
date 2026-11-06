@@ -38,6 +38,9 @@ var environmentFlags = []environmentFlag{
 	{"MM_CGROUP", "cgroup"},
 	{"MM_PANIC", "panic"},
 	{"MM_ABSSNAPSHOT", "abssnapshot"},
+	{"MM_FIRECRACKER_DIR", "firecracker-dir"},
+	{"MM_FIRECRACKER_UID_BASE", "firecracker-uid-base"},
+	{"MM_FIRECRACKER_LAUNCH_PARALLEL", "firecracker-launch-parallel"},
 }
 
 func setEnvironmentFlagDefault(fs *flag.FlagSet, mapping environmentFlag, value string) error {

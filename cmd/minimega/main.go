@@ -59,6 +59,10 @@ var (
 	f_hashfiles   = flag.Bool("hashfiles", false, "hash files to be served by iomeshage")
 	f_absSnapshot = flag.Bool("abssnapshot", false, "use absolute paths to backing images when creating snapshots")
 
+	f_firecrackerDir            = flag.String("firecracker-dir", "/var/lib/minimega/firecracker", "directory for Firecracker jails, instance directories, and the image cache; must be one filesystem")
+	f_firecrackerUIDBase        = flag.Uint("firecracker-uid-base", 2000000000, "first uid and gid for jailed Firecracker VMMs; each VM uses the base plus its VM ID")
+	f_firecrackerLaunchParallel = flag.Int("firecracker-launch-parallel", 0, "maximum Firecracker VMs that prepare at the same time; 0 means the number of CPUs")
+
 	f_e         = flag.Bool("e", false, "execute command on running minimega")
 	f_attach    = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
 	f_namespace = flag.String("namespace", "", "prepend namespace to all -attach and -e commands")
@@ -249,6 +253,8 @@ func main() {
 
 	fmt.Println(copyright())
 	log.Info("%s", versionString())
+
+	firecrackerHostInit()
 
 	// check all the external dependencies
 	if err := checkExternal(); err != nil {

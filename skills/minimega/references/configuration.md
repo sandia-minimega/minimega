@@ -21,6 +21,7 @@ variables, and command-line flags:
 | Runtime state | `-base`, `-filepath`, `-cgroup` |
 | Mesh and VLANs | `-context`, `-degree`, `-msa`, `-broadcast`, `-port`, `-vlanrange`, `-headnode` |
 | Lifecycle | `-nostdin`, `-force`, `-recover`, `-panic`, `-hashfiles`, `-abssnapshot` |
+| Firecracker VMs | `-firecracker-dir`, `-firecracker-uid-base`, `-firecracker-launch-parallel` |
 | Logging | `-level`, `-logfile`, `-v`, `-verbose` |
 | Alternate and client modes | `-e`, `-attach`, `-namespace`, `-pipe`, `-version`, `-cli`, `-completion`, `-suggest` |
 
@@ -63,9 +64,10 @@ a complete file.
 The process recognizes these environment variables as flag defaults:
 `MM_BASE`, `MM_DEGREE`, `MM_MSA`, `MM_BROADCAST`, `MM_VLANRANGE`, `MM_PORT`,
 `MM_FORCE`, `MM_RECOVER`, `MM_DAEMON`, `MM_CONTEXT`, `MM_FILEPATH`,
-`MM_LOGLEVEL`, `MM_LOGFILE`, `MM_CGROUP`, `MM_PANIC`, and `MM_ABSSNAPSHOT`.
-The mapping lives in `cmd/minimega/environment.go`. Explicit command-line flags
-take precedence. They apply to server mode and to the `-e`, `-attach`, and
+`MM_LOGLEVEL`, `MM_LOGFILE`, `MM_CGROUP`, `MM_PANIC`, `MM_ABSSNAPSHOT`,
+`MM_FIRECRACKER_DIR`, `MM_FIRECRACKER_UID_BASE`, and
+`MM_FIRECRACKER_LAUNCH_PARALLEL`. The mapping lives in
+`cmd/minimega/environment.go`. Explicit command-line flags take precedence. They apply to server mode and to the `-e`, `-attach`, and
 `-pipe` client modes alike. For those client modes, when neither `MM_BASE` nor
 `-base` is set, minimega also reads `MM_BASE` from `/etc/minimega/minimega.conf`;
 other configuration-file values are not read in client modes.
@@ -99,8 +101,9 @@ starts Open vSwitch, waits for it, starts miniweb, then runs minimega with
 
 - `MM_BASE`, `MM_FILEPATH`, `MM_BROADCAST`, `MM_VLANRANGE`, `MM_PORT`,
   `MM_DEGREE`, `MM_CONTEXT`, `MM_LOGLEVEL`, `MM_LOGFILE`, `MM_FORCE`,
-  `MM_RECOVER`, `MM_CGROUP`, and `MM_ABSSNAPSHOT` map to same-purpose minimega
-  flags.
+  `MM_RECOVER`, `MM_CGROUP`, `MM_ABSSNAPSHOT`, `MM_FIRECRACKER_DIR`,
+  `MM_FIRECRACKER_UID_BASE`, and `MM_FIRECRACKER_LAUNCH_PARALLEL` map to
+  same-purpose minimega flags.
 - `MINIWEB_ROOT`, `MINIWEB_HOST`, and `MINIWEB_PORT` configure miniweb.
 - `OVS_APPEND` adds raw `ovs-ctl start` arguments. `OVS_HOST_IFACE` uses
   `<bridge>:<port>[,<port>...]`.

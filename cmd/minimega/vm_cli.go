@@ -113,6 +113,7 @@ supported VM types are:
 - kvm : QEMU-based vms
 - container: Linux containers
 - android : Android emulator-based VMs
+- firecracker : Firecracker microVM under the jailer (minifire)
 
 If you supply a name instead of a number of VMs, one VM with that name will be
 launched. You may also supply a range expression to launch VMs with a specific
@@ -141,6 +142,7 @@ concurrently, and fewer if some of those ports are already in use.`,
 			"vm launch <kvm,> <name or count> [config]",
 			"vm launch <container,> <name or count> [config]",
 			"vm launch <android,> <name or count> [config]",
+			"vm launch <firecracker,> <name or count> [config]",
 		},
 		Call: wrapSimpleCLI(cliVMLaunch),
 	},
@@ -594,6 +596,7 @@ func init() {
 	gob.Register(&KvmVM{})
 	gob.Register(&ContainerVM{})
 	gob.Register(&AndroidVM{})
+	gob.Register(&FirecrackerVM{})
 }
 
 func cliVMApply(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

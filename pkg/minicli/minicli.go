@@ -274,6 +274,10 @@ func ExpandAliases(input string) string {
 func suggest(raw string, input *Input) []string {
 	vals := map[string]bool{}
 	for _, h := range handlers {
+		if h.Hidden {
+			continue
+		}
+
 		for _, v := range h.suggest(raw, input) {
 			vals[v] = true
 		}
@@ -307,7 +311,7 @@ func Help(input string) string {
 		return printHelpShort(handlers)
 	}
 
-	matches := trie.help(inputItems.items)
+	matches := visibleHandlers(trie.help(inputItems.items))
 
 	if len(matches) == 0 {
 		return fmt.Sprintf("no help entry for `%s`", input)
@@ -359,9 +363,9 @@ func ClearHistory() {
 	history = make([]string, 0)
 }
 
-// Doc generate CLI documentation, in JSON format.
+// Doc generate CLI documentation, in JSON format. Hidden handlers are omitted.
 func Doc() (string, error) {
-	bytes, err := json.Marshal(handlers)
+	bytes, err := json.Marshal(visibleHandlers(handlers))
 	return string(bytes), err
 }
 

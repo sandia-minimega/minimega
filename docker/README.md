@@ -183,6 +183,9 @@ MM_FORCE=true
 MM_RECOVER=false
 MM_CGROUP=/sys/fs/cgroup
 MM_ABSSNAPSHOT=false
+MM_FIRECRACKER_DIR=/var/lib/minimega/firecracker
+MM_FIRECRACKER_UID_BASE=2000000000
+MM_FIRECRACKER_LAUNCH_PARALLEL=0
 ```
 
 The defaults set for miniweb are:

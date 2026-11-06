@@ -313,4 +313,7 @@ func registerEnvironmentFlags(fs *flag.FlagSet) {
 	fs.String("cgroup", "", "")
 	fs.Bool("panic", false, "")
 	fs.Bool("abssnapshot", false, "")
+	fs.String("firecracker-dir", "", "")
+	fs.Uint("firecracker-uid-base", 2000000000, "")
+	fs.Int("firecracker-launch-parallel", 0, "")
 }

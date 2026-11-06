@@ -56,13 +56,13 @@ type KVMConfig struct {
 	// Attach a kernel image to a VM. If set, QEMU will boot from this image
 	// instead of any disk image.
 	//
-	// Note: this configuration only applies to KVM-based VMs.
+	// Note: this configuration only applies to KVM-based and Firecracker-based VMs.
 	KernelPath string
 
 	// Attach an initrd image to a VM. Passed along with the kernel image at
 	// boot time.
 	//
-	// Note: this configuration only applies to KVM-based VMs.
+	// Note: this configuration only applies to KVM-based and Firecracker-based VMs.
 	InitrdPath string
 
 	// Attach a cdrom to a VM. When using a cdrom, it will automatically be set
@@ -194,7 +194,7 @@ type KVMConfig struct {
 	//
 	// 	vm config append ip=10.0.0.5 gateway=10.0.0.1 netmask=255.255.255.0 dns=10.10.10.10
 	//
-	// Note: this configuration only applies to KVM-based VMs.
+	// Note: this configuration only applies to KVM-based and Firecracker-based VMs.
 	Append []string
 
 	// Attach one or more disks to a vm. Any disk image supported by QEMU is a
@@ -564,6 +564,8 @@ func (vm *KvmVM) Conflicts(vm2 VM) error {
 		return vm.BaseVM.conflicts(vm2.BaseVM)
 	case *AndroidVM:
 		return vm.ConflictsAndroid(vm2)
+	case *FirecrackerVM:
+		return vm.BaseVM.conflicts(vm2.BaseVM)
 	}
 
 	return errors.New("unknown VM type")
