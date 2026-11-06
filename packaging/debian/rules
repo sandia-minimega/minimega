@@ -1,24 +1,15 @@
 #!/usr/bin/make -f
 #export DH_VERBOSE=1
 
-MM=".."
-DST="debian/tmp/opt/minimega"
-DOCS="debian/tmp/usr/share/doc/minimega"
+DST = debian/minimega
 
 %:
-	dh $@ --with systemd --no-start --parallel
+	dh $@
 
-override_dh_prep:
-	dh_prep
-	mkdir -p $(DST)
-	cp -r $(MM)/bin $(DST)/
-	cp -r $(MM)/doc $(DST)/
-	cp -r $(MM)/lib $(DST)/
-	mkdir -p $(DST)/misc
-	cp -r $(MM)/misc/daemon $(DST)/misc/
-	cp -r $(MM)/misc/vmbetter_configs $(DST)/misc/
-	mkdir -p $(DST)/web
-	cp -r $(MM)/web $(DST)/web/
-	mkdir -p $(DOCS)
-	cp $(MM)/LICENSE $(DOCS)/
-	cp -r $(MM)/LICENSES $(DOCS)/
+# Copy the license files that LICENSES/ links to, and drop the xterm.js development files.
+execute_after_dh_install:
+	cp -rL ../LICENSES $(DST)/usr/share/doc/minimega/
+	rm -rf $(DST)/opt/minimega/web/xterm.js/.[!.]*
+
+override_dh_installsystemd:
+	dh_installsystemd --no-start

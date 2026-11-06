@@ -1,23 +1,27 @@
 Source: minimega
 Section: utils
-Priority: extra
+Priority: optional
 Maintainer: Arthur Hernandez <aherna4@sandia.gov>
 Uploaders: Jacob Davis <jacdavi@sandia.gov>
-Build-Depends: debhelper
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.3
+Rules-Requires-Root: no
 Vcs-Browser: https://github.com/sandia-minimega/minimega/
 Vcs-Git: https://github.com/sandia-minimega/minimega.git
 
 Package: minimega
 Architecture: amd64
 Homepage: https://sandia-minimega.github.io/minimega/
-Depends: qemu-kvm,
+Depends: ${misc:Depends},
+         ${shlibs:Depends},
+         qemu-system-x86 | qemu-kvm,
          qemu-utils,
          openvswitch-switch,
          dnsmasq,
          dosfstools,
          ntfs-3g,
-         libpcap-dev
-Description: a distributed VM management tool.
+         passwd
+Description: distributed VM management tool
  minimega is a tool for launching and managing virtual machines. It can run on
  your laptop or distributed across a cluster. minimega is fast, easy to deploy,
  and can scale to run on massive clusters with virtually no setup.
