@@ -131,6 +131,9 @@ func checkExternal() error {
 		}
 	}
 
+	// Firecracker runtime is optional, so it only logs warnings
+	checkFirecracker()
+
 	return nil
 }
 
