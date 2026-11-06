@@ -6,10 +6,13 @@ DST = debian/minimega
 %:
 	dh $@
 
-# Copy the license files that LICENSES/ links to, and drop the xterm.js development files.
+# Copy the license files that LICENSES/ links to, drop the xterm.js development files,
+# and generate the bash completion file, so that the package owns it.
 execute_after_dh_install:
 	cp -rL ../LICENSES $(DST)/usr/share/doc/minimega/
 	rm -rf $(DST)/opt/minimega/web/xterm.js/.[!.]*
+	mkdir -p $(DST)/usr/share/bash-completion/completions
+	../bin/minimega -completion bash > $(DST)/usr/share/bash-completion/completions/minimega
 
 override_dh_installsystemd:
 	dh_installsystemd --no-start
