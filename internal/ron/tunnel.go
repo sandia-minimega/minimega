@@ -81,6 +81,25 @@ func (s *Server) CloseForward(uuid string, id int) error {
 	return c.tunnel.CloseForward(id)
 }
 
+// ListReverses returns the reverse tunnels that the client with the given UUID
+// opened and that are still open. A client without an initialized tunnel has
+// no reverse tunnels.
+func (s *Server) ListReverses(uuid string) ([]minitunnel.ReverseTunnel, error) {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+
+	c, ok := s.clients[uuid]
+	if !ok {
+		return nil, fmt.Errorf("no such client: %v", uuid)
+	}
+
+	if c.tunnel == nil {
+		return nil, nil
+	}
+
+	return c.tunnel.ListReverses(), nil
+}
+
 // Reverse creates a reverse tunnel from guest->host. It is possible to have
 // multiple clients create a reverse tunnel simultaneously. filter allows
 // specifying which clients to have create the tunnel, and matches clients the

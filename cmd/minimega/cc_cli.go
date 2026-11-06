@@ -118,8 +118,8 @@ access to. For example, to connect port 4444 on each client to a web server:
 
 	cc rtunnel 4444 myserver 80
 
-"cc tunnel list" does not show reverse tunnels. A reverse tunnel stays open
-until the client disconnects.
+"cc rtunnel list" shows the reverse tunnels that are open on each client, or
+only on the given VM. "cc tunnel list" does not show reverse tunnels.
 
 "cc rtunnel" returns an error if no client matches the filter. If a client does
 not open its tunnel, the error gives the UUID of that client. The tunnels on the
@@ -180,6 +180,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <tunnel,> <close,> <vm name or uuid> <id>",
 			"cc <tunnel,> <list,> <vm name, uuid, or all>",
 			"cc <rtunnel,> <src port> <host> <dst port>",
+			"cc <rtunnel,> <list,> [vm name, uuid, or all]",
 
 			"cc <delete,> <command,> <id or prefix or all>",
 			"cc <delete,> <response,> <id or prefix or all>",
@@ -225,19 +226,36 @@ See "help cc" for more information.`,
 	},
 }
 
-// wrapCCCLI uses wrapCCRTunnelCLI for "cc rtunnel" (but not "cc rtunnel
-// list") and cliCCBroadcast for the other cc subcommands.
+// wrapCCCLI wraps the cc subcommands with the wrapper that ccCLIWrapper
+// selects for each command. The broadcast wrapper is cliCCBroadcast.
 func wrapCCCLI(fn wrappedCLIFunc) minicli.CLIFunc {
+	broadcast := minicli.CLIFunc(cliCCBroadcast)
+	vmTarget := wrapVMTargetCLI(fn)
 	rtunnel := wrapCCRTunnelCLI(fn)
 
 	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
-		if c.BoolArgs["rtunnel"] && !c.BoolArgs["list"] {
-			rtunnel(c, respChan)
-			return
-		}
-
-		cliCCBroadcast(c, respChan)
+		ccCLIWrapper(c, broadcast, vmTarget, rtunnel)(c, respChan)
 	}
+}
+
+// ccCLIWrapper returns rtunnel for "cc rtunnel", vmTarget for "cc rtunnel
+// list" with a VM name or UUID, and broadcast for the other cc subcommands.
+// vmTarget ignores the "vm not found" errors from the hosts that do not run
+// the VM.
+func ccCLIWrapper(c *minicli.Command, broadcast, vmTarget, rtunnel minicli.CLIFunc) minicli.CLIFunc {
+	if !c.BoolArgs["rtunnel"] {
+		return broadcast
+	}
+
+	if !c.BoolArgs["list"] {
+		return rtunnel
+	}
+
+	if v := c.StringArgs["vm"]; v != "" && v != Wildcard {
+		return vmTarget
+	}
+
+	return broadcast
 }
 
 // wrapCCRTunnelCLI broadcasts "cc rtunnel" to all hosts in the namespace like
@@ -466,35 +484,10 @@ func cliCCTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	}
 
 	if c.BoolArgs["list"] {
-		// map VM name --> VM UUID
-		vms := make(map[string]string)
-
-		if v == Wildcard {
-			clients := ns.ccServer.GetClients()
-
-			for _, client := range clients {
-				vm := ns.FindVM(client.UUID)
-				if vm == nil {
-					return vmNotFound(client.UUID)
-				}
-
-				vms[vm.GetName()] = client.UUID
-			}
-		} else {
-			vm := ns.FindVM(v)
-			if vm == nil {
-				return vmNotFound(v)
-			}
-
-			vms[v] = vm.GetUUID()
+		names, vms, err := ccTunnelVMs(ns, v)
+		if err != nil {
+			return err
 		}
-
-		var names []string
-		for name := range vms {
-			names = append(names, name)
-		}
-
-		sort.Strings(names)
 
 		resp.Header = []string{"vm", "id", "src port", "dst", "dst port"}
 		resp.Tabular = [][]string{}
@@ -553,8 +546,49 @@ func cliCCTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	return ns.ccServer.Forward(uuid, src, host, dst)
 }
 
+// ccTunnelVMs returns the sorted names of the VMs that v selects and maps each
+// name to the UUID of that VM. v is a VM name, a UUID, or Wildcard for every
+// connected client.
+func ccTunnelVMs(ns *Namespace, v string) ([]string, map[string]string, error) {
+	// map VM name --> VM UUID
+	vms := make(map[string]string)
+
+	if v == Wildcard {
+		clients := ns.ccServer.GetClients()
+
+		for _, client := range clients {
+			vm := ns.FindVM(client.UUID)
+			if vm == nil {
+				return nil, nil, vmNotFound(client.UUID)
+			}
+
+			vms[vm.GetName()] = client.UUID
+		}
+	} else {
+		vm := ns.FindVM(v)
+		if vm == nil {
+			return nil, nil, vmNotFound(v)
+		}
+
+		vms[v] = vm.GetUUID()
+	}
+
+	var names []string
+	for name := range vms {
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+
+	return names, vms, nil
+}
+
 // rtunnel
 func cliCCRTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if c.BoolArgs["list"] {
+		return cliCCRTunnelList(ns, c, resp)
+	}
+
 	src, err := strconv.Atoi(c.StringArgs["src"])
 	if err != nil {
 		return fmt.Errorf("non-integer src: %v : %v", c.StringArgs["src"], err)
@@ -566,6 +600,44 @@ func cliCCRTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	}
 
 	return ns.ccServer.Reverse(ns.ccFilter, src, c.StringArgs["host"], dst)
+}
+
+// rtunnel list
+func cliCCRTunnelList(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	v := c.StringArgs["vm"]
+	if v == "" {
+		v = Wildcard
+	}
+
+	names, vms, err := ccTunnelVMs(ns, v)
+	if err != nil {
+		return err
+	}
+
+	resp.Header = []string{"vm", "src port", "dst", "dst port"}
+	resp.Tabular = [][]string{}
+
+	for _, name := range names {
+		reverses, err := ns.ccServer.ListReverses(vms[name])
+		if err != nil {
+			return err
+		}
+
+		sort.SliceStable(reverses, func(i, j int) bool {
+			return reverses[i].Source < reverses[j].Source
+		})
+
+		for _, r := range reverses {
+			resp.Tabular = append(resp.Tabular, []string{
+				name,
+				strconv.Itoa(r.Source),
+				r.Host,
+				strconv.Itoa(r.Dest),
+			})
+		}
+	}
+
+	return nil
 }
 
 // responses

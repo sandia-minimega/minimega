@@ -39,6 +39,10 @@ type Tunnel struct {
 	forwardIDs chan int
 	forwards   map[int]*forward
 
+	// reverses that the remote end acknowledged, protected by reverseLock
+	reverses    []ReverseTunnel
+	reverseLock sync.Mutex
+
 	sendLock sync.Mutex
 }
 
@@ -193,6 +197,8 @@ func (t *Tunnel) Reverse(source int, host string, dest int) error {
 	} else if m.Error != "" {
 		return errors.New(m.Error)
 	}
+
+	t.addReverse(ReverseTunnel{Source: source, Host: host, Dest: dest})
 
 	return nil
 }

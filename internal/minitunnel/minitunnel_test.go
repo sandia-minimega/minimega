@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	. "github.com/sandia-minimega/minimega/v2/internal/minitunnel"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
@@ -313,5 +315,60 @@ func TestReverseInvalid(t *testing.T) {
 	errListen := <-errChan
 	if errListen != nil {
 		t.Fatalf("ListenAndServe: %v", errListen)
+	}
+}
+
+func TestListReverses(t *testing.T) {
+	g, h := net.Pipe()
+	defer g.Close()
+	defer h.Close()
+
+	errChan := goListenAndServe(g)
+
+	tun, errDial := Dial(h)
+	if errDial != nil {
+		t.Fatalf("Dial: %v", errDial)
+	}
+
+	if errListen := <-errChan; errListen != nil {
+		t.Fatalf("ListenAndServe: %v", errListen)
+	}
+
+	if got := tun.ListReverses(); len(got) != 0 {
+		t.Fatalf("ListReverses before Reverse = %v, want none", got)
+	}
+
+	ln, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+
+	if err := tun.Reverse(src, "localhost", 80); err != nil {
+		t.Fatalf("Reverse: %v", err)
+	}
+
+	// the remote end refuses both of these, so neither is recorded
+	if err := tun.Reverse(src, "localhost", 81); err == nil {
+		t.Fatal("nil error on Reverse to a port in use")
+	}
+	if err := tun.Reverse(-1, "localhost", 82); err == nil {
+		t.Fatal("nil error on Reverse to an invalid port")
+	}
+
+	want := []ReverseTunnel{{Source: src, Host: "localhost", Dest: 80}}
+	if got := tun.ListReverses(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("ListReverses = %v, want %v", got, want)
+	}
+
+	h.Close()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for len(tun.ListReverses()) != 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("ListReverses after close = %v, want none", tun.ListReverses())
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

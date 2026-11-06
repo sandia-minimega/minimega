@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -277,6 +278,66 @@ func TestReverseTimesOutWithoutHoldingClientLock(t *testing.T) {
 	}
 }
 
+func TestListReversesRecordsOpenedTunnels(t *testing.T) {
+	s := &Server{
+		clients: map[string]*client{
+			"uninitialized": {Client: &Client{UUID: "uninitialized"}},
+			"working":       {Client: &Client{UUID: "working"}, tunnel: newTestTunnel(t)},
+		},
+	}
+
+	src := freePort(t)
+
+	err := s.Reverse(nil, src, "127.0.0.1", 80)
+	if err == nil || err.Error() != "uninitialized: tunnel has not been initialized" {
+		t.Fatalf("Reverse error = %v, want an error for client uninitialized", err)
+	}
+
+	// src is in use on the working client now, so its second tunnel fails
+	err = s.Reverse(&Filter{UUID: "working"}, src, "127.0.0.1", 81)
+	if err == nil || !strings.HasPrefix(err.Error(), "working: ") {
+		t.Fatalf("Reverse error = %v, want an error for client working", err)
+	}
+
+	got, err := s.ListReverses("working")
+	if err != nil {
+		t.Fatalf("ListReverses(working): %v", err)
+	}
+	want := []minitunnel.ReverseTunnel{{Source: src, Host: "127.0.0.1", Dest: 80}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ListReverses(working) = %v, want %v", got, want)
+	}
+
+	got, err = s.ListReverses("uninitialized")
+	if err != nil || len(got) != 0 {
+		t.Fatalf("ListReverses(uninitialized) = %v, %v, want no tunnels", got, err)
+	}
+
+	if _, err := s.ListReverses("missing"); err == nil || err.Error() != "no such client: missing" {
+		t.Fatalf("ListReverses(missing) = %v, want no such client", err)
+	}
+}
+
+func TestListReversesSkipsSilentClient(t *testing.T) {
+	defer func(d time.Duration) { reverseTimeout = d }(reverseTimeout)
+	reverseTimeout = 100 * time.Millisecond
+
+	s := &Server{
+		clients: map[string]*client{
+			"silent": {Client: &Client{UUID: "silent"}, tunnel: newSilentTunnel(t, make(chan struct{}, 1))},
+		},
+	}
+
+	if err := s.Reverse(nil, freePort(t), "127.0.0.1", 80); err == nil {
+		t.Fatal("Reverse succeeded, want a timeout for client silent")
+	}
+
+	got, err := s.ListReverses("silent")
+	if err != nil || len(got) != 0 {
+		t.Fatalf("ListReverses(silent) = %v, %v, want no tunnels", got, err)
+	}
+}
+
 // newHeldTunnel returns the minimega end of a tunnel whose miniccc end answers
 // the handshake, sends the TID of each FORWARD message to forward, and sends an
 // ACK for each TID that the test sends to the returned channel.
@@ -402,6 +463,18 @@ func TestReverseSkipsClientWithPendingRequest(t *testing.T) {
 
 	if err := <-errs; err != nil {
 		t.Fatalf("third Reverse: %v", err)
+	}
+
+	got, err := s.ListReverses("held")
+	if err != nil {
+		t.Fatalf("ListReverses(held): %v", err)
+	}
+	want := []minitunnel.ReverseTunnel{
+		{Source: first, Host: "127.0.0.1", Dest: 80},
+		{Source: second, Host: "127.0.0.1", Dest: 81},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ListReverses(held) = %v, want %v", got, want)
 	}
 }
 

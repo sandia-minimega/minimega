@@ -99,6 +99,7 @@ func (t *Tunnel) mux() {
 
 	close(t.quit) // signal to all listeners that this tunnel is outa here
 	t.transport.Close()
+	t.clearReverses()
 
 	for _, ch := range t.chans.dropAll() {
 		close(ch)
