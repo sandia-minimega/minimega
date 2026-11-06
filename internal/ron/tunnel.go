@@ -5,15 +5,31 @@
 package ron
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"sort"
+	"time"
 
+	"github.com/sandia-minimega/minimega/v2/internal/minitunnel"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
 const (
 	BUFFER_SIZE = 32768
 )
+
+// ErrNoClients is the error that Reverse wraps when no client matches the
+// filter.
+var ErrNoClients = errors.New("no clients")
+
+// errReversePending is the error for a client whose previous reverse request
+// has not finished.
+var errReversePending = errors.New("a reverse request is already pending")
+
+// reverseTimeout is how long Reverse waits for each client to open its
+// listener.
+var reverseTimeout = 30 * time.Second
 
 // Forward creates a tunnel from host->guest, based on UUID, source, host, and
 // destination port. This is similar to the ssh -L command.
@@ -67,26 +83,113 @@ func (s *Server) CloseForward(uuid string, id int) error {
 
 // Reverse creates a reverse tunnel from guest->host. It is possible to have
 // multiple clients create a reverse tunnel simultaneously. filter allows
-// specifying which clients to have create the tunnel.
+// specifying which clients to have create the tunnel, and matches clients the
+// same way as commands do. Reverse returns an error when no client matches
+// filter. Otherwise, it tries every matching client and returns one error that
+// names each client that failed. A client whose previous reverse request has
+// not finished is skipped and named in the error.
 func (s *Server) Reverse(filter *Filter, source int, host string, dest int) error {
-	s.clientLock.Lock()
-	defer s.clientLock.Unlock()
+	type pending struct {
+		c      *client
+		tunnel *minitunnel.Tunnel
+	}
 
-	for _, c := range s.clients {
+	failed := map[string]error{}
+	tunnels := map[string]pending{}
+
+	s.clientLock.Lock()
+	for uuid, c := range s.clients {
+		if s.UseVMs && !s.loadVMTags(uuid, c, []*Filter{filter}) {
+			continue
+		}
+
 		if !c.Matches(filter) {
 			continue
 		}
 
 		if c.tunnel == nil {
-			return fmt.Errorf("tunnel has not been initialized for %v", c.UUID)
+			failed[uuid] = errors.New("tunnel has not been initialized")
+			continue
 		}
 
-		if err := c.tunnel.Reverse(source, host, dest); err != nil {
-			return err
+		if c.reversePending {
+			failed[uuid] = errReversePending
+			continue
+		}
+
+		c.reversePending = true
+		tunnels[uuid] = pending{c, c.tunnel}
+	}
+	s.clientLock.Unlock()
+
+	if len(failed)+len(tunnels) == 0 {
+		if f := filter.String(); f != "" {
+			return fmt.Errorf("%w match filter: %v", ErrNoClients, f)
+		}
+
+		return fmt.Errorf("%w connected", ErrNoClients)
+	}
+
+	type result struct {
+		uuid string
+		err  error
+	}
+
+	results := make(chan result, len(tunnels))
+	for uuid, p := range tunnels {
+		done := func() {
+			s.clientLock.Lock()
+			defer s.clientLock.Unlock()
+
+			p.c.reversePending = false
+		}
+
+		go func() {
+			results <- result{uuid, reverse(p.tunnel, source, host, dest, reverseTimeout, done)}
+		}()
+	}
+
+	for range tunnels {
+		if r := <-results; r.err != nil {
+			failed[r.uuid] = r.err
 		}
 	}
 
-	return nil
+	uuids := make([]string, 0, len(failed))
+	for uuid := range failed {
+		uuids = append(uuids, uuid)
+	}
+	sort.Strings(uuids)
+
+	var errs []error
+	for _, uuid := range uuids {
+		errs = append(errs, fmt.Errorf("%v: %w", uuid, failed[uuid]))
+	}
+
+	return errors.Join(errs...)
+}
+
+// reverse calls tunnel.Reverse and stops waiting after timeout, so a client
+// that never answers cannot block the caller. The client can still open the
+// listener after the timeout. reverse calls finished when tunnel.Reverse
+// returns, which can be after reverse returns.
+func reverse(tunnel *minitunnel.Tunnel, source int, host string, dest int, timeout time.Duration, finished func()) error {
+	done := make(chan error, 1)
+	go func() {
+		err := tunnel.Reverse(source, host, dest)
+		finished()
+		done <- err
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case err := <-done:
+		return err
+	case <-timer.C:
+		return fmt.Errorf("no response from client after %v", timeout)
+	}
 }
 
 // Trunk reads data from remote, constructs a *Message, and sends it using fn.

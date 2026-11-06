@@ -110,6 +110,21 @@ to a remote port. The local port will be created on the minimega cluster host
 that the tunneling VM is running on. The remote port can be on the same VM or on
 a different VM the tunneling VM has network access to.
 
+"cc rtunnel" creates reverse tunnels. Each connected client that matches the
+current filter listens on the source port and tunnels TCP connections back to
+the minimega cluster host that the client is connected to. That host then
+connects to the destination host and port, which can be any host it has network
+access to. For example, to connect port 4444 on each client to a web server:
+
+	cc rtunnel 4444 myserver 80
+
+"cc tunnel list" does not show reverse tunnels. A reverse tunnel stays open
+until the client disconnects.
+
+"cc rtunnel" returns an error if no client matches the filter. If a client does
+not open its tunnel, the error gives the UUID of that client. The tunnels on the
+other clients stay open.
+
 "cc test-conn" allows users to test network connectivity from a guest to the
 given IP or domain name and port. The wait timeout should be specified as a Go
 duration string (e.g. 5s, 1m). If "udp" is used, a "base64 udp packet" that will
@@ -171,7 +186,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 
 			"cc <test-conn,> <tcp,udp> <ip or fqdn> <port> wait <timeout> [base64 udp packet]",
 		},
-		Call: cliCCBroadcast,
+		Call: wrapCCCLI(cliCC),
 	},
 	{ // cc mount
 		HelpShort: "list mounted filesystems",
@@ -210,6 +225,76 @@ See "help cc" for more information.`,
 	},
 }
 
+// wrapCCCLI uses wrapCCRTunnelCLI for "cc rtunnel" (but not "cc rtunnel
+// list") and cliCCBroadcast for the other cc subcommands.
+func wrapCCCLI(fn wrappedCLIFunc) minicli.CLIFunc {
+	rtunnel := wrapCCRTunnelCLI(fn)
+
+	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
+		if c.BoolArgs["rtunnel"] && !c.BoolArgs["list"] {
+			rtunnel(c, respChan)
+			return
+		}
+
+		cliCCBroadcast(c, respChan)
+	}
+}
+
+// wrapCCRTunnelCLI broadcasts "cc rtunnel" to all hosts in the namespace like
+// wrapBroadcastCLI, then merges the responses with mergeCCRTunnelResponses.
+func wrapCCRTunnelCLI(fn wrappedCLIFunc) minicli.CLIFunc {
+	localFunc := wrapSimpleCLI(fn)
+
+	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
+		ns := resolveNamespace(c)
+
+		// See note in wrapBroadcastCLI.
+		if c.Source != "" {
+			localFunc(c, respChan)
+			return
+		}
+
+		res := minicli.Responses{}
+
+		for resps := range runCommands(namespaceCommands(ns, c)...) {
+			res = append(res, resps...)
+		}
+
+		respChan <- mergeCCRTunnelResponses(res)
+	}
+}
+
+// mergeCCRTunnelResponses removes the responses from hosts that have no
+// matching client. When every host has no matching client, it keeps the first
+// of those responses so that the command still fails.
+func mergeCCRTunnelResponses(resps minicli.Responses) minicli.Responses {
+	res := minicli.Responses{}
+	var noClients *minicli.Response
+
+	for _, resp := range resps {
+		if isNoCCClients(resp.Error) {
+			if noClients == nil {
+				noClients = resp
+			}
+			continue
+		}
+
+		res = append(res, resp)
+	}
+
+	if len(res) == 0 && noClients != nil {
+		return minicli.Responses{noClients}
+	}
+
+	return res
+}
+
+// isNoCCClients reports whether err is the error text of ron.ErrNoClients.
+// Responses from other hosts carry only the text of the error.
+func isNoCCClients(err string) bool {
+	return strings.HasPrefix(err, ron.ErrNoClients.Error()+" ")
+}
+
 // Functions pointers to the various handlers for the subcommands
 var ccCliSubHandlers = map[string]wrappedCLIFunc{
 	"background":      cliCCBackground,
@@ -226,7 +311,7 @@ var ccCliSubHandlers = map[string]wrappedCLIFunc{
 	"recv":            cliCCFileRecv,
 	"responses":       cliCCResponses,
 	"exitcode":        cliCCExitCode,
-	"rtunnel":         cliCCTunnel,
+	"rtunnel":         cliCCRTunnel,
 	"send":            cliCCFileSend,
 	"tunnel":          cliCCTunnel,
 	"listen":          cliCCListen,
@@ -466,6 +551,21 @@ func cliCCTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	uuid := vm.GetUUID()
 
 	return ns.ccServer.Forward(uuid, src, host, dst)
+}
+
+// rtunnel
+func cliCCRTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	src, err := strconv.Atoi(c.StringArgs["src"])
+	if err != nil {
+		return fmt.Errorf("non-integer src: %v : %v", c.StringArgs["src"], err)
+	}
+
+	dst, err := strconv.Atoi(c.StringArgs["dst"])
+	if err != nil {
+		return fmt.Errorf("non-integer dst: %v : %v", c.StringArgs["dst"], err)
+	}
+
+	return ns.ccServer.Reverse(ns.ccFilter, src, c.StringArgs["host"], dst)
 }
 
 // responses
