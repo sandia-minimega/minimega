@@ -1,0 +1,24 @@
+# minimega is add-on software that is not part of Debian, so it installs in /opt as the FHS describes.
+minimega: dir-or-file-in-opt [opt/minimega/*]
+# Go builds these helper programs without cgo, so they are static.
+minimega: statically-linked-binary [opt/minimega/bin/*]
+# scripts/build.bash builds the Go programs without -buildmode=pie.
+minimega: hardening-no-pie [opt/minimega/bin/*]
+# The Go linker adds no RELRO segment to a program that it links without -buildmode=pie.
+minimega: hardening-no-relro [opt/minimega/bin/*]
+# gopacket compiles the IEEE OUI table into minimega.
+minimega: embedded-library ieee-data [opt/minimega/bin/minimega]
+# Upstream supplies no manual pages; the documentation is in /opt/minimega/doc.
+minimega: no-manual-page [usr/bin/*]
+# postinst gives the minimega user the package files; a fix would change the file owners.
+minimega: recursive-privilege-change "chown -R" [postinst:*]
+# miniweb serves the bundled web fonts from /opt/minimega/web.
+minimega: duplicate-font-file also in * [opt/minimega/web/fonts/*]
+# miniweb serves the bundled web fonts from /opt/minimega/web.
+minimega: truetype-font-prohibits-installable-embedding (preview/print only) [opt/minimega/web/*]
+# miniweb serves the bundled JavaScript libraries from /opt/minimega/web.
+minimega: embedded-javascript-library please use * [opt/minimega/web/*]
+# This file is part of the bundled mxGraph source as upstream supplies it.
+minimega: national-encoding [opt/minimega/web/grapheditor/src/js/index.txt]
+# The bundled xterm.js demo page loads a script from a CDN; the minimega web pages do not use it.
+minimega: privacy-breach-generic * [opt/minimega/web/xterm.js/demo/index.html]
