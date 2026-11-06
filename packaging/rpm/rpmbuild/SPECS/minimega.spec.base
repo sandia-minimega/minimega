@@ -5,17 +5,13 @@
 Name:          minimega
 Version:       ${version}
 Release:       1%{?dist}
-Summary:       A distributed VM management tool.
-License:       GPLv3
+Summary:       A distributed VM management tool
+License:       GPL-3.0-only
 
-Group:         utils
 URL: https://sandia-minimega.github.io/minimega/
 #Source0: https://github.com/sandia-minimega/minimega.git
 BuildArch:     x86_64
 AutoReqProv: no
-
-Provides:      minimega = 1%{?dist}
-Provides:      minimega(x86-64) = 1%{?dist}
 
 Requires:      /bin/bash
 Requires:      /bin/sh
@@ -28,8 +24,8 @@ Requires:      dosfstools
 Requires:      net-tools
 Requires:      ntfs-3g
 Requires:      libpcap
-Requires:      openssl-devel
 Requires(post): /bin/sh
+Requires(post): shadow-utils
 
 
 
@@ -38,7 +34,8 @@ minimega is a tool for launching and managing virtual machines. It can run on
 your laptop or distributed across a cluster. minimega is fast, easy to deploy,
 and can scale to run on massive clusters with virtually no setup.
 
-**Note:** This package requires the EPEL repository to be enabled, as it depends on the `ntfs-3g` package, which is only available in EPEL.
+This package needs the EPEL repository, because the NTFS-3G package comes
+from EPEL.
 
 %build
 MM="%{_topdir}/../../.."
@@ -61,8 +58,9 @@ cp -Lr $MM/bin $RPM_BUILD_ROOT/opt/minimega/
 cp -Lr $MM/doc $RPM_BUILD_ROOT/opt/minimega/
 cp -Lr $MM/lib $RPM_BUILD_ROOT/opt/minimega/
 cp -Lr $MM/misc/daemon $RPM_BUILD_ROOT/opt/minimega/misc/
-cp -Lr $MM/misc/vmbetter_configs $RPM_BUILD_ROOT/opt/minimega/misc/
+cp -r $MM/misc/vmbetter_configs $RPM_BUILD_ROOT/opt/minimega/misc/
 cp -Lr $MM/web $RPM_BUILD_ROOT/opt/minimega/
+rm -rf $RPM_BUILD_ROOT/opt/minimega/web/xterm.js/.[!.]*
 cp -Lr $MM/LICENSE $RPM_BUILD_ROOT/usr/share/doc/minimega/
 cp -Lr $MM/LICENSES $RPM_BUILD_ROOT/usr/share/doc/minimega/
 
@@ -71,16 +69,20 @@ cp -Lr $MM/LICENSES $RPM_BUILD_ROOT/usr/share/doc/minimega/
 $MM/bin/minimega -completion bash > $RPM_BUILD_ROOT/usr/share/bash-completion/completions/minimega
 
 # Make future symlinks
-ln -sf /opt/minimega/bin/minimega $RPM_BUILD_ROOT/usr/bin/minimega
-ln -sf /opt/minimega/bin/miniweb $RPM_BUILD_ROOT/usr/bin/miniweb
-ln -sf /opt/minimega/bin/protonuke $RPM_BUILD_ROOT/usr/bin/protonuke
-ln -sf /opt/minimega/misc/daemon/minimega.conf $RPM_BUILD_ROOT/etc/minimega/minimega.conf
+ln -sf ../../opt/minimega/bin/minimega $RPM_BUILD_ROOT/usr/bin/minimega
+ln -sf ../../opt/minimega/bin/miniweb $RPM_BUILD_ROOT/usr/bin/miniweb
+ln -sf ../../opt/minimega/bin/protonuke $RPM_BUILD_ROOT/usr/bin/protonuke
+ln -sf ../../opt/minimega/misc/daemon/minimega.conf $RPM_BUILD_ROOT/etc/minimega/minimega.conf
 
-ln -sf /opt/minimega/misc/daemon/minimega.service $RPM_BUILD_ROOT/usr/lib/systemd/system/minimega.service
+ln -sf ../../../../opt/minimega/misc/daemon/minimega.service $RPM_BUILD_ROOT/usr/lib/systemd/system/minimega.service
 
-find $RPM_BUILD_ROOT -type f -printf "/%%P\n" > $RPM_BUILD_ROOT/../../buildfiles
-
-%files -f %{buildroot}/../../buildfiles
+%files
+/opt/minimega
+%dir /usr/share/doc/minimega
+%license /usr/share/doc/minimega/LICENSE
+%license /usr/share/doc/minimega/LICENSES
+/usr/share/bash-completion/completions/minimega
+%dir /etc/minimega
 %verify(link) /etc/minimega/minimega.conf
 %verify(link) /usr/bin/minimega
 %verify(link) /usr/bin/miniweb
@@ -97,17 +99,9 @@ fi
 if [ $1 -eq 0 ] && [ -x "/usr/lib/systemd/systemd-update-helper" ]; then
     # Package removal, not upgrade
     /usr/lib/systemd/systemd-update-helper remove-system-units minimega.service || :
-fi
-
-if [ $1 -eq 0 ]; then
-    /usr/bin/systemctl --no-reload disable minimega.service
-    /usr/bin/systemctl stop minimega.service >/dev/null 2>&1 ||:
-    /usr/bin/systemctl disable minimega.service
-
-fi
-if [ $1 -eq 1 ]; then
-    /usr/bin/systemctl --no-reload disable minimega.service
-    /usr/bin/systemctl stop %minimega.service
+elif [ $1 -eq 0 ] && [ -d /run/systemd/system ]; then
+    # Package removal on a systemd without the update helper
+    /usr/bin/systemctl --no-reload disable --now minimega.service >/dev/null 2>&1 || :
 fi
 
 %post -p /bin/sh
@@ -160,11 +154,7 @@ chown -R minimega:minimega /usr/share/doc/minimega
 chown -R minimega:minimega /opt/minimega
 chown -R minimega:minimega /etc/minimega
 
-if [ $1 -eq 1 ]; then
-    /usr/bin/systemctl daemon-reload
-    /usr/bin/systemctl start minimega.service
-fi
-if [ $1 -eq 2 ]; then
+if [ -d /run/systemd/system ]; then
     /usr/bin/systemctl daemon-reload
     /usr/bin/systemctl start minimega.service
 fi
@@ -174,6 +164,6 @@ if [ $1 -eq 1 ] && [ -x "/usr/lib/systemd/systemd-update-helper" ]; then
     /usr/lib/systemd/systemd-update-helper install-system-units minimega.service || :
 fi
 
-%clean
-rm $RPM_BUILD_ROOT/../../buildfiles
-rm -rf $RPM_BUILD_ROOT
+%changelog
+* ${date} Minimega-Dev <Minimega-Dev@sandia.gov> - ${version}-1
+- Release minimega version ${version}.
