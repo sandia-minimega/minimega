@@ -1468,6 +1468,7 @@ Default: empty map
 			"clear vm config <hostname,>",
 			"clear vm config <init,>",
 			"clear vm config <initrd,>",
+			"clear vm config <inject,>",
 			"clear vm config <jailer-path,>",
 			"clear vm config <kernel,>",
 			"clear vm config <machine,>",
@@ -1955,6 +1956,9 @@ func (v *FirecrackerConfig) Info(field string) (string, error) {
 	if field == "firecracker-snapshot" {
 		return v.FirecrackerSnapshotPath, nil
 	}
+	if field == "inject" {
+		return fmt.Sprintf("%v", v.Injects), nil
+	}
 
 	return "", fmt.Errorf("invalid info field: %v", field)
 }
@@ -1978,6 +1982,9 @@ func (v *FirecrackerConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "firecracker-snapshot" {
 		v.FirecrackerSnapshotPath = ""
 	}
+	if mask == Wildcard || mask == "inject" {
+		v.Injects = nil
+	}
 }
 
 func (v *FirecrackerConfig) WriteConfig(w io.Writer) error {
@@ -1998,6 +2005,9 @@ func (v *FirecrackerConfig) WriteConfig(w io.Writer) error {
 	}
 	if v.FirecrackerSnapshotPath != "" {
 		fmt.Fprintf(w, "vm config firecracker-snapshot %v\n", v.FirecrackerSnapshotPath)
+	}
+	if err := v.Injects.WriteConfig(w); err != nil {
+		return err
 	}
 
 	return nil
@@ -2029,6 +2039,10 @@ func (v *FirecrackerConfig) ReadConfig(r io.Reader, ns string, vmConfig *VMConfi
 			v.VsockCID, _ = strconv.ParseUint(config[1], 10, 64)
 		case "firecracker-snapshot":
 			v.FirecrackerSnapshotPath = config[1]
+		case "inject":
+			if err := v.ReadFieldConfig(strings.NewReader(line), "inject", ns, vmConfig); err != nil {
+				return err
+			}
 		}
 	}
 

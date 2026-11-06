@@ -73,6 +73,10 @@ type FirecrackerConfig struct {
 	//
 	// Note: this configuration only applies to Firecracker-based VMs.
 	FirecrackerSnapshotPath string `config:"firecracker-snapshot" path:"false"`
+
+	// Files to inject into the first disk at launch, handler is not generated
+	// by vmconfiger.
+	Injects FCInjects `config:"inject"`
 }
 
 type FirecrackerVM struct {
@@ -85,7 +89,14 @@ type FirecrackerVM struct {
 var _ VM = (*FirecrackerVM)(nil)
 
 func (old FirecrackerConfig) Copy() FirecrackerConfig {
-	return old
+	res := old
+
+	if old.Injects != nil {
+		res.Injects = make(FCInjects, len(old.Injects))
+		copy(res.Injects, old.Injects)
+	}
+
+	return res
 }
 
 func (vm *FirecrackerConfig) String() string {
@@ -99,6 +110,7 @@ func (vm *FirecrackerConfig) String() string {
 	fmt.Fprintf(w, "Entropy:\t%v\n", vm.FirecrackerEntropy)
 	fmt.Fprintf(w, "Vsock CID:\t%v\n", vm.VsockCID)
 	fmt.Fprintf(w, "Snapshot:\t%v\n", vm.FirecrackerSnapshotPath)
+	fmt.Fprintf(w, "Injects:\t%v\n", vm.Injects)
 	w.Flush()
 	fmt.Fprintln(&o)
 	return o.String()

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
@@ -155,6 +156,56 @@ Examples:
 		Patterns: []string{"disk resize <image> <size>"},
 		Call:     wrapSimpleCLI(cliDiskResize),
 	},
+	{
+		HelpShort: "shows or clears the Firecracker image cache",
+		HelpLong: `
+Shows the entries of the image cache for Firecracker VMs on this host. The
+cache is in the cache directory of -firecracker-dir. Each entry is a raw copy
+of a disk image that Firecracker VMs use.
+
+The columns are:
+
+	key     - the name of the entry
+	source  - the disk image that minimega copied
+	format  - the format of the source image
+	size    - the size of the raw copy
+	created - the time that minimega made the entry
+	inuse   - the number of Firecracker VMs on this host that use the entry
+
+To remove the entries that no VM uses:
+
+	disk cache clear
+
+disk cache clear shows the number of entries that it removed.`,
+		Patterns: []string{"disk cache [clear,]"},
+		Call:     wrapSimpleCLI(cliDiskCache),
+	},
+}
+
+func cliDiskCache(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if c.BoolArgs["clear"] {
+		n, err := fcCacheClear()
+		if err != nil {
+			return err
+		}
+
+		resp.Response = strconv.Itoa(n)
+		return nil
+	}
+
+	entries, err := fcCacheList()
+	if err != nil {
+		return err
+	}
+
+	resp.Header = []string{"key", "source", "format", "size", "created", "inuse"}
+	for _, e := range entries {
+		resp.Tabular = append(resp.Tabular, []string{
+			e.Key, e.Source, e.Format, humanReadableBytes(e.Size), e.Created.Format(time.RFC3339), strconv.Itoa(e.InUse),
+		})
+	}
+
+	return nil
 }
 
 func getImage(c *minicli.Command) string {

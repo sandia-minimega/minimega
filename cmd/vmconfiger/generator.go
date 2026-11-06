@@ -218,6 +218,9 @@ func (g *Generator) handleNode(node ast.Node) bool {
 				case "QemuOverrides":
 					zero = getDefault(doc, `QemuOverrides{}`)
 					unhandled = true
+				case "FCInjects":
+					zero = getDefault(doc, `nil`)
+					unhandled = true
 				default:
 					log.Error("unhandled type: %v", typ)
 					unhandled = true

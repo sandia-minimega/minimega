@@ -265,6 +265,38 @@ Note: this configuration only applies to KVM-based VMs.`,
 		},
 		Call: wrapSimpleCLI(cliVMConfigQemuOverride),
 	},
+	{ // vm config inject
+		HelpShort: "inject files into the disk of a Firecracker VM at launch",
+		HelpLong: `
+Inject files into the first disk of a Firecracker VM when the VM launches.
+minimega changes the VM's own copy of the disk. The source image does not
+change.
+
+To copy files, give a partition and one or more src:dst pairs:
+
+	vm config inject 1 miniccc:/usr/local/bin/miniccc
+
+To delete files or directories, use the delete keyword:
+
+	vm config inject delete 1 /etc/motd
+
+The partition is a number. Partition 0 is the whole disk, for a disk that has
+a filesystem and no partition table. A relative source path is relative to the
+files directory (-filepath). Each destination is a path in the filesystem of
+the partition. A destination that is not in that filesystem is an error.
+
+Each call adds entries. minimega applies the entries in order. To show the
+entries, call vm config inject with no arguments. To remove all entries, use
+clear vm config inject.
+
+vm config inject needs snapshot true.
+
+Note: this configuration only applies to Firecracker-based VMs.`,
+		Patterns: []string{
+			"vm config inject [injectspec]...",
+		},
+		Call: wrapSimpleCLI(cliVMConfigInject),
+	},
 	{ // clear vm config tag
 		HelpShort: "remove tags for newly launched VMs",
 		HelpLong: `
@@ -408,6 +440,34 @@ func cliVMConfigQemuOverride(ns *Namespace, c *minicli.Command, resp *minicli.Re
 		Match: c.StringArgs["match"],
 		Repl:  c.StringArgs["replacement"],
 	})
+
+	return nil
+}
+
+func cliVMConfigInject(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if len(c.ListArgs["injectspec"]) == 0 {
+		if len(ns.vmConfig.Injects) == 0 {
+			return nil
+		}
+
+		resp.Header = []string{"partition", "action", "src", "dst"}
+		for _, i := range ns.vmConfig.Injects {
+			action := "copy"
+			if i.Delete {
+				action = "delete"
+			}
+			resp.Tabular = append(resp.Tabular, []string{strconv.Itoa(i.Partition), action, i.Src, i.Dst})
+		}
+
+		return nil
+	}
+
+	injects, err := fcParseInjects(c.ListArgs["injectspec"])
+	if err != nil {
+		return err
+	}
+
+	ns.vmConfig.Injects = append(ns.vmConfig.Injects, injects...)
 
 	return nil
 }
