@@ -17,12 +17,30 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y rpm dnsmasq iproute2 isc-dhcp-client libpcap-dev ntfs-3g openssh-client openvswitch-switch qemu-system-x86 qemu-utils
+        sudo apt-get install -y rpm rpmlint dnsmasq iproute2 isc-dhcp-client libpcap-dev ntfs-3g openssh-client openvswitch-switch qemu-system-x86 qemu-utils
 
     - name: Build RPM package
       id: rpm
       run: |
         ./packaging/rpm/build.bash
+
+    - name: Check for build files left in the repository
+      run: |
+        git status --short
+        test -z "$(git status --porcelain)"
+
+    - name: Lint RPM package
+      run: |
+        rpmlint --strict -r packaging/rpm/minimega.rpmlintrc ./packaging/rpm/rpmbuild/RPMS/x86_64/minimega-*.rpm
+
+    - name: Install RPM package in Rocky Linux 9
+      run: |
+        docker run --rm -v "$PWD/packaging/rpm/rpmbuild/RPMS/x86_64:/rpms:ro" \
+          docker.io/rockylinux/rockylinux:9@sha256:8101994123cf3d0a8fee517bee7f39e555c7d92bd2d9eb3303cc988a0eeed00f \
+          bash -euxc 'dnf install -y dnf-plugins-core epel-release
+            dnf config-manager --set-enabled crb
+            dnf install -y /rpms/minimega-*.rpm
+            minimega -version'
 
     - name: Upload artifact
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

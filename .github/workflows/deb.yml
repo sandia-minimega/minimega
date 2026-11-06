@@ -17,12 +17,59 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential debhelper dnsmasq iproute2 isc-dhcp-client libpcap-dev ntfs-3g openssh-client openvswitch-switch qemu-system-x86 qemu-utils
+        sudo apt-get install -y build-essential debhelper dnsmasq iproute2 isc-dhcp-client libpcap-dev lintian ntfs-3g openssh-client openvswitch-switch qemu-system-x86 qemu-utils
 
     - name: Build Deb package
       id: deb
       run: |
         ./packaging/debian/build.bash
+
+    - name: Check for build files left in the repository
+      run: |
+        git status --short
+        test -z "$(git status --porcelain)"
+
+    - name: Lint Deb package
+      run: |
+        lintian --fail-on error,warning ./minimega_*.deb
+
+    - name: Install Deb package
+      run: |
+        sudo apt-get install -y ./minimega_*.deb
+        minimega -version
+
+    - name: Check bash completion
+      shell: bash
+      run: |
+        f=/usr/share/bash-completion/completions/minimega
+        dpkg -S "$f"
+        bash -n "$f"
+        # the completion function is not written for set -e, so run it in a shell without it
+        bash --norc --noprofile -c '
+          source "$1"
+          complete -p minimega | grep -q _minimega_completion || exit 1
+          COMP_WORDS=(minimega -lev); COMP_CWORD=1; _minimega_completion
+          printf "%s\n" "${COMPREPLY[@]}" | grep -qx -- -level || exit 1
+          COMP_WORDS=(minimega -e vm lau); COMP_CWORD=3; _minimega_completion
+          printf "%s\n" "${COMPREPLY[@]}" | grep -qx launch || exit 1
+        ' bash "$f"
+
+    - name: Purge Deb package
+      run: |
+        dpkg -L minimega > "$RUNNER_TEMP/minimega-files"
+        sudo apt-get purge -y minimega
+        left=0
+        if dpkg -s minimega >/dev/null 2>&1; then echo "dpkg still knows minimega"; left=1; fi
+        # shared directories such as /usr stay; the minimega directories are checked below
+        while IFS= read -r p; do
+          if [ ! -d "$p" ] && { [ -e "$p" ] || [ -L "$p" ]; }; then echo "left after purge: $p"; left=1; fi
+        done < "$RUNNER_TEMP/minimega-files"
+        for d in /opt/minimega /etc/minimega /usr/share/doc/minimega; do
+          if [ -e "$d" ]; then echo "left after purge: $d"; left=1; fi
+        done
+        found=$(sudo find /etc/systemd /var/lib/systemd -name 'minimega*' 2>/dev/null || true)
+        if [ -n "$found" ]; then echo "left after purge: $found"; left=1; fi
+        exit "$left"
 
     - name: Upload artifact
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
