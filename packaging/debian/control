@@ -1,7 +1,8 @@
 Source: minimega
 Section: utils
 Priority: extra
-Maintainer: Arthur Hernandez <aherna4@sandia.gov>, Jacob Davis <jacdavi@sandia.gov>
+Maintainer: Arthur Hernandez <aherna4@sandia.gov>
+Uploaders: Jacob Davis <jacdavi@sandia.gov>
 Build-Depends: debhelper
 Vcs-Browser: https://github.com/sandia-minimega/minimega/
 Vcs-Git: https://github.com/sandia-minimega/minimega.git
