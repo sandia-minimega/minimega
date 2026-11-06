@@ -37,6 +37,7 @@ import (
 	"math/rand"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -387,7 +388,7 @@ func (n *Node) checkDegree() {
 
 // dial another node, perform a handshake, and add the client to the client list if successful
 func (n *Node) dial(host string, solicited bool) error {
-	addr := fmt.Sprintf("%s:%d", host, n.port)
+	addr := net.JoinHostPort(host, strconv.Itoa(n.port))
 	log.Debug("dialing: %v", addr)
 
 	conn, err := net.DialTimeout("tcp", addr, DEFAULT_TIMEOUT*time.Second)
