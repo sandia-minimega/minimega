@@ -1,0 +1,28 @@
+# minimega is add-on software that is not part of the distribution, so it installs in /opt as the FHS describes.
+addFilter("dir-or-file-in-opt /opt/minimega")
+# Go builds these helper programs without cgo, so they are static.
+addFilter("statically-linked-binary /opt/minimega/bin/")
+# scripts/build.bash builds the Go programs without -buildmode=pie.
+addFilter("position-independent-executable-suggested /opt/minimega/")
+# Upstream supplies no manual pages; the documentation is in /opt/minimega/doc.
+addFilter("no-manual-page-for-binary ")
+# AutoReq is off because the programs link libpcap.so.0.8 from the Ubuntu build host, so the libpcap dependency is explicit.
+addFilter("explicit-lib-dependency libpcap$")
+# vmbetter copies the overlay scripts into guest images, which run them.
+addFilter("env-script-interpreter /opt/minimega/misc/vmbetter_configs/")
+# The empty files in the vmbetter overlays are placeholders that vmbetter copies into guest images.
+addFilter("zero-length /opt/minimega/misc/vmbetter_configs/")
+# The bundled documentation, overlays, and web files contain identical files at the paths that use them.
+addFilter("files-duplicate /opt/minimega/")
+# The bundled documentation, overlays, and web files contain identical files at the paths that use them.
+addFilter("files-duplicated-waste ")
+# %post links libpcap.so.0.8, which the Ubuntu-built programs need, to the libpcap of the system.
+addFilter("dangerous-command-in-%post ln")
+# CI does not sign the packages that it builds.
+addFilter("no-signature")
+# The Fedora packaging guidelines tell packagers not to use the Packager tag.
+addFilter("no-packager-tag")
+# The Fedora packaging guidelines tell packagers not to use the Group tag.
+addFilter("no-group-tag")
+# The default rpmlint configuration has an empty ValidLicenses list; GPL-3.0-only is an SPDX identifier.
+addFilter("invalid-license GPL-3.0-only")
