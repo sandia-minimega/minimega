@@ -14,7 +14,7 @@ import (
 	"github.com/sandia-minimega/minimega/v2/internal/gonetflow"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 
-	"github.com/google/gopacket/pcap"
+	"github.com/gopacket/gopacket/pcap"
 )
 
 // Global lock for all bridge operations
