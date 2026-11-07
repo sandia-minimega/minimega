@@ -876,7 +876,8 @@ The ports (on the guest) will then be mapped to /dev/virtio-port/foo and
 	{
 		HelpShort: "configures vga",
 		HelpLong: `Specify the graphics card to emulate. "cirrus" or "std" should work with
-most operating systems.
+most operating systems. Use "virtio" to let a VNC client, such as the
+browser console, change the screen size of the VM.
 
 Default: "std"
 `,

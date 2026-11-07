@@ -6,6 +6,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"html"
 	"image"
@@ -69,7 +70,7 @@ func serveFile(w http.ResponseWriter, r *http.Request, fs http.FileSystem, name 
 			}
 		}
 
-		streamRecording(w, f, offset)
+		streamRecording(r.Context(), w, f, offset)
 	}
 }
 
@@ -99,69 +100,24 @@ func dirList(w http.ResponseWriter, f http.File) {
 	fmt.Fprintf(w, "</pre>\n")
 }
 
-func streamRecording(w http.ResponseWriter, f http.File, start time.Duration) {
-	updateChan, _ := readFile(f)
-	imageChan := make(chan image.Image, 10)
+// streamRecording sends the recording in f as a stream of JPEG images, with
+// the recorded delays between them. It skips the images before start. It
+// returns when the recording ends, when the client disconnects, or when ctx
+// is canceled, and it stops the reader of f before it returns.
+func streamRecording(ctx context.Context, w http.ResponseWriter, f io.Reader, start time.Duration) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-	// gorountine to rebuild the images
-	go func() {
-		var X, Y int
-
-		prev := time.Now()
-		img := image.NewRGBA(image.Rect(0, 0, X, Y))
-		var startOffset int64
-
-		// for each jpeg image
-		for update := range updateChan {
-			var skip bool
-			// fast forward to start
-			// we set skip instead of just continuing the outer
-			// loop so we can do other checks like resolution
-			// changes
-			if startOffset < start.Nanoseconds() {
-				startOffset += update.Offset
-				skip = true
-			}
-
-			// Check if the resolution has changed
-			last := update.Rectangles[len(update.Rectangles)-1]
-			if last.EncodingType == DesktopSize || X == 0 || Y == 0 {
-				X = last.Rect.Max.X
-				Y = last.Rect.Max.Y
-			}
-
-			nimg := image.NewRGBA(image.Rect(0, 0, X, Y))
-
-			// Copy in the previous image
-			dr := image.Rectangle{img.Rect.Min, img.Rect.Max}
-			draw.Draw(nimg, dr, img, img.Rect.Min, draw.Src)
-
-			for _, r := range update.Rectangles {
-				dr := image.Rectangle{r.Rect.Min, r.Rect.Max}
-				log.Debug("drawing in rectangle at %#v\n", dr)
-				draw.Draw(nimg, dr, r, r.Rect.Min, draw.Src)
-			}
-
-			offset := time.Now().Sub(prev).Nanoseconds()
-			img = nimg
-
-			if skip {
-				continue
-			}
-
-			prev = time.Now()
-
-			if offset < update.Offset {
-				// Sleep until the next image should be served
-				time.Sleep(time.Duration(update.Offset - offset))
-			} else {
-				log.Debugln("warning: longer to replay images than record them")
-			}
-
-			imageChan <- nimg
+	updates, err := readFile(ctx, f)
+	if err != nil {
+		log.Error("unable to read recording: %v", err)
+		http.Error(w, "unable to read recording", http.StatusInternalServerError)
+		return
+	}
+	defer func() {
+		cancel()
+		for range updates {
 		}
-
-		close(imageChan)
 	}()
 
 	mh := make(textproto.MIMEHeader)
@@ -174,16 +130,44 @@ func streamRecording(w http.ResponseWriter, f http.File, start time.Duration) {
 	boundary := m.Boundary()
 	h.Set("Content-type", fmt.Sprintf("multipart/x-mixed-replace; boundary=%s", boundary))
 
-	// encode and send the image
-	var buf bytes.Buffer
-	for image := range imageChan {
+	var (
+		canvas = image.NewRGBA(image.Rectangle{})
+		sentAt time.Duration // recording time of the last image sent
+		next   time.Time     // wall time to send the next image
+		buf    bytes.Buffer
+	)
+
+	for update := range updates {
+		elapsed := update.Elapsed
+
+		if len(update.Rectangles) == 0 {
+			continue
+		}
+
+		canvas = applyUpdate(canvas, update)
+
+		// fast forward to start
+		if elapsed < start || canvas.Rect.Empty() {
+			continue
+		}
+
+		if next.IsZero() {
+			next = time.Now()
+		} else {
+			next = next.Add(elapsed - sentAt)
+		}
+		sentAt = elapsed
+
+		if !sleepUntil(ctx, next) {
+			return
+		}
+
 		buf.Reset()
 
-		log.Debug("writing image: %v", image.Bounds())
-		err := jpeg.Encode(&buf, image, nil)
-		if err != nil {
+		log.Debug("writing image: %v", canvas.Bounds())
+		if err := jpeg.Encode(&buf, canvas, nil); err != nil {
 			log.Error("unable to encode jpeg: %v", err)
-			break
+			return
 		}
 
 		mh.Set("Content-length", fmt.Sprintf("%d", buf.Len()))
@@ -192,10 +176,61 @@ func streamRecording(w http.ResponseWriter, f http.File, start time.Duration) {
 			log.Error("unable to create multipart: %v", err)
 			return
 		}
-		_, err = io.Copy(fm, &buf)
-		if err != nil {
+		if _, err := io.Copy(fm, &buf); err != nil {
 			log.Error("unable to write multipart: %v", err)
-			break
+			return
 		}
+	}
+}
+
+// applyUpdate draws the rectangles of u on canvas. A DesktopSize rectangle
+// sets the framebuffer size. With no DesktopSize rectangle, the canvas grows
+// to hold each rectangle. It returns the canvas, which is new when the size
+// changes.
+func applyUpdate(canvas *image.RGBA, u *FramebufferUpdate) *image.RGBA {
+	for _, r := range u.Rectangles {
+		if r.EncodingType == DesktopSize {
+			canvas = resize(canvas, image.Rect(0, 0, r.Rect.Dx(), r.Rect.Dy()))
+			continue
+		}
+
+		if !r.Rect.In(canvas.Rect) {
+			b := image.Rect(0, 0, max(canvas.Rect.Max.X, r.Rect.Max.X), max(canvas.Rect.Max.Y, r.Rect.Max.Y))
+			canvas = resize(canvas, b)
+		}
+
+		log.Debug("drawing in rectangle at %#v\n", r.Rect)
+		draw.Draw(canvas, r.Rect, r, r.Rect.Min, draw.Src)
+	}
+
+	return canvas
+}
+
+// resize returns a canvas of bounds b with the pixels of canvas.
+func resize(canvas *image.RGBA, b image.Rectangle) *image.RGBA {
+	if b == canvas.Rect {
+		return canvas
+	}
+
+	n := image.NewRGBA(b)
+	draw.Draw(n, canvas.Rect, canvas, canvas.Rect.Min, draw.Src)
+	return n
+}
+
+// sleepUntil waits until t. It returns false if ctx is canceled first.
+func sleepUntil(ctx context.Context, t time.Time) bool {
+	d := time.Until(t)
+	if d <= 0 {
+		return ctx.Err() == nil
+	}
+
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return false
+	case <-timer.C:
+		return true
 	}
 }

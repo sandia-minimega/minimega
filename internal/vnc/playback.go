@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -18,32 +19,41 @@ import (
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
+// maxKBLine is the longest kb file line, in bytes. A base64 template can be
+// much longer than the 64 KB default of bufio.Scanner.
+const maxKBLine = 16 << 20
+
+// errStopped tells the playback goroutine that the playback stopped.
+var errStopped = errors.New("playback stopped")
+
 type playback struct {
 	*Conn // embed
 
-	ID    string // ID to identify playback
-	rhost string // remote host
+	ID string // ID to identify playback
 
 	start time.Time // start for when the playback started
+	clock clock
 
-	out         chan Event // events to write to vnc server
-	signal      chan signal
-	done        chan bool        // teardown playback
-	screenshots chan *image.RGBA // screenshots of the VM
+	// out sends events to the writer goroutine. Nothing closes it: each
+	// send also selects on done.
+	out chan Event
+
+	// wake tells the playback goroutine that the control state changed.
+	wake chan struct{}
+
+	done        chan struct{}    // closed by Stop
+	ended       chan struct{}    // closed when the connection is closed
+	screenshots chan *image.RGBA // latest screenshot of the VM
 
 	sync.Mutex               // guards below
 	depth      int           // how nested we are in LoadFiles
 	duration   time.Duration // total playback duration
 	e          string        // current event
 	state      Control       // playback state, only Play or Pause
+	step       bool          // a Step is pending
+	pending    []any         // injected LoadFile and WaitForIt events
 	closed     bool          // set after playback closed
 	file       *os.File      // file that we are reading
-	err        error         // error
-}
-
-type signal struct {
-	kind Control
-	data interface{}
 }
 
 // newPlayback creates a new playback with given id.
@@ -56,10 +66,12 @@ func newPlayback(id, rhost string) (*playback, error) {
 	return &playback{
 		ID:          id,
 		Conn:        conn,
+		clock:       realClock{},
 		out:         make(chan Event),
-		signal:      make(chan signal),
-		done:        make(chan bool),
-		screenshots: make(chan *image.RGBA),
+		wake:        make(chan struct{}, 1),
+		done:        make(chan struct{}),
+		ended:       make(chan struct{}),
+		screenshots: make(chan *image.RGBA, 1),
 		state:       Play,
 	}, nil
 }
@@ -99,123 +111,129 @@ func (p *playback) Info() []string {
 	return res
 }
 
+// Start opens filename and starts the playback. It does not close the
+// connection on an error.
 func (p *playback) Start(filename string) error {
-	p.Lock()
-	defer p.Unlock()
-
-	err := (&SetEncodings{
-		Encodings: []int32{CursorPseudoEncoding},
-	}).Write(p.Conn)
-
+	f, err := os.Open(filename)
 	if err != nil {
-		log.Error("unable to set encodings: %v", err)
 		return err
 	}
 
+	// Keep the encodings from the handshake: Raw and DesktopSize, no cursor.
+
+	p.Lock()
 	p.start = time.Now()
 	p.state = Play
+	p.Unlock()
 
 	go p.writeEvents()
 	go func() {
-		if err := p.playFile(nil, filename); err != nil {
-			log.Error("playback failed: %v", err)
+		if err := p.playFile(f); err != nil && !errors.Is(err, errStopped) {
+			log.Error("playback %v failed: %v", p.ID, err)
 		}
 
-		// finished producing -- close output so the underlying connection
-		// closes (see writeEvents)
-		close(p.out)
-
-		// finished with this playback
 		p.Stop()
 	}()
-	go func() {
-		// consume responses from the server
-		for {
-			msg, err := p.Conn.ReadMessage()
-			if err != nil {
-				if !p.closed { // if already closed, don't care about error. likely eof
-					log.Error("server to playback error: %v", err)
-				}
-				break
-			}
-
-			switch msg := msg.(type) {
-			case *FramebufferUpdate:
-				for _, rect := range msg.Rectangles {
-					// ignore non-image
-					if rect.RGBA == nil {
-						continue
-					}
-
-					select {
-					case p.screenshots <- rect.RGBA:
-						// success
-					default:
-						// drop
-					}
-				}
-			case *SetColorMapEntries:
-			case *Bell:
-			}
-		}
-	}()
+	go p.readScreen()
 
 	return nil
 }
 
-func (p *playback) Step() error {
-	p.Lock()
-	defer p.Unlock()
+// readScreen reads the messages of the server. It keeps the latest
+// screenshot for waitForIt, and it stops the playback when the connection
+// fails.
+func (p *playback) readScreen() {
+	for {
+		msg, err := p.Conn.ReadMessage()
+		if err != nil {
+			if !p.Closed() { // if already closed, don't care about error. likely eof
+				log.Error("server to playback error: %v", err)
+			}
+			p.Stop()
+			return
+		}
 
-	if p.state != Play || p.closed {
-		return errors.New("playback not stepable")
+		if msg, ok := msg.(*FramebufferUpdate); ok {
+			for _, rect := range msg.Rectangles {
+				// ignore non-image
+				if rect.RGBA != nil {
+					p.putScreenshot(rect.RGBA)
+				}
+			}
+		}
+	}
+}
+
+// putScreenshot replaces the screenshot in p.screenshots with img. Only
+// readScreen sends on p.screenshots.
+func (p *playback) putScreenshot(img *image.RGBA) {
+	select {
+	case <-p.screenshots:
+	default:
 	}
 
-	p.signal <- signal{kind: Step}
+	p.screenshots <- img
+}
 
+// poke wakes the playback goroutine. It does not block.
+func (p *playback) poke() {
+	select {
+	case p.wake <- struct{}{}:
+	default:
+	}
+}
+
+func (p *playback) Step() error {
+	p.Lock()
+	if p.state != Play || p.closed {
+		p.Unlock()
+		return errors.New("playback not stepable")
+	}
+	p.step = true
+	p.Unlock()
+
+	p.poke()
 	return nil
 }
 
 func (p *playback) Pause() error {
 	p.Lock()
-	defer p.Unlock()
-
 	if p.state != Play || p.closed {
+		p.Unlock()
 		return errors.New("playback not pauseable")
 	}
-
-	p.signal <- signal{kind: Pause}
 	p.state = Pause
+	p.Unlock()
 
+	p.poke()
 	return nil
 }
 
 func (p *playback) Continue() error {
 	p.Lock()
-	defer p.Unlock()
-
 	if p.state != Pause || p.closed {
+		p.Unlock()
 		return errors.New("playback not playable")
 	}
-
-	p.signal <- signal{kind: Play}
 	p.state = Play
+	p.Unlock()
 
+	p.poke()
 	return nil
 }
 
+// Stop stops the playback. The writer goroutine closes the connection after
+// it writes the event that it has.
 func (p *playback) Stop() error {
 	p.Lock()
 	defer p.Unlock()
 
 	if p.closed {
-		log.Info("playback has already stopped for %v", p.ID)
 		return nil
 	}
 
-	close(p.signal)
-	close(p.done)
 	p.closed = true
+	close(p.done)
 	log.Info("Finished playback on %v", p.ID)
 
 	return nil
@@ -230,29 +248,63 @@ func (p *playback) Inject(cmd string) error {
 	return p.InjectEvent(e)
 }
 
-func (p *playback) InjectEvent(e interface{}) error {
-	p.Lock()
-	defer p.Unlock()
-
-	if p.closed {
-		return errors.New("playback has already stopped")
-	}
-
+// InjectEvent sends an Event at once. It queues a LoadFile or WaitForIt event
+// for the playback goroutine, which runs it when the playback is not paused.
+func (p *playback) InjectEvent(e any) error {
 	if event, ok := e.(Event); ok {
-		p.out <- event
+		if p.Closed() {
+			return errors.New("playback has already stopped")
+		}
+		if !p.send(event) {
+			return errors.New("playback has already stopped")
+		}
 		return nil
 	}
 
 	switch e := e.(type) {
 	case *LoadFileEvent:
-		p.signal <- signal{kind: LoadFile, data: e}
+		p.Lock()
+		name := e.File
+		if !filepath.IsAbs(name) && p.file != nil {
+			name = filepath.Join(filepath.Dir(p.file.Name()), name)
+		}
+		p.Unlock()
+
+		if _, err := os.Stat(name); err != nil {
+			return err
+		}
+		e = &LoadFileEvent{File: name}
+
+		return p.queue(e)
 	case *WaitForItEvent:
-		p.signal <- signal{kind: WaitForIt, data: e}
+		return p.queue(e)
 	default:
 		return fmt.Errorf("unknown event: %v", e)
 	}
+}
 
+func (p *playback) queue(e any) error {
+	p.Lock()
+	if p.closed {
+		p.Unlock()
+		return errors.New("playback has already stopped")
+	}
+	p.pending = append(p.pending, e)
+	p.Unlock()
+
+	p.poke()
 	return nil
+}
+
+// send gives e to the writer goroutine. It returns false if the playback
+// stopped.
+func (p *playback) send(e Event) bool {
+	select {
+	case p.out <- e:
+		return true
+	case <-p.done:
+		return false
+	}
 }
 
 func (p *playback) GetStep() (string, error) {
@@ -266,7 +318,16 @@ func (p *playback) GetStep() (string, error) {
 	return p.e, nil
 }
 
-func (v *playback) playFile(parent *os.File, filename string) error {
+// newKBScanner returns a scanner for the lines of a kb file.
+func newKBScanner(r io.Reader) *bufio.Scanner {
+	s := bufio.NewScanner(r)
+	s.Buffer(make([]byte, 0, 64*1024), maxKBLine)
+	return s
+}
+
+// loadFile plays the named file. A relative name is in the directory of
+// parent.
+func (p *playback) loadFile(parent *os.File, filename string) error {
 	if !filepath.IsAbs(filename) && parent != nil {
 		// Our file is in the same directory as the parent
 		filename = filepath.Join(filepath.Dir(parent.Name()), filename)
@@ -276,21 +337,25 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 	if err != nil {
 		return err
 	}
+
+	return p.playFile(f)
+}
+
+// playFile plays the events of f, and then closes f.
+func (p *playback) playFile(f *os.File) error {
 	defer f.Close()
-	log.Info("Start playback of %v on %v", f.Name(), v.ID)
+	log.Info("Start playback of %v on %v", f.Name(), p.ID)
 
 	// record that we're reading a new file and update the remaining duration
-	v.addDuration(getDuration(f))
+	p.addDuration(getDuration(f))
 
-	old, err := v.setFile(f)
+	old, err := p.setFile(f)
 	if err != nil {
 		return err
 	}
-	defer func() {
-		v.resetFile(old)
-	}()
+	defer p.resetFile(old)
 
-	scanner := bufio.NewScanner(f)
+	scanner := newKBScanner(f)
 
 	for scanner.Scan() {
 		// Parse the event
@@ -315,7 +380,7 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 		}
 
 		// Set the current event context
-		v.setStep(scanner.Text())
+		p.setStep(scanner.Text())
 
 		duration, err := parseDuration(s[0])
 		if err != nil {
@@ -323,85 +388,126 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 			continue
 		}
 
-		for {
-			start := time.Now()
+		if err := p.wait(f, duration); err != nil {
+			return err
+		}
+
+		if err := p.run(f, res); err != nil {
+			return err
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("read %v: %w", f.Name(), err)
+	}
+
+	return nil
+}
+
+// run runs one event of the file f.
+func (p *playback) run(f *os.File, e any) error {
+	switch e := e.(type) {
+	case Event:
+		if !p.send(e) {
+			return errStopped
+		}
+	case *LoadFileEvent:
+		return p.loadFile(f, e.File)
+	case *WaitForItEvent:
+		return p.runWaitForIt(e)
+	}
+
+	return nil
+}
+
+// wait waits for d before the next event of the file f. It runs the
+// injected events, holds while the playback is paused, and ends at once on
+// a Step.
+func (p *playback) wait(f *os.File, d time.Duration) error {
+	for {
+		step, err := p.control(f)
+		if err != nil {
+			return err
+		}
+		if step {
+			p.addDuration(-d)
+			return nil
+		}
+		if d <= 0 {
+			return nil
+		}
+
+		start := p.clock.Now()
+
+		select {
+		case <-p.clock.After(d):
+			p.addDuration(-d)
+			return nil
+		case <-p.wake:
+			waited := min(p.clock.Now().Sub(start), d)
+			p.addDuration(-waited)
+
+			// don't need to wait as long next time
+			d -= waited
+		case <-p.done:
+			return errStopped
+		}
+	}
+}
+
+// control holds while the playback is paused and runs the injected events.
+// It returns true if a Step is pending.
+func (p *playback) control(f *os.File) (bool, error) {
+	for {
+		p.Lock()
+		if p.closed {
+			p.Unlock()
+			return false, errStopped
+		}
+
+		if p.state == Pause {
+			p.Unlock()
 
 			select {
-			case <-time.After(duration):
-				v.addDuration(-duration)
-
-				goto Event
-			case sig, ok := <-v.signal:
-				if !ok {
-					// signal channel closed -- bail
-					log.Info("abort playback of %v due to signal", f.Name())
-					return nil
-				}
-
-				waited := start.Sub(time.Now())
-				v.addDuration(-waited)
-
-				// don't need to wait as long next time
-				duration -= waited
-
-				switch sig.kind {
-				case Pause:
-					sig, ok := <-v.signal
-					if !ok {
-						// signal channel closed -- bail
-						log.Info("abort playback of %v due to signal", f.Name())
-						return nil
-					}
-
-					switch sig.kind {
-					case Play:
-						// do nothing except keep playing
-					default:
-						log.Error("unexpected signal: %v", sig)
-					}
-				case Step:
-					// decrease by the remaining
-					v.addDuration(-duration)
-
-					goto Event
-				case LoadFile:
-					e := sig.data.(LoadFileEvent)
-
-					if err := v.playFile(f, e.File); err != nil {
-						return err
-					}
-				case WaitForIt:
-					e := sig.data.(*WaitForItEvent)
-
-					// TODO: what to do for duration?
-					if e2, err := v.waitForIt(e); err != nil {
-						return err
-					} else if e.Click {
-						v.out <- e2
-					}
-				default:
-					log.Error("unexpected signal: %v", sig)
-				}
+			case <-p.wake:
+				continue
+			case <-p.done:
+				return false, errStopped
 			}
 		}
 
-		// waited so process the event
-	Event:
-		switch e := res.(type) {
-		case Event:
-			v.out <- e
-		case *LoadFileEvent:
-			if err := v.playFile(f, e.File); err != nil {
-				return err
-			}
-		case *WaitForItEvent:
-			// TODO: what to do for duration?
-			if e2, err := v.waitForIt(e); err != nil {
-				return err
-			} else if e.Click {
-				v.out <- e2
-			}
+		if len(p.pending) == 0 {
+			step := p.step
+			p.step = false
+			p.Unlock()
+
+			return step, nil
 		}
+
+		e := p.pending[0]
+		p.pending = p.pending[1:]
+		p.Unlock()
+
+		if err := p.run(f, e); err != nil {
+			return false, err
+		}
+	}
+}
+
+// runWaitForIt waits for the template of e. For a click, it sends a press and
+// then a release on the center of the template.
+func (p *playback) runWaitForIt(e *WaitForItEvent) error {
+	// TODO: what to do for duration?
+	press, err := p.waitForIt(e)
+	if err != nil || !e.Click {
+		return err
+	}
+
+	release := *press
+	release.ButtonMask = 0
+
+	if !p.send(press) || !p.send(&release) {
+		return errStopped
 	}
 
 	return nil
@@ -413,15 +519,21 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 func (p *playback) waitForIt(e *WaitForItEvent) (*PointerEvent, error) {
 	log.Info("playback %v, wait for %v, timeout = %v", p.ID, e.Source, e.Timeout)
 
-	// timeout tracks how long we have left to wait
-	timeout := e.Timeout
+	deadline := time.After(e.Timeout)
 
-	fb := &FramebufferUpdateRequest{
-		Width:  p.Conn.s.Width,
-		Height: p.Conn.s.Height,
-	}
+	for {
+		// drop a screenshot from before the request
+		select {
+		case <-p.screenshots:
+		default:
+		}
 
-	for timeout > 0 {
+		width, height := p.Conn.size()
+		fb := &FramebufferUpdateRequest{
+			Width:  width,
+			Height: height,
+		}
+
 		// request an updated screenshot
 		if err := fb.Write(p.Conn); err != nil {
 			return nil, err
@@ -431,36 +543,39 @@ func (p *playback) waitForIt(e *WaitForItEvent) (*PointerEvent, error) {
 
 		select {
 		case screenshot := <-p.screenshots:
-			waited := time.Now().Sub(start)
-			timeout -= waited
-
-			log.Info("playback %v got screenshot after %v", p.ID, waited)
+			log.Info("playback %v got screenshot after %v", p.ID, time.Since(start))
 
 			if e := matchTemplate(screenshot, e.Template); e != nil {
 				return e, nil
 			}
-		case <-time.After(timeout):
+		case <-deadline:
 			return nil, fmt.Errorf("timeout waiting for %v", e.Source)
+		case <-p.done:
+			return nil, errStopped
 		}
 
 		// sleep and try again
-		time.Sleep(time.Second)
-		timeout -= time.Second
+		select {
+		case <-time.After(time.Second):
+		case <-deadline:
+			return nil, fmt.Errorf("timeout waiting for %v", e.Source)
+		case <-p.done:
+			return nil, errStopped
+		}
 	}
-
-	return nil, fmt.Errorf("timeout waiting for %v", e.Source)
 }
 
 func (p *playback) setFile(f *os.File) (old *os.File, err error) {
 	p.Lock()
 	defer p.Unlock()
 
+	if p.depth >= 100 {
+		return nil, errors.New("too many recursive LoadFiles")
+	}
+
 	p.depth += 1
 	if p.depth > 10 {
 		log.Warn("recursive LoadFiles detected in vnc playback")
-	}
-	if p.depth > 100 {
-		return nil, errors.New("too many recursive LoadFiles")
 	}
 
 	old, p.file = p.file, f
@@ -489,22 +604,41 @@ func (p *playback) addDuration(d time.Duration) {
 	p.duration += d
 }
 
-// writeEvents reads events from the out channel and write them to the vnc
-// connection. Closes the connection when it drains the channel.
+// writeEvents reads events from the out channel and writes them to the vnc
+// connection. It closes the connection when the playback stops.
 func (p *playback) writeEvents() {
+	defer close(p.ended)
 	defer p.Conn.Close()
 
-	for e := range p.out {
-		if err := e.Write(p.Conn); err != nil {
-			log.Error("unable to write vnc event: %v", err)
-			break
+	var logged bool
+	for {
+		select {
+		case <-p.done:
+			return
+		case e := <-p.out:
+			if pe, ok := e.(*kbPointerEvent); ok && pe.dropped() != 0 && !logged {
+				log.Warn("playback %v drops pointer mask bits %#x: the connection does not support extended mouse buttons", p.ID, pe.dropped())
+				logged = true
+			}
+
+			if err := e.Write(p.Conn); err != nil {
+				if !p.Closed() {
+					log.Error("unable to write vnc event: %v", err)
+				}
+				p.Stop()
+				return
+			}
 		}
 	}
-
-	// stop ourselves in a separate goroutine to avoid a deadlock
-	go p.Stop()
-
-	for range p.out {
-		// drain the channel
-	}
 }
+
+// clock gives the time to the playback wait. Tests replace it.
+type clock interface {
+	Now() time.Time
+	After(d time.Duration) <-chan time.Time
+}
+
+type realClock struct{}
+
+func (realClock) Now() time.Time                         { return time.Now() }
+func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) }

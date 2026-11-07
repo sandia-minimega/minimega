@@ -5,13 +5,14 @@
 package main
 
 import (
-	"fmt"
 	"os/exec"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
-func transcode(in, out string) error {
+// transcode runs ffmpeg to transcode the MJPEG stream at the URL src to the
+// file out.
+func transcode(src, out string) error {
 	p := "ffmpeg"
 
 	var args []string
@@ -20,7 +21,7 @@ func transcode(in, out string) error {
 	args = append(args, "-r")
 	args = append(args, "10") // minimega uses 10 frames per second
 	args = append(args, "-i")
-	args = append(args, fmt.Sprintf("http://localhost:%v/%v", *f_port, in))
+	args = append(args, src)
 	args = append(args, out)
 
 	log.Debugln("args:", args)

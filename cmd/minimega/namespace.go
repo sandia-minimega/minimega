@@ -140,11 +140,12 @@ func NewNamespace(name string) *Namespace {
 			counter: NewCounter(),
 		},
 		Recorder:      vnc.NewRecorder(),
-		Player:        vnc.NewPlayer(),
+		Player:        vnc.NewPlayer(*f_iomBase),
 		vmConfig:      NewVMConfig(),
 		savedVMConfig: make(map[string]VMConfig),
 		ccMounts:      make(map[string]ccMount),
 	}
+	ns.VMs.stopVNC = ns.stopVMRecordings
 
 	if name == DefaultNamespace {
 		// default only contains this node by default
@@ -181,6 +182,18 @@ func NewNamespace(name string) *Namespace {
 	}
 
 	return ns
+}
+
+// stopVMRecordings stops the VNC recordings, the kb playback, and the pastes
+// of the named VM.
+func (n *Namespace) stopVMRecordings(name string) {
+	if err := n.Recorder.StopVM(name); err != nil {
+		log.Warn("unable to stop vnc recordings of vm %v: %v", name, err)
+	}
+
+	if err := n.Player.Stop(name); err != nil && !errors.Is(err, vnc.ErrPlaybackNotFound) {
+		log.Warn("unable to stop vnc playback of vm %v: %v", name, err)
+	}
 }
 
 func (n *Namespace) String() string {

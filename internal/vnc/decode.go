@@ -15,63 +15,6 @@ import (
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
-var clientMessages = map[uint8]func() interface{}{
-	TypeSetPixelFormat:           func() interface{} { return new(SetPixelFormat) },
-	TypeSetEncodings:             func() interface{} { return new(_SetEncodings) },
-	TypeFramebufferUpdateRequest: func() interface{} { return new(FramebufferUpdateRequest) },
-	TypeKeyEvent:                 func() interface{} { return new(KeyEvent) },
-	TypePointerEvent:             func() interface{} { return new(PointerEvent) },
-	TypeClientCutText:            func() interface{} { return new(_ClientCutText) },
-}
-
-// ReadClientMessage reads the next client-to-server message
-func ReadClientMessage(r io.Reader) (interface{}, error) {
-	var msgType uint8
-	if err := binary.Read(r, binary.BigEndian, &msgType); err != nil {
-		return nil, err
-	}
-
-	if _, ok := clientMessages[msgType]; !ok {
-		return nil, fmt.Errorf("unknown client-to-server message: %d", msgType)
-	}
-
-	// Copy the struct
-	msg := clientMessages[msgType]()
-
-	if err := binary.Read(r, binary.BigEndian, msg); err != nil {
-		return nil, err
-	}
-
-	var err error
-
-	// Do extra processing on messages that have variable length fields
-	switch msgType {
-	case TypeSetEncodings:
-		msg2 := &SetEncodings{_SetEncodings: *msg.(*_SetEncodings)}
-		msg2.Encodings = make([]int32, msg2.NumberOfEncodings)
-
-		err = binary.Read(r, binary.BigEndian, &msg2.Encodings)
-		msg = msg2
-	case TypeClientCutText:
-		msg2 := &ClientCutText{_ClientCutText: *msg.(*_ClientCutText)}
-		length := msg2.Length
-		// negative length used for extended pseudo-encoding
-		if length < 0 {
-			length = -length
-		}
-		msg2.Text = make([]uint8, length)
-
-		err = binary.Read(r, binary.BigEndian, &msg2.Text)
-		msg = msg2
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return msg, nil
-}
-
 // ReadMessage reads the next server-to-client message
 func (c *Conn) ReadMessage() (interface{}, error) {
 	var msgType uint8
@@ -84,7 +27,7 @@ func (c *Conn) ReadMessage() (interface{}, error) {
 		msg := FramebufferUpdate{}
 
 		// Skip padding
-		if _, err := c.Read(make([]byte, 1)); err != nil {
+		if _, err := io.ReadFull(c, make([]byte, 1)); err != nil {
 			return nil, fmt.Errorf("unable to skip padding: %v", err)
 		}
 
@@ -110,7 +53,7 @@ func (c *Conn) ReadMessage() (interface{}, error) {
 		msg := SetColorMapEntries{}
 
 		// Skip padding
-		if _, err := c.Read(make([]byte, 1)); err != nil {
+		if _, err := io.ReadFull(c, make([]byte, 1)); err != nil {
 			return nil, fmt.Errorf("unable to skip padding: %v", err)
 		}
 
@@ -135,9 +78,17 @@ func (c *Conn) ReadMessage() (interface{}, error) {
 	case TypeServerCutText:
 		msg := ServerCutText{}
 
+		// Skip padding
+		if _, err := io.ReadFull(c, make([]byte, 3)); err != nil {
+			return nil, fmt.Errorf("unable to skip padding: %v", err)
+		}
+
 		// Decode cut text length
 		if err := binary.Read(c, binary.BigEndian, &msg.Length); err != nil {
 			return nil, fmt.Errorf("unable to decode cut text length: %v", err)
+		}
+		if msg.Length > maxCutText {
+			return nil, fmt.Errorf("server cut text has %d bytes, limit is %d", msg.Length, maxCutText)
 		}
 
 		msg.Text = make([]uint8, msg.Length)
@@ -172,20 +123,17 @@ func (c *Conn) readRectangle() (*Rectangle, error) {
 
 	log.Debug("rectangle: %d x %d at (%d, %d)", r.Width, r.Height, r.X, r.Y)
 
-	r.RGBA = image.NewRGBA(image.Rectangle{
-		image.Point{int(r.X), int(r.Y)},
-		image.Point{int(r.X) + int(r.Width), int(r.Y) + int(r.Height)}})
-
 	var err error
 
+	// Only Raw rectangles get pixel data. The others leave r.RGBA nil.
 	switch r.EncodingType {
 	case RawEncoding:
+		r.RGBA = image.NewRGBA(image.Rect(int(r.X), int(r.Y), int(r.X)+int(r.Width), int(r.Y)+int(r.Height)))
 		err = c.decodeRawEncoding(r)
-	case TightEncoding:
-		// TODO
-		//err = c.decodeTightEncoding(reader, r)
 	case DesktopSizePseudoEncoding:
 		err = c.decodeDesktopSizeEncoding(r)
+	case CursorPseudoEncoding:
+		err = c.skipCursorEncoding(r)
 	default:
 		err = fmt.Errorf("unaccepted encoding: %d", r.EncodingType)
 	}
@@ -204,7 +152,7 @@ func (c *Conn) decodeRawEncoding(r *Rectangle) error {
 			if err != nil {
 				return fmt.Errorf("error reading pixel (%v, %v): %v", x, y, err)
 			}
-			r.RGBA.Set(x, y, pixel)
+			r.RGBA.SetRGBA(x, y, pixel)
 		}
 	}
 
@@ -212,9 +160,22 @@ func (c *Conn) decodeRawEncoding(r *Rectangle) error {
 }
 
 func (c *Conn) decodeDesktopSizeEncoding(r *Rectangle) error {
-	width, height := uint16(r.Rect.Dx()), uint16(r.Rect.Dy())
-	log.Info("new desktop size: %v x %v -> %v x %v", c.s.Width, c.s.Height, width, height)
-	c.s.Width, c.s.Height = width, height
+	oldW, oldH := c.size()
+	log.Info("new desktop size: %v x %v -> %v x %v", oldW, oldH, r.Width, r.Height)
+	c.setSize(r.Width, r.Height)
+
+	return nil
+}
+
+// skipCursorEncoding reads and drops the pixels and the bitmask of a Cursor
+// pseudo-encoding rectangle.
+func (c *Conn) skipCursorEncoding(r *Rectangle) error {
+	w, h := int64(r.Width), int64(r.Height)
+	n := w*h*int64(c.pf.BitsPerPixel/8) + (w+7)/8*h
+
+	if _, err := io.CopyN(io.Discard, c, n); err != nil {
+		return fmt.Errorf("unable to skip cursor: %v", err)
+	}
 
 	return nil
 }
@@ -222,30 +183,41 @@ func (c *Conn) decodeDesktopSizeEncoding(r *Rectangle) error {
 func (c *Conn) readPixel() (color.RGBA, error) {
 	var rgb color.RGBA
 
-	bytesPerPixel := c.s.BitsPerPixel / 8
-	buf := make([]byte, bytesPerPixel)
-
-	n, err := io.ReadFull(c, buf)
-	if err != nil {
-		return rgb, err
-	} else if uint8(n) != bytesPerPixel {
-		return rgb, errors.New("unable to read full pixel")
-	}
-
-	raw := binary.LittleEndian.Uint32(buf)
-	if c.s.BigEndianFlag != 0 {
-		raw = binary.BigEndian.Uint32(buf)
-	}
-
-	if c.s.TrueColorFlag != 0 {
-		rgb.R = uint8((raw >> uint32(c.s.RedShift)) & uint32(c.s.RedMax))
-		rgb.G = uint8((raw >> uint32(c.s.GreenShift)) & uint32(c.s.GreenMax))
-		rgb.B = uint8((raw >> uint32(c.s.BlueShift)) & uint32(c.s.BlueMax))
-		rgb.A = 255
-	} else {
+	pf := c.pf
+	if pf.TrueColorFlag == 0 {
 		// TODO
 		return rgb, errors.New("unable to decode untrue colors")
 	}
+
+	buf := make([]byte, pf.BitsPerPixel/8)
+	if _, err := io.ReadFull(c, buf); err != nil {
+		return rgb, err
+	}
+
+	var raw uint32
+	switch len(buf) {
+	case 1:
+		raw = uint32(buf[0])
+	case 2:
+		if pf.BigEndianFlag != 0 {
+			raw = uint32(binary.BigEndian.Uint16(buf))
+		} else {
+			raw = uint32(binary.LittleEndian.Uint16(buf))
+		}
+	case 4:
+		if pf.BigEndianFlag != 0 {
+			raw = binary.BigEndian.Uint32(buf)
+		} else {
+			raw = binary.LittleEndian.Uint32(buf)
+		}
+	default:
+		return rgb, fmt.Errorf("unable to decode %d bits per pixel", pf.BitsPerPixel)
+	}
+
+	rgb.R = uint8((raw >> uint32(pf.RedShift)) & uint32(pf.RedMax))
+	rgb.G = uint8((raw >> uint32(pf.GreenShift)) & uint32(pf.GreenMax))
+	rgb.B = uint8((raw >> uint32(pf.BlueShift)) & uint32(pf.BlueMax))
+	rgb.A = 255
 
 	return rgb, nil
 }

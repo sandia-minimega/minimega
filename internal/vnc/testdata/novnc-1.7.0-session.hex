@@ -1,0 +1,51 @@
+# Synthetic client-to-server stream of a noVNC 1.7.0 session against QEMU 6.2.
+# See README.md. The bytes are in hex. Each comment names the message below it.
+# The test ignores whitespace and the text from "#" to the end of the line.
+
+# ProtocolVersion "RFB 003.008\n"
+52 46 42 20 30 30 33 2e 30 30 38 0a
+# Security type None
+01
+# ClientInit, shared
+01
+# SetPixelFormat: 32 bpp, depth 24, little-endian, true color, max 255, shifts 0 8 16
+00 000000 20 18 00 01 00ff 00ff 00ff 00 08 10 000000
+# SetEncodings: 24 encodings in noVNC 1.7.0 order, quality 6, compression 2
+02 00 0018
+   00000001 00000007 fffffefc 00000010 00000015 00000005
+   00000002 00000006 00000000 ffffffe6 ffffff02 ffffff21
+   ffffff20 fffffefe fffffefb fffffecc fffffecb fffffec8
+   fffffec7 fffffecd c0a1e5ce fffffec4 574d5664 ffffff11
+# FramebufferUpdateRequest, full, 1024x768
+03 00 0000 0000 0400 0300
+# FramebufferUpdateRequest, incremental
+03 01 0000 0000 0400 0300
+# SetDesktopSize 1280x800, one screen, id 0, flags 0
+fb 00 0500 0320 01 00 00000000 0000 0000 0500 0320 00000000
+# FramebufferUpdateRequest, incremental, after the resize
+03 01 0000 0000 0500 0320
+# PointerEvent: move, press button 1, release
+05 00 0100 0080
+05 01 0100 0080
+05 00 0100 0080
+# QEMU extended key events (255/0): Shift+L, s, Return
+ff 00 0001 0000ffe1 0000002a  # Shift_L down
+ff 00 0001 0000004c 00000026  # L down
+ff 00 0000 0000004c 00000026  # L up
+ff 00 0000 0000ffe1 0000002a  # Shift_L up
+ff 00 0001 00000073 0000001f  # s down
+ff 00 0000 00000073 0000001f  # s up
+ff 00 0001 0000ff0d 0000001c  # Return down
+ff 00 0000 0000ff0d 0000001c  # Return up
+# FramebufferUpdateRequest, incremental
+03 01 0000 0000 0500 0320
+# SetEncodings again after a quality change to 3
+02 00 0018
+   00000001 00000007 fffffefc 00000010 00000015 00000005
+   00000002 00000006 00000000 ffffffe3 ffffff02 ffffff21
+   ffffff20 fffffefe fffffefb fffffecc fffffecb fffffec8
+   fffffec7 fffffecd c0a1e5ce fffffec4 574d5664 ffffff11
+# ClientCutText, plain, "pwd"
+06 000000 00000003 707764
+# FramebufferUpdateRequest, incremental
+03 01 0000 0000 0500 0320

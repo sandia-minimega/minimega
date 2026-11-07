@@ -16,6 +16,10 @@ import (
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
+// fbRequestInterval is the time between two FramebufferUpdateRequests of an
+// fb recording.
+const fbRequestInterval = 100 * time.Millisecond
+
 // Recorder keeps track of active recordings.
 type Recorder struct {
 	mu sync.RWMutex // guards below
@@ -28,19 +32,25 @@ type recorder struct {
 	*Conn // embed
 
 	file  *os.File
-	err   error
-	done  chan bool
 	start time.Time
 }
 
 type kbRecorder struct {
 	*recorder // embed
 
+	mu   sync.Mutex // guards last and the writes to file
 	last time.Time
 }
 
 type fbRecorder struct {
 	*recorder // embed
+
+	done     chan struct{} // closed by Stop, ends the request loop
+	readDone chan struct{} // closed when the reader goroutine ends
+	readErr  error         // error that the reader gives, valid after readDone
+
+	stopOnce sync.Once
+	stopErr  error
 }
 
 func NewRecorder() *Recorder {
@@ -66,24 +76,27 @@ func newRecorder(rhost, filename string) (*recorder, error) {
 		Conn:  c,
 		file:  f,
 		start: time.Now(),
-		done:  make(chan bool),
 	}, nil
 }
 
-func (r *recorder) Stop() error {
-	if r.file != nil {
-		if err := r.file.Close(); err != nil {
-			return err
-		}
-	}
+// close closes the connection and then the file. It closes both, even if
+// the first Close fails.
+func (r *recorder) close() error {
+	var errs []error
 
 	if r.Conn != nil {
 		if err := r.Conn.Close(); err != nil {
-			return err
+			errs = append(errs, fmt.Errorf("close vnc connection: %v", err))
 		}
 	}
 
-	return nil
+	if r.file != nil {
+		if err := r.file.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close %v: %v", r.file.Name(), err))
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 func (r *Recorder) RecordKB(id, rhost, filename string) error {
@@ -125,10 +138,13 @@ func (r *Recorder) RecordFB(id, rhost, filename string) error {
 
 	fb := &fbRecorder{
 		recorder: rc,
+		done:     make(chan struct{}),
+		readDone: make(chan struct{}),
 	}
 	r.fb[id] = fb
 
-	go fb.Record()
+	go fb.read()
+	go fb.request()
 
 	return nil
 }
@@ -143,36 +159,57 @@ func (r *Recorder) Route(id string, msg interface{}) {
 	}
 }
 
+// StopKB stops the kb recording of id. It always removes the recording, and
+// returns the errors from the Close calls.
 func (r *Recorder) StopKB(id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if kb, ok := r.kb[id]; ok {
-		if err := kb.Stop(); err != nil {
-			return err
-		}
-
-		delete(r.kb, id)
-		return nil
+	kb, ok := r.kb[id]
+	if !ok {
+		return fmt.Errorf("kb recording %v not found", id)
 	}
 
-	return fmt.Errorf("kb recording %v not found", id)
+	delete(r.kb, id)
+	return kb.Stop()
 }
 
+// StopFB stops the fb recording of id. It always removes the recording, and
+// returns the errors from the Close calls.
 func (r *Recorder) StopFB(id string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if fb, ok := r.fb[id]; ok {
-		if err := fb.Stop(); err != nil {
-			return err
-		}
-
-		delete(r.fb, id)
-		return nil
+	fb, ok := r.fb[id]
+	if !ok {
+		return fmt.Errorf("fb recording %v not found", id)
 	}
 
-	return fmt.Errorf("fb recording %v not found", id)
+	delete(r.fb, id)
+	return fb.Stop()
+}
+
+// StopVM stops the kb and fb recordings of id, if there are any. Use it when
+// the VM is killed or flushed.
+func (r *Recorder) StopVM(id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	var errs []error
+
+	if kb, ok := r.kb[id]; ok {
+		log.Debug("stopping kb recording for %v", id)
+		delete(r.kb, id)
+		errs = append(errs, kb.Stop())
+	}
+
+	if fb, ok := r.fb[id]; ok {
+		log.Debug("stopping fb recording for %v", id)
+		delete(r.fb, id)
+		errs = append(errs, fb.Stop())
+	}
+
+	return errors.Join(errs...)
 }
 
 // Clear stops all recordings
@@ -182,20 +219,18 @@ func (r *Recorder) Clear() {
 
 	for k, kb := range r.kb {
 		log.Debug("stopping kb recording for %v", k)
+		delete(r.kb, k)
 		if err := kb.Stop(); err != nil {
 			log.Error("%v", err)
 		}
-
-		delete(r.kb, k)
 	}
 
 	for k, fb := range r.fb {
 		log.Debug("stopping fb recording for %v", k)
+		delete(r.fb, k)
 		if err := fb.Stop(); err != nil {
 			log.Error("%v", err)
 		}
-
-		delete(r.fb, k)
 	}
 }
 
@@ -226,80 +261,142 @@ func (r *Recorder) Info() [][]string {
 	return res
 }
 
-// Record records a  client-to-server message in plaintext
-func (kb *kbRecorder) Record(msg interface{}) {
-	delta := time.Now().Sub(kb.last).Nanoseconds()
+// Stop closes the connection and the file.
+func (kb *kbRecorder) Stop() error {
+	kb.mu.Lock()
+	defer kb.mu.Unlock()
 
-	switch msg := msg.(type) {
-	case *SetPixelFormat:
-	case *SetEncodings:
-	case *FramebufferUpdateRequest:
-	case *ClientCutText:
-		// Don't record
-	case *KeyEvent, *PointerEvent:
-		fmt.Fprintf(kb.file, "%d:%s\n", delta, msg)
-		kb.last = time.Now()
-	default:
-		log.Info("unexpected  client-to-server message: %#v\n", msg)
-	}
+	return kb.close()
 }
 
-func (fb *fbRecorder) Record() {
-	go func() {
-		prev := time.Now()
-		buf := make([]byte, 4096)
-		writer := gzip.NewWriter(fb.file)
-		defer writer.Close()
+// Record records a client-to-server message in plaintext
+func (kb *kbRecorder) Record(msg interface{}) {
+	var e fmt.Stringer
 
-		for {
-			n, err := fb.Conn.Read(buf)
-			if err != nil {
-				log.Debug(" fb response read failed: %v", err)
-				break
-			}
+	switch msg := msg.(type) {
+	case *SetPixelFormat, *SetEncodings, *FramebufferUpdateRequest,
+		*ClientCutText, *ExtendedClientCutText, *EnableContinuousUpdates,
+		*ClientFence, *XVPMessage, *SetDesktopSize, *QEMUAudioMessage:
+		// Not recorded
+		return
+	case *KeyEvent:
+		e = msg
+	case *QEMUExtendedKeyEvent:
+		e = msg.KeyEvent()
+	case *PointerEvent:
+		e = &kbPointerEvent{Mask: uint16(msg.ButtonMask), XPosition: msg.XPosition, YPosition: msg.YPosition}
+	case *ExtendedPointerEvent:
+		e = &kbPointerEvent{Mask: msg.Mask(), XPosition: msg.XPosition, YPosition: msg.YPosition}
+	default:
+		log.Info("unexpected client-to-server message: %#v", msg)
+		return
+	}
 
-			if n > 0 {
-				offset := time.Now().Sub(prev).Nanoseconds()
-				header := fmt.Sprintf("%d %d\r\n", offset, n)
+	if ke, ok := e.(*KeyEvent); ok && ke.Key == 0 {
+		log.Debug("skip KeyEvent with keysym 0")
+		return
+	}
 
-				if _, err := io.WriteString(writer, header); err != nil {
-					log.Debug(" fb write chunk header failed: %v", err)
-					break
-				}
-				if _, err := writer.Write(buf[:n]); err != nil {
-					log.Debug(" fb write chunk failed: %v", err)
-					break
-				}
-				if _, err := io.WriteString(writer, "\r\n"); err != nil {
-					log.Debug(" fb write chunk tailer failed: %v", err)
-					break
-				}
+	kb.mu.Lock()
+	defer kb.mu.Unlock()
 
-				prev = time.Now()
+	now := time.Now()
+	if _, err := fmt.Fprintf(kb.file, "%d:%s\n", now.Sub(kb.last).Nanoseconds(), e); err != nil {
+		log.Error("unable to write kb recording %v: %v", kb.file.Name(), err)
+	}
+	kb.last = now
+}
 
-				log.Debug(" fb wrote %d bytes", n)
-			}
+// Stop ends the request loop, closes the connection, and waits for the
+// reader goroutine to close the file. It returns the errors from the Close
+// calls and from the writes to the file.
+func (fb *fbRecorder) Stop() error {
+	fb.stopOnce.Do(func() {
+		close(fb.done)
+
+		var errs []error
+		if err := fb.Conn.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close vnc connection: %v", err))
 		}
-	}()
 
-	req := &FramebufferUpdateRequest{}
-	req.Height = fb.Conn.s.Height
-	req.Width = fb.Conn.s.Width
+		<-fb.readDone
+		fb.stopErr = errors.Join(append(errs, fb.readErr)...)
+	})
 
-	// fall into a loop issuing periodic fb update requests and dump to file
-	// check if we need to quit
-	for {
-		select {
-		case <-fb.done:
+	return fb.stopErr
+}
+
+// read copies the server bytes to the gzip file in chunks until the
+// connection ends. Then it closes the gzip writer and the file.
+func (fb *fbRecorder) read() {
+	defer close(fb.readDone)
+
+	writer := gzip.NewWriter(fb.file)
+	prev := time.Now()
+	buf := make([]byte, 4096)
+
+	var werr error
+	for werr == nil {
+		n, err := fb.Conn.Read(buf)
+		if n > 0 {
+			offset := time.Since(prev).Nanoseconds()
+			prev = time.Now()
+
+			werr = fb.writeChunk(writer, offset, buf[:n])
+			log.Debug("fb wrote %d bytes", n)
+		}
+		if err != nil {
+			log.Debug("fb response read failed: %v", err)
 			break
-		default:
 		}
+	}
 
+	var errs []error
+	if werr != nil {
+		errs = append(errs, fmt.Errorf("write %v: %v", fb.file.Name(), werr))
+	}
+	if err := writer.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("write %v: %v", fb.file.Name(), err))
+	}
+	if err := fb.file.Close(); err != nil {
+		errs = append(errs, fmt.Errorf("close %v: %v", fb.file.Name(), err))
+	}
+
+	fb.readErr = errors.Join(errs...)
+}
+
+func (fb *fbRecorder) writeChunk(w io.Writer, offset int64, b []byte) error {
+	if _, err := fmt.Fprintf(w, "%d %d\r\n", offset, len(b)); err != nil {
+		return err
+	}
+	if _, err := w.Write(b); err != nil {
+		return err
+	}
+	_, err := io.WriteString(w, "\r\n")
+	return err
+}
+
+// request asks for the whole screen every fbRequestInterval until Stop or the
+// end of the reader. QEMU clamps the rectangle to the current screen size, so
+// the frames follow a guest resize.
+func (fb *fbRecorder) request() {
+	req := &FramebufferUpdateRequest{Width: 0xffff, Height: 0xffff}
+
+	ticker := time.NewTicker(fbRequestInterval)
+	defer ticker.Stop()
+
+	for {
 		if err := req.Write(fb.Conn); err != nil {
-			fb.err = errors.New("unable to request framebuffer update")
+			log.Debug("fb update request failed: %v", err)
 			return
 		}
 
-		time.Sleep(100 * time.Millisecond)
+		select {
+		case <-fb.done:
+			return
+		case <-fb.readDone:
+			return
+		case <-ticker.C:
+		}
 	}
 }

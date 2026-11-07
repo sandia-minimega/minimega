@@ -25,7 +25,8 @@ user can watch a video of interactions with the VM.
 If record is selected, a file will be created containing a record of mouse
 and keyboard actions by the user or of the framebuffer for the VM.
 
-Note: recordings are written to the host where the VM is running.`,
+Note: recordings are written to the host where the VM is running. When the VM
+is killed or flushed, its recordings stop.`,
 		Patterns: []string{
 			"vnc <record,> <kb,fb> <vm name> <filename>",
 			"vnc <stop,> <kb,fb> <vm name>",
@@ -58,6 +59,15 @@ sent immediately:
 New playback files can be injected as well:
 
 	vnc inject vm-0 LoadFile,foo.kb
+
+A relative path in an injected LoadFile is relative to the -filepath directory.
+
+The type command types a string on the VM as key events. It types only
+printable ASCII characters, Tab, and Enter, and it skips other characters.
+minimega types the strings for one VM in order. While a playback runs on the
+VM, the type command fails with an "already playing" error. A string can have
+a maximum of 65,536 characters, and a maximum of 8 strings can wait for each
+VM.
 
 Comments in the playback file are logged at the info level. An example is given
 below.
@@ -129,7 +139,7 @@ func cliVNCPlay(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 		case c.BoolArgs["play"]:
 			return true, ns.Player.Playback(id, rhost, fname)
 		case c.BoolArgs["type"]:
-			return true, ns.Player.PlaybackString(id, rhost, strings.Join(c.ListArgs["str"], " "))
+			return true, ns.Player.Paste(id, rhost, strings.Join(c.ListArgs["str"], " "))
 		case c.BoolArgs["stop"]:
 			return true, ns.Player.Stop(id)
 		case c.BoolArgs["inject"]:
@@ -154,6 +164,8 @@ func cliVNCPlay(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 				id,
 				res,
 			})
+
+			return true, nil
 		}
 
 		// strange...
