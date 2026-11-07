@@ -430,3 +430,7 @@ captured on the node that runs the VM and can be retrieved with `file get` when
 the capture completes. Capturing traffic on a bridge (PCAP or netflow) is not
 advised -- it may contain traffic from other experiments. See `help capture`
 for more details.
+
+VM and bridge captures accept options after the file name, such as
+`snaplen=128` or `filter="tcp port 80"`. These options apply to one capture
+only, so you do not have to change the namespace settings around a capture.

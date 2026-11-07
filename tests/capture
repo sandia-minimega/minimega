@@ -9,13 +9,13 @@ namespace bar vm launch kvm car
 # Start captures in respective namespaces
 namespace foo capture pcap vm foo 0 /dev/null
 namespace bar capture pcap vm bar 0 /dev/null
-namespace foo capture
-namespace bar capture
+.columns bridge,type,interface,id,state,path namespace foo capture
+.columns bridge,type,interface,id,state,path namespace bar capture
 
 # Make sure we only clear the capture in foo namespace
 namespace foo clear capture
-namespace foo capture
-namespace bar capture
+.columns bridge,type,interface,id,state,path namespace foo capture
+.columns bridge,type,interface,id,state,path namespace bar capture
 
 # Clear remaining captures
 namespace bar clear capture
@@ -25,18 +25,18 @@ namespace foo capture pcap vm car 0 /dev/null
 namespace foo capture pcap vm car 0 /dev/null
 namespace bar capture pcap vm car 0 /dev/null
 namespace bar capture pcap vm car 0 /dev/null
-namespace foo capture
-namespace bar capture
+.columns bridge,type,interface,id,state,path namespace foo capture
+.columns bridge,type,interface,id,state,path namespace bar capture
 
 # Delete a capture in one namespace but not the other
 namespace foo capture pcap delete vm car
-namespace foo capture
-namespace bar capture
+.columns bridge,type,interface,id,state,path namespace foo capture
+.columns bridge,type,interface,id,state,path namespace bar capture
 
 # Delete all captures in the other namespace
 namespace bar capture pcap delete vm all
-namespace foo capture
-namespace bar capture
+.columns bridge,type,interface,id,state,path namespace foo capture
+.columns bridge,type,interface,id,state,path namespace bar capture
 
 # Try some things that shouldn't work
 namespace foo capture pcap vm car 1 /dev/null
@@ -48,19 +48,19 @@ namespace foo vm config net A B
 namespace foo vm launch kvm multi
 namespace foo capture pcap vm multi 0 /dev/null
 namespace foo capture pcap vm multi 1 /dev/null
-namespace foo capture
+.columns bridge,type,interface,id,state,path namespace foo capture
 namespace foo capture pcap delete vm multi 0
-namespace foo capture
+.columns bridge,type,interface,id,state,path namespace foo capture
 namespace foo capture pcap vm multi 0 /dev/null
-namespace foo capture
+.columns bridge,type,interface,id,state,path namespace foo capture
 namespace foo capture pcap delete vm multi 1
-namespace foo capture
+.columns bridge,type,interface,id,state,path namespace foo capture
 namespace foo capture pcap delete vm multi 0
-namespace foo capture
+.columns bridge,type,interface,id,state,path namespace foo capture
 
 # Deleting a nonexistent interface capture should fail
 namespace foo capture pcap vm multi 0 /dev/null
 namespace foo capture pcap delete vm multi 5
-namespace foo capture
+.columns bridge,type,interface,id,state,path namespace foo capture
 namespace foo capture pcap delete vm multi 0
-namespace foo capture
+.columns bridge,type,interface,id,state,path namespace foo capture

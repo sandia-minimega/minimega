@@ -27,6 +27,12 @@ func processWrapper(args ...string) (string, error) {
 		return "", fmt.Errorf("empty argument list")
 	}
 
+	return processExec(args)
+}
+
+// processExec runs a command and returns its combined output. Tests replace
+// it.
+var processExec = func(args []string) (string, error) {
 	start := time.Now()
 	out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
 	stop := time.Now()

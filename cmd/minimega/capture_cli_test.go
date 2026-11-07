@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/sandia-minimega/minimega/v2/internal/bridge"
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 )
 
@@ -36,8 +37,8 @@ func TestCaptureHandlerPaths(t *testing.T) {
 
 	origVM, origBr, origNF := captureVM, captureBridge, captureNetflowFile
 	t.Cleanup(func() { captureVM, captureBridge, captureNetflowFile = origVM, origBr, origNF })
-	captureVM = func(_ *captures, _ VM, _ int, p string) error { return record(p) }
-	captureBridge = func(_ *captures, _, p string) error { return record(p) }
+	captureVM = func(_ *captures, _ VM, _ int, p string, _ bridge.CaptureConfig) (int, error) { return 0, record(p) }
+	captureBridge = func(_ *captures, _, p string, _ bridge.CaptureConfig) (int, error) { return 0, record(p) }
 	captureNetflowFile = func(_ *captures, _, p string) error { return record(p) }
 
 	vm := &KvmVM{BaseVM: &BaseVM{Name: "vm0"}}

@@ -217,19 +217,26 @@ func ovsDelMirror(bridge, tap string) error {
 // ovsCmdWrapper wraps `ovs-vsctl` commands, returning stdout, stderr, and any
 // error produced running the command.
 func ovsCmdWrapper(args []string) (string, error) {
+	out, err := ovsExec(args)
+	if err == nil {
+		return out, nil
+	}
+
+	if strings.Contains(out, "already exists") {
+		return "", errAlreadyExists
+	} else if strings.Contains(out, "no port named") {
+		return "", errNoSuchPort
+	}
+
+	return "", fmt.Errorf("ovs cmd failed: %v %v", args, out)
+}
+
+// ovsExec runs ovs-vsctl with args and returns its combined output. Tests
+// replace it.
+var ovsExec = func(args []string) (string, error) {
 	cmd := exec.Command("ovs-vsctl", args...)
 	log.Debug("running ovs cmd: %v", cmd)
 
 	out, err := cmd.CombinedOutput()
-	if err == nil {
-		return string(out), nil
-	}
-
-	if strings.Contains(string(out), "already exists") {
-		return "", errAlreadyExists
-	} else if strings.Contains(string(out), "no port named") {
-		return "", errNoSuchPort
-	}
-
-	return "", fmt.Errorf("ovs cmd failed: %v %v", args, string(out))
+	return string(out), err
 }
