@@ -1296,7 +1296,7 @@ func cliCCClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 			// command line or if we're clearing everything (nothing was
 			// specified).
 			if c.BoolArgs[what] || len(c.BoolArgs) == 0 {
-				log.Info("clearing %v in namespace `%v`", what, ns.Name)
+				log.Debug("clearing %v in namespace `%v`", what, ns.Name)
 
 				switch what {
 				case "filter":

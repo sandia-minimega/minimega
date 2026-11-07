@@ -761,14 +761,14 @@ func (s *Server) DeleteResponses(prefix string) error {
 // ClearResponses deletes all responses received so far. It may not affect
 // responses that are still in-flight.
 func (s *Server) ClearResponses() error {
-	log.Info("clearing responses")
+	log.Debug("clearing responses")
 
 	// grab the client lock so that no more responses can be processed until
 	// we're finished.
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
-	log.Info("cleared responses")
+	log.Debug("cleared responses")
 
 	return os.RemoveAll(s.responsePath(nil))
 }
@@ -941,7 +941,7 @@ func (s *Server) handshake(conn net.Conn, expectedUUID string) (*client, error) 
 	}
 
 	if majorVersion(m.Version) > 0 {
-		log.Info("starting heartbeat to client %s", m.Client.UUID)
+		log.Debug("starting heartbeat to client %s", m.Client.UUID)
 
 		// Only send heartbeats to client if message version is present to prevent
 		// older clients from failing against this version of the server (sending a
@@ -1265,7 +1265,7 @@ func (s *Server) route(m *Message) {
 		}
 
 		if c.maxCommandID == maxCommandID {
-			log.Info("no commands for %v", uuid)
+			log.Debug("no commands for %v", uuid)
 			return
 		}
 
@@ -1307,7 +1307,7 @@ func (s *Server) route(m *Message) {
 
 			if len(m2.Commands) == 0 {
 				c.maxCommandID = maxCommandID
-				log.Info("no commands for %v", uuid)
+				log.Debug("no commands for %v", uuid)
 				return
 			}
 
