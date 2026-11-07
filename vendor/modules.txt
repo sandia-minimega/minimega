@@ -26,8 +26,8 @@ github.com/creack/pty
 # github.com/dutchcoders/goftp v0.0.0-20170301105846-ed59a591ce14 => ./packages/github.com/dutchcoders/goftp
 ## explicit; go 1.13
 github.com/dutchcoders/goftp
-# github.com/fsnotify/fsnotify v1.9.0
-## explicit; go 1.17
+# github.com/fsnotify/fsnotify v1.10.1
+## explicit; go 1.23
 github.com/fsnotify/fsnotify
 github.com/fsnotify/fsnotify/internal
 # github.com/goftp/server v0.0.0-20200708154336-f64f7c2d8a42 => ./packages/github.com/goftp/server
