@@ -131,8 +131,8 @@ func ovsSetPortQinQ(tap string, outer int) error {
 }
 
 // ovsAddMirror creates a mirror on bridge from src to dst. If src is empty,
-// mirrors the entire bridge.
-func ovsAddMirror(bridge, src, dst string) error {
+// mirrors the entire bridge. tags say who owns the mirror.
+func ovsAddMirror(bridge, src, dst string, tags MirrorTags) error {
 	findPort := func(name, tap string) []string {
 		return []string{
 			"--",
@@ -170,6 +170,8 @@ func ovsAddMirror(bridge, src, dst string) error {
 			"select-all=true",
 		)
 	}
+
+	args = append(args, tags.args()...)
 
 	// add mirror to bridge
 	args = append(args,

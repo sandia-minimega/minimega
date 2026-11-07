@@ -78,6 +78,9 @@ type CaptureConfig struct {
 	// Format is the file format, pcap (the default) or pcapng.
 	Format string
 
+	// Namespace owns the capture and its mirror.
+	Namespace string
+
 	// Description, Comment and Names are written to a pcapng file: the
 	// interface description, the section comment and the known addresses.
 	Description string

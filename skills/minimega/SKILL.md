@@ -231,6 +231,10 @@ Consult command help before mutating state; subcommand requirements evolve.
   stops only pcap captures. Give `snaplen=`, `filter=`, `maxsize=`,
   `format=pcap|pcapng`, and (VM only) `direction=` after the file name instead of changing the namespace
   settings around one capture.
+- **A bridge has at most 32 working mirrors.** Open vSwitch silently ignores
+  more. Tap mirrors and captures share them; minimega refuses a new mirror at
+  32. `bridge mirrors` lists every Mirror row with its owner namespace and
+  kind, also rows that minimega did not make (`external`).
 - **Do not parse default tables by column position.** Select columns explicitly
   because command output is also consumed by phēnix, FIREWHEEL, and scripts.
 

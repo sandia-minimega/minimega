@@ -146,9 +146,19 @@ example, to create a vxlan tunnel to another bridge with IP 10.0.0.1:
 
 	bridge tunnel vxlan mega_bridge 10.0.0.1
 
+To list the Open vSwitch mirrors on the bridges of this host, use 'bridge
+mirrors'. The list includes mirrors that minimega did not make, with the kind
+external. Open vSwitch applies at most 32 mirrors on a bridge. Tap mirrors and
+captures use the same 32 mirrors. The kinds are tap-mirror, capture-bridge,
+capture-namespace and external, or a kind that another tool sets:
+
+	bridge mirrors
+	bridge mirrors mega_bridge
+
 Note: bridge is not a namespace-aware command.`,
 		Patterns: []string{
 			"bridge",
+			"bridge <mirrors,> [bridge]",
 			"bridge <config,> <bridge> <config>",
 			"bridge <trunk,> <bridge> <interface>",
 			"bridge <notrunk,> <bridge> <interface>",
@@ -245,7 +255,7 @@ func cliTapMirror(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	src := c.StringArgs["src"]
 	dst := c.StringArgs["dst"]
 
-	if err := br.CreateMirror(src, dst); err != nil {
+	if err := br.CreateMirror(src, dst, ns.Name); err != nil {
 		return err
 	}
 
@@ -297,7 +307,7 @@ func cliTapMirrorVM(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 		return err
 	}
 
-	if err := br.CreateMirror(n1.Tap, n2.Tap); err != nil {
+	if err := br.CreateMirror(n1.Tap, n2.Tap, ns.Name); err != nil {
 		return err
 	}
 
@@ -343,6 +353,22 @@ func cliTapClearMirrorVM(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 func cliBridge(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	iface := c.StringArgs["interface"]
 	remoteIP := c.StringArgs["remote"]
+
+	if c.BoolArgs["mirrors"] {
+		mirrors, err := bridge.ListMirrors(c.StringArgs["bridge"])
+		if err != nil {
+			return err
+		}
+
+		resp.Header = []string{"bridge", "mirror", "output", "namespace", "kind"}
+		resp.Tabular = [][]string{}
+
+		for _, m := range mirrors {
+			resp.Tabular = append(resp.Tabular, []string{m.Bridge, m.Mirror, m.Output, m.Namespace, m.Kind})
+		}
+
+		return nil
+	}
 
 	// Get the specifed bridge. If we're listing the bridges, we'll get the
 	// default bridge which should be fine.
