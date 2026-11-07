@@ -273,3 +273,29 @@ func (b *Bridge) EdgePorts(s EdgeSelector) []string {
 
 	return b.edgePorts(s)
 }
+
+// EdgeTaps returns copies of the taps that s selects, bond members included,
+// sorted by name.
+func (b *Bridge) EdgeTaps(s EdgeSelector) []Tap {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	var res []Tap
+
+	for _, t := range b.taps {
+		switch {
+		case t.Defunct, t.Namespace == "", t.Namespace != s.Namespace:
+		case b.mirrors[t.Name]:
+		case !s.matchVLAN(t.VLAN), !s.matchOwner(t.Owner):
+		default:
+			v := *t
+			v.qos = nil
+			v.stats = nil
+			res = append(res, v)
+		}
+	}
+
+	sort.Slice(res, func(i, j int) bool { return res[i].Name < res[j].Name })
+
+	return res
+}

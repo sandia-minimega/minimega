@@ -38,8 +38,9 @@ behavior change makes it stale.
   - [`cmd/plumbing/`](cmd/plumbing/) contains support commands excluded from
     canonical build and test loops.
 - [`internal/`](internal/) contains private packages: `bridge`, `gonetflow`,
-  `iomeshage`, `meshage`, `miniplumber`, `minitunnel`, `nbd`, `present`, `qemu`,
-  `qmp`, `recovery`, `ron`, `version`, `vlans`, `vmconfig`, and `vnc`.
+  `iomeshage`, `meshage`, `miniplumber`, `minitunnel`, `nbd`, `nscapture`,
+  `pcapfile`, `present`, `qemu`, `qmp`, `recovery`, `ron`, `version`, `vlans`,
+  `vmconfig`, and `vnc`.
 - [`pkg/`](pkg/) contains reusable packages: `minicli`, `miniclient`, `minilog`,
   `minipager`, and `ranges`.
 - [`tests/`](tests/) contains minitest command files and matching `.want`

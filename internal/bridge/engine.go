@@ -296,9 +296,10 @@ func openSource(device string, c CaptureConfig) (packetSource, error) {
 	return handle, nil
 }
 
-// fileSink is a capture file.
+// fileSink is where a capture writes: a file, or another pcapfile.Writer
+// such as the sender of a namespace capture.
 type fileSink struct {
-	f       *os.File
+	f       io.Closer // nil when the writer is not a file
 	w       pcapfile.Writer
 	path    string
 	release func()
@@ -384,12 +385,16 @@ func createFileSink(path, iface string, c CaptureConfig) (*fileSink, error) {
 
 func (s *fileSink) close() error {
 	err := s.w.Close()
-	if err2 := s.f.Close(); err == nil {
-		err = err2
+	if s.f != nil {
+		if err2 := s.f.Close(); err == nil {
+			err = err2
+		}
 	}
 
 	// release in a goroutine: the caller can hold bridgeLock
-	go s.release()
+	if s.release != nil {
+		go s.release()
+	}
 
 	return err
 }
@@ -566,6 +571,13 @@ func (e *engine) run() {
 	}
 	if err := e.sink.w.WriteStats(0, stats, ""); err != nil {
 		fail(err)
+	}
+
+	// a sink that reports errors, such as a namespace capture stream, gets it
+	if f, ok := e.sink.w.(interface{ Fail(string) }); ok {
+		if state, err := e.status(); state == CaptureFailed || state == CaptureFull {
+			f.Fail(err)
+		}
 	}
 
 	if err := e.sink.close(); err != nil {
