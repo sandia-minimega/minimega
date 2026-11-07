@@ -214,12 +214,33 @@ func (n *Namespace) Destroy() error {
 
 	// Kill and flush all the VMs
 	n.Kill(Wildcard)
-	n.FlushAll(n.ccServer)
+	n.flushAll(n.ccServer)
 
 	// Stop ron server
 	n.ccServer.Destroy()
 
-	// Delete any Taps associated with the namespace
+	// Delete any Taps associated with the namespace, then destroy them and
+	// the VM taps in one pass of the reaper
+	err := n.destroyTaps()
+	reapTaps()
+	if err != nil {
+		return err
+	}
+
+	// We don't need to delete mirrors -- deleting the taps should clean those
+	// up automatically.
+
+	// Free up any VLANs associated with the namespace
+	vlans.Delete(n.Name, "")
+	mustWrite(filepath.Join(*f_base, "vlans"), vlanInfo())
+
+	n.ccServer.Destroy()
+
+	return nil
+}
+
+// destroyTaps marks the host taps of the namespace as defunct.
+func (n *Namespace) destroyTaps() error {
 	for t := range n.Taps {
 		tap, err := bridges.FindTap(t)
 		if err != nil {
@@ -235,15 +256,6 @@ func (n *Namespace) Destroy() error {
 			return err
 		}
 	}
-
-	// We don't need to delete mirrors -- deleting the taps should clean those
-	// up automatically.
-
-	// Free up any VLANs associated with the namespace
-	vlans.Delete(n.Name, "")
-	mustWrite(filepath.Join(*f_base, "vlans"), vlanInfo())
-
-	n.ccServer.Destroy()
 
 	return nil
 }
