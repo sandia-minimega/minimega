@@ -7,7 +7,7 @@ require (
 	github.com/anthonynsimon/bild v0.14.0
 	github.com/c9s/goprocinfo v0.0.0-20210130143923-c95fcf8c64a8
 	github.com/dutchcoders/goftp v0.0.0-20170301105846-ed59a591ce14
-	github.com/fsnotify/fsnotify v1.9.0
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/goftp/server v0.0.0-20200708154336-f64f7c2d8a42
 	github.com/google/gopacket v1.1.19
 	github.com/jbuchbinder/gopnm v0.0.0-20251119211316-bb594e0d2e34
