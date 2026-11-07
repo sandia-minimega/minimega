@@ -8,7 +8,6 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -50,14 +49,26 @@ func (items inputItems) String() string {
 	s2 := make([]string, len(items))
 
 	for i, v := range items {
-		if strings.IndexFunc(v.Value, unicode.IsSpace) > -1 {
-			s2[i] = strconv.Quote(v.Value)
+		if needsQuote(v.Value) {
+			s2[i] = `"` + quoteReplacer.Replace(v.Value) + `"`
 		} else {
 			s2[i] = v.Value
 		}
 	}
 
 	return strings.Join(s2, " ")
+}
+
+// quoteReplacer escapes a quoted item with only the escapes that lexEscape
+// reads, so other characters stay literal.
+var quoteReplacer = strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\r", `\r`, "\n", `\n`, "\t", `\t`)
+
+// needsQuote reports whether s must be quoted to lex as the same single item:
+// it is empty or has a space, a quote, a backslash, or a comment leader.
+func needsQuote(s string) bool {
+	return s == "" ||
+		strings.IndexFunc(s, unicode.IsSpace) > -1 ||
+		strings.ContainsAny(s, `"'\`+CommentLeader)
 }
 
 func lexInput(input string) (*Input, error) {
