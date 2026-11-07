@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sandia-minimega/minimega/v2/internal/pcapfile"
+
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/pcap"
 	"github.com/gopacket/gopacket/pcapgo"
@@ -591,5 +593,74 @@ func TestDestroyRemovesMirrors(t *testing.T) {
 
 	if got := readFrames(t, path); len(got) != 0 {
 		t.Errorf("file has %d frames", len(got))
+	}
+}
+
+func TestCapturePcapng(t *testing.T) {
+	src := newFakeSource()
+	useFakeSources(t, src)
+
+	b := testBridge()
+	path := filepath.Join(t.TempDir(), "a.pcapng")
+
+	id, err := b.CaptureTap("tap0", path, CaptureConfig{
+		Format:      "pcapng",
+		Direction:   DirectionIn,
+		Filter:      "tcp",
+		Description: "web01 interface 0, VLAN EXP_1 (101)",
+		Names:       []pcapfile.Name{{Addr: "10.0.0.7", Names: []string{"web01"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 3; i++ {
+		src.ch <- make([]byte, 60)
+	}
+
+	waitFor(t, "packets", func() bool {
+		info, _ := b.CaptureInfo(id)
+		return info.Packets == 3 && info.Format == "pcapng"
+	})
+
+	if err := b.StopCapture(id); err != nil {
+		t.Fatal(err)
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	r, err := pcapgo.NewNgReader(f, pcapgo.DefaultNgReaderOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var n int
+	for {
+		_, ci, err := r.ReadPacketData()
+		if errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		if ci.Timestamp.Nanosecond() != 123456789 {
+			t.Errorf("timestamp %v", ci.Timestamp)
+		}
+		n++
+	}
+
+	if n != 3 {
+		t.Errorf("read %d frames, want 3", n)
+	}
+
+	intf, err := r.Interface(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if intf.Name != "tap0" || intf.Description != "web01 interface 0, VLAN EXP_1 (101)" || intf.Filter != "tcp" {
+		t.Errorf("interface %+v", intf)
 	}
 }

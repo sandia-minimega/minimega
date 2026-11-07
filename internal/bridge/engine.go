@@ -7,8 +7,10 @@ package bridge
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,6 +18,7 @@ import (
 	"time"
 
 	"github.com/sandia-minimega/minimega/v2/internal/pcapfile"
+	"github.com/sandia-minimega/minimega/v2/internal/version"
 
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
@@ -71,6 +74,24 @@ type CaptureConfig struct {
 	// Direction limits the capture to frames that the interface receives
 	// (in) or sends (out). Empty means both.
 	Direction string
+
+	// Format is the file format, pcap (the default) or pcapng.
+	Format string
+
+	// Description, Comment and Names are written to a pcapng file: the
+	// interface description, the section comment and the known addresses.
+	Description string
+	Comment     string
+	Names       []pcapfile.Name
+}
+
+// format returns the file format to use for c.
+func (c CaptureConfig) format() string {
+	if c.Format == "" {
+		return pcapfile.FormatPcap
+	}
+
+	return c.Format
 }
 
 // snapLen returns the snaplen to use for c.
@@ -104,7 +125,30 @@ func (c CaptureConfig) Validate() error {
 		return errors.New("maxsize must not be negative")
 	}
 
-	return nil
+	return ValidateFormat(c.Format)
+}
+
+// ValidateFormat checks that f is a capture file format. Empty means pcap.
+func ValidateFormat(f string) error {
+	switch f {
+	case "", pcapfile.FormatPcap, pcapfile.FormatPcapng:
+		return nil
+	}
+
+	return fmt.Errorf("invalid format %q: use pcap or pcapng", f)
+}
+
+// NewCaptureWriter writes the header of a capture file in format to w.
+func NewCaptureWriter(w io.Writer, format string, snaplen uint32, comment string) (pcapfile.Writer, error) {
+	if format != pcapfile.FormatPcapng {
+		return pcapfile.NewClassic(w, snaplen)
+	}
+
+	return pcapfile.NewNg(w, pcapfile.Section{
+		UserAppl: "minimega " + version.Version,
+		OS:       runtime.GOOS,
+		Comment:  comment,
+	})
 }
 
 // ValidateSnapLen checks that v is a valid snaplen.
@@ -273,7 +317,7 @@ func claimCapturePath(path string) (func(), error) {
 
 // createFileSink claims path, creates its directory and the file, and writes
 // the file header. Assumes bridgeLock is held.
-func createFileSink(path string, c CaptureConfig) (*fileSink, error) {
+func createFileSink(path, iface string, c CaptureConfig) (*fileSink, error) {
 	release, err := claimCapturePath(path)
 	if err != nil {
 		return nil, err
@@ -290,7 +334,21 @@ func createFileSink(path string, c CaptureConfig) (*fileSink, error) {
 		return nil, err
 	}
 
-	w, err := pcapfile.NewClassic(f, c.snapLen())
+	w, err := NewCaptureWriter(f, c.format(), c.snapLen(), c.Comment)
+	if err == nil {
+		_, err = w.AddInterface(pcapfile.Interface{
+			Name:        iface,
+			Description: c.Description,
+			Filter:      c.Filter,
+			SnapLen:     c.snapLen(),
+		})
+	}
+	if err == nil && len(c.Names) > 0 {
+		err = w.WriteNames(c.Names)
+	}
+	if err == nil {
+		err = w.Flush()
+	}
 	if err != nil {
 		f.Close()
 		release()
@@ -318,6 +376,8 @@ type engine struct {
 	src     packetSource
 	sink    *fileSink
 	maxSize int64
+	recOpts pcapfile.RecordOptions // options for every record
+	started time.Time
 
 	stop     chan struct{}
 	done     chan struct{}
@@ -343,6 +403,7 @@ func newEngine(src packetSource, sink *fileSink, maxSize int64) *engine {
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
 		state:   CaptureRunning,
+		started: time.Now(),
 	}
 	e.size.Store(sink.w.Size())
 
@@ -445,7 +506,7 @@ func (e *engine) run() {
 			}
 
 			buf = pcapfile.AppendRecord(buf[:0], ci.Timestamp, ci.Length, data)
-			if err := e.sink.w.WriteRecord(0, buf, pcapfile.RecordOptions{}); err != nil {
+			if err := e.sink.w.WriteRecord(0, buf, e.recOpts); err != nil {
 				fail(err)
 				break
 			}
@@ -471,6 +532,17 @@ func (e *engine) run() {
 
 	e.readStats()
 	e.src.Close()
+
+	stats := pcapfile.Stats{
+		Start:     e.started,
+		End:       time.Now(),
+		Received:  e.packets.Load() + e.kdrops.Load(),
+		IfDrop:    e.kdrops.Load(),
+		Delivered: e.packets.Load(),
+	}
+	if err := e.sink.w.WriteStats(0, stats, ""); err != nil {
+		fail(err)
+	}
 
 	if err := e.sink.close(); err != nil {
 		fail(err)

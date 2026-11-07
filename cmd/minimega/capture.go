@@ -13,6 +13,7 @@ import (
 
 	"github.com/sandia-minimega/minimega/v2/internal/bridge"
 	"github.com/sandia-minimega/minimega/v2/internal/gonetflow"
+	"github.com/sandia-minimega/minimega/v2/internal/pcapfile"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
@@ -252,6 +253,18 @@ func (c *captures) CaptureVM(vm VM, iface int, fname string, config bridge.Captu
 	br, err := getBridge(nic.Bridge)
 	if err != nil {
 		return 0, err
+	}
+
+	config.Description = fmt.Sprintf("%v interface %v, VLAN %v", vm.GetName(), iface, nic.VLAN)
+	if nic.Alias != "" {
+		config.Description = fmt.Sprintf("%v interface %v, VLAN %v (%v)", vm.GetName(), iface, nic.Alias, nic.VLAN)
+	}
+	config.Comment = fmt.Sprintf("minimega capture of VM %v in namespace %v", vm.GetName(), vm.GetNamespace())
+
+	for _, ip := range []string{nic.IP4, nic.IP6} {
+		if ip != "" {
+			config.Names = append(config.Names, pcapfile.Name{Addr: ip, Names: []string{vm.GetName()}})
+		}
 	}
 
 	id, err := br.CaptureTap(nic.Tap, fname, config)

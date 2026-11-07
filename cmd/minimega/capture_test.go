@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -166,17 +167,17 @@ func TestCaptureRows(t *testing.T) {
 func TestParseCaptureOptions(t *testing.T) {
 	base := bridge.CaptureConfig{Filter: "udp", SnapLen: 200}
 
-	c, err := parseCaptureOptions(captureKindVM, base, []string{"snaplen=128", "filter=tcp port 80", "maxsize=10240M", "direction=in"})
+	c, err := parseCaptureOptions(captureKindVM, base, []string{"snaplen=128", "filter=tcp port 80", "maxsize=10240M", "direction=in", "format=pcapng"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	want := bridge.CaptureConfig{Filter: "tcp port 80", SnapLen: 128, MaxSize: 10240 << 20, Direction: "in"}
-	if c != want {
+	want := bridge.CaptureConfig{Filter: "tcp port 80", SnapLen: 128, MaxSize: 10240 << 20, Direction: "in", Format: "pcapng"}
+	if !reflect.DeepEqual(c, want) {
 		t.Errorf("got %+v, want %+v", c, want)
 	}
 
-	if c, err := parseCaptureOptions(captureKindBridge, base, nil); err != nil || c != base {
+	if c, err := parseCaptureOptions(captureKindBridge, base, nil); err != nil || !reflect.DeepEqual(c, base) {
 		t.Errorf("no options: %+v %v", c, err)
 	}
 
@@ -191,6 +192,7 @@ func TestParseCaptureOptions(t *testing.T) {
 		{"filter=tcp port eighty"},
 		{"maxsize=1T"},
 		{"direction=up"},
+		{"format=pcapx"},
 		{"colour=blue"},
 		{"novalue"},
 		{"snaplen=100", "snaplen=200"},

@@ -79,7 +79,7 @@ func (b *Bridge) startCapture(tap, mirrorSrc string, mirror bool, fname string, 
 		return 0, err
 	}
 
-	sink, err := createFileSink(fname, c)
+	sink, err := createFileSink(fname, tap, c)
 	if err != nil {
 		src.Close()
 		return 0, err
@@ -97,6 +97,10 @@ func (b *Bridge) startCapture(tap, mirrorSrc string, mirror bool, fname string, 
 	*b.captureID++
 
 	e := newEngine(src, sink, c.MaxSize)
+	if !mirror {
+		e.recOpts.Inbound = c.Direction == DirectionIn
+		e.recOpts.Outbound = c.Direction == DirectionOut
+	}
 	ca := &capture{
 		id:     id,
 		tap:    tap,
