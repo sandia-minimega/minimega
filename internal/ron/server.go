@@ -355,7 +355,7 @@ func (s *Server) DialSerial(path, uuid string) error {
 			// This blocks, but will return on a loss of connection to the client.
 			s.clientHandler(cli)
 
-			log.Info("client handler for %s completed", path)
+			log.Debug("client handler for %s completed", path)
 		}
 	}()
 
@@ -846,7 +846,7 @@ func (s *Server) serve(addr string, ln net.Listener) {
 
 		remote := conn.RemoteAddr()
 
-		log.Info("client connected: %v -> %v", remote, addr)
+		log.Debug("client connected: %v -> %v", remote, addr)
 		c, err := s.handshake(conn, "")
 		if err != nil {
 			if err != io.EOF {
@@ -1434,7 +1434,7 @@ func (s *Server) updateClient(cin *Client) {
 		// the client probably disconnected between sending the heartbeat and
 		// us processing it. We'll still process any command responses but
 		// shouldn't try to update the client itself.
-		log.Info("unknown client %v", cin.UUID)
+		log.Debug("unknown client %v", cin.UUID)
 		return
 	}
 
@@ -1448,7 +1448,7 @@ func (s *Server) updateClient(cin *Client) {
 	vm, ok := s.vms[cin.UUID]
 	if !ok {
 		// see above but for the VM.
-		log.Info("unregistered client %v", cin.UUID)
+		log.Debug("unregistered client %v", cin.UUID)
 		return
 	}
 

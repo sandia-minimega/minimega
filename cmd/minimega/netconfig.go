@@ -209,7 +209,7 @@ func ParseNetConfig(spec string, nics map[string]bool) (*NetConfig, error) {
 		return nil, errors.New("malformed netspec")
 	}
 
-	log.Info(`got bridge="%v", alias="%v", mac="%v", driver="%v"`, b, v, m, d)
+	log.Debug(`got bridge="%v", alias="%v", mac="%v", driver="%v"`, b, v, m, d)
 
 	if b == "" {
 		b = DefaultBridge
@@ -481,7 +481,7 @@ func ParseBondConfig(spec string) (*BondConfig, error) {
 		}
 	}
 
-	log.Info(
+	log.Debug(
 		`got interfaces="%v", mode="%v", lacp="%v", fallback="%v", qinq="%v", name="%v"`,
 		ifaces, b, l, !nf, q, n,
 	)

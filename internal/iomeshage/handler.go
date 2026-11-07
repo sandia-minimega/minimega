@@ -173,7 +173,7 @@ func (iom *IOMeshage) handlePart(m *Message, xfer bool) {
 	iom.drainLock.RLock()
 	defer iom.drainLock.RUnlock()
 
-	log.Info("handlePart for %v (part %v), xfer = %v", m.Filename, m.Part, xfer)
+	log.Debug("handlePart for %v (part %v), xfer = %v", m.Filename, m.Part, xfer)
 
 	files, err := iom.List(m.Filename, false)
 	if err != nil {
