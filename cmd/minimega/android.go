@@ -771,6 +771,8 @@ func (vm *AndroidVM) addTap(name, bridge, mac string, vlan int, qinq bool) (stri
 		return tap, err
 	}
 
+	br.SetTapOwner(tap, vm.Namespace, vm.Name)
+
 	if qinq {
 		if err := br.SetTapQinQ(tap, vlan); err != nil {
 			return tap, err

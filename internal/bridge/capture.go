@@ -68,7 +68,7 @@ func (b *Bridge) createCaptureTap(tap string, tags MirrorTags) error {
 // startCapture opens tap, creates the file and starts the engine. When mirror
 // is set, it creates the mirror after it opens tap so that the first frames
 // are not lost. Assumes bridgeLock is held.
-func (b *Bridge) startCapture(tap, mirrorSrc string, mirror bool, fname string, c CaptureConfig) (int, error) {
+func (b *Bridge) startCapture(tap string, mirror func() error, fname string, c CaptureConfig) (int, error) {
 	if err := c.Validate(); err != nil {
 		return 0, err
 	}
@@ -88,8 +88,8 @@ func (b *Bridge) startCapture(tap, mirrorSrc string, mirror bool, fname string, 
 		return 0, err
 	}
 
-	if mirror {
-		if err := b.createMirror(mirrorSrc, tap, MirrorTags{Namespace: c.Namespace, Kind: MirrorKindBridge}); err != nil {
+	if mirror != nil {
+		if err := mirror(); err != nil {
 			src.Close()
 			sink.close()
 			return 0, err
@@ -100,14 +100,14 @@ func (b *Bridge) startCapture(tap, mirrorSrc string, mirror bool, fname string, 
 	*b.captureID++
 
 	e := newEngine(src, sink, c.MaxSize)
-	if !mirror {
+	if mirror == nil {
 		e.recOpts.Inbound = c.Direction == DirectionIn
 		e.recOpts.Outbound = c.Direction == DirectionOut
 	}
 	ca := &capture{
 		id:     id,
 		tap:    tap,
-		mirror: mirror,
+		mirror: mirror != nil,
 		config: c,
 		start:  time.Now(),
 		engine: e,
@@ -199,7 +199,15 @@ func (b *Bridge) Capture(fname string, config ...CaptureConfig) (int, error) {
 		return 0, err
 	}
 
-	id, err := b.startCapture(tap, "", true, fname, c)
+	tags := MirrorTags{Namespace: c.Namespace, Kind: MirrorKindBridge}
+	mirror := func() error {
+		if c.Ports == PortsEdge {
+			return b.createEdgeMirror(tap, EdgeSelector{Namespace: c.Namespace, VLANs: c.VLANs, VMs: c.VMs}, tags)
+		}
+		return b.createMirrorVLANs("", tap, c.VLANs, tags)
+	}
+
+	id, err := b.startCapture(tap, mirror, fname, c)
 	if err != nil {
 		if err := b.destroyTap(tap); err != nil {
 			log.Error("zombie tap -- %v %v", tap, err)
@@ -228,7 +236,7 @@ func (b *Bridge) CaptureTap(tap, fname string, config ...CaptureConfig) (int, er
 		c = config[0]
 	}
 
-	return b.startCapture(tap, "", false, fname, c)
+	return b.startCapture(tap, nil, fname, c)
 }
 
 // StopCapture stops a capture and waits until its file is closed. It holds

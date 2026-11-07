@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/sandia-minimega/minimega/v2/internal/bridge"
+	"github.com/sandia-minimega/minimega/v2/internal/vlans"
 )
 
 // Kinds of pcap captures that take key=value options.
@@ -26,6 +27,9 @@ var captureOptionKinds = map[string][]string{
 	"maxsize":   {captureKindVM, captureKindBridge},
 	"direction": {captureKindVM},
 	"format":    {captureKindVM, captureKindBridge},
+	"ports":     {captureKindBridge},
+	"vlans":     {captureKindBridge},
+	"vms":       {captureKindBridge},
 }
 
 var errFilenameOption = errors.New("give the file name before the options")
@@ -73,10 +77,43 @@ func splitCaptureOptions(kind string, opts []string) (map[string]string, error) 
 	return res, nil
 }
 
-// parseCaptureOptions returns the config for a new pcap capture of kind: the
-// namespace settings in base with the options on top.
-func parseCaptureOptions(kind string, base bridge.CaptureConfig, opts []string) (bridge.CaptureConfig, error) {
+// parseCaptureVLANs resolves a comma-separated list of VLAN aliases and IDs in
+// namespace. It never allocates a VLAN.
+func parseCaptureVLANs(namespace, s string) ([]int, error) {
+	var res []int
+
+	for _, v := range strings.Split(s, ",") {
+		if v == "" {
+			continue
+		}
+
+		if id, err := strconv.Atoi(v); err == nil {
+			if id < 1 || id > 4095 {
+				return nil, fmt.Errorf("invalid VLAN %v: use 1 to 4095", id)
+			}
+			res = append(res, id)
+			continue
+		}
+
+		id, err := vlans.GetVLAN(namespace, v)
+		if err != nil {
+			return nil, fmt.Errorf("unknown VLAN %v in namespace %v", v, namespace)
+		}
+		res = append(res, id)
+	}
+
+	if len(res) == 0 {
+		return nil, errors.New("vlans= needs one or more VLANs")
+	}
+
+	return res, nil
+}
+
+// parseCaptureOptions returns the config for a new pcap capture of kind in
+// namespace: the namespace settings in base with the options on top.
+func parseCaptureOptions(kind, namespace string, base bridge.CaptureConfig, opts []string) (bridge.CaptureConfig, error) {
 	c := base
+	c.Namespace = namespace
 
 	m, err := splitCaptureOptions(kind, opts)
 	if err != nil {
@@ -114,6 +151,24 @@ func parseCaptureOptions(kind string, base bridge.CaptureConfig, opts []string) 
 
 	if v, ok := m["format"]; ok {
 		c.Format = v
+	}
+
+	if v, ok := m["ports"]; ok {
+		c.Ports = v
+	}
+
+	if v, ok := m["vlans"]; ok {
+		if c.VLANs, err = parseCaptureVLANs(namespace, v); err != nil {
+			return c, err
+		}
+	}
+
+	if v, ok := m["vms"]; ok {
+		for _, vm := range strings.Split(v, ",") {
+			if vm != "" {
+				c.VMs = append(c.VMs, vm)
+			}
+		}
 	}
 
 	return c, c.Validate()

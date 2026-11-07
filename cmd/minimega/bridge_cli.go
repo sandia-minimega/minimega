@@ -200,7 +200,7 @@ func cliTapCreate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return err
 	}
 
-	tap, err := hostTapCreate(b, c.StringArgs["tap"], vlan)
+	tap, err := hostTapCreate(ns.Name, b, c.StringArgs["tap"], vlan)
 	if err != nil {
 		return err
 	}

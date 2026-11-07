@@ -22,6 +22,11 @@ func (b *Bridge) CreateMirror(src, dst, namespace string) error {
 }
 
 func (b *Bridge) createMirror(src, dst string, tags MirrorTags) error {
+	return b.createMirrorVLANs(src, dst, nil, tags)
+}
+
+// createMirrorVLANs is createMirror, limited to vlans when it is not empty.
+func (b *Bridge) createMirrorVLANs(src, dst string, vlans []int, tags MirrorTags) error {
 	log.Info("adding mirror on bridge: %v:%v to %v", b.Name, src, dst)
 	if src == dst {
 		return errors.New("cannot mirror tap to itself")
@@ -46,7 +51,7 @@ func (b *Bridge) createMirror(src, dst string, tags MirrorTags) error {
 		return err
 	}
 
-	if err := ovsAddMirror(b.Name, src, dst, tags); err != nil {
+	if err := ovsAddMirror(b.Name, src, dst, vlans, tags); err != nil {
 		return err
 	}
 
@@ -68,6 +73,8 @@ func (b *Bridge) destroyMirror(tap string) error {
 	if !b.mirrors[tap] {
 		return fmt.Errorf("tap is not a mirror on bridge %v: %v", b.Name, tap)
 	}
+
+	b.forgetEdgeMirror(tap)
 
 	if err := ovsDelMirror(b.Name, tap); err != nil {
 		return err
