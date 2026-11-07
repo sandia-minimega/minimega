@@ -577,13 +577,11 @@ func containerShim() {
 	// freeze the child and close the other end of fd(5). Upon unfreezing,
 	// the read will fail and we can move on to exec.
 
-	log.Debug("sync for freezing")
 	sync1 := os.NewFile(uintptr(4), "")
 	sync2 := os.NewFile(uintptr(5), "")
 	sync1.Close()
 	var buf = make([]byte, 1)
 	sync2.Read(buf)
-	log.Debug("return from freezing")
 
 	// close fds we don't want in init
 	logFile.Close()

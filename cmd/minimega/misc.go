@@ -103,7 +103,6 @@ func unreachable() error {
 }
 
 func generateUUID() string {
-	log.Debugln("generateUUID")
 	uuid, err := os.ReadFile("/proc/sys/kernel/random/uuid")
 	if err != nil {
 		log.Error("generateUUID: %v", err)
