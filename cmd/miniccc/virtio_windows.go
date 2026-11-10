@@ -64,6 +64,14 @@ func dialSerial(path string) (io.ReadWriteCloser, error) {
 }
 
 func (p *virtioPort) Close() error {
+	// port stays open while I/O is pending, even after closing the handle.
+	// try to cleanup here to prevent client from getting stuck
+	// ERROR_NOT_FOUND is expected (already clean)
+	err := syscall.CancelIoEx(p.fd, nil)
+	if err != nil && err != syscall.ERROR_NOT_FOUND {
+		log.Error("canceling I/O on serial port: %v", err)
+	}
+
 	return p.f.Close()
 }
 
