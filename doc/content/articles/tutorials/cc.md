@@ -170,6 +170,50 @@ Processes started in the background can later be listed and killed using the
 
 [Download this example](cc/process.mm){ download="process.mm" }
 
+<a id="TOC_4.3."></a>
+
+### User sessions
+
+Commands run as the user running miniccc. On Windows, miniccc normally runs as
+a service in a session that is isolated from the desktop, so a command cannot
+show a window to the logged-in user, change the display, or use that user's
+profile.
+
+To run a command in the logged-in user's desktop session instead, add a
+`session` option before the command:
+
+```minimega
+cc exec session=user whoami
+cc background session=user charmap.exe
+cc background session=elevated regedit.exe
+```
+
+On Windows, `session=user` runs the command as the logged-in user, with that user's
+environment and profile. `session=elevated` does the same with the user's
+administrator rights, which only differs from `session=user` for an
+administrator logged in with User Account Control enabled. The program is found
+using the user's `PATH` and runs in miniccc's working directory.
+
+miniccc tries to identify the logged-in user on the console, or otherwise
+picks the lowest numbered active session (e.g. a remote desktop connection).
+The command fails if:
+
+- no user is logged in
+- `session=elevated` is used and the user is not an administrator
+- miniccc is not running as the LocalSystem service
+
+On Linux, the session option is ignored and commands run as miniccc's own user.
+
+Applications installed from the Microsoft Store only start from a process
+that is already running in the user's session. Launch them through a shell:
+
+```minimega
+cc background session=user cmd /c start notepad
+```
+
+**NOTE:** A miniccc client that predates this option ignores it and runs the
+command as usual.
+
 <a id="TOC_5."></a>
 
 ## File I/O
