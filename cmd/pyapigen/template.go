@@ -33,6 +33,7 @@ to the bug tracker:
 '''
 
 
+import contextlib
 import copy
 import json
 import socket
@@ -209,6 +210,26 @@ class minimega(object):
 				pass
 
 		return __namespacer__()
+
+
+	@contextlib.contextmanager
+	def cc_filtered(self, *filters):
+		'''
+		Sets the cc filter for the duration of a with statement and clears it
+		on exit, even if the block raises, so a later cc command cannot
+		silently reuse a stale filter:
+
+			with mm.cc_filtered("uuid=abc"):
+				mm.cc_exec_once("pkill iperf3")
+
+		Any previous filter is cleared, not restored.
+		'''
+
+		self.cc_filter(" ".join(filters))
+		try:
+			yield self
+		finally:
+			self.clear_cc_filter()
 
 
 	def streamResponses(self):
