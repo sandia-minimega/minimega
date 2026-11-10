@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"syscall"
 	"testing"
+
+	"github.com/sandia-minimega/minimega/v2/internal/ron"
 )
 
 func TestRestartUpdatedKeepsBinaryWhenExecFails(t *testing.T) {
@@ -35,7 +37,7 @@ func TestKillBackgroundStopsProcesses(t *testing.T) {
 	client.Processes = map[int]*Process{}
 	defer func() { client.Processes = nil }()
 
-	if _, stderr, code := runCommand("", "", "", []string{"sleep", "60"}, true); code != 0 {
+	if _, stderr, code := runCommand(&ron.Command{Command: []string{"sleep", "60"}, Background: true}); code != 0 {
 		t.Fatalf("start background process: %v, %v", code, stderr)
 	}
 
