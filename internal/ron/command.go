@@ -22,6 +22,20 @@ type Filter struct {
 	Tags     map[string]string
 }
 
+// Session values that run a command in a logged-in user's session.
+type Session string
+
+const (
+	// SessionUser runs the command as the logged-in user.
+	SessionUser Session = "user"
+
+	// SessionElevated runs the command as the logged-in user with their
+	// administrator rights.
+	SessionElevated Session = "elevated"
+)
+
+var ValidSessions = []Session{SessionUser, SessionElevated}
+
 type Command struct {
 	ID int
 
@@ -78,6 +92,10 @@ type Command struct {
 	Stdin  string
 	Stdout string
 	Stderr string
+
+	// Session runs the command in the logged-in user's desktop session
+	// instead of the client's own. Empty or one of the Session values.
+	Session Session
 }
 
 type Response struct {
@@ -145,6 +163,7 @@ func (c *Command) Copy() *Command {
 		Stdin:      c.Stdin,
 		Stdout:     c.Stdout,
 		Stderr:     c.Stderr,
+		Session:    c.Session,
 	}
 
 	// make deep copies

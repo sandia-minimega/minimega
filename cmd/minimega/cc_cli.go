@@ -12,6 +12,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -59,6 +60,19 @@ This will prevent the command from being sent again if the client restarts (for
 example, after a reboot).
 
 	cc exec-once shutdown -r now
+
+Executed commands run as the miniccc client's own user. On Windows this is
+normally a service, which cannot interact with the desktop. To run a command in
+the logged-in user's desktop session instead, specify session.
+"session=user" runs the command as a logged-in user, and "session=elevated"
+tries to run with that user's administrator rights. For example:
+
+	cc exec session=user whoami
+	cc background session=elevated regedit.exe
+
+On Windows, the command fails if no user is logged in or if "session=elevated"
+is selected and the logged-in user does not have privileges. On Linux, the
+session option is ignored and commands run as the miniccc client's own user.
 
 Responses are organized in a structure within <filepath>/miniccc_responses, and
 include subdirectories for each client response named by the client's UUID.
@@ -570,15 +584,12 @@ func cliCCFileRecv(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 
 // background (just exec with background==true)
 func cliCCBackground(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
-
-	cmd := &ron.Command{
-		Background: true,
-		Command:    command,
-		Stdin:      stdin,
-		Stdout:     stdout,
-		Stderr:     stderr,
+	cmd, err := ccCommandPreProcess(c.ListArgs["command"])
+	if err != nil {
+		return err
 	}
+
+	cmd.Background = true
 
 	resp.Data = ns.NewCommand(cmd)
 	return nil
@@ -586,16 +597,13 @@ func cliCCBackground(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 
 // background-once (just exec with background==true)
 func cliCCBackgroundOnce(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
-
-	cmd := &ron.Command{
-		Once:       true,
-		Background: true,
-		Command:    command,
-		Stdin:      stdin,
-		Stdout:     stdout,
-		Stderr:     stderr,
+	cmd, err := ccCommandPreProcess(c.ListArgs["command"])
+	if err != nil {
+		return err
 	}
+
+	cmd.Once = true
+	cmd.Background = true
 
 	resp.Data = ns.NewCommand(cmd)
 	return nil
@@ -633,13 +641,9 @@ func cliCCProcessKillAll(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 
 // exec
 func cliCCExec(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
-
-	cmd := &ron.Command{
-		Command: command,
-		Stdin:   stdin,
-		Stdout:  stdout,
-		Stderr:  stderr,
+	cmd, err := ccCommandPreProcess(c.ListArgs["command"])
+	if err != nil {
+		return err
 	}
 
 	resp.Data = ns.NewCommand(cmd)
@@ -648,15 +652,12 @@ func cliCCExec(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 
 // exec-once
 func cliCCExecOnce(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
-
-	cmd := &ron.Command{
-		Once:    true,
-		Command: command,
-		Stdin:   stdin,
-		Stdout:  stdout,
-		Stderr:  stderr,
+	cmd, err := ccCommandPreProcess(c.ListArgs["command"])
+	if err != nil {
+		return err
 	}
+
+	cmd.Once = true
 
 	resp.Data = ns.NewCommand(cmd)
 	return nil
@@ -715,30 +716,40 @@ func cliCCProcess(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	return nil
 }
 
-// parse out key/value pairs from the command list for stdio
-func ccCommandPreProcess(c []string) (stdin, stdout, stderr string, command []string) {
-	// pop key/value pairs (up to three) for stdio plumber redirection
-	for i := 0; i < 3 && i < len(c); i++ {
-		f := strings.Split(c[i], "=")
-		if len(f) == 1 {
-			command = c[i:]
-			return
+// ccCommandPreProcess pops the leading key/value options off of the command
+// list and returns a command with those options set.
+func ccCommandPreProcess(c []string) (*ron.Command, error) {
+	cmd := &ron.Command{}
+
+	for i, v := range c {
+		key, val, ok := strings.Cut(v, "=")
+		if !ok {
+			cmd.Command = c[i:]
+			return cmd, nil
 		}
-		switch f[0] {
+
+		switch key {
 		case "stdin":
-			stdin = f[1]
+			cmd.Stdin = val
 		case "stdout":
-			stdout = f[1]
+			cmd.Stdout = val
 		case "stderr":
-			stderr = f[1]
+			cmd.Stderr = val
+		case "session":
+			session := ron.Session(val)
+			if !slices.Contains(ron.ValidSessions, session) {
+				return nil, fmt.Errorf("invalid session: `%v`", val)
+			}
+
+			cmd.Session = session
 		default:
 			// perhaps some goofy filename with an = in it
-			command = c[i:]
-			return
+			cmd.Command = c[i:]
+			return cmd, nil
 		}
 	}
-	command = c[3:]
-	return
+
+	return nil, errors.New("missing command")
 }
 
 func cliCCLog(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
