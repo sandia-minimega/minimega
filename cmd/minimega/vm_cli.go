@@ -39,7 +39,7 @@ info include:
 - namespace* : namespace the VM belongs to
 - type*      : one of (kvm, container, android)
 - uuid*      : QEMU system uuid
-- cc_active* : indicates whether cc is connected
+- cc_active* : true if a miniccc client for the VM is connected (see cc clients)
 - vcpus      : the number of allocated CPUs
 - memory     : allocated memory, in megabytes
 - vlan*      : vlan, as an integer
