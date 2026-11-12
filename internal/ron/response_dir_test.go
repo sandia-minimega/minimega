@@ -44,7 +44,7 @@ func mustExist(t *testing.T, path string) os.FileInfo {
 
 // writeResponse sends a response through the response handler and waits until
 // the handler records it on disk.
-func writeResponse(t *testing.T, s *Server, id int, uuid, stdout string) {
+func writeStdoutResponse(t *testing.T, s *Server, id int, uuid, stdout string) {
 	t.Helper()
 
 	s.responses <- &Client{
@@ -150,7 +150,7 @@ func TestResponseWriteCreatesResponseDir(t *testing.T) {
 
 	s := newTestServer(t, base, "ns")
 
-	writeResponse(t, s, 1, "client-1", "hello")
+	writeStdoutResponse(t, s, 1, "client-1", "hello")
 
 	for _, dir := range []string{filepath.Join(base, "ns"), s.responsePath(nil)} {
 		if got := mustExist(t, dir).Mode().Perm(); got != want {
@@ -201,11 +201,11 @@ func TestDestroyRemovesEmptySubpathDir(t *testing.T) {
 	}{
 		{"no responses", func(t *testing.T, s *Server) error { return nil }},
 		{"cleared responses", func(t *testing.T, s *Server) error {
-			writeResponse(t, s, 1, "client-1", "hello")
+			writeStdoutResponse(t, s, 1, "client-1", "hello")
 			return s.ClearResponses()
 		}},
 		{"deleted response", func(t *testing.T, s *Server) error {
-			writeResponse(t, s, 1, "client-1", "hello")
+			writeStdoutResponse(t, s, 1, "client-1", "hello")
 			return s.DeleteResponse(1)
 		}},
 		{"empty response dir", func(t *testing.T, s *Server) error {
