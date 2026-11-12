@@ -130,14 +130,46 @@ func TestDelLogger(t *testing.T) {
 	}
 }
 
+// lockedBuffer is a bytes.Buffer that is safe to write from the LogAll
+// goroutine while the test reads it.
+type lockedBuffer struct {
+	sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.Lock()
+	defer b.Unlock()
+
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.Lock()
+	defer b.Unlock()
+
+	return b.buf.String()
+}
+
 func TestLogAll(t *testing.T) {
-	sink := new(bytes.Buffer)
+	out := new(lockedBuffer)
 	source := bytes.NewBufferString("line_1\nline_2\nline_3")
 
-	AddLogger("sinkAll", sink, DEBUG, false)
+	AddLogger("sinkAll", out, DEBUG, false)
+	defer DelLogger("sinkAll")
 
 	LogAll(source, DEBUG, "test")
-	time.Sleep(1 * time.Second) // allow the LogAll goroutine to finish
+
+	// wait for the LogAll goroutine to log all three lines
+	deadline := time.Now().Add(5 * time.Second)
+	for strings.Count(out.String(), "\n") < 3 {
+		if time.Now().After(deadline) {
+			t.Fatal("sink got:", out.String())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	sink := bytes.NewBufferString(out.String())
 
 	// we should see only three lines on the logger output
 	l1, err := sink.ReadString('\n')

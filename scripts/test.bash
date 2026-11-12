@@ -15,7 +15,7 @@ echo "TESTING"
 for i in ${DIRECTORY_ARRAY[@]}; do
     for j in `ls $i | grep -v plumbing`
     do
-        go test $i/$j
+        go test -race -shuffle=on $i/$j
         if [[ $? != 0 ]]; then
             exit 1
         fi

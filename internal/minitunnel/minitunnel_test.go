@@ -263,6 +263,7 @@ func TestReverse(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 
+	s.Lock()
 	if s.err != nil {
 		t.Fatalf("%v", s.err)
 	}
