@@ -2,7 +2,7 @@
 
 A network with nothing on it is a poor testbed. In this lab you fill the
 router sandwich with plausible traffic: protonuke serves web and mail on
-`vm_left`, a second protonuke on `vm_right` browses and sends mail to it
+`vm-left`, a second protonuke on `vm-right` browses and sends mail to it
 through the router, and you watch the load from the minimega prompt. Along
 the way you use `cc send` to push a binary into a guest, `cc background` to
 start daemons, and `cc process list` and `vm top` to see what they are doing.
@@ -17,7 +17,7 @@ and flags this lab does not touch.
 The clients of chapter 3 take whatever lease the router hands out, which is
 fine for a demo but awkward when one VM has to name the other. Give each
 client a fixed MAC address in its netspec and a static lease on the router so
-that `vm_left` is always `10.0.0.10` and `vm_right` is always `10.0.1.10`:
+that `vm-left` is always `10.0.0.10` and `vm-right` is always `10.0.1.10`:
 
 ```minimega
 minimega$ clear namespace sandwich
@@ -27,9 +27,9 @@ minimega[sandwich]$ vm config kernel miniccc.kernel
 minimega[sandwich]$ vm config initrd miniccc.initrd
 minimega[sandwich]$ vm config memory 3072
 minimega[sandwich]$ vm config networks net_left,00:00:00:00:01:01
-minimega[sandwich]$ vm launch kvm vm_left
+minimega[sandwich]$ vm launch kvm vm-left
 minimega[sandwich]$ vm config networks net_right,00:00:00:00:02:01
-minimega[sandwich]$ vm launch kvm vm_right
+minimega[sandwich]$ vm launch kvm vm-right
 ```
 
 The router is launched and described as in chapter 3, plus one `static` line
@@ -48,8 +48,8 @@ confirm the addresses:
 minimega[sandwich]$ .annotate false .columns name,state,ip vm info
 name     | state   | ip
 router   | RUNNING | [10.0.0.1, 10.0.1.1]
-vm_left  | RUNNING | [10.0.0.10]
-vm_right | RUNNING | [10.0.1.10]
+vm-left  | RUNNING | [10.0.0.10]
+vm-right | RUNNING | [10.0.1.10]
 ```
 
 ## Get protonuke into the guests
@@ -77,14 +77,14 @@ overlay is copied into the image root, so
 `misc/vmbetter_configs/miniccc_overlay/usr/local/bin/protonuke` becomes
 `/usr/local/bin/protonuke` in the guest.
 
-## Serve on vm_left
+## Serve on vm-left
 
 One protonuke process with `-serve` runs a server for every protocol you
-enable. Start it on `vm_left` as a background command, since it never
+enable. Start it on `vm-left` as a background command, since it never
 returns:
 
 ```minimega
-minimega[sandwich]$ cc filter name=vm_left
+minimega[sandwich]$ cc filter name=vm-left
 minimega[sandwich]$ cc background protonuke -serve -http -https -smtp
 ```
 
@@ -101,7 +101,7 @@ retry a refused connection, and keep `-S` so that a failure prints an error
 instead of nothing:
 
 ```minimega
-minimega[sandwich]$ cc filter name=vm_right
+minimega[sandwich]$ cc filter name=vm-right
 minimega[sandwich]$ cc exec curl -sS --retry 5 --retry-connrefused 10.0.0.10/
 minimega[sandwich]$ shell sleep 5
 minimega[sandwich]$ cc responses 6
@@ -112,9 +112,9 @@ links back to the same host, a hit counter, and an `<img src=image.png>` tag.
 Every `cc responses` file is printed under its path, `6/<uuid>/stdout:`, where
 `6` is the command id shown by `cc commands` (the router commit used 1 to 3, `cc send` 4, and `cc background` 5).
 
-## Generate load from vm_right
+## Generate load from vm-right
 
-Now run protonuke as a client on `vm_right`, pointed at the server. Each
+Now run protonuke as a client on `vm-right`, pointed at the server. Each
 enabled protocol runs its own loop that sleeps a random interval around `-u`
 (1 second by default) and then performs one action against one target:
 
@@ -137,8 +137,8 @@ tracks them by:
 ```minimega
 minimega[sandwich]$ .annotate false cc process list all
 name     | uuid   | pid | command
-vm_left  | <uuid> | 412 | protonuke -serve -http -https -smtp
-vm_right | <uuid> | 415 | protonuke -http -https -smtp -u 500ms 10.0.0.10
+vm-left  | <uuid> | 412 | protonuke -serve -http -https -smtp
+vm-right | <uuid> | 415 | protonuke -http -https -smtp -u 500ms 10.0.0.10
 ```
 
 `cc commands` lists what has been queued, how many clients answered, and
@@ -157,13 +157,13 @@ directions on the router:
 minimega[sandwich]$ .annotate false .columns name,cpu,rx,tx vm top 5
 name     | cpu   | rx   | tx
 router   | 8.12  | 6.10 | 6.09
-vm_left  | 14.60 | 0.21 | 6.08
-vm_right | 11.03 | 6.07 | 0.20
+vm-left  | 14.60 | 0.21 | 6.08
+vm-right | 11.03 | 6.07 | 0.20
 ```
 
 The figures are measured from the host and differ from what the guests
 report. Stopping and restarting the client (`cc process killall protonuke`
-on `vm_right`, then the `cc background` line again) shows the rates fall and
+on `vm-right`, then the `cc background` line again) shows the rates fall and
 rise. The next chapter captures this traffic as PCAP and netflow.
 
 ## Stop it
@@ -184,7 +184,7 @@ the namespace's cc state entirely.
 ## What you built
 
 - The sandwich with fixed client addresses, `10.0.0.10` and `10.0.1.10`.
-- A protonuke server on `vm_left` and a protonuke client on `vm_right`,
+- A protonuke server on `vm-left` and a protonuke client on `vm-right`,
   exchanging HTTP, HTTPS and SMTP traffic through the router.
 - The habit of watching an experiment from the host: `cc process list`,
   `cc commands`, `vm top`.

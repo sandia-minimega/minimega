@@ -4,7 +4,7 @@ In this lab you record what crosses the sandwich, three ways: a PCAP of one
 VM interface, a PCAP of the whole bridge, and netflow summaries of the
 bridge, written as text and as compressed binary that you convert with
 `nfcat`. Then you add a fourth VM, `monitor`, and use `tap mirror` to feed it
-a copy of everything `vm_left` sends and receives, so a tool inside a guest
+a copy of everything `vm-left` sends and receives, so a tool inside a guest
 can watch the traffic live. All of it happens on the host side of the taps;
 the guests cannot tell.
 
@@ -17,17 +17,17 @@ of traffic to capture but is not required; the lab uses `ping`.
 
 Start from the sandwich with fixed client addresses, exactly as in
 [chapter 11](11-traffic.md#rebuild-the-sandwich-with-fixed-addresses):
-`vm_left` is `10.0.0.10`, `vm_right` is `10.0.1.10`, and the script at the
+`vm-left` is `10.0.0.10`, `vm-right` is `10.0.1.10`, and the script at the
 end of the chapter rebuilds it. The topology, with the monitor you add later:
 
 ```mermaid
 flowchart LR
     subgraph left["net_left"]
-        vl["vm_left<br/>10.0.0.10"]
+        vl["vm-left<br/>10.0.0.10"]
         mon["monitor"]
     end
     subgraph right["net_right"]
-        vr["vm_right<br/>10.0.1.10"]
+        vr["vm-right<br/>10.0.1.10"]
     end
     vl --- r["router<br/>10.0.0.1 / 10.0.1.1"] --- vr
     vl -. "tap mirror" .-> mon
@@ -40,29 +40,29 @@ interface index, into a file. A relative file name lands in the files
 directory, `/tmp/minimega/files`, of the host that runs the VM:
 
 ```minimega
-minimega[sandwich]$ capture pcap vm vm_left 0 vm_left.pcap
+minimega[sandwich]$ capture pcap vm vm-left 0 vm-left.pcap
 minimega[sandwich]$ .annotate false capture
 bridge      | type | interface | mode | compress | path
-mega_bridge | pcap | vm_left:0 |      |          | /tmp/minimega/files/vm_left.pcap
+mega_bridge | pcap | vm-left:0 |      |          | /tmp/minimega/files/vm-left.pcap
 ```
 
-Make some traffic that crosses that interface. A ping from `vm_left` to
-`vm_right` goes out through the router and the replies come back the same
+Make some traffic that crosses that interface. A ping from `vm-left` to
+`vm-right` goes out through the router and the replies come back the same
 way:
 
 ```minimega
-minimega[sandwich]$ cc filter name=vm_left
+minimega[sandwich]$ cc filter name=vm-left
 minimega[sandwich]$ cc exec ping -c 5 10.0.1.10
 minimega[sandwich]$ shell sleep 10
-minimega[sandwich]$ capture pcap delete vm vm_left
+minimega[sandwich]$ capture pcap delete vm vm-left
 ```
 
 `capture pcap delete vm <name>` stops every capture on that VM; add the
 interface index to stop just one. The file is an ordinary PCAP, readable
-with `tcpdump -n -r /tmp/minimega/files/vm_left.pcap` or Wireshark on the
+with `tcpdump -n -r /tmp/minimega/files/vm-left.pcap` or Wireshark on the
 host. It contains the ten ICMP packets, five requests and five replies, plus
 any ARP, and nothing from `net_right`, because the tap only ever sees
-`vm_left`'s frames.
+`vm-left`'s frames.
 
 Two settings apply to captures you start afterwards: `capture pcap snaplen`
 limits the bytes kept per packet (1600 by default), and
@@ -82,8 +82,8 @@ minimega[sandwich]$ shell sleep 10
 minimega[sandwich]$ capture pcap delete bridge mega_bridge
 ```
 
-This time each ping appears twice, once on `net_left` between `vm_left` and
-the router and once on `net_right` between the router and `vm_right`. Bridge
+This time each ping appears twice, once on `net_left` between `vm-left` and
+the router and once on `net_right` between the router and `vm-right`. Bridge
 captures run only on the host you are attached to, and a bridge carries every
 namespace that uses it, so on a shared host a bridge capture contains other
 people's experiments as well. Prefer per-VM captures when hosts are shared;
@@ -142,7 +142,7 @@ minimega[sandwich]$ vm config networks net_left
 minimega[sandwich]$ vm launch kvm monitor
 minimega[sandwich]$ vm start monitor
 minimega[sandwich]$ shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip namespace sandwich vm info 2>/dev/null | grep -c 'true.*10[.]' | grep -qx 4; do sleep 3; done"
-minimega[sandwich]$ tap mirror vm_left 0 monitor 0
+minimega[sandwich]$ tap mirror vm-left 0 monitor 0
 ```
 
 `tap mirror <vm> <index> <vm> <index>` tells Open vSwitch to copy every frame
@@ -155,8 +155,8 @@ minimega[sandwich]$ .annotate false .columns name,tap vm info
 name     | tap
 monitor  | [mega_tap4]
 router   | [mega_tap2, mega_tap3]
-vm_left  | [mega_tap0]
-vm_right | [mega_tap1]
+vm-left  | [mega_tap0]
+vm-right | [mega_tap1]
 minimega[sandwich]$ tap mirror mega_tap0 mega_tap4
 ```
 
@@ -171,7 +171,7 @@ the other client, then stop tcpdump and read the file back:
 minimega[sandwich]$ cc filter name=monitor
 minimega[sandwich]$ cc prefix monitor
 minimega[sandwich]$ cc background tcpdump -U -n -i eth0 -w /tmp/mirror.pcap
-minimega[sandwich]$ cc filter name=vm_right
+minimega[sandwich]$ cc filter name=vm-right
 minimega[sandwich]$ cc exec ping -c 3 10.0.0.10
 minimega[sandwich]$ shell sleep 10
 minimega[sandwich]$ cc filter name=monitor
@@ -183,7 +183,7 @@ minimega[sandwich]$ cc responses monitor
 
 `-U` makes tcpdump flush each packet to the file, so nothing is lost when
 `cc process killall` stops it. The response shows the six ICMP packets
-between `10.0.1.10` and `10.0.0.10` as they crossed `vm_left`'s interface,
+between `10.0.1.10` and `10.0.0.10` as they crossed `vm-left`'s interface,
 plus whatever ARP and DHCP traffic that interface saw. Replace tcpdump with
 Zeek, Suricata or Snort in your own image and the same mirror feeds a real
 sensor; the [capture guide](../../articles/capture.md#a-zeek-sensor-on-the-mirror)
@@ -208,11 +208,11 @@ stay in `/tmp/minimega/files` until you delete them, and on a cluster
 
 ## What you built
 
-- PCAPs of one interface (`vm_left.pcap`) and of the whole bridge
+- PCAPs of one interface (`vm-left.pcap`) and of the whole bridge
   (`sandwich.pcap`), and the difference between them.
 - Netflow of the bridge as text (`sandwich.nf`) and as gzipped raw records
   converted with `nfcat`.
-- A `monitor` VM on `net_left` that receives a mirror of `vm_left`'s
+- A `monitor` VM on `net_left` that receives a mirror of `vm-left`'s
   interface and runs tcpdump on it, driven entirely over cc.
 
 ## Where to read more

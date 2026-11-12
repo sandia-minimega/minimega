@@ -3,7 +3,7 @@
 Real machines get unplugged, slow links, CDs and USB sticks. In this lab you
 do all four to running VMs without restarting anything: pull the router's
 cable to `net_right` and plug it back in with `vm net`, degrade the link to
-`vm_left` with `qos`, swap an ISO in and out of `vm_right`'s CD drive with
+`vm-left` with `qos`, swap an ISO in and out of `vm-right`'s CD drive with
 `vm cdrom`, and attach a disk image as a USB drive with `vm hotplug`.
 
 Prerequisites: Part I, in particular [Chapter 3](03-router-sandwich.md),
@@ -14,12 +14,12 @@ netspecs and VLANs, and [Chapter 8](08-cc.md) for `cc`.
 
 Start from the sandwich with fixed client addresses, as in
 [chapter 11](11-traffic.md#rebuild-the-sandwich-with-fixed-addresses):
-`vm_left` is `10.0.0.10`, `vm_right` is `10.0.1.10`. The script at the end
-rebuilds it. A ping from `vm_left` is the yardstick for everything that
+`vm-left` is `10.0.0.10`, `vm-right` is `10.0.1.10`. The script at the end
+rebuilds it. A ping from `vm-left` is the yardstick for everything that
 follows; give the commands a prefix so their responses are easy to find:
 
 ```minimega
-minimega[sandwich]$ cc filter name=vm_left
+minimega[sandwich]$ cc filter name=vm-left
 minimega[sandwich]$ cc prefix baseline
 minimega[sandwich]$ cc exec ping -c 3 10.0.1.10
 minimega[sandwich]$ shell sleep 10
@@ -40,13 +40,13 @@ minimega[sandwich]$ vm net disconnect router 1
 minimega[sandwich]$ .annotate false .columns name,vlan vm info
 name     | vlan
 router   | [net_left (101), disconnected]
-vm_left  | [net_left (101)]
-vm_right | [net_right (102)]
+vm-left  | [net_left (101)]
+vm-right | [net_right (102)]
 ```
 
 Now the ping has nowhere to go past the router. `-W 1` keeps each attempt to
 one second, and the exit code of a foreground command is recorded, so
-`cc exitcode <id> vm_left` reports `1` where the baseline reported `0`:
+`cc exitcode <id> vm-left` reports `1` where the baseline reported `0`:
 
 ```minimega
 minimega[sandwich]$ cc prefix unplugged
@@ -75,13 +75,13 @@ hot-plugs a new interface, using the same netspec syntax as
 bandwidth in `kbit`, `mbit` or `gbit`:
 
 ```minimega
-minimega[sandwich]$ qos add vm_left 0 delay 100ms
+minimega[sandwich]$ qos add vm-left 0 delay 100ms
 minimega[sandwich]$ cc prefix delayed
 minimega[sandwich]$ cc exec ping -c 3 10.0.1.10
 ```
 
 Each reply now takes a little over 100 ms. Shaping applies to what the VM
-*receives*, the egress side of its host tap; `vm_left`'s requests leave at
+*receives*, the egress side of its host tap; `vm-left`'s requests leave at
 full speed and only the replies coming back to it are delayed, which is why
 the round trip grows by one delay rather than two. To slow both directions
 of a link, shape the interface at each end.
@@ -90,22 +90,22 @@ of a link, shape the interface at each end.
 `loss` is a percentage:
 
 ```minimega
-minimega[sandwich]$ qos add vm_left 0 loss 25
+minimega[sandwich]$ qos add vm-left 0 loss 25
 minimega[sandwich]$ .annotate false .columns name,qos vm info
 name     | qos
 router   | []
-vm_left  | [0: delay 100ms loss 25]
-vm_right | []
+vm-left  | [0: delay 100ms loss 25]
+vm-right | []
 ```
 
 A longer ping, `ping -c 20 10.0.1.10`, now reports roughly a quarter of the
 replies missing. `rate` uses a different queue and cannot coexist with the
-other two: `qos add vm_left 0 rate 1 mbit` replaces the delay and loss, with
+other two: `qos add vm-left 0 rate 1 mbit` replaces the delay and loss, with
 a warning in the log, and adding loss or delay again removes the rate. Clear
 one interface or all of them:
 
 ```minimega
-minimega[sandwich]$ clear qos vm_left all
+minimega[sandwich]$ clear qos vm-left all
 ```
 
 ## Swap the CD
@@ -120,13 +120,13 @@ packages. Put it in the files directory and give its absolute path, since the
 path is checked on the host where minimega runs:
 
 ```minimega
-minimega[sandwich]$ vm cdrom change vm_right /tmp/minimega/files/lab.iso
+minimega[sandwich]$ vm cdrom change vm-right /tmp/minimega/files/lab.iso
 minimega[sandwich]$ .annotate false .columns name,cdrom vm info
 name     | cdrom
 router   |
-vm_left  |
-vm_right | /tmp/minimega/files/lab.iso
-minimega[sandwich]$ vm cdrom eject vm_right
+vm-left  |
+vm-right | /tmp/minimega/files/lab.iso
+minimega[sandwich]$ vm cdrom eject vm-right
 ```
 
 `vm cdrom change` ejects whatever was inserted first. If the guest has
@@ -143,10 +143,10 @@ the files directory, and attach it by absolute path:
 
 ```minimega
 minimega[sandwich]$ disk create raw usb.img 64M
-minimega[sandwich]$ vm hotplug add vm_right /tmp/minimega/files/usb.img
+minimega[sandwich]$ vm hotplug add vm-right /tmp/minimega/files/usb.img
 minimega[sandwich]$ .annotate false vm hotplug
 name     | id | file                       | version
-vm_right | 0  | /tmp/minimega/files/usb.img | 1.1
+vm-right | 0  | /tmp/minimega/files/usb.img | 1.1
 ```
 
 Without a version the drive lands on the USB 1.1 bus. `2.0` and `3.0` put it
@@ -161,8 +161,8 @@ loaded.
 Remove drives by the id in the listing, or all at once:
 
 ```minimega
-minimega[sandwich]$ vm hotplug remove vm_right 0
-minimega[sandwich]$ vm hotplug remove vm_right all
+minimega[sandwich]$ vm hotplug remove vm-right 0
+minimega[sandwich]$ vm hotplug remove vm-right all
 ```
 
 Ids are per VM, one above the highest drive still attached. A real USB
@@ -173,8 +173,8 @@ and QEMU's `usb-host` device; that is a launch-time setting, not a hotplug.
 
 - A router whose `net_right` interface was unplugged and reconnected, with
   the ping that proved it each time.
-- A shaped link into `vm_left`: 100 ms of delay and 25% loss, then cleared.
-- An ISO inserted into and ejected from `vm_right`, and a 64 MB USB drive
+- A shaped link into `vm-left`: 100 ms of delay and 25% loss, then cleared.
+- An ISO inserted into and ejected from `vm-right`, and a 64 MB USB drive
   attached to and removed from it.
 
 ## Where to read more

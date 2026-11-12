@@ -10,9 +10,9 @@ vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
 vm config memory 3072
 vm config networks net_left
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks net_right
-vm launch kvm vm_right
+vm launch kvm vm-right
 vm config kernel minirouter.kernel
 vm config initrd minirouter.initrd
 vm config networks net_left net_right

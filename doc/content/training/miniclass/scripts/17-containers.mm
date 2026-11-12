@@ -28,9 +28,9 @@ vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
 vm config memory 3072
 vm config networks net_left
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks net_right
-vm launch kvm vm_right
+vm launch kvm vm-right
 
 # Containers share the host kernel, so they need a root filesystem instead
 # of a kernel and initrd. The KVM fields left in the template are ignored.

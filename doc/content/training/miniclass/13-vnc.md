@@ -2,7 +2,7 @@
 
 Every KVM VM has a console, and minimega sits between that console and
 whoever is using it. In this lab you record the keystrokes sent to
-`vm_right`, record what its screen shows while a recording is played back
+`vm-right`, record what its screen shows while a recording is played back
 into it, turn the screen recording into a video with `rfbplay`, and then
 write a short console session by hand and play it. The same mechanism drives
 scripted logins and fleets of simulated users.
@@ -16,7 +16,7 @@ is the natural way to make your own recordings.
 
 Start from the sandwich with fixed client addresses, as in
 [chapter 11](11-traffic.md#rebuild-the-sandwich-with-fixed-addresses); the
-script at the end rebuilds it. Only `vm_right` is used, but a console session
+script at the end rebuilds it. Only `vm-right` is used, but a console session
 that pings `10.0.0.10` is more interesting on a network that works.
 
 ## How the console is wired
@@ -31,22 +31,22 @@ goes to `/tmp/minimega/files`.
 
 ## Record what is typed
 
-Start a keyboard and mouse recording on `vm_right`, then send it some input.
+Start a keyboard and mouse recording on `vm-right`, then send it some input.
 Open the console in miniweb and type, or stay at the prompt: `vnc type`
 types a string, taking care of Shift for you, and `vnc inject` sends one raw
 event, here a press and release of Return:
 
 ```minimega
-minimega[sandwich]$ vnc record kb vm_right session.kb
-minimega[sandwich]$ vnc type vm_right "ping -c 3 10.0.0.10"
+minimega[sandwich]$ vnc record kb vm-right session.kb
+minimega[sandwich]$ vnc type vm-right "ping -c 3 10.0.0.10"
 minimega[sandwich]$ shell sleep 1
-minimega[sandwich]$ vnc inject vm_right KeyEvent,true,Return
-minimega[sandwich]$ vnc inject vm_right KeyEvent,false,Return
+minimega[sandwich]$ vnc inject vm-right KeyEvent,true,Return
+minimega[sandwich]$ vnc inject vm-right KeyEvent,false,Return
 minimega[sandwich]$ .annotate false vnc
 name     | type      | time  | filename
-vm_right | record kb | 4.02s | /tmp/minimega/files/session.kb
+vm-right | record kb | 4.02s | /tmp/minimega/files/session.kb
 minimega[sandwich]$ shell sleep 5
-minimega[sandwich]$ vnc stop kb vm_right
+minimega[sandwich]$ vnc stop kb vm-right
 ```
 
 The client image boots straight into a root shell on its console, so the
@@ -79,21 +79,21 @@ whether or not anyone is watching. Start one, play the keyboard recording
 into the same VM, and stop when it is done:
 
 ```minimega
-minimega[sandwich]$ vnc record fb vm_right session.fb
-minimega[sandwich]$ vnc play vm_right session.kb
+minimega[sandwich]$ vnc record fb vm-right session.fb
+minimega[sandwich]$ vnc play vm-right session.kb
 minimega[sandwich]$ .annotate false vnc
 name     | type        | time            | filename
-vm_right | record fb   | 2.51s           | /tmp/minimega/files/session.fb
-vm_right | playback kb | 1.08s remaining | /tmp/minimega/files/session.kb
+vm-right | record fb   | 2.51s           | /tmp/minimega/files/session.fb
+vm-right | playback kb | 1.08s remaining | /tmp/minimega/files/session.kb
 minimega[sandwich]$ shell sleep 10
-minimega[sandwich]$ vnc stop fb vm_right
+minimega[sandwich]$ vnc stop fb vm-right
 ```
 
 A playback can be paused and resumed (`vnc pause`, `vnc continue`),
 advanced one event at a time (`vnc step`, with `vnc getstep` showing the
-event it is waiting on), or ended early (`vnc stop vm_right`). It can also be
-played into any other KVM VM: `vnc play vm_left session.kb` types the same
-command into `vm_left`. Only one playback runs per VM at a time, and
+event it is waiting on), or ended early (`vnc stop vm-right`). It can also be
+played into any other KVM VM: `vnc play vm-left session.kb` types the same
+command into `vm-left`. Only one playback runs per VM at a time, and
 `vnc type` refuses to run while one is active.
 
 An `.fb` file is not a video. `rfbplay`, installed with the other tools under
@@ -107,7 +107,7 @@ $ /opt/minimega/bin/rfbplay /tmp/minimega/files/session.fb session.mp4
 
 Transcoding runs at the recording's own speed, so a minute of recording takes
 a minute. To check what the console shows right now without a recording,
-save a screenshot: `vm screenshot vm_right file /tmp/minimega/files/vm_right.png`.
+save a screenshot: `vm screenshot vm-right file /tmp/minimega/files/vm-right.png`.
 
 ## Write a session by hand
 
@@ -125,7 +125,7 @@ playback logs at the `info` level:
 Copy it to `/tmp/minimega/files/console.kb` and play it:
 
 ```minimega
-minimega[sandwich]$ vnc play vm_right console.kb
+minimega[sandwich]$ vnc play vm-right console.kb
 ```
 
 There is no wait event; a button-less `PointerEvent` with a long delay is
@@ -146,7 +146,7 @@ files directory.
 
 ## What you built
 
-- `session.kb`, a keyboard recording of a command typed into `vm_right`,
+- `session.kb`, a keyboard recording of a command typed into `vm-right`,
   and `session.fb`, a framebuffer recording of that command being replayed.
 - A hand-written recording, `console.kb`, that runs two commands on the
   console, and the pattern for turning it into a scripted login.

@@ -45,7 +45,7 @@ milliseconds; that is fine for a loop over a handful of VMs:
 #!/bin/bash
 MM="sudo minimega -namespace sandwich -e"
 
-for vm in vm_left vm_right; do
+for vm in vm-left vm-right; do
     $MM cc filter name=$vm
     $MM cc exec uname -a
 done
@@ -154,8 +154,8 @@ Run the script as root, because the socket is root-owned, and clean up with
 $ sudo minimega -e clear namespace sandwich
 $ sudo python3 21-automation.py
 router     RUNNING   [net_left (101), net_right (102)]  [10.0.0.1, 10.0.1.1]
-vm_left    RUNNING   [net_left (101)]                   [10.0.0.2]
-vm_right   RUNNING   [net_right (102)]                  [10.0.1.2]
+vm-left    RUNNING   [net_left (101)]                   [10.0.0.2]
+vm-right   RUNNING   [net_right (102)]                  [10.0.1.2]
 $ sudo minimega -e clear namespace sandwich
 ```
 

@@ -9,9 +9,9 @@ vm config initrd miniccc.initrd
 vm config memory 3072
 vm config networks net_left
 vm config save client
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks net_right
-vm launch kvm vm_right
+vm launch kvm vm-right
 
 # the router description, also saved
 vm config kernel minirouter.kernel
@@ -34,15 +34,15 @@ vm start all
 shell sleep 20
 
 # pause one client and resume it; memory is kept while it is PAUSED
-vm stop vm_left
+vm stop vm-left
 .annotate false .columns name,state vm info
-vm start vm_left
+vm start vm-left
 
 # kill the other client: "vm start all" leaves it in QUIT, naming it restarts it
-vm kill vm_right
+vm kill vm-right
 vm start all
 .annotate false .columns name,state vm info
-vm start vm_right
+vm start vm-right
 
 # two spare clients from the saved description, tagged as a group
 vm launch kvm spare[1-2] client

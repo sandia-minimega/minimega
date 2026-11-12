@@ -44,9 +44,9 @@ vm config kernel $images/miniccc.kernel
 vm config initrd $images/miniccc.initrd
 vm config memory 3072
 vm config networks net_left
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks net_right
-vm launch kvm vm_right
+vm launch kvm vm-right
 vm config kernel $images/minirouter.kernel
 vm config initrd $images/minirouter.initrd
 vm config networks net_left net_right
@@ -112,9 +112,9 @@ leaves `router_sandwich.got` behind. Read it, all of it. It begins:
 ## vm config initrd $images/miniccc.initrd
 ## vm config memory 3072
 ## vm config networks net_left
-## vm launch kvm vm_left
+## vm launch kvm vm-left
 ## vm config networks net_right
-## vm launch kvm vm_right
+## vm launch kvm vm-right
 ## vm config kernel $images/minirouter.kernel
 ## vm config initrd $images/minirouter.initrd
 ## vm config networks net_left net_right
@@ -122,8 +122,8 @@ leaves `router_sandwich.got` behind. Read it, all of it. It begins:
 ## .columns name,state vm info
 name     | state
 router   | BUILDING
-vm_left  | BUILDING
-vm_right | BUILDING
+vm-left  | BUILDING
+vm-right | BUILDING
 
 ## # Stage the router configuration and read it back before committing
 ## router router interface 0 10.0.0.1/24

@@ -2,9 +2,9 @@
 
 The sandwich router has done one job so far: hand out addresses and a
 default gateway on each side. In this chapter you use the rest of the
-`router` API on it. You give `vm_right` a fixed address and a name that
-`vm_left` can resolve, then grow the experiment: a second router, `router2`,
-joins `net_right` to a third network, `net_far`, with a client `vm_far` on
+`router` API on it. You give `vm-right` a fixed address and a name that
+`vm-left` can resolve, then grow the experiment: a second router, `router2`,
+joins `net_right` to a third network, `net_far`, with a client `vm-far` on
 it. You connect the two routers first with static routes and then with
 OSPF, look at what the routers report back, and see where firewall rules
 fit. At the end the sandwich is a three-network topology with two routers
@@ -37,17 +37,17 @@ commit, and if you change your mind, describe and commit again.
 ## A static lease and a name
 
 DHCP leases are identified by MAC address, so a static lease needs a VM with
-a known MAC. `vm_right` was launched with a random one; relaunch it with a
+a known MAC. `vm-right` was launched with a random one; relaunch it with a
 fixed MAC in its netspec. The template still holds the router's kernel and
 initrd from chapter 3, so point it back at the client image first:
 
 ```minimega
-minimega$ vm kill vm_right
-minimega$ vm flush vm_right
+minimega$ vm kill vm-right
+minimega$ vm flush vm-right
 minimega$ vm config kernel miniccc.kernel
 minimega$ vm config initrd miniccc.initrd
 minimega$ vm config networks net_right,00:00:00:00:02:01
-minimega$ vm launch kvm vm_right
+minimega$ vm launch kvm vm-right
 ```
 
 Before starting it, describe the lease, a DNS record for the address, and
@@ -63,11 +63,11 @@ minimega$ router router dns 10.0.1.10 right.sandwich
 minimega$ router router dhcp 10.0.0.0 dns 10.0.0.1
 minimega$ router router dhcp 10.0.1.0 dns 10.0.1.1
 minimega$ router router commit
-minimega$ vm start vm_right
+minimega$ vm start vm-right
 ```
 
 Give the commit a few seconds before the client boots, so that its first
-DHCP request already hits the new configuration. `vm_right` now comes up at
+DHCP request already hits the new configuration. `vm-right` now comes up at
 `10.0.1.10`, and the description shows the lease and the record under the
 network they belong to:
 
@@ -86,14 +86,14 @@ DNS:
 ...
 ```
 
-`vm_left` took its lease at boot, before the DNS option existed, and a lease
+`vm-left` took its lease at boot, before the DNS option existed, and a lease
 is only refreshed at renewal time, so its resolver still points wherever it
 did before. Rather than wait, ask it by address for now and by name after its
 next boot; the script at the end of the chapter builds everything in the
 right order so the name works immediately:
 
 ```minimega
-minimega$ cc filter name=vm_left
+minimega$ cc filter name=vm-left
 minimega$ cc exec ping -c 3 10.0.1.10
 minimega$ cc exec ping -c 3 right.sandwich
 ```
@@ -108,17 +108,17 @@ experiment has a path to the outside world
 
 Now extend the topology. `router2` has one interface on `net_right`, which
 becomes the transit link between the two routers, and one on the new
-`net_far`, where it serves DHCP to `vm_far`:
+`net_far`, where it serves DHCP to `vm-far`:
 
 ```mermaid
 flowchart LR
-    vm_left["vm_left"] --- net_left["net_left<br/>10.0.0.0/24"]
+    vm-left["vm-left"] --- net_left["net_left<br/>10.0.0.0/24"]
     net_left --- router["router<br/>10.0.0.1 | 10.0.1.1"]
     router --- net_right["net_right<br/>10.0.1.0/24"]
-    net_right --- vm_right["vm_right<br/>10.0.1.10"]
+    net_right --- vm-right["vm-right<br/>10.0.1.10"]
     net_right --- router2["router2<br/>10.0.1.2 | 10.0.2.1"]
     router2 --- net_far["net_far<br/>10.0.2.0/24"]
-    net_far --- vm_far["vm_far"]
+    net_far --- vm-far["vm-far"]
 ```
 
 Launch the client first while the template still describes a client, then
@@ -127,7 +127,7 @@ and interface 1 on `net_far`, in the order of the netspec:
 
 ```minimega
 minimega$ vm config networks net_far
-minimega$ vm launch kvm vm_far
+minimega$ vm launch kvm vm-far
 minimega$ vm config kernel minirouter.kernel
 minimega$ vm config initrd minirouter.initrd
 minimega$ vm config networks net_right net_far
@@ -138,20 +138,20 @@ minimega$ router router2 dhcp 10.0.2.0 range 10.0.2.2 10.0.2.254
 minimega$ router router2 dhcp 10.0.2.0 router 10.0.2.1
 minimega$ router router2 commit
 minimega$ vm start router2
-minimega$ vm start vm_far
+minimega$ vm start vm-far
 ```
 
 `router2` takes a static address on `net_right` and ignores the leases the
 sandwich router offers there; a minirouter only asks for DHCP on an
-interface you configure with `interface <n> dhcp`. Once `vm_far` has its
-lease, try to reach `router2`'s far side from `vm_left`:
+interface you configure with `interface <n> dhcp`. Once `vm-far` has its
+lease, try to reach `router2`'s far side from `vm-left`:
 
 ```minimega
 minimega$ cc exec ping -c 3 10.0.2.1
 ```
 
 It fails, and the response says why: the sandwich router replies that the
-network is unreachable. `vm_left` sent the packet to its default gateway,
+network is unreachable. `vm-left` sent the packet to its default gateway,
 `10.0.0.1`, and that router knows its two connected networks and nothing
 else. Routing between the two routers is the missing piece.
 
@@ -169,13 +169,13 @@ minimega$ router router2 commit
 ```
 
 `router2` needs the second route as much as the sandwich router needs the
-first: without it, `vm_left`'s ping arrives and the reply has nowhere to go.
+first: without it, `vm-left`'s ping arrives and the reply has nowhere to go.
 After both commits the ping succeeds, and `traceroute` shows the path:
 
 ```minimega
 minimega$ cc exec traceroute -n 10.0.2.1
 minimega$ cc responses 19
-19/<uuid of vm_left>/stdout:
+19/<uuid of vm-left>/stdout:
 traceroute to 10.0.2.1 (10.0.2.1), 30 hops max, 60 byte packets
  1  10.0.0.1  0.412 ms  0.388 ms  0.371 ms
  2  10.0.2.1  0.913 ms  0.878 ms  0.860 ms
@@ -245,16 +245,16 @@ same guide scales the idea to six routers and nine links.
 
 A minirouter can also filter the traffic it forwards, with iptables rules
 generated from `fw` subcommands. `in` and `out` are relative to the
-interface at the given index, so a rule for traffic *toward* `vm_right` is
+interface at the given index, so a rule for traffic *toward* `vm-right` is
 an `out` rule on interface 1 of the sandwich router. This one drops ICMP
-addressed to `vm_right` and leaves everything else alone:
+addressed to `vm-right` and leaves everything else alone:
 
 ```minimega
 minimega$ router router fw drop out 1 10.0.1.10 icmp
 minimega$ router router commit
 ```
 
-After the commit a ping from `vm_left` to `10.0.1.10` gets no replies and
+After the commit a ping from `vm-left` to `10.0.1.10` gets no replies and
 `cc exitcode` reports `1`, while `10.0.2.1` still answers. `fw default drop`
 turns the policy around so that only what you `accept` is forwarded, and
 chains group rules that apply to more than one interface.
@@ -297,10 +297,10 @@ both directions:
 
 ## What you built
 
-- `vm_right` at a fixed `10.0.1.10`, resolvable as `right.sandwich` from
+- `vm-right` at a fixed `10.0.1.10`, resolvable as `right.sandwich` from
   the other clients, with both DHCP servers advertising the router as
   resolver.
-- A third network, `net_far`, behind a second router, with `vm_far` on it.
+- A third network, `net_far`, behind a second router, with `vm-far` on it.
 - Two routers exchanging routes over OSPF on `net_right`, and the tools to
   see what they learned: the description, its `Log:` section, and `birdc`
   over `cc`.

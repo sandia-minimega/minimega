@@ -10,9 +10,9 @@ vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
 vm config memory 3072
 vm config networks net_left,00:00:00:00:01:01
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks net_right,00:00:00:00:02:01
-vm launch kvm vm_right
+vm launch kvm vm-right
 vm config kernel minirouter.kernel
 vm config initrd minirouter.initrd
 vm config networks net_left net_right
@@ -36,12 +36,12 @@ shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip
 pipe hello "the sandwich says hello"
 .annotate false pipe
 
-# vm_left pings vm_right and writes the output to the pipe "pings";
-# vm_right reads the pipe into a file from a guest shell with miniccc -pipe
+# vm-left pings vm-right and writes the output to the pipe "pings";
+# vm-right reads the pipe into a file from a guest shell with miniccc -pipe
 # (cc background stdin=pings tee /tmp/pings.log would do the same without one)
-cc filter name=vm_left
+cc filter name=vm-left
 cc background stdout=pings ping -i 1 10.0.1.10
-cc filter name=vm_right
+cc filter name=vm-right
 cc background sh -c "miniccc -pipe pings > /tmp/pings.log"
 shell sleep 10
 cc exec tail -n 3 /tmp/pings.log
@@ -69,7 +69,7 @@ clear pipe rtt via
 
 # a pipe with an open writer cannot be deleted, so stop the ping first;
 # clearing the pipe then sends EOF down the pipeline
-cc filter name=vm_left
+cc filter name=vm-left
 cc process killall ping
 clear cc filter
 shell sleep 5

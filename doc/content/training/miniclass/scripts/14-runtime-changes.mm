@@ -10,9 +10,9 @@ vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
 vm config memory 3072
 vm config networks net_left,00:00:00:00:01:01
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks net_right,00:00:00:00:02:01
-vm launch kvm vm_right
+vm launch kvm vm-right
 vm config kernel minirouter.kernel
 vm config initrd minirouter.initrd
 vm config networks net_left net_right
@@ -32,8 +32,8 @@ vm start all
 # wait until every VM has a connected agent and an address (about 90 s)
 shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip namespace sandwich vm info 2>/dev/null | grep -c 'true.*10[.]' | grep -qx 3; do sleep 3; done"
 
-# baseline: vm_left pings vm_right through the router
-cc filter name=vm_left
+# baseline: vm-left pings vm-right through the router
+cc filter name=vm-left
 cc prefix baseline
 cc exec ping -c 3 10.0.1.10
 shell sleep 10
@@ -54,30 +54,30 @@ cc exec ping -c 3 10.0.1.10
 shell sleep 10
 cc responses replugged
 
-# shape what vm_left receives: 100 ms of delay, then 25% loss on top
-qos add vm_left 0 delay 100ms
+# shape what vm-left receives: 100 ms of delay, then 25% loss on top
+qos add vm-left 0 delay 100ms
 cc prefix delayed
 cc exec ping -c 3 10.0.1.10
 shell sleep 10
 cc responses delayed
-qos add vm_left 0 loss 25
+qos add vm-left 0 loss 25
 .annotate false .columns name,qos vm info
 cc prefix lossy
 cc exec ping -c 20 10.0.1.10
 shell sleep 30
 cc responses lossy
-clear qos vm_left all
+clear qos vm-left all
 clear cc prefix
 clear cc filter
 
-# swap an ISO into vm_right's CD drive and eject it again
-vm cdrom change vm_right /tmp/minimega/files/lab.iso
+# swap an ISO into vm-right's CD drive and eject it again
+vm cdrom change vm-right /tmp/minimega/files/lab.iso
 .annotate false .columns name,cdrom vm info
-vm cdrom eject vm_right
+vm cdrom eject vm-right
 
 # attach a 64 MB image as a USB drive, list it, remove it
 disk create raw usb.img 64M
-vm hotplug add vm_right /tmp/minimega/files/usb.img
+vm hotplug add vm-right /tmp/minimega/files/usb.img
 .annotate false vm hotplug
-vm hotplug remove vm_right 0
+vm hotplug remove vm-right 0
 .annotate false vm hotplug

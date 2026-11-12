@@ -33,7 +33,7 @@ boot:
   drivers, brings up `eth0` with DHCP, starts `sshd`, links the virtio-serial
   ports under `/dev/virtio-ports/`, starts
   `/miniccc -serial /dev/virtio-ports/cc`, and opens a root shell on the
-  console. This is the client image: `vm_left` and `vm_right` boot it.
+  console. This is the client image: `vm-left` and `vm-right` boot it.
 - `minirouter.conf` adds the `dnsmasq` and `bird` packages. Its `/init` does
   everything the client's does, turns on IPv4 and IPv6 forwarding, and starts
   `/minirouter` next to `/miniccc`. This is the router image.
@@ -189,10 +189,10 @@ minimega$ namespace sandwich
 minimega$ vm config kernel miniccc.kernel
 minimega$ vm config initrd miniccc.initrd
 minimega$ vm config memory 3072
-minimega$ vm launch kvm client_test
+minimega$ vm launch kvm client-test
 minimega$ vm config kernel minirouter.kernel
 minimega$ vm config initrd minirouter.initrd
-minimega$ vm launch kvm router_test
+minimega$ vm launch kvm router-test
 minimega$ vm start all
 ```
 
@@ -212,14 +212,14 @@ Then look:
 ```minimega
 minimega$ .annotate false .columns name,state,cc_active vm info
 name        | state   | cc_active
-client_test | RUNNING | true
-router_test | RUNNING | true
+client-test | RUNNING | true
+router-test | RUNNING | true
 ```
 
 If a VM is `RUNNING` but `cc_active` stays `false`, the agent inside is not
 connecting: usually the overlay link was dangling and the image has no
 `/miniccc`. Rebuild after fixing the link. If a VM is in `ERROR`, the `error`
-tag says why; `vm tag client_test error` prints it, and the most common
+tag says why; `vm tag client-test error` prints it, and the most common
 causes are a misspelled image name and a host without KVM.
 
 Then remove the test VMs. `vm kill` stops them and leaves them in the `QUIT`

@@ -132,8 +132,8 @@ minimega$ .columns name,type,state,vlan,ip,cc_active vm info
 host  | name     | type      | state   | vlan                              | ip                   | cc_active
 node1 | ctr0     | container | RUNNING | [net_left (101)]                  | [10.0.0.4]           | true
 node1 | router   | kvm       | RUNNING | [net_left (101), net_right (102)] | [10.0.0.1, 10.0.1.1] | true
-node1 | vm_left  | kvm       | RUNNING | [net_left (101)]                  | [10.0.0.2]           | true
-node1 | vm_right | kvm       | RUNNING | [net_right (102)]                 | [10.0.1.2]           | true
+node1 | vm-left  | kvm       | RUNNING | [net_left (101)]                  | [10.0.0.2]           | true
+node1 | vm-right | kvm       | RUNNING | [net_right (102)]                 | [10.0.1.2]           | true
 ```
 
 `cc` treats it like any other client:
@@ -233,16 +233,16 @@ Chapter 3's diagram now looks like this:
 ```mermaid
 flowchart LR
     subgraph left["net_left 10.0.0.0/24"]
-        vm_left["vm_left (kvm)"]
+        vm-left["vm-left (kvm)"]
         l["left0 ... left49 (container)"]
     end
     subgraph right["net_right 10.0.1.0/24"]
-        vm_right["vm_right (kvm)"]
+        vm-right["vm-right (kvm)"]
         r["right0 ... right49 (container)"]
     end
-    vm_left --- router
+    vm-left --- router
     l --- router
-    router["router<br>10.0.0.1 / 10.0.1.1"] --- vm_right
+    router["router<br>10.0.0.1 / 10.0.1.1"] --- vm-right
     router --- r
 ```
 

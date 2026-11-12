@@ -1,26 +1,26 @@
 # Chapter 19: Specialty KVM guests
 # Rebuilds the router sandwich from chapter 3 with a software TPM attached
-# to vm_left, then talks to QEMU directly over QMP. Needs the chapter 2
+# to vm-left, then talks to QEMU directly over QMP. Needs the chapter 2
 # images and the swtpm package on the host.
 clear namespace sandwich
 namespace sandwich
 clear cc responses
 
 # One swtpm instance per VM, started as a host process from minimega
-shell mkdir -p /tmp/minimega/swtpm/vm_left
-background swtpm socket --tpm2 --tpmstate dir=/tmp/minimega/swtpm/vm_left --ctrl type=unixio,path=/tmp/minimega/swtpm/vm_left/swtpm-sock
+shell mkdir -p /tmp/minimega/swtpm/vm-left
+background swtpm socket --tpm2 --tpmstate dir=/tmp/minimega/swtpm/vm-left --ctrl type=unixio,path=/tmp/minimega/swtpm/vm-left/swtpm-sock
 shell sleep 2
 
-# vm_left gets the TPM; vm_right is a plain client
+# vm-left gets the TPM; vm-right is a plain client
 vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
 vm config memory 3072
 vm config networks net_left
-vm config tpm-socket /tmp/minimega/swtpm/vm_left/swtpm-sock
-vm launch kvm vm_left
+vm config tpm-socket /tmp/minimega/swtpm/vm-left/swtpm-sock
+vm launch kvm vm-left
 clear vm config tpm-socket
 vm config networks net_right
-vm launch kvm vm_right
+vm launch kvm vm-right
 
 # The router, as in chapter 3
 vm config kernel minirouter.kernel
@@ -42,10 +42,10 @@ shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip
 .columns name,state,tpm-socket vm info
 
 # Ask QEMU directly over its QMP socket
-vm qmp vm_left '{ "execute": "query-status" }'
+vm qmp vm-left '{ "execute": "query-status" }'
 
 # The guest sees an ordinary TPM device
-cc filter name=vm_left
+cc filter name=vm-left
 cc exec modprobe tpm_tis
 cc exec ls -l /dev/tpm0
 shell sleep 10

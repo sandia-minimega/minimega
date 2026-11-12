@@ -7,9 +7,9 @@ vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
 vm config memory 3072
 vm config networks net_left
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks net_right
-vm launch kvm vm_right
+vm launch kvm vm-right
 
 vm config kernel minirouter.kernel
 vm config initrd minirouter.initrd
@@ -30,7 +30,7 @@ vm start all
 shell sleep 20
 .annotate false .columns name,state vm info
 
-# a full-size screenshot in vm_left's instance directory, and a 400-pixel
-# thumbnail of vm_right in the files directory, where the Files page serves it
-vm screenshot vm_left
-vm screenshot vm_right file /tmp/minimega/files/vm_right.png 400
+# a full-size screenshot in vm-left's instance directory, and a 400-pixel
+# thumbnail of vm-right in the files directory, where the Files page serves it
+vm screenshot vm-left
+vm screenshot vm-right file /tmp/minimega/files/vm-right.png 400

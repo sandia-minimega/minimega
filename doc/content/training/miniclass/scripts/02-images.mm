@@ -8,12 +8,12 @@ namespace sandwich
 vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
 vm config memory 3072
-vm launch kvm client_test
+vm launch kvm client-test
 
 # a router from the minirouter image
 vm config kernel minirouter.kernel
 vm config initrd minirouter.initrd
-vm launch kvm router_test
+vm launch kvm router-test
 
 vm start all
 # wait until both agents have connected (about 90 s)

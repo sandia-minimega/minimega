@@ -5,7 +5,7 @@ In [chapter 3](03-router-sandwich.md) you gave each VM a network with one
 that up. You look at how the sandwich's three VMs are wired together on the
 host, what a netspec and a VLAN alias really are, and then extend the
 experiment: the host gets its own tap into `net_left` so you can reach
-`vm_left` from a host shell, you unplug and replug a running VM, and you
+`vm-left` from a host shell, you unplug and replug a running VM, and you
 shape the traffic a VM receives. At the end the sandwich is running as
 before, with the host attached to its left network.
 
@@ -35,8 +35,8 @@ flowchart LR
             t3["mega_tap3<br/>net_right (102)"]
             t4["mega_tap4<br/>net_left (101)"]
         end
-        left["vm_left"] --- t0
-        right["vm_right"] --- t1
+        left["vm-left"] --- t0
+        right["vm-right"] --- t1
         router["router"] --- t2
         router --- t3
         shell["host shell<br/>10.0.0.254"] --- t4
@@ -51,8 +51,8 @@ matter here (the tables in this chapter omit the leading `host` column that
 minimega$ .columns name,vlan,tap,ip vm info
 name     | vlan                              | tap                   | ip
 router   | [net_left (101), net_right (102)] | [mega_tap2, mega_tap3] | [10.0.0.1, 10.0.1.1]
-vm_left  | [net_left (101)]                  | [mega_tap0]           | [10.0.0.37]
-vm_right | [net_right (102)]                 | [mega_tap1]           | [10.0.1.112]
+vm-left  | [net_left (101)]                  | [mega_tap0]           | [10.0.0.37]
+vm-right | [net_right (102)]                 | [mega_tap1]           | [10.0.1.112]
 ```
 
 The router's two entries in each column are its two interfaces, in the order
@@ -94,7 +94,7 @@ Only the VLAN is required; the sandwich never used anything else. The
 router's `net_left net_right` produced interface 0 on `net_left` and
 interface 1 on `net_right`, which is the order the guest names them (`eth0`,
 `eth1`) and the index that `router router interface 0` and
-`vm net disconnect vm_right 0` refer to. The other fields are recognised by
+`vm net disconnect vm-right 0` refer to. The other fields are recognised by
 what they look like: a MAC address is a MAC, the name of a QEMU network
 device is the driver, the literal `qinq` is a flag, and anything else in
 front of the VLAN is a bridge name. The defaults are `mega_bridge`, a random
@@ -173,13 +173,13 @@ mega_bridge | mega_tap4 | net_left (101)
 ```
 
 The host now has `10.0.0.254` on `mega_tap4` and a route to `10.0.0.0/24`
-through it. Prove it from the other side: have `vm_left` ping the host's tap
+through it. Prove it from the other side: have `vm-left` ping the host's tap
 address with `cc`, which runs a command inside a guest (chapter 8 covers it
 properly). This works wherever minimega runs, including the Docker image,
 which has no `ping` of its own for `shell` to run on the host:
 
 ```minimega
-minimega$ cc filter name=vm_left
+minimega$ cc filter name=vm-left
 minimega$ cc prefix tap
 minimega$ cc exec ping -c 3 10.0.0.254
 minimega$ shell sleep 8
@@ -190,7 +190,7 @@ minimega$ clear cc filter
 
 The responses show three replies from `10.0.0.254`.
 
-From a host shell, ping `vm_left` at the address `vm info` showed, or log in:
+From a host shell, ping `vm-left` at the address `vm info` showed, or log in:
 the stock miniccc image allows root to log in over SSH with no password.
 
 ```bash
@@ -249,23 +249,23 @@ later, another DNS server on the host owns port 53;
 ## Unplugging a running VM
 
 `vm net` changes the interfaces of a running VM, addressed by their index.
-Unplug `vm_right` and look at the `vlan` column:
+Unplug `vm-right` and look at the `vlan` column:
 
 ```minimega
-minimega$ vm net disconnect vm_right 0
+minimega$ vm net disconnect vm-right 0
 minimega$ .columns name,vlan vm info
 name     | vlan
 router   | [net_left (101), net_right (102)]
-vm_left  | [net_left (101)]
-vm_right | [disconnected]
+vm-left  | [net_left (101)]
+vm-right | [disconnected]
 ```
 
 The interface still exists inside the guest and still has its address; only
-the port on the bridge is gone. A ping from `vm_left` to `vm_right`'s
+the port on the bridge is gone. A ping from `vm-left` to `vm-right`'s
 address now fails where it worked in chapter 3:
 
 ```minimega
-minimega$ cc filter name=vm_left
+minimega$ cc filter name=vm-left
 minimega$ cc exec ping -c 3 10.0.1.112
 ```
 
@@ -274,7 +274,7 @@ takes a VLAN and, optionally, a bridge, so the same command moves an
 interface to a different network:
 
 ```minimega
-minimega$ vm net connect vm_right 0 net_right
+minimega$ vm net connect vm-right 0 net_right
 minimega$ clear cc filter
 ```
 
@@ -288,21 +288,21 @@ client now: a client on both networks would bypass the router.
 
 `qos add` shapes traffic on one VM interface with `tc` on the host side of
 the tap. `loss` is a percentage, so this drops one packet in four of what
-`vm_left` receives; `delay` adds latency and combines with loss; `rate` caps
+`vm-left` receives; `delay` adds latency and combines with loss; `rate` caps
 bandwidth and replaces both, because the two are implemented with different
 queueing disciplines:
 
 ```minimega
-minimega$ qos add vm_left 0 loss 25
-minimega$ qos add vm_left 0 delay 100ms
+minimega$ qos add vm-left 0 loss 25
+minimega$ qos add vm-left 0 delay 100ms
 minimega$ .columns name,qos vm info
-minimega$ qos add vm_left 0 rate 10 mbit
-minimega$ clear qos vm_left all
+minimega$ qos add vm-left 0 rate 10 mbit
+minimega$ clear qos vm-left all
 ```
 
 The constraint applies to traffic the VM *receives*, not what it sends. With
-loss in place, `ping vm_left` from the host through the tap loses about a
-quarter of its requests, while a ping from `vm_left` outward loses nothing
+loss in place, `ping vm-left` from the host through the tap loses about a
+quarter of its requests, while a ping from `vm-left` outward loses nothing
 on the way out. To shape a link in both directions, shape the interface at
 each end. Whatever is in force shows in the `qos` column.
 [Chapter 14](14-runtime-changes.md) uses qos with real traffic on the
@@ -324,7 +324,7 @@ does everything in this chapter, leaving the host tap in place:
 - The sandwich as in chapter 3, with the router's `net_left` range narrowed
   to `10.0.0.2`–`10.0.0.200` by a second commit.
 - A host tap at `10.0.0.254` on `net_left`, and a host shell that can ping
-  and log in to `vm_left`.
+  and log in to `vm-left`.
 - A working knowledge of what the `vlan`, `tap` and `ip` columns of
   `vm info` and the `vlans` and `tap` tables are telling you.
 

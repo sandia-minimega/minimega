@@ -1,6 +1,6 @@
 # Chapter 6: networking basics
 # Rebuilds the router sandwich from chapter 3, inspects its VLANs, gives the
-# host a tap into net_left, unplugs and replugs vm_right, and tries qos.
+# host a tap into net_left, unplugs and replugs vm-right, and tries qos.
 clear namespace sandwich
 namespace sandwich
 clear cc responses
@@ -10,9 +10,9 @@ vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
 vm config memory 3072
 vm config networks net_left
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks net_right
-vm launch kvm vm_right
+vm launch kvm vm-right
 
 # the router; the net_left range stops at .200 to leave room for the host tap
 vm config kernel minirouter.kernel
@@ -40,7 +40,7 @@ vlans
 tap create net_left ip 10.0.0.254/24
 tap
 # prove it from the guest side: the Docker image has no ping on the host
-cc filter name=vm_left
+cc filter name=vm-left
 cc prefix tap
 cc exec ping -c 3 10.0.0.254
 shell sleep 8
@@ -48,12 +48,12 @@ cc responses tap
 clear cc prefix
 clear cc filter
 
-# unplug vm_right, look, plug it back in
-vm net disconnect vm_right 0
+# unplug vm-right, look, plug it back in
+vm net disconnect vm-right 0
 .annotate false .columns name,vlan vm info
-vm net connect vm_right 0 net_right
+vm net connect vm-right 0 net_right
 
-# drop a quarter of what vm_left receives, look, then remove the constraint
-qos add vm_left 0 loss 25
+# drop a quarter of what vm-left receives, look, then remove the constraint
+qos add vm-left 0 loss 25
 .annotate false .columns name,qos vm info
-clear qos vm_left all
+clear qos vm-left all

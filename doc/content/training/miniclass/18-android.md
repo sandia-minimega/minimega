@@ -4,7 +4,7 @@ In this chapter you add an Android emulator instance to the router sandwich
 as a third kind of VM, watch minimega assign its console, ADB, and gRPC
 ports, open it in the miniweb console, and give it an address on `net_left`
 so the KVM clients can reach it. At the end `phone0` is running beside
-`vm_left` and `vm_right`, controllable from the browser and from `adb`.
+`vm-left` and `vm-right`, controllable from the browser and from `adb`.
 
 It assumes the sandwich from [Chapter 3](03-router-sandwich.md), miniweb
 from [Chapter 5](05-miniweb.md), and the netspec from
@@ -127,11 +127,11 @@ $ adb -s emulator-5554 shell ip addr show eth1
 ```
 
 Whether `adb root` is allowed depends on the system image; Google Play
-images refuse it. Once the address is there, `vm_left` can reach the phone
+images refuse it. Once the address is there, `vm-left` can reach the phone
 through `cc`:
 
 ```minimega
-minimega$ cc filter name=vm_left
+minimega$ cc filter name=vm-left
 minimega$ cc exec ping -c 3 10.0.0.50
 minimega$ cc responses all
 minimega$ clear cc filter
@@ -172,7 +172,7 @@ AVD name to yours.
   with auto-assigned console, ADB, and gRPC ports.
 - A browser console for it in miniweb with phone buttons, rotation, and GPS.
 - A guest interface on `net_left` configured over `adb` and reachable from
-  `vm_left`.
+  `vm-left`.
 
 ## Where to read more
 

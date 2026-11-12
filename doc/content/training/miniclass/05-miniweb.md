@@ -81,7 +81,7 @@ demonstration.
 The screenshot above comes from a larger experiment than the sandwich, and
 from an earlier release, so the navigation bar has no Builder entry; the
 layout is otherwise what you see. Your table has three rows, `router`,
-`vm_left` and `vm_right`, with the addresses the router handed out in
+`vm-left` and `vm-right`, with the addresses the router handed out in
 [chapter 3](03-router-sandwich.md).
 
 The VM Screenshots page is the one to keep open during a demonstration: one
@@ -94,10 +94,10 @@ live tile per VM, and a click connects you to that VM.
 The VNC column of the VM table, and every screenshot tile, links to
 `/vm/<name>/connect/`. For a KVM VM that page loads noVNC and opens a
 WebSocket that miniweb proxies to the VM's VNC port, so keyboard, mouse and
-display all work in the tab. Open `vm_left`. The client image runs a root
+display all work in the tab. Open `vm-left`. The client image runs a root
 shell on its console, so there is nothing to log in to; you land at a prompt
 and can type `ip addr` to see the address the router handed out, or
-`ping 10.0.1.2` to reach `vm_right` the way `cc exec` did in chapter 3.
+`ping 10.0.1.2` to reach `vm-right` the way `cc exec` did in chapter 3.
 
 Open `router` the same way. Its console is another root shell, and
 `ip addr` shows both interfaces, `10.0.0.1` and `10.0.1.1`, while
@@ -128,8 +128,8 @@ writes `screenshot.png` into the VM's instance directory
 trailing number caps the larger dimension in pixels:
 
 ```minimega
-minimega$ vm screenshot vm_left
-minimega$ vm screenshot vm_right file /tmp/minimega/files/vm_right.png 400
+minimega$ vm screenshot vm-left
+minimega$ vm screenshot vm-right file /tmp/minimega/files/vm-right.png 400
 ```
 
 The second form drops the image into the files directory, so it appears on
@@ -155,7 +155,7 @@ your prompt is in `sandwich`, so is `/vms`; if it has gone back to the
 default namespace, the VM table is empty. Two ways to be explicit:
 
 - Prefix any path with the namespace: `/sandwich/vms`, `/sandwich/vlans`,
-  `/sandwich/vm/vm_left/connect/`. The Namespaces page links to each.
+  `/sandwich/vm/vm-left/connect/`. The Namespaces page links to each.
 - Start miniweb with `-namespace sandwich`. Every command it sends is then
   pinned to that namespace, the URL prefix is disabled, and `/namespaces`
   answers 501.
@@ -201,7 +201,7 @@ sudo miniweb -root /opt/minimega/web -passwords /etc/minimega/miniweb.passwd
 ```
 
 A rule for `/` covers the whole site; a rule for `/sandwich/` covers that
-namespace's pages; a rule for `/vm/vm_left` covers one VM. Basic
+namespace's pages; a rule for `/vm/vm-left` covers one VM. Basic
 authentication sends the password with every request, so pair it with TLS:
 `-cert` and `-key` take a PEM certificate and key, and both are required.
 The [miniweb guide](../../articles/miniweb.md#authentication) shows the file
@@ -213,7 +213,7 @@ each miniweb route exposes and how the VNC ports behave.
 
 - miniweb running against the sandwich, with the VMs, screenshot, graph and
   namespace pages showing the three VMs and two networks.
-- A console on `vm_left` and on `router` in the browser, and the `vnc_port`
+- A console on `vm-left` and on `router` in the browser, and the `vnc_port`
   behind it.
 - Screenshots of both clients taken from the prompt, one of them served by
   miniweb's Files page.

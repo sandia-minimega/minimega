@@ -32,9 +32,9 @@ def build(mm):
     mm.vm_config_initrd("miniccc.initrd")
     mm.vm_config_memory(3072)
     mm.vm_config_networks("net_left")
-    mm.vm_launch_kvm("vm_left")
+    mm.vm_launch_kvm("vm-left")
     mm.vm_config_networks("net_right")
-    mm.vm_launch_kvm("vm_right")
+    mm.vm_launch_kvm("vm-right")
 
     # The router: minirouter image, one interface on each network
     mm.vm_config_kernel("minirouter.kernel")

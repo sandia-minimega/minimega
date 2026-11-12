@@ -10,9 +10,9 @@ vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
 vm config memory 3072
 vm config networks net_left
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks net_right
-vm launch kvm vm_right
+vm launch kvm vm-right
 vm config kernel minirouter.kernel
 vm config initrd minirouter.initrd
 vm config networks net_left net_right
@@ -40,13 +40,13 @@ cc exec cat /etc/motd
 shell sleep 5
 cc responses 4
 
-# ids 5 and 6: only vm_left from here on
-cc filter name=vm_left
+# ids 5 and 6: only vm-left from here on
+cc filter name=vm-left
 cc exec ping -c 3 10.0.1.1
 cc test-conn tcp 10.0.1.1 22 wait 10s
 shell sleep 10
 cc responses 5
-cc exitcode 5 vm_left
+cc exitcode 5 vm-left
 cc responses 6
 
 # id 7 sends a script; ids 8 and 9 run it and fetch a file back, under a prefix
@@ -63,7 +63,7 @@ cc responses hello
 # id 10: a long-running program belongs in the background
 cc background sleep 600
 shell sleep 5
-.annotate false .columns name,command cc process list vm_left
+.annotate false .columns name,command cc process list vm-left
 cc process killall sleep
 
 # what is queued, then clean up

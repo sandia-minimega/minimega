@@ -10,9 +10,9 @@ vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
 vm config memory 3072
 vm config networks net_left,00:00:00:00:01:01
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks net_right,00:00:00:00:02:01
-vm launch kvm vm_right
+vm launch kvm vm-right
 vm config kernel minirouter.kernel
 vm config initrd minirouter.initrd
 vm config networks net_left net_right
@@ -46,9 +46,9 @@ vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
 vm config memory 3072
 vm config networks net_left,00:00:00:00:01:01
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks net_right,00:00:00:00:02:01
-vm launch kvm vm_right
+vm launch kvm vm-right
 vm config kernel minirouter.kernel
 vm config initrd minirouter.initrd
 vm config networks net_left net_right
@@ -79,8 +79,8 @@ vm start all
 shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip namespace sandwich2 vm info 2>/dev/null | grep -c 'true.*10[.]' | grep -qx 3; do sleep 3; done"
 
 # same addresses as the first sandwich, separate network: this ping
-# reaches sandwich2's vm_right only
-cc filter name=vm_left
+# reaches sandwich2's vm-right only
+cc filter name=vm-left
 cc exec ping -c 3 10.0.1.10
 shell sleep 10
 cc responses 4

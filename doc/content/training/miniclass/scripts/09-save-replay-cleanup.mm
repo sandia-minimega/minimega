@@ -21,9 +21,9 @@ vm config restore
 # launch from the templates
 vm config restore client
 vm config networks net_left
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks net_right
-vm launch kvm vm_right
+vm launch kvm vm-right
 vm config restore minirouter
 vm config networks net_left net_right
 vm launch kvm router
@@ -44,8 +44,8 @@ shell sleep 20
 write /tmp/minimega/files/sandwich.mm
 shell head -8 /tmp/minimega/files/sandwich.mm
 
-# checkpoint vm_left: only a state file, since it boots from a kernel and initrd
-vm save vm_left
+# checkpoint vm-left: only a state file, since it boots from a kernel and initrd
+vm save vm-left
 shell sleep 30
 .annotate false .columns name,status vm save
 .annotate false .columns name,state vm info

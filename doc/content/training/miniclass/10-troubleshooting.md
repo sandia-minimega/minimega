@@ -83,7 +83,7 @@ name them explicitly to relaunch.
 
 ## A client has no address
 
-`vm_left` is `RUNNING` but its `ip` column stays empty. The column is
+`vm-left` is `RUNNING` but its `ip` column stays empty. The column is
 learned from traffic, so give the guest a moment; if it stays empty, work
 through the three things that have to be true for a lease to arrive.
 
@@ -112,7 +112,7 @@ port 53, minimega's `dnsmasq start` exits at once, and
 
 ## A ping does not return
 
-Ping in steps, because each step rules out a layer. From `vm_left`:
+Ping in steps, because each step rules out a layer. From `vm-left`:
 
 1. Its own gateway, `10.0.0.1`. Failure here is a subnet problem: wrong
    VLAN, an address in the wrong subnet, or a duplicate address.
@@ -127,7 +127,7 @@ Ping in steps, because each step rules out a layer. From `vm_left`:
    subnet.
 3. The other client, `10.0.1.10`. Failure here, with steps 1 and 2 working,
    is on the far side: the client has no address (previous section), no
-   default route back (`cc exec ip route` on `vm_right` should show
+   default route back (`cc exec ip route` on `vm-right` should show
    `default via 10.0.1.1`), or a firewall. A reply that has nowhere to go
    looks exactly like a request that never arrived;
    `cc exec tcpdump -c 5 -n icmp` on the target settles which.

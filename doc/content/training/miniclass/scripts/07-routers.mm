@@ -1,20 +1,20 @@
 # Chapter 7: routers and services
-# Rebuilds the sandwich with a static lease and a DNS name for vm_right, then
-# adds router2, net_far and vm_far and runs OSPF between the two routers.
+# Rebuilds the sandwich with a static lease and a DNS name for vm-right, then
+# adds router2, net_far and vm-far and runs OSPF between the two routers.
 clear namespace sandwich
 namespace sandwich
 clear cc responses
 
-# clients; vm_right gets a fixed MAC so the router can give it a static lease
+# clients; vm-right gets a fixed MAC so the router can give it a static lease
 vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
 vm config memory 3072
 vm config networks net_left
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks net_right,00:00:00:00:02:01
-vm launch kvm vm_right
+vm launch kvm vm-right
 vm config networks net_far
-vm launch kvm vm_far
+vm launch kvm vm-far
 
 # routers
 vm config kernel minirouter.kernel
@@ -60,12 +60,12 @@ shell sleep 30
 router router
 router router2
 
-# vm_left reaches router2's far interface through both routers, by name too
-cc filter name=vm_left
+# vm-left reaches router2's far interface through both routers, by name too
+cc filter name=vm-left
 cc exec ping -c 3 10.0.2.1
 cc exec ping -c 3 right.sandwich
-# vm_far reaches vm_right's static address the other way
-cc filter name=vm_far
+# vm-far reaches vm-right's static address the other way
+cc filter name=vm-far
 cc exec ping -c 3 10.0.1.10
 clear cc filter
 shell sleep 15

@@ -55,9 +55,9 @@ minimega[sandwich2]$ vm config kernel miniccc.kernel
 minimega[sandwich2]$ vm config initrd miniccc.initrd
 minimega[sandwich2]$ vm config memory 3072
 minimega[sandwich2]$ vm config networks net_left,00:00:00:00:01:01
-minimega[sandwich2]$ vm launch kvm vm_left
+minimega[sandwich2]$ vm launch kvm vm-left
 minimega[sandwich2]$ vm config networks net_right,00:00:00:00:02:01
-minimega[sandwich2]$ vm launch kvm vm_right
+minimega[sandwich2]$ vm launch kvm vm-right
 minimega[sandwich2]$ vm config kernel minirouter.kernel
 minimega[sandwich2]$ vm config initrd minirouter.initrd
 minimega[sandwich2]$ vm config networks net_left net_right
@@ -74,8 +74,8 @@ launching anything:
 minimega[sandwich2]$ .annotate false ns schedule dry-run
 vm       | dst
 router   | mm1
-vm_left  | mm1
-vm_right | mm1
+vm-left  | mm1
+vm-right | mm1
 ```
 
 With one host there is only one answer. On a cluster the scheduler picks the
@@ -90,14 +90,14 @@ start               | end                 | state     | launched | failures | to
 minimega[sandwich2]$ .annotate false .columns name,state,vlan vm info
 name     | state    | vlan
 router   | BUILDING | [net_left (103), net_right (104)]
-vm_left  | BUILDING | [net_left (103)]
-vm_right | BUILDING | [net_right (104)]
+vm-left  | BUILDING | [net_left (103)]
+vm-right | BUILDING | [net_right (104)]
 ```
 
 `ns schedule` and a bare `vm launch` are the same thing. The VMs exist now
 and the aliases have been resolved: `net_left` in `sandwich2` is VLAN 103,
 not 101, because aliases are looked up per namespace and each namespace gets
-its own tags from the shared range. Two VMs called `vm_left` exist on the
+its own tags from the shared range. Two VMs called `vm-left` exist on the
 host, one per namespace; names only have to be unique within a namespace.
 
 Configure and start the router, then the clients, exactly as before, in this
@@ -129,20 +129,20 @@ flowchart LR
     subgraph br["mega_bridge"]
         direction LR
         subgraph s1["namespace sandwich"]
-            a1["vm_left<br/>10.0.0.10<br/>tag 101"] --- r1["router"] --- b1["vm_right<br/>10.0.1.10<br/>tag 102"]
+            a1["vm-left<br/>10.0.0.10<br/>tag 101"] --- r1["router"] --- b1["vm-right<br/>10.0.1.10<br/>tag 102"]
         end
         subgraph s2["namespace sandwich2"]
-            a2["vm_left<br/>10.0.0.10<br/>tag 103"] --- r2["router"] --- b2["vm_right<br/>10.0.1.10<br/>tag 104"]
+            a2["vm-left<br/>10.0.0.10<br/>tag 103"] --- r2["router"] --- b2["vm-right<br/>10.0.1.10<br/>tag 104"]
         end
     end
 ```
 
 Prove it. `cc` is scoped too: each namespace runs its own cc server, so
-`cc filter name=vm_left` in `sandwich2` matches only the second `vm_left`,
-and the ping reaches only the second `vm_right`:
+`cc filter name=vm-left` in `sandwich2` matches only the second `vm-left`,
+and the ping reaches only the second `vm-right`:
 
 ```minimega
-minimega[sandwich2]$ cc filter name=vm_left
+minimega[sandwich2]$ cc filter name=vm-left
 minimega[sandwich2]$ cc exec ping -c 3 10.0.1.10
 minimega[sandwich2]$ shell sleep 10
 minimega[sandwich2]$ cc responses 4
@@ -159,8 +159,8 @@ with its name:
 minimega[sandwich2]$ .annotate false namespace sandwich .columns name,state,vlan vm info
 name     | state   | vlan
 router   | RUNNING | [net_left (101), net_right (102)]
-vm_left  | RUNNING | [net_left (101)]
-vm_right | RUNNING | [net_right (102)]
+vm-left  | RUNNING | [net_left (101)]
+vm-right | RUNNING | [net_right (102)]
 ```
 
 Pipes follow the same rule, as `sandwich//pings` in chapter 15 showed, and

@@ -5,7 +5,7 @@ and initrd. This chapter covers four things you reach for when a guest needs
 more than that: a virtual TPM through swtpm, a shared clipboard in both
 directions, direct access to QEMU's monitor with `vm qmp`, and the
 bare-metal mode for firmware images that expect no PC hardware at all. It
-finishes with where to go for Windows guests. At the end `vm_left` is
+finishes with where to go for Windows guests. At the end `vm-left` is
 running with a TPM the guest can see, and you have queried QEMU about it
 directly.
 
@@ -24,28 +24,28 @@ instance with its own state directory and socket. Start one from a host
 shell:
 
 ```bash
-$ sudo mkdir -p /tmp/minimega/swtpm/vm_left
-$ sudo swtpm socket --tpm2 --tpmstate dir=/tmp/minimega/swtpm/vm_left \
-      --ctrl type=unixio,path=/tmp/minimega/swtpm/vm_left/swtpm-sock &
+$ sudo mkdir -p /tmp/minimega/swtpm/vm-left
+$ sudo swtpm socket --tpm2 --tpmstate dir=/tmp/minimega/swtpm/vm-left \
+      --ctrl type=unixio,path=/tmp/minimega/swtpm/vm-left/swtpm-sock &
 ```
 
 or, as the chapter script does, from minimega with `background`, which runs
 a host program and returns at once:
 
 ```minimega
-minimega$ shell mkdir -p /tmp/minimega/swtpm/vm_left
-minimega$ background swtpm socket --tpm2 --tpmstate dir=/tmp/minimega/swtpm/vm_left --ctrl type=unixio,path=/tmp/minimega/swtpm/vm_left/swtpm-sock
+minimega$ shell mkdir -p /tmp/minimega/swtpm/vm-left
+minimega$ background swtpm socket --tpm2 --tpmstate dir=/tmp/minimega/swtpm/vm-left --ctrl type=unixio,path=/tmp/minimega/swtpm/vm-left/swtpm-sock
 Started background process with id 1
 ```
 
 `--tpm2` gives a TPM 2.0 device; leave it out for TPM 1.2. Then point the
-VM at the socket before launching it. Set the field for `vm_left` only and
-clear it before launching `vm_right`, since two VMs must not share a
+VM at the socket before launching it. Set the field for `vm-left` only and
+clear it before launching `vm-right`, since two VMs must not share a
 socket:
 
 ```minimega
-minimega$ vm config tpm-socket /tmp/minimega/swtpm/vm_left/swtpm-sock
-minimega$ vm launch kvm vm_left
+minimega$ vm config tpm-socket /tmp/minimega/swtpm/vm-left/swtpm-sock
+minimega$ vm launch kvm vm-left
 minimega$ clear vm config tpm-socket
 ```
 
@@ -56,8 +56,8 @@ line. The path shows up in `vm info`:
 minimega$ .columns name,state,tpm-socket vm info
 host  | name     | state   | tpm-socket
 node1 | router   | RUNNING |
-node1 | vm_left  | RUNNING | /tmp/minimega/swtpm/vm_left/swtpm-sock
-node1 | vm_right | RUNNING |
+node1 | vm-left  | RUNNING | /tmp/minimega/swtpm/vm-left/swtpm-sock
+node1 | vm-right | RUNNING |
 ```
 
 Inside the guest the device is an ordinary `/dev/tpm0` once the `tpm_tis`
@@ -65,7 +65,7 @@ driver is loaded, and the Debian kernel in the vmbetter image has the
 driver:
 
 ```minimega
-minimega$ cc filter name=vm_left
+minimega$ cc filter name=vm-left
 minimega$ cc exec modprobe tpm_tis
 minimega$ cc exec ls -l /dev/tpm0
 minimega$ cc responses all
@@ -114,12 +114,12 @@ QMP commands underneath. `vm qmp` sends any QMP command you write yourself
 and returns QEMU's JSON reply:
 
 ```minimega
-minimega$ vm qmp vm_left '{ "execute": "query-status" }'
+minimega$ vm qmp vm-left '{ "execute": "query-status" }'
 {"return":{"running":true,"singlestep":false,"status":"running"}}
-minimega$ vm stop vm_left
-minimega$ vm qmp vm_left '{ "execute": "query-status" }'
+minimega$ vm stop vm-left
+minimega$ vm qmp vm-left '{ "execute": "query-status" }'
 {"return":{"running":false,"singlestep":false,"status":"paused"}}
-minimega$ vm start vm_left
+minimega$ vm start vm-left
 ```
 
 The reply for a VM that is launched but not yet started reports
@@ -174,7 +174,7 @@ through all of it, starting from an image installed as in
 
 ## The script
 
-The script rebuilds the sandwich with the TPM on `vm_left`, queries QEMU,
+The script rebuilds the sandwich with the TPM on `vm-left`, queries QEMU,
 and looks for the device in the guest.
 
 ```minimega title="19-specialty-guests.mm"
@@ -185,7 +185,7 @@ and looks for the device in the guest.
 
 ## What you built
 
-- `vm_left` with a TPM 2.0 device backed by swtpm, visible inside the guest
+- `vm-left` with a TPM 2.0 device backed by swtpm, visible inside the guest
   as `/dev/tpm0`.
 - A QMP conversation with QEMU through `vm qmp`, and an understanding of
   what minimega itself does over that socket.

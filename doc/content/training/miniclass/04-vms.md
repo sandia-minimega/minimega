@@ -117,32 +117,32 @@ instance directories, and frees their names.
 
 ### Try it on the sandwich
 
-With the sandwich running from chapter 3, pause `vm_left` and look:
+With the sandwich running from chapter 3, pause `vm-left` and look:
 
 ```minimega
-minimega$ vm stop vm_left
+minimega$ vm stop vm-left
 minimega$ .annotate false .columns name,state vm info
 name     | state
 router   | RUNNING
-vm_left  | PAUSED
-vm_right | RUNNING
-minimega$ vm start vm_left
+vm-left  | PAUSED
+vm-right | RUNNING
+minimega$ vm start vm-left
 ```
 
-Now kill `vm_right` and watch `vm start all` leave it alone:
+Now kill `vm-right` and watch `vm start all` leave it alone:
 
 ```minimega
-minimega$ vm kill vm_right
+minimega$ vm kill vm-right
 minimega$ vm start all
 minimega$ .annotate false .columns name,state vm info
 name     | state
 router   | RUNNING
-vm_left  | RUNNING
-vm_right | QUIT
-minimega$ vm start vm_right
+vm-left  | RUNNING
+vm-right | QUIT
+minimega$ vm start vm-right
 ```
 
-The relaunched `vm_right` boots from scratch, asks the router for a lease
+The relaunched `vm-right` boots from scratch, asks the router for a lease
 again, and is back in `vm info` with an address a few seconds later. Its
 `vm info` row keeps the same name and ID throughout; only `vm flush` would
 have freed them.

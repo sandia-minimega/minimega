@@ -66,8 +66,8 @@ minimega$ read /tmp/minimega/files/sandwich.mm check
 minimega$ read /tmp/minimega/files/sandwich.mm
 ```
 
-VM names are unique within a namespace, so a script that launches `vm_left`
-fails if a `vm_left` already exists. That is why every course script starts
+VM names are unique within a namespace, so a script that launches `vm-left`
+fails if a `vm-left` already exists. That is why every course script starts
 with `clear namespace sandwich` and `namespace sandwich`: it makes the script
 runnable from any state. A file cannot `read` another file, so a course
 script is one flat file each. From a host shell,
@@ -113,7 +113,7 @@ client
 minirouter
 minimega$ vm config restore client
 minimega$ vm config networks net_left
-minimega$ vm launch kvm vm_left
+minimega$ vm launch kvm vm-left
 ```
 
 Templates hold no runtime state; they are the `vm config` lines of a class,
@@ -129,10 +129,10 @@ kernel and initrd and have no disk, so only the state file is written.
 Without a filename the files go under `saved/` in the files directory:
 
 ```minimega
-minimega$ vm save vm_left
+minimega$ vm save vm-left
 minimega$ vm save
 id | name    | status | complete (%)
-1  | vm_left | active | 42.17
+1  | vm-left | active | 42.17
 ```
 
 The command returns once the disk copy is done while the memory save
@@ -147,13 +147,13 @@ serial ports and interfaces must match, because QEMU restores the device
 state into them:
 
 ```minimega
-minimega$ vm kill vm_left
-minimega$ vm flush vm_left
+minimega$ vm kill vm-left
+minimega$ vm flush vm-left
 minimega$ vm config restore client
 minimega$ vm config networks net_left
-minimega$ vm config state saved/vm_left.state
-minimega$ vm launch kvm vm_left
-minimega$ vm start vm_left
+minimega$ vm config state saved/vm-left.state
+minimega$ vm launch kvm vm-left
+minimega$ vm start vm-left
 minimega$ clear vm config state
 ```
 
@@ -180,8 +180,8 @@ completed | total
 
 ```text
 /tmp/minimega/files/saved/sandwich-day1/router.state
-/tmp/minimega/files/saved/sandwich-day1/vm_left.state
-/tmp/minimega/files/saved/sandwich-day1/vm_right.state
+/tmp/minimega/files/saved/sandwich-day1/vm-left.state
+/tmp/minimega/files/saved/sandwich-day1/vm-right.state
 /tmp/minimega/files/saved/sandwich-day1/launch.mm
 ```
 
@@ -235,7 +235,7 @@ Check before you leave a shared host: `tap` and `vm info` should be empty,
 ## The script
 
 The script rebuilds the sandwich from templates, writes the session to
-`sandwich.mm`, checkpoints `vm_left`, and then tears everything down. It
+`sandwich.mm`, checkpoints `vm-left`, and then tears everything down. It
 starts with `clear history`, so the written file contains exactly the
 commands that follow:
 
@@ -249,7 +249,7 @@ commands that follow:
 
 - `sandwich.mm`, a script written from the history, that rebuilds the
   experiment with `read`.
-- Two templates, `client` and `minirouter`, and a `vm_left.state`
+- Two templates, `client` and `minirouter`, and a `vm-left.state`
   checkpoint under `saved/`.
 - A clean host: no namespace, no VMs, no taps.
 

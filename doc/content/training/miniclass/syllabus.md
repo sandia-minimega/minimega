@@ -40,7 +40,7 @@ students typing along, and the labs are unassisted.
 | 14:15–14:45 | Networking basics | [6](06-networking.md) | The host tap into `net_left`. See the shared-host pitfall below before choosing addresses. |
 | 14:45–15:00 | Break | | |
 | 15:00–15:30 | Routers | [7](07-routers.md) | Static leases and DNS on the sandwich router; the second router and OSPF as a demonstration if time is short. |
-| 15:30–16:15 | Command and control; **Lab B** | [8](08-cc.md) | Lab B: `cc exec`, `cc background`, `cc send` and `cc recv` between the clients; generate traffic with `ping` in the background and watch it in `vm top`; add `qos add vm_left 0 loss 25` and watch it again. |
+| 15:30–16:15 | Command and control; **Lab B** | [8](08-cc.md) | Lab B: `cc exec`, `cc background`, `cc send` and `cc recv` between the clients; generate traffic with `ping` in the background and watch it in `vm top`; add `qos add vm-left 0 loss 25` and watch it again. |
 | 16:15–16:45 | Save, replay, clean up | [9](09-save-replay-cleanup.md) | `vm save` and `ns save` versus `vm config save`; `clear namespace`; `nuke`. |
 | 16:45–17:30 | Troubleshooting; **Lab C** | [10](10-troubleshooting.md) | Lab C: students receive four broken copies of the Chapter 3 script (router never committed, a VLAN alias misspelt on one side, an initrd path that does not exist, a host `dnsmasq` started on the same tap) and fix each using `vm info`, `router router`, the log, and `check`. |
 | 17:30 | Wrap-up | | Point at Part II and the two-day schedule. |
@@ -53,10 +53,10 @@ namespaces and clusters.
 | Time | Block | Chapters | Notes |
 |---|---|---|---|
 | 09:00–09:15 | Recap; rebuild the sandwich from its script | [3](03-router-sandwich.md) | `read` the chapter script; everyone starts from the same state. |
-| 09:15–10:00 | Background traffic | [11](11-traffic.md) | protonuke server on `vm_left`, client on `vm_right`. |
-| 10:00–10:45 | Capture and mirrors; **Lab D** | [12](12-capture.md) | Lab D: capture `vm_left`'s traffic to a PCAP, add the `monitor` VM with a `tap mirror`, and read both captures with `tcpdump` on the host. |
+| 09:15–10:00 | Background traffic | [11](11-traffic.md) | protonuke server on `vm-left`, client on `vm-right`. |
+| 10:00–10:45 | Capture and mirrors; **Lab D** | [12](12-capture.md) | Lab D: capture `vm-left`'s traffic to a PCAP, add the `monitor` VM with a `tap mirror`, and read both captures with `tcpdump` on the host. |
 | 10:45–11:00 | Break | | |
-| 11:00–11:45 | VNC recording and scripting | [13](13-vnc.md) | Record a login on `vm_right`, play it back on a second copy. |
+| 11:00–11:45 | VNC recording and scripting | [13](13-vnc.md) | Record a login on `vm-right`, play it back on a second copy. |
 | 11:45–12:15 | Runtime changes | [14](14-runtime-changes.md) | CD-ROM, USB hotplug, disconnecting the router's interfaces, `qos`. |
 | 12:15–13:15 | Lunch | | |
 | 13:15–14:00 | Namespaces | [16](16-namespaces.md) | A second copy of the sandwich in `sandwich2`; on a shared cluster, each student now moves into a namespace of their own. |

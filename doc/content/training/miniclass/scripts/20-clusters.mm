@@ -27,14 +27,14 @@ vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
 vm config memory 3072
 vm config networks sandwich,net_left
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks sandwich,net_right
-vm launch kvm vm_right
+vm launch kvm vm-right
 
 # Look at the placement, then force the clients onto opposite hosts
 ns schedule dry-run
-ns schedule mv vm_left node2
-ns schedule mv vm_right node1
+ns schedule mv vm-left node2
+ns schedule mv vm-right node1
 ns schedule dump
 ns schedule
 shell sleep 5
@@ -54,8 +54,8 @@ vm start all
 shell sleep 20
 .columns name,state,vlan,ip vm info
 
-# vm_left on node2 got its lease from the router on node1 through the tunnel
-cc filter name=vm_left
+# vm-left on node2 got its lease from the router on node1 through the tunnel
+cc filter name=vm-left
 cc exec ping -c 3 10.0.0.1
 shell sleep 5
 cc responses all

@@ -2,8 +2,8 @@
 
 Plumbing moves lines of text between guests, host programs and minimega
 itself, over the cc channel rather than the experiment network. In this lab
-`vm_left` pings `vm_right` and writes the output into a named pipe;
-`vm_right` reads the same pipe and logs it; a pipeline on the host rewrites
+`vm-left` pings `vm-right` and writes the output into a named pipe;
+`vm-right` reads the same pipe and logs it; a pipeline on the host rewrites
 the lines on their way to a second pipe; and a via hands each reader of a
 pipe its own random sample. None of the traffic touches `net_left` or
 `net_right`, which is the point: measurement and control stay out of band.
@@ -51,14 +51,14 @@ Guests reach pipes two ways. A program started with `cc exec` or
 the command with `stdin=`, `stdout=` or `stderr=` pairs. And any guest shell
 can run `miniccc -pipe <name>`, which talks to the running agent through its
 socket under `/tmp/miniccc` and connects the shell's standard input and
-output to the pipe until the pipe closes. Use the first form on `vm_left`,
-to ping `vm_right` forever and send the output to a pipe called `pings`, and
-the second on `vm_right`, to read that pipe into a file:
+output to the pipe until the pipe closes. Use the first form on `vm-left`,
+to ping `vm-right` forever and send the output to a pipe called `pings`, and
+the second on `vm-right`, to read that pipe into a file:
 
 ```minimega
-minimega[sandwich]$ cc filter name=vm_left
+minimega[sandwich]$ cc filter name=vm-left
 minimega[sandwich]$ cc background stdout=pings ping -i 1 10.0.1.10
-minimega[sandwich]$ cc filter name=vm_right
+minimega[sandwich]$ cc filter name=vm-right
 minimega[sandwich]$ cc background sh -c "miniccc -pipe pings > /tmp/pings.log"
 minimega[sandwich]$ shell sleep 10
 minimega[sandwich]$ cc exec tail -n 3 /tmp/pings.log
@@ -69,7 +69,7 @@ minimega[sandwich]$ clear cc filter
 
 The quoted string reaches the guest as a single argument, so the shell
 redirect happens inside the guest. The response is the last three lines of
-ping output, as received on `vm_right` through the cc channel; the ICMP went
+ping output, as received on `vm-right` through the cc channel; the ICMP went
 one way over the router, the text came back the other way through minimega.
 The pipe listing shows one writer, one reader and a rising count:
 
@@ -80,7 +80,7 @@ sandwich//pings | all  | 1       | 1       | 14    |     | 64 bytes from 10.0.1.
 ```
 
 Without a shell, `cc background stdin=pings tee /tmp/pings.log` on
-`vm_right` does the same job: minimega feeds the pipe straight into `tee`'s
+`vm-right` does the same job: minimega feeds the pipe straight into `tee`'s
 standard input. A host shell attaches with `minimega -pipe sandwich//pings`, so a
 third reader on the host would see every line as well.
 
@@ -102,7 +102,7 @@ sandwich//pings  | all  | 2       | 1       | 31    |     | 64 bytes from 10.0.1
 sandwich//tagged | all  | 0       | 1       | 17    |     | left:64 bytes from 10.0.1.10: icmp_seq=31 ttl=63 time=0.398 ms
 ```
 
-`pings` now has two readers, `miniccc -pipe` on `vm_right` and `sed` on the
+`pings` now has two readers, `miniccc -pipe` on `vm-right` and `sed` on the
 host, and
 each line appears on `tagged` with a prefix. `sed -u` is unbuffered; without
 it, and its equivalent for other filters, output waits in the program's
@@ -148,14 +148,14 @@ level (`log level debug` to see it), and `clear pipe pings log` stops that.
 ## Clean up
 
 Clearing a pipe closes its readers with an end of file, which is how you
-stop a pipeline: `miniccc -pipe` on `vm_right` exits, `sed` exits, and the
+stop a pipeline: `miniccc -pipe` on `vm-right` exits, `sed` exits, and the
 pipeline is gone from `plumb`. But minimega refuses to delete a pipe that
 still has a writer (`cannot delete named pipe with open writers`), and the
-ping on `vm_left` is still writing to `pings`. Kill the ping first, give the
+ping on `vm-left` is still writing to `pings`. Kill the ping first, give the
 kill a moment to arrive, then clear:
 
 ```minimega
-minimega[sandwich]$ cc filter name=vm_left
+minimega[sandwich]$ cc filter name=vm-left
 minimega[sandwich]$ cc process killall ping
 minimega[sandwich]$ clear cc filter
 minimega[sandwich]$ shell sleep 5
@@ -176,8 +176,8 @@ in the namespace.
 
 ## What you built
 
-- A pipe, `pings`, carrying ping output from `vm_left` to a log file on
-  `vm_right` without touching the experiment network.
+- A pipe, `pings`, carrying ping output from `vm-left` to a log file on
+  `vm-right` without touching the experiment network.
 - A host-side pipeline that rewrites those lines into a second pipe,
   `tagged`, and the delivery modes that turn a pipe into a queue.
 - A via on `rtt` that gives each reader its own sample from one write.

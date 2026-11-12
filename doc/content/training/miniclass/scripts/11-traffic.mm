@@ -6,14 +6,14 @@ namespace sandwich
 clear cc responses
 
 # the sandwich from chapter 3, with fixed MACs and static leases so that
-# vm_left is always 10.0.0.10 and vm_right is always 10.0.1.10
+# vm-left is always 10.0.0.10 and vm-right is always 10.0.1.10
 vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
 vm config memory 3072
 vm config networks net_left,00:00:00:00:01:01
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks net_right,00:00:00:00:02:01
-vm launch kvm vm_right
+vm launch kvm vm-right
 vm config kernel minirouter.kernel
 vm config initrd minirouter.initrd
 vm config networks net_left net_right
@@ -39,17 +39,17 @@ shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip
 shell sh -c "cp /usr/bin/protonuke /tmp/minimega/files/protonuke 2>/dev/null || cp /opt/minimega/bin/protonuke /tmp/minimega/files/protonuke"
 cc send protonuke
 
-# serve HTTP, HTTPS and SMTP on vm_left (sshd already owns port 22)
-cc filter name=vm_left
+# serve HTTP, HTTPS and SMTP on vm-left (sshd already owns port 22)
+cc filter name=vm-left
 cc background protonuke -serve -http -https -smtp
 
-# fetch one page from vm_right to prove the path through the router works
-cc filter name=vm_right
+# fetch one page from vm-right to prove the path through the router works
+cc filter name=vm-right
 cc exec curl -sS --retry 5 --retry-connrefused 10.0.0.10/
 shell sleep 10
 cc responses 6
 
-# then generate steady load from vm_right, one action every 500 ms per protocol
+# then generate steady load from vm-right, one action every 500 ms per protocol
 cc background protonuke -http -https -smtp -u 500ms 10.0.0.10
 clear cc filter
 shell sleep 15

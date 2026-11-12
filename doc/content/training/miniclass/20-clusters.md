@@ -3,8 +3,8 @@
 In this chapter you join two minimega hosts into a mesh, spread the router
 sandwich across them so that a client on one host gets its DHCP lease from
 the router on the other, and watch the images, the VLANs, and the results
-follow the VMs from host to host. At the end `router` and `vm_right` run on
-`node1`, `vm_left` runs on `node2`, and the three talk through a VXLAN
+follow the VMs from host to host. At the end `router` and `vm-right` run on
+`node1`, `vm-left` runs on `node2`, and the three talk through a VXLAN
 tunnel that minimega built for the namespace.
 
 It assumes the installation from [Chapter 1](01-install.md), the sandwich
@@ -26,15 +26,15 @@ flowchart LR
     subgraph n1["node1 (head)"]
         mm1["minimega"]
         router["router"]
-        vm_right["vm_right"]
+        vm-right["vm-right"]
     end
     subgraph n2["node2"]
         mm2["minimega"]
-        vm_left["vm_left"]
+        vm-left["vm-left"]
     end
     mm1 <-- "mesh, port 9000" --> mm2
-    router <-- "VXLAN tunnel, bridge sandwich" --> vm_left
-    router --- vm_right
+    router <-- "VXLAN tunnel, bridge sandwich" --> vm-left
+    router --- vm-right
 ```
 
 The two hosts talk to each other on a management network; the sandwich's
@@ -229,9 +229,9 @@ minimega$ vm config kernel miniccc.kernel
 minimega$ vm config initrd miniccc.initrd
 minimega$ vm config memory 3072
 minimega$ vm config networks sandwich,net_left
-minimega$ vm launch kvm vm_left
+minimega$ vm launch kvm vm-left
 minimega$ vm config networks sandwich,net_right
-minimega$ vm launch kvm vm_right
+minimega$ vm launch kvm vm-right
 ```
 
 Nothing has launched yet; `ns queue` lists the three waiting VMs. A dry run
@@ -241,19 +241,19 @@ shows where the scheduler would put them, `ns schedule mv` overrides it,
 
 ```minimega
 minimega$ ns schedule dry-run
-minimega$ ns schedule mv vm_left node2
-minimega$ ns schedule mv vm_right node1
+minimega$ ns schedule mv vm-left node2
+minimega$ ns schedule mv vm-right node1
 minimega$ ns schedule dump
 vm       | dst
 router   | node1
-vm_left  | node2
-vm_right | node1
+vm-left  | node2
+vm-right | node1
 minimega$ ns schedule
 minimega$ .columns name,state,vlan vm info
 host  | name     | state    | vlan
 node1 | router   | BUILDING | [net_left (101), net_right (102)]
-node2 | vm_left  | BUILDING | [net_left (101)]
-node1 | vm_right | BUILDING | [net_right (102)]
+node2 | vm-left  | BUILDING | [net_left (101)]
+node1 | vm-right | BUILDING | [net_right (102)]
 ```
 
 The placement the dry run proposes depends on the load of the hosts; the
@@ -265,7 +265,7 @@ queueing stays on for the namespace: a later `vm launch kvm x` queues
 until the next bare `vm launch`.
 
 The `host` column, which minicli adds to every table while `.annotate` is
-on, is now the interesting one: `vm_left` is on `node2`.
+on, is now the interesting one: `vm-left` is on `node2`.
 
 ## Bring up the sandwich
 
@@ -285,7 +285,7 @@ minimega$ vm start router
 minimega$ vm start all
 ```
 
-Twenty seconds later, `vm_left` on `node2` has a lease from the router on
+Twenty seconds later, `vm-left` on `node2` has a lease from the router on
 `node1`. Its DHCP request crossed the tunnel and the answer came back the
 same way:
 
@@ -293,18 +293,18 @@ same way:
 minimega$ .columns name,state,vlan,ip vm info
 host  | name     | state   | vlan                              | ip
 node1 | router   | RUNNING | [net_left (101), net_right (102)] | [10.0.0.1, 10.0.1.1]
-node2 | vm_left  | RUNNING | [net_left (101)]                  | [10.0.0.2]
-node1 | vm_right | RUNNING | [net_right (102)]                 | [10.0.1.2]
-minimega$ cc filter name=vm_left
+node2 | vm-left  | RUNNING | [net_left (101)]                  | [10.0.0.2]
+node1 | vm-right | RUNNING | [net_right (102)]                 | [10.0.1.2]
+minimega$ cc filter name=vm-left
 minimega$ cc exec ping -c 3 10.0.0.1
 minimega$ cc responses all
 minimega$ clear cc filter
 ```
 
-`cc` did not care which host `vm_left` is on: every namespace runs its own
+`cc` did not care which host `vm-left` is on: every namespace runs its own
 `cc` server on every host, and commands and responses are collected on the
 node you typed at. The same holds for `vm screenshot`, VNC through miniweb,
-and captures: a `capture pcap vm vm_left 0 left.pcap` writes the file on
+and captures: a `capture pcap vm vm-left 0 left.pcap` writes the file on
 `node2`, and `file get left.pcap` brings it to `node1` when it is done.
 
 Finally, look at what iomeshage did while you were not watching:
@@ -316,7 +316,7 @@ node2 |     | miniccc.initrd | 141852672 | 2026-09-17T14:02:11Z
 node2 |     | miniccc.kernel | 7815424   | 2026-09-17T14:02:09Z
 ```
 
-`node2` fetched the two files it needed for `vm_left` and nothing else.
+`node2` fetched the two files it needed for `vm-left` and nothing else.
 
 ## Clean up
 

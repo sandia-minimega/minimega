@@ -15,14 +15,14 @@ It assumes the images from [chapter 2](02-images.md) are in
 ```mermaid
 flowchart LR
     subgraph left["net_left  (10.0.0.0/24)"]
-        vm_left["vm_left<br/>DHCP client"]
+        vm-left["vm-left<br/>DHCP client"]
     end
     subgraph right["net_right  (10.0.1.0/24)"]
-        vm_right["vm_right<br/>DHCP client"]
+        vm-right["vm-right<br/>DHCP client"]
     end
     router["router<br/>eth0 10.0.0.1<br/>eth1 10.0.1.1<br/>DHCP on both"]
-    vm_left --- router
-    router --- vm_right
+    vm-left --- router
+    router --- vm-right
 ```
 
 `net_left` and `net_right` are two VLANs on the host's Open vSwitch bridge.
@@ -72,7 +72,7 @@ minimega$ vm config kernel miniccc.kernel
 minimega$ vm config initrd miniccc.initrd
 minimega$ vm config memory 3072
 minimega$ vm config networks net_left
-minimega$ vm launch kvm vm_left
+minimega$ vm launch kvm vm-left
 ```
 
 `net_left` is a *VLAN alias*. minimega allocates a VLAN tag the first time it
@@ -81,7 +81,7 @@ every interface that names `net_left` from then on. You never pick tag
 numbers yourself; [chapter 6](06-networking.md) explains the netspec and the
 alias table.
 
-`vm launch kvm vm_left` creates one KVM VM named `vm_left` from the current
+`vm launch kvm vm-left` creates one KVM VM named `vm-left` from the current
 description. It exists now, with its tap on the bridge and a QEMU process
 waiting, but it is not running; that is the `BUILDING` state.
 
@@ -90,7 +90,7 @@ needs a different network:
 
 ```minimega
 minimega$ vm config networks net_right
-minimega$ vm launch kvm vm_right
+minimega$ vm launch kvm vm-right
 ```
 
 ## Describe and launch the router
@@ -113,8 +113,8 @@ Three VMs, all `BUILDING`:
 minimega$ .annotate false .columns name,state,vlan vm info
 name     | state    | vlan
 router   | BUILDING | [net_left (101), net_right (102)]
-vm_left  | BUILDING | [net_left (101)]
-vm_right | BUILDING | [net_right (102)]
+vm-left  | BUILDING | [net_left (101)]
+vm-right | BUILDING | [net_right (102)]
 ```
 
 The numbers in parentheses are the tags minimega allocated for the aliases,
@@ -207,8 +207,8 @@ When it returns the guests have booted and taken their leases:
 minimega$ .annotate false .columns name,state,vlan,ip vm info
 name     | state   | vlan                              | ip
 router   | RUNNING | [net_left (101), net_right (102)] | [10.0.0.1, 10.0.1.1]
-vm_left  | RUNNING | [net_left (101)]                  | [10.0.0.2]
-vm_right | RUNNING | [net_right (102)]                 | [10.0.1.2]
+vm-left  | RUNNING | [net_left (101)]                  | [10.0.0.2]
+vm-right | RUNNING | [net_right (102)]                 | [10.0.1.2]
 ```
 
 The `ip` column is learned by watching traffic on each VM's tap, so it
@@ -237,23 +237,23 @@ clients
 ```
 
 `cc exec` runs a command on every connected agent, and `cc filter` narrows
-that to the VMs you name. Filter on `vm_left` and ping `vm_right` through
+that to the VMs you name. Filter on `vm-left` and ping `vm-right` through
 the router. The command is queued, delivered, and run; nothing is printed
 until you ask for the response:
 
 ```minimega
-minimega$ cc filter name=vm_left
+minimega$ cc filter name=vm-left
 minimega$ cc exec ping -c 3 10.0.1.2
 minimega$ cc commands
 ```
 
 `cc commands` lists every command minimega has issued in the namespace with
 its id. The first three are the router commit; the ping is the fourth, and
-the `responses` column turns to 1 once `vm_left` has reported back. Read it:
+the `responses` column turns to 1 once `vm-left` has reported back. Read it:
 
 ```minimega
 minimega$ cc responses 4
-4/<uuid of vm_left>/stdout:
+4/<uuid of vm-left>/stdout:
 PING 10.0.1.2 (10.0.1.2) 56(84) bytes of data.
 64 bytes from 10.0.1.2: icmp_seq=1 ttl=63 time=1.4 ms
 64 bytes from 10.0.1.2: icmp_seq=2 ttl=63 time=0.8 ms
@@ -263,16 +263,16 @@ PING 10.0.1.2 (10.0.1.2) 56(84) bytes of data.
 3 packets transmitted, 3 received, 0% packet loss, time 2003ms
 ```
 
-The `ttl=63` is the proof: the reply left `vm_right` with a TTL of 64 and
-crossed one router. `cc exitcode 4 vm_left` prints `0`. Clear the filter
+The `ttl=63` is the proof: the reply left `vm-right` with a TTL of 64 and
+crossed one router. `cc exitcode 4 vm-left` prints `0`. Clear the filter
 when you are done, or every later `cc` command in the chapter goes to
-`vm_left` alone:
+`vm-left` alone:
 
 ```minimega
 minimega$ clear cc filter
 ```
 
-`cc filter name=vm_left` matches on the `name` column of `vm info`; any
+`cc filter name=vm-left` matches on the `name` column of `vm info`; any
 column or tag works the same way. [Chapter 8](08-cc.md) covers the rest of
 the API.
 
@@ -379,7 +379,7 @@ prompt or `sudo minimega -e read <path>` from a shell.
 
 ## What you built
 
-- Namespace `sandwich` with `vm_left` on `net_left`, `vm_right` on
+- Namespace `sandwich` with `vm-left` on `net_left`, `vm-right` on
   `net_right`, and `router` on both.
 - A minirouter serving addresses and a default gateway on each network, and
   a ping from one client to the other through it, run over command and

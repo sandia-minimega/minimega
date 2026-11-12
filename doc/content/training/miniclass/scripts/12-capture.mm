@@ -10,9 +10,9 @@ vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
 vm config memory 3072
 vm config networks net_left,00:00:00:00:01:01
-vm launch kvm vm_left
+vm launch kvm vm-left
 vm config networks net_right,00:00:00:00:02:01
-vm launch kvm vm_right
+vm launch kvm vm-right
 vm config kernel minirouter.kernel
 vm config initrd minirouter.initrd
 vm config networks net_left net_right
@@ -32,13 +32,13 @@ vm start all
 # wait until every VM has a connected agent and an address (about 90 s)
 shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip namespace sandwich vm info 2>/dev/null | grep -c 'true.*10[.]' | grep -qx 3; do sleep 3; done"
 
-# PCAP of vm_left's only interface, with a ping through the router as traffic
-capture pcap vm vm_left 0 vm_left.pcap
+# PCAP of vm-left's only interface, with a ping through the router as traffic
+capture pcap vm vm-left 0 vm-left.pcap
 .annotate false capture
-cc filter name=vm_left
+cc filter name=vm-left
 cc exec ping -c 5 10.0.1.10
 shell sleep 10
-capture pcap delete vm vm_left
+capture pcap delete vm vm-left
 
 # PCAP of the whole bridge: both sides of the router this time
 capture pcap bridge mega_bridge sandwich.pcap
@@ -70,14 +70,14 @@ vm launch kvm monitor
 vm start monitor
 # wait until the monitor has an agent and a lease: four VMs now
 shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip namespace sandwich vm info 2>/dev/null | grep -c 'true.*10[.]' | grep -qx 4; do sleep 3; done"
-tap mirror vm_left 0 monitor 0
+tap mirror vm-left 0 monitor 0
 .annotate false .columns name,tap vm info
 
-# tcpdump on the monitor sees vm_left's traffic; drive it over cc
+# tcpdump on the monitor sees vm-left's traffic; drive it over cc
 cc filter name=monitor
 cc prefix monitor
 cc background tcpdump -U -n -i eth0 -w /tmp/mirror.pcap
-cc filter name=vm_right
+cc filter name=vm-right
 cc exec ping -c 3 10.0.0.10
 shell sleep 10
 cc filter name=monitor
