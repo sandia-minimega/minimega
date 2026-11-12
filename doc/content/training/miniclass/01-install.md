@@ -29,8 +29,8 @@ If the host is a virtual machine, `nested` must be on, or every guest you
 launch later sits in the `ERROR` state. The
 [installation guide](../../articles/installing.md#what-you-need) lists the rest
 of the requirements: a 64-bit kernel of 3.18 or later, root, and enough
-memory for 2 GB per VM by default. The course needs three VMs at once, so a
-host with 8 GB is comfortable.
+memory for 2 GB per VM by default (the course gives each VM 3 GB). The
+course needs three VMs at once, so a host with 12 GB is comfortable.
 
 ## Install
 

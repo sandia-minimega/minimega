@@ -61,14 +61,16 @@ depth.
 ## Describe and launch the clients
 
 `vm config` holds the description that the next `vm launch` will copy. Point
-it at the client image, give the VM 2 GB of memory (the default, but the
-course says so explicitly), and put its single interface on a network named
-`net_left`:
+it at the client image, give the VM 3 GB of memory, and put its single
+interface on a network named `net_left`. The default is 2 GB, but these
+images unpack to about 1 GB into a RAM-backed filesystem that is capped at
+half of the guest's memory, so a 2 GB guest panics at boot with `VFS: Unable
+to mount root fs`:
 
 ```minimega
 minimega$ vm config kernel miniccc.kernel
 minimega$ vm config initrd miniccc.initrd
-minimega$ vm config memory 2048
+minimega$ vm config memory 3072
 minimega$ vm config networks net_left
 minimega$ vm launch kvm vm_left
 ```
@@ -185,8 +187,21 @@ minimega$ vm start all
 `shell` runs a program on the host and waits for it, which is how a command
 file pauses. `vm start all` starts every VM that is `BUILDING` or `PAUSED`
 and skips the one that is already running, so it is safe to call after
-`vm start router`. Twenty seconds later the guests have booted and taken
-their leases:
+`vm start router`.
+
+Booting takes a minute or more, and a fixed `shell sleep` is either too short
+or wasteful. Instead, have the shell ask minimega until the answer is the one
+you want. The loop below runs `minimega -e`, the same client you use to send
+a one-off command, once every three seconds, and stops when exactly three VMs
+report a connected agent (`cc_active` true) and an address starting with
+`10.`. The outer `timeout` gives up after five minutes, which makes the
+script fail instead of hang. It usually returns after about 90 seconds:
+
+```minimega
+minimega$ shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip namespace sandwich vm info 2>/dev/null | grep -c 'true.*10[.]' | grep -qx 3; do sleep 3; done"
+```
+
+When it returns the guests have booted and taken their leases:
 
 ```minimega
 minimega$ .annotate false .columns name,state,vlan,ip vm info
@@ -198,7 +213,7 @@ vm_right | RUNNING | [net_right (102)]                 | [10.0.1.2]
 
 The `ip` column is learned by watching traffic on each VM's tap, so it
 trails the guest by a moment and stays empty for a VM that has not sent a
-packet. If a client's address is missing after half a minute, the router did
+packet. If a client's address never appears, the router did
 not serve it; [chapter 10](10-troubleshooting.md) walks through why.
 
 `vlans` shows the alias table the namespace built up:
@@ -301,7 +316,7 @@ router's. Print it and see what minimega actually recorded:
 ```minimega
 minimega$ vm config
 VM configuration:
-Memory:           2048
+Memory:           3072
 VCPUs:            1
 Networks:         [net_left net_right]
 Bonds:            []
@@ -348,7 +363,12 @@ which is how [chapter 4](04-vms.md) launches spares.
 Everything above, as one command file. It starts with
 `clear namespace sandwich` so that it always builds from nothing; that line
 destroys the namespace and everything in it, which is also how you tear the
-sandwich down when you are finished. Run it with `read <path>` at the
+sandwich down when you are finished. The one thing it leaves behind is the
+response files that `cc` wrote under `/tmp/minimega/files/sandwich/`. Command
+ids start again at 1 in a new namespace, so a later `cc responses 4` would
+print the old output of the same id. The scripts that read responses
+therefore follow `namespace sandwich` with `clear cc responses`; do the same
+whenever you rebuild an experiment by hand. Run it with `read <path>` at the
 prompt or `sudo minimega -e read <path>` from a shell.
 
 ```minimega title="03-router-sandwich.mm"

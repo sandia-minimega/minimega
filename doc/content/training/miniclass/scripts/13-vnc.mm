@@ -7,7 +7,7 @@ namespace sandwich
 # the sandwich from chapter 3 with fixed client addresses (chapter 11)
 vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
-vm config memory 2048
+vm config memory 3072
 vm config networks net_left,00:00:00:00:01:01
 vm launch kvm vm_left
 vm config networks net_right,00:00:00:00:02:01

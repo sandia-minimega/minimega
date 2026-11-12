@@ -102,7 +102,7 @@ touching the current one:
 minimega$ clear vm config
 minimega$ vm config kernel miniccc.kernel
 minimega$ vm config initrd miniccc.initrd
-minimega$ vm config memory 2048
+minimega$ vm config memory 3072
 minimega$ vm config save client
 minimega$ clear vm config
 minimega$ vm config kernel minirouter.kernel
@@ -138,7 +138,7 @@ id | name    | status | complete (%)
 The command returns once the disk copy is done while the memory save
 continues; `vm save` alone shows the saves in flight, and the `status`
 column ends as `completed` or `failed`. Saving pauses the VM, and it stays
-`PAUSED` until you `vm start` it. A 2 GB VM writes up to 2 GB of state, so
+`PAUSED` until you `vm start` it. A 3 GB VM writes up to 3 GB of state, so
 check the free space under the files directory first.
 
 To resume the checkpoint, describe a VM the same way as the one you saved

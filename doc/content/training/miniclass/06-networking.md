@@ -173,12 +173,22 @@ mega_bridge | mega_tap4 | net_left (101)
 ```
 
 The host now has `10.0.0.254` on `mega_tap4` and a route to `10.0.0.0/24`
-through it. `shell` runs a program on the host and returns its output, so
-you can prove it without leaving the prompt:
+through it. Prove it from the other side: have `vm_left` ping the host's tap
+address with `cc`, which runs a command inside a guest (chapter 8 covers it
+properly). This works wherever minimega runs, including the Docker image,
+which has no `ping` of its own for `shell` to run on the host:
 
 ```minimega
-minimega$ shell ping -c 3 10.0.0.1
+minimega$ cc filter name=vm_left
+minimega$ cc prefix tap
+minimega$ cc exec ping -c 3 10.0.0.254
+minimega$ shell sleep 8
+minimega$ cc responses tap
+minimega$ clear cc prefix
+minimega$ clear cc filter
 ```
+
+The responses show three replies from `10.0.0.254`.
 
 From a host shell, ping `vm_left` at the address `vm info` showed, or log in:
 the stock miniccc image allows root to log in over SSH with no password.

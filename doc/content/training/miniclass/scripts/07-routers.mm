@@ -3,11 +3,12 @@
 # adds router2, net_far and vm_far and runs OSPF between the two routers.
 clear namespace sandwich
 namespace sandwich
+clear cc responses
 
 # clients; vm_right gets a fixed MAC so the router can give it a static lease
 vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
-vm config memory 2048
+vm config memory 3072
 vm config networks net_left
 vm launch kvm vm_left
 vm config networks net_right,00:00:00:00:02:01
@@ -50,8 +51,10 @@ router router2 commit
 vm start router,router2
 shell sleep 15
 vm start all
+# wait until every VM has a connected agent and an address (about 90 s)
+shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip namespace sandwich vm info 2>/dev/null | grep -c 'true.*10[.]' | grep -qx 5; do sleep 3; done"
 # OSPF needs a little while to form its adjacency and exchange routes
-shell sleep 45
+shell sleep 30
 
 .annotate false .columns name,vlan vm info
 router router

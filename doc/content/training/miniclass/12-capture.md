@@ -141,7 +141,7 @@ minimega[sandwich]$ vm config initrd miniccc.initrd
 minimega[sandwich]$ vm config networks net_left
 minimega[sandwich]$ vm launch kvm monitor
 minimega[sandwich]$ vm start monitor
-minimega[sandwich]$ shell sleep 30
+minimega[sandwich]$ shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip namespace sandwich vm info 2>/dev/null | grep -c 'true.*10[.]' | grep -qx 4; do sleep 3; done"
 minimega[sandwich]$ tap mirror vm_left 0 monitor 0
 ```
 

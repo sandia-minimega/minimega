@@ -22,9 +22,10 @@ that `vm_left` is always `10.0.0.10` and `vm_right` is always `10.0.1.10`:
 ```minimega
 minimega$ clear namespace sandwich
 minimega$ namespace sandwich
+minimega[sandwich]$ clear cc responses
 minimega[sandwich]$ vm config kernel miniccc.kernel
 minimega[sandwich]$ vm config initrd miniccc.initrd
-minimega[sandwich]$ vm config memory 2048
+minimega[sandwich]$ vm config memory 3072
 minimega[sandwich]$ vm config networks net_left,00:00:00:00:01:01
 minimega[sandwich]$ vm launch kvm vm_left
 minimega[sandwich]$ vm config networks net_right,00:00:00:00:02:01
@@ -57,10 +58,13 @@ The client image built in chapter 2 contains miniccc but not protonuke. The
 packages install protonuke as `/usr/bin/protonuke` on the host (the Docker
 image has it in `/opt/minimega/bin`, a source build in `bin/`), and `cc send`
 can deliver any file that sits under minimega's files directory,
-`/tmp/minimega/files` by default. Copy it there and send it to every client:
+`/tmp/minimega/files` by default. Copy it there and send it to every client.
+The `cp` tries the package path first and falls back to the Docker image's
+`/opt/minimega/bin`; change the path if you built from source. It runs under
+`sh -c` so that the `||` reaches the shell:
 
 ```minimega
-minimega[sandwich]$ shell cp /usr/bin/protonuke /tmp/minimega/files/protonuke
+minimega[sandwich]$ shell sh -c "cp /usr/bin/protonuke /tmp/minimega/files/protonuke 2>/dev/null || cp /opt/minimega/bin/protonuke /tmp/minimega/files/protonuke"
 minimega[sandwich]$ cc send protonuke
 ```
 
@@ -88,11 +92,17 @@ Leave SSH out of the server set: the client image already runs sshd on port
 22, and two servers cannot share it. HTTP and HTTPS answer every `GET` with a
 generated page and a random 3 MB image; SMTP accepts mail and drops it.
 
-Check it from the other side of the router. The client image has `curl`:
+Check it from the other side of the router. The client image has `curl`.
+Leave the `http://` off the URL: minimega treats any argument that starts
+with `http://` as a file to download and replaces it with a local path, so
+`curl` would never see the address. `curl` assumes HTTP when there is no
+scheme. protonuke may not be listening yet when `curl` runs, so let `curl`
+retry a refused connection, and keep `-S` so that a failure prints an error
+instead of nothing:
 
 ```minimega
 minimega[sandwich]$ cc filter name=vm_right
-minimega[sandwich]$ cc exec curl -s http://10.0.0.10/
+minimega[sandwich]$ cc exec curl -sS --retry 5 --retry-connrefused 10.0.0.10/
 minimega[sandwich]$ shell sleep 5
 minimega[sandwich]$ cc responses 6
 ```

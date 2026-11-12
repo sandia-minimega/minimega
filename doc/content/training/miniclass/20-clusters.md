@@ -227,7 +227,7 @@ minimega$ vm launch kvm router
 minimega$ clear vm config schedule
 minimega$ vm config kernel miniccc.kernel
 minimega$ vm config initrd miniccc.initrd
-minimega$ vm config memory 2048
+minimega$ vm config memory 3072
 minimega$ vm config networks sandwich,net_left
 minimega$ vm launch kvm vm_left
 minimega$ vm config networks sandwich,net_right

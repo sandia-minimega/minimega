@@ -10,7 +10,7 @@ namespace sandwich
 clear vm config
 vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
-vm config memory 2048
+vm config memory 3072
 vm config save client
 clear vm config
 vm config kernel minirouter.kernel

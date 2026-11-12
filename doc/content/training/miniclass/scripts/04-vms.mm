@@ -6,7 +6,7 @@ namespace sandwich
 # the client description, saved for later launches
 vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
-vm config memory 2048
+vm config memory 3072
 vm config networks net_left
 vm config save client
 vm launch kvm vm_left

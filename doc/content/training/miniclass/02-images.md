@@ -85,22 +85,26 @@ warning and may drop commands.
 
 vmbetter writes `<name>.kernel` and `<name>.initrd` into the current
 directory, so run it from minimega's files directory and the results land
-where the next chapters look for them. `-branch stable` pins the Debian
+where the next chapters look for them. `-branch bookworm` pins the Debian
 release that `debootstrap` installs (the default is `testing`), and
-`-level info` shows progress.
+`-level info` shows progress. Name the release rather than using `stable`:
+`stable` is now Debian 13 (trixie), which no longer carries the `ntp` and
+`dnsutils` packages that `misc/vmbetter_configs/default.conf` installs, so
+the build stops with `E: Couldn't find these debs: dnsutils ntp`.
 
 **Package**
 
 ```bash
 cd /tmp/minimega/files
-sudo /opt/minimega/bin/vmbetter -level info -branch stable /opt/minimega/misc/vmbetter_configs/miniccc.conf
-sudo /opt/minimega/bin/vmbetter -level info -branch stable /opt/minimega/misc/vmbetter_configs/minirouter.conf
+sudo /opt/minimega/bin/vmbetter -level info -branch bookworm /opt/minimega/misc/vmbetter_configs/miniccc.conf
+sudo /opt/minimega/bin/vmbetter -level info -branch bookworm /opt/minimega/misc/vmbetter_configs/minirouter.conf
 ```
 
 **Source**
 
 The repository's `misc/vmbetter.bash` wraps the same two builds with the same
-flags and expects the binaries in `bin/`. It writes into the current
+flags and expects the binaries in `bin/`. It pins `branch=stable`, so change
+that line to `branch=bookworm` first, for the reason above. It writes into the current
 directory, so run it from the repository root and move the results:
 
 ```bash
@@ -122,8 +126,8 @@ mkdir -p ~/minimega/bin
 sudo docker cp minimega:/opt/minimega/bin/miniccc ~/minimega/bin/miniccc
 sudo docker cp minimega:/opt/minimega/bin/minirouter ~/minimega/bin/minirouter
 cd /tmp/minimega/files
-sudo /opt/minimega/bin/vmbetter -level info -branch stable ~/minimega/misc/vmbetter_configs/miniccc.conf
-sudo /opt/minimega/bin/vmbetter -level info -branch stable ~/minimega/misc/vmbetter_configs/minirouter.conf
+sudo /usr/local/bin/vmbetter -level info -branch bookworm ~/minimega/misc/vmbetter_configs/miniccc.conf
+sudo /usr/local/bin/vmbetter -level info -branch bookworm ~/minimega/misc/vmbetter_configs/minirouter.conf
 ```
 
 A fresh clone has no `bin/` directory, so the overlay links dangle until the
@@ -184,6 +188,7 @@ properly.
 minimega$ namespace sandwich
 minimega$ vm config kernel miniccc.kernel
 minimega$ vm config initrd miniccc.initrd
+minimega$ vm config memory 3072
 minimega$ vm launch kvm client_test
 minimega$ vm config kernel minirouter.kernel
 minimega$ vm config initrd minirouter.initrd
@@ -191,9 +196,18 @@ minimega$ vm launch kvm router_test
 minimega$ vm start all
 ```
 
-Give the guests half a minute. The images' `init` waits ten seconds for
+Give the guests a minute or two. The images' `init` waits ten seconds for
 devices to settle before it starts anything, so `cc_active`, the column that
-says whether a miniccc agent is connected, takes a moment to turn `true`:
+says whether a miniccc agent is connected, takes a while to turn `true`. A
+`shell` loop can wait for it; it asks minimega every three seconds until two
+VMs report `true`, and gives up after five minutes ([chapter
+3](03-router-sandwich.md#start-in-order) explains it):
+
+```minimega
+minimega$ shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip namespace sandwich vm info 2>/dev/null | grep -c 'true' | grep -qx 2; do sleep 3; done"
+```
+
+Then look:
 
 ```minimega
 minimega$ .annotate false .columns name,state,cc_active vm info

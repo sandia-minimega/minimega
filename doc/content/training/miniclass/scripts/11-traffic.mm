@@ -3,12 +3,13 @@
 # in /tmp/minimega/files, and protonuke installed on the host.
 clear namespace sandwich
 namespace sandwich
+clear cc responses
 
 # the sandwich from chapter 3, with fixed MACs and static leases so that
 # vm_left is always 10.0.0.10 and vm_right is always 10.0.1.10
 vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
-vm config memory 2048
+vm config memory 3072
 vm config networks net_left,00:00:00:00:01:01
 vm launch kvm vm_left
 vm config networks net_right,00:00:00:00:02:01
@@ -29,12 +30,13 @@ router router commit
 vm start router
 shell sleep 10
 vm start all
-shell sleep 30
+# wait until every VM has a connected agent and an address (about 90 s)
+shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip namespace sandwich vm info 2>/dev/null | grep -c 'true.*10[.]' | grep -qx 3; do sleep 3; done"
 .annotate false .columns name,state,ip vm info
 
 # put protonuke where cc send can find it, then send it to every client;
 # it lands in /tmp/miniccc/files on the guests and runs by name
-shell cp /usr/bin/protonuke /tmp/minimega/files/protonuke
+shell sh -c "cp /usr/bin/protonuke /tmp/minimega/files/protonuke 2>/dev/null || cp /opt/minimega/bin/protonuke /tmp/minimega/files/protonuke"
 cc send protonuke
 
 # serve HTTP, HTTPS and SMTP on vm_left (sshd already owns port 22)
@@ -43,7 +45,7 @@ cc background protonuke -serve -http -https -smtp
 
 # fetch one page from vm_right to prove the path through the router works
 cc filter name=vm_right
-cc exec curl -s http://10.0.0.10/
+cc exec curl -sS --retry 5 --retry-connrefused 10.0.0.10/
 shell sleep 10
 cc responses 6
 

@@ -149,12 +149,17 @@ level (`log level debug` to see it), and `clear pipe pings log` stops that.
 
 Clearing a pipe closes its readers with an end of file, which is how you
 stop a pipeline: `miniccc -pipe` on `vm_right` exits, `sed` exits, and the
-pipeline is gone from `plumb`. The ping on `vm_left` is still running and still writing
-to a pipe that nobody reads, so kill it too:
+pipeline is gone from `plumb`. But minimega refuses to delete a pipe that
+still has a writer (`cannot delete named pipe with open writers`), and the
+ping on `vm_left` is still writing to `pings`. Kill the ping first, give the
+kill a moment to arrive, then clear:
 
 ```minimega
-minimega[sandwich]$ clear pipe pings
+minimega[sandwich]$ cc filter name=vm_left
 minimega[sandwich]$ cc process killall ping
+minimega[sandwich]$ clear cc filter
+minimega[sandwich]$ shell sleep 5
+minimega[sandwich]$ clear pipe pings
 minimega[sandwich]$ clear plumb
 minimega[sandwich]$ clear pipe
 ```

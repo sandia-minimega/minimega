@@ -42,7 +42,7 @@ Save the following as `tests/router_sandwich` in your checkout. It is
 # The router sandwich from miniclass chapter 3, in the default namespace
 vm config kernel $images/miniccc.kernel
 vm config initrd $images/miniccc.initrd
-vm config memory 2048
+vm config memory 3072
 vm config networks net_left
 vm launch kvm vm_left
 vm config networks net_right
@@ -110,7 +110,7 @@ leaves `router_sandwich.got` behind. Read it, all of it. It begins:
 ## # The router sandwich from miniclass chapter 3, in the default namespace
 ## vm config kernel $images/miniccc.kernel
 ## vm config initrd $images/miniccc.initrd
-## vm config memory 2048
+## vm config memory 3072
 ## vm config networks net_left
 ## vm launch kvm vm_left
 ## vm config networks net_right

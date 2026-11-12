@@ -3,11 +3,12 @@
 # in /tmp/minimega/files. nfcat is expected at /opt/minimega/bin/nfcat.
 clear namespace sandwich
 namespace sandwich
+clear cc responses
 
 # the sandwich from chapter 3 with fixed client addresses (chapter 11)
 vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
-vm config memory 2048
+vm config memory 3072
 vm config networks net_left,00:00:00:00:01:01
 vm launch kvm vm_left
 vm config networks net_right,00:00:00:00:02:01
@@ -28,7 +29,8 @@ router router commit
 vm start router
 shell sleep 10
 vm start all
-shell sleep 30
+# wait until every VM has a connected agent and an address (about 90 s)
+shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip namespace sandwich vm info 2>/dev/null | grep -c 'true.*10[.]' | grep -qx 3; do sleep 3; done"
 
 # PCAP of vm_left's only interface, with a ping through the router as traffic
 capture pcap vm vm_left 0 vm_left.pcap
@@ -66,7 +68,8 @@ vm config initrd miniccc.initrd
 vm config networks net_left
 vm launch kvm monitor
 vm start monitor
-shell sleep 30
+# wait until the monitor has an agent and a lease: four VMs now
+shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip namespace sandwich vm info 2>/dev/null | grep -c 'true.*10[.]' | grep -qx 4; do sleep 3; done"
 tap mirror vm_left 0 monitor 0
 .annotate false .columns name,tap vm info
 

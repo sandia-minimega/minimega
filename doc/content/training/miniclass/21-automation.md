@@ -97,7 +97,7 @@ dashes included: `vm info` is `mm.vm_info()`, `vm launch kvm <name>` is
 `mm.clear_vm_config()`. Arguments are positional in pattern order, optional
 ones default to `None`, and every value is turned into a string and joined
 with spaces, so you pass exactly what you would type:
-`mm.vm_config_networks("net_left net_right")`, `mm.vm_config_memory(2048)`.
+`mm.vm_config_networks("net_left net_right")`, `mm.vm_config_memory(3072)`.
 `help(minimega)` lists every method with the help text you know from
 `help <command>`, and the
 [Python API reference](../../reference/python.md) is the same listing
@@ -134,8 +134,10 @@ the socket is serial and the next call fails until they are consumed.
 
 The script builds the Chapter 3 sandwich in the `sandwich` namespace and
 prints one line per VM. Compare it with `03-router-sandwich.mm`: the
-commands are the same, in the same order, with `shell sleep` replaced by
-`time.sleep` and the final `.columns` by a loop over `as_dict`.
+commands are the same, in the same order, except that the shell loop that
+waits for the guests becomes `wait_ready()`, which polls `vm info` until
+every VM has `cc_active` true and an address, and the final `.columns`
+becomes a loop over `as_dict`.
 
 ```python title="21-automation.py"
 --8<-- "training/miniclass/scripts/21-automation.py"
@@ -166,7 +168,7 @@ not reachable, from `minimega.Error`, which means minimega refused a
 command; both messages tell you which.
 
 From here a script can do what a `.mm` file cannot: wait for a `cc`
-response instead of sleeping a fixed time, retry a launch that failed,
+response, retry a launch that failed,
 launch as many VMs as `host` says fit, or pull `vm info` into a data
 frame. Because the calls are the commands, anything you can do at the
 prompt you can do here, and the reference for both is the same.

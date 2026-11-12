@@ -20,17 +20,17 @@ import minimega
 
 NAMESPACE = "sandwich"
 ROUTER_WAIT = 10  # seconds for minirouter to boot and apply its configuration
-CLIENT_WAIT = 20  # seconds for the clients to boot and get a DHCP lease
+READY_TIMEOUT = 300  # seconds to wait for every VM to connect and get an address
 
 
 def build(mm):
     """Configure and launch the two clients and the router."""
     mm.clear_vm_config()
 
-    # The clients: miniccc image, 2 GB each, one on each network
+    # The clients: miniccc image, 3 GB each, one on each network
     mm.vm_config_kernel("miniccc.kernel")
     mm.vm_config_initrd("miniccc.initrd")
-    mm.vm_config_memory(2048)
+    mm.vm_config_memory(3072)
     mm.vm_config_networks("net_left")
     mm.vm_launch_kvm("vm_left")
     mm.vm_config_networks("net_right")
@@ -55,7 +55,18 @@ def build(mm):
     mm.vm_start("router")
     time.sleep(ROUTER_WAIT)
     mm.vm_start("all")
-    time.sleep(CLIENT_WAIT)
+    wait_ready(mm)
+
+
+def wait_ready(mm):
+    """Wait until every VM has a connected cc agent and an IP address."""
+    deadline = time.time() + READY_TIMEOUT
+    while time.time() < deadline:
+        vms = [vm for r in mm.vm_info() if r["Tabular"] for vm in minimega.as_dict(r)]
+        if vms and all(vm["cc_active"] == "true" and "10." in vm["ip"] for vm in vms):
+            return
+        time.sleep(3)
+    raise TimeoutError(f"VMs not ready after {READY_TIMEOUT} s")
 
 
 def report(mm):
@@ -75,7 +86,7 @@ def main():
 
     try:
         build(mm)
-    except minimega.Error as err:
+    except (minimega.Error, TimeoutError) as err:
         sys.exit(f"minimega: {err}")
 
     report(mm)

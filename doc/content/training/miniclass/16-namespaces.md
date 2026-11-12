@@ -53,7 +53,7 @@ minimega[sandwich2]$ ns hosts
 minimega[sandwich2]$ ns queueing true
 minimega[sandwich2]$ vm config kernel miniccc.kernel
 minimega[sandwich2]$ vm config initrd miniccc.initrd
-minimega[sandwich2]$ vm config memory 2048
+minimega[sandwich2]$ vm config memory 3072
 minimega[sandwich2]$ vm config networks net_left,00:00:00:00:01:01
 minimega[sandwich2]$ vm launch kvm vm_left
 minimega[sandwich2]$ vm config networks net_right,00:00:00:00:02:01

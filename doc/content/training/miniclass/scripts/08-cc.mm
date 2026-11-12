@@ -4,10 +4,11 @@
 # /tmp/minimega/files; adjust the path if minimega runs with another -filepath.
 clear namespace sandwich
 namespace sandwich
+clear cc responses
 
 vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
-vm config memory 2048
+vm config memory 3072
 vm config networks net_left
 vm launch kvm vm_left
 vm config networks net_right
@@ -26,7 +27,8 @@ router router commit
 vm start router
 shell sleep 10
 vm start all
-shell sleep 20
+# wait until all three VMs have a connected agent and an address (about 90 s)
+shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip namespace sandwich vm info 2>/dev/null | grep -c 'true.*10[.]' | grep -qx 3; do sleep 3; done"
 
 # every VM should have a connected agent
 .annotate false .columns name,cc_active vm info

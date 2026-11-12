@@ -77,8 +77,8 @@ RHEL-family amd64 install, and root.
 
 | Lab | Per student or pair | Notes |
 |---|---|---|
-| A, B, C (day 1) | One host: 4 cores, 8 GB RAM, 20 GB free disk | The sandwich is two 2 GB clients plus the router; leave room for the host. |
-| D (capture) | As above plus 2 GB RAM | The `monitor` VM is a third client image. |
+| A, B, C (day 1) | One host: 4 cores, 12 GB RAM, 20 GB free disk | The sandwich is two 3 GB clients plus the router; leave room for the host. |
+| D (capture) | As above plus 3 GB RAM | The `monitor` VM is a third client image. |
 | E (clusters) | Two hosts per pair, or a shared cluster | Hosts need unique hostnames, IP connectivity on port 9000 TCP and UDP, SSH keys for `deploy`, and either a second NIC on a VLAN-capable switch or plain IP reachability for the VXLAN tunnel. Two nested VMs on one workstation work if both have nested virtualization. |
 | Chapter 17 (containers) | Day-1 host, rebooted with cgroup v1 | `systemd.unified_cgroup_hierarchy=0` (plus `cgroup_enable=memory` on Debian-family) on the kernel command line; a reboot, so decide before class. |
 | Chapter 18 (Android) | Day-1 host plus 15 GB disk for the SDK and 4 GB RAM for the emulator | Avoid nested virtualization for this one; the emulator is slow under it. |
@@ -106,8 +106,9 @@ the vmbetter overlays link to them:
 | `minicccfs.tar.gz` (container filesystem) | `sudo bash misc/vmbetter.bash minicccfs` | Chapter 17 |
 | An Android SDK and an AVD named `Pixel_9a` | `sdkmanager` and `avdmanager`, as in [Chapter 18](18-android.md#prepare-the-host) | Chapter 18 |
 
-The wrapper pins Debian `stable` and the US mirror; edit `misc/vmbetter.bash`
-if you need another mirror. Check Chapters 11 to 14 for any additional
+The wrapper pins Debian `stable` and the US mirror. `stable` is now trixie, which
+fails to build; edit `branch=stable` to `branch=bookworm` in `misc/vmbetter.bash`
+(and the mirror, if you need another). Check Chapters 11 to 14 for any additional
 media they use (an ISO for `vm cdrom`, for example) and stage that too.
 Boot each image once on the build machine before copying it anywhere.
 

@@ -155,7 +155,7 @@ names and launch from them:
 ```minimega
 minimega$ vm config kernel miniccc.kernel
 minimega$ vm config initrd miniccc.initrd
-minimega$ vm config memory 2048
+minimega$ vm config memory 3072
 minimega$ vm config networks net_left
 minimega$ vm config save client
 minimega$ vm config kernel minirouter.kernel

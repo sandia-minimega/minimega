@@ -4,6 +4,7 @@
 # images and the swtpm package on the host.
 clear namespace sandwich
 namespace sandwich
+clear cc responses
 
 # One swtpm instance per VM, started as a host process from minimega
 shell mkdir -p /tmp/minimega/swtpm/vm_left
@@ -13,7 +14,7 @@ shell sleep 2
 # vm_left gets the TPM; vm_right is a plain client
 vm config kernel miniccc.kernel
 vm config initrd miniccc.initrd
-vm config memory 2048
+vm config memory 3072
 vm config networks net_left
 vm config tpm-socket /tmp/minimega/swtpm/vm_left/swtpm-sock
 vm launch kvm vm_left
@@ -36,7 +37,8 @@ router router commit
 vm start router
 shell sleep 10
 vm start all
-shell sleep 20
+# wait until every VM has a connected agent and an address (about 90 s)
+shell timeout 300 sh -c "until minimega -e .annotate false .columns cc_active,ip namespace sandwich vm info 2>/dev/null | grep -c 'true.*10[.]' | grep -qx 3; do sleep 3; done"
 .columns name,state,tpm-socket vm info
 
 # Ask QEMU directly over its QMP socket
@@ -46,6 +48,6 @@ vm qmp vm_left '{ "execute": "query-status" }'
 cc filter name=vm_left
 cc exec modprobe tpm_tis
 cc exec ls -l /dev/tpm0
-shell sleep 5
+shell sleep 10
 cc responses all
 clear cc filter
