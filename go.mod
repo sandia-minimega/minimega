@@ -19,6 +19,7 @@ require (
 	github.com/thoj/go-ircevent v0.0.0-20210723090443-73e444401d64
 	github.com/twmb/murmur3 v1.1.8
 	github.com/ziutek/telnet v0.1.0
+	go.uber.org/goleak v1.3.0
 	golang.org/x/crypto v0.48.0
 	golang.org/x/net v0.50.0
 	golang.org/x/sys v0.41.0
