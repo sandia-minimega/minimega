@@ -6,8 +6,13 @@ package ron
 
 import (
 	"encoding/gob"
+	"io"
 	"net"
+	"strconv"
 	"testing"
+	"time"
+
+	"go.uber.org/goleak"
 )
 
 func TestBindClientUUIDUsesSerialIdentity(t *testing.T) {
@@ -97,5 +102,78 @@ func TestSendCommandsTracksIssuedCommands(t *testing.T) {
 
 	if got := s.GetCommand(1).Issued; got != 2 {
 		t.Fatalf("issued after reconnect = %d, want 2", got)
+	}
+}
+
+func TestDestroyStopsServerGoroutines(t *testing.T) {
+	ignore := goleak.IgnoreCurrent()
+
+	s := newTestServer(t, t.TempDir(), "ns")
+	// let clientReaper reach its wait, so that Destroy must interrupt it
+	time.Sleep(10 * time.Millisecond)
+	s.Destroy()
+
+	goleak.VerifyNone(t, ignore)
+}
+
+func TestDestroyReapsSilentTCPClient(t *testing.T) {
+	s, err := newServer(t.TempDir(), "ns", nil, 10*time.Millisecond, 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("newServer: %v", err)
+	}
+	s.UseVMs = false
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+
+	if err := s.Listen(port); err != nil {
+		t.Fatalf("Listen(%d): %v", port, err)
+	}
+
+	conn, err := net.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.Close() })
+
+	if _, err := io.WriteString(conn, "RON"); err != nil {
+		t.Fatal(err)
+	}
+	var magic [3]byte
+	if _, err := io.ReadFull(conn, magic[:]); err != nil || string(magic[:]) != "RON" {
+		t.Fatalf("read magic bytes = %q, %v", magic, err)
+	}
+
+	m := &Message{
+		Type:    MESSAGE_CLIENT,
+		UUID:    "c6a2a0f4-5f0e-4b8e-9d5c-2f0b1c9e7a31",
+		Client:  &Client{UUID: "c6a2a0f4-5f0e-4b8e-9d5c-2f0b1c9e7a31"},
+		Version: "v1",
+	}
+	if err := gob.NewEncoder(conn).Encode(m); err != nil {
+		t.Fatal(err)
+	}
+
+	for deadline := time.Now().Add(5 * time.Second); s.Clients() != 1; {
+		if time.Now().After(deadline) {
+			t.Fatalf("Clients() = %d, want 1", s.Clients())
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.Destroy()
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(15 * time.Second):
+		t.Fatal("Destroy did not return while a silent TCP client was connected")
 	}
 }

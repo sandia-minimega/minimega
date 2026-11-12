@@ -33,7 +33,7 @@ func (f *forward) String() string {
 
 func (t *Tunnel) newForward(l net.Listener, src int, host string, dst int) *forward {
 	return &forward{
-		fid:  <-t.forwardIDs,
+		fid:  int(t.lastFID.Add(1)),
 		src:  src,
 		host: host,
 		dst:  dst,

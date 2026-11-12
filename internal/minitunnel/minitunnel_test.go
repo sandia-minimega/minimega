@@ -15,14 +15,27 @@ import (
 
 	. "github.com/sandia-minimega/minimega/v2/internal/minitunnel"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
+	"go.uber.org/goleak"
 )
 
 func init() {
 	log.AddLogger("stderr", os.Stderr, log.DEBUG, true)
 }
 
+// pipe returns both ends of a transport and closes them when the test ends,
+// which stops the mux of each tunnel.
+func pipe(t *testing.T) (net.Conn, net.Conn) {
+	g, h := net.Pipe()
+	t.Cleanup(func() {
+		g.Close()
+		h.Close()
+	})
+
+	return g, h
+}
+
 func goListenAndServe(g net.Conn) chan error {
-	err := make(chan error)
+	err := make(chan error, 1)
 
 	go func() {
 		err <- ListenAndServe(g)
@@ -106,7 +119,7 @@ func (d *DummyClient) Receive(expect string) error {
 }
 
 func TestHandshake(t *testing.T) {
-	g, h := net.Pipe()
+	g, h := pipe(t)
 
 	errChan := goListenAndServe(g)
 
@@ -122,7 +135,7 @@ func TestHandshake(t *testing.T) {
 }
 
 func TestTunnel(t *testing.T) {
-	g, h := net.Pipe()
+	g, h := pipe(t)
 
 	errChan := goListenAndServe(g)
 
@@ -168,7 +181,7 @@ func TestTunnel(t *testing.T) {
 }
 
 func TestMultiTunnel(t *testing.T) {
-	g, h := net.Pipe()
+	g, h := pipe(t)
 
 	errChan := goListenAndServe(g)
 
@@ -231,7 +244,7 @@ func TestMultiTunnel(t *testing.T) {
 }
 
 func TestReverse(t *testing.T) {
-	g, h := net.Pipe()
+	g, h := pipe(t)
 
 	errChan := goListenAndServe(g)
 
@@ -277,7 +290,7 @@ func TestReverse(t *testing.T) {
 }
 
 func TestFowardInvalid(t *testing.T) {
-	g, h := net.Pipe()
+	g, h := pipe(t)
 
 	errChan := goListenAndServe(g)
 
@@ -298,7 +311,7 @@ func TestFowardInvalid(t *testing.T) {
 }
 
 func TestReverseInvalid(t *testing.T) {
-	g, h := net.Pipe()
+	g, h := pipe(t)
 
 	errChan := goListenAndServe(g)
 
@@ -316,6 +329,24 @@ func TestReverseInvalid(t *testing.T) {
 	if errListen != nil {
 		t.Fatalf("ListenAndServe: %v", errListen)
 	}
+}
+
+func TestClosedTransportStopsTunnel(t *testing.T) {
+	ignore := goleak.IgnoreCurrent()
+
+	g, h := net.Pipe()
+	errChan := goListenAndServe(g)
+
+	if _, err := Dial(h); err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	if err := <-errChan; err != nil {
+		t.Fatalf("ListenAndServe: %v", err)
+	}
+
+	h.Close()
+
+	goleak.VerifyNone(t, ignore)
 }
 
 func TestListReverses(t *testing.T) {
