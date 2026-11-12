@@ -275,13 +275,7 @@ func cliCaptureVM(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return vmNotFound(name)
 	}
 
-	// Ensure that relative paths are always relative to /files/
-	if !filepath.IsAbs(fname) {
-		// TODO: should we capture to the VM directory instead?
-		fname = filepath.Join(*f_iomBase, fname)
-	}
-
-	return ns.captures.CaptureVM(vm, num, fname)
+	return captureVM(&ns.captures, vm, num, capturePath(fname))
 }
 
 func cliCaptureClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -297,7 +291,7 @@ func cliCapturePcap(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 		return ns.captures.StopBridge(b, "pcap")
 	}
 
-	return ns.captures.CaptureBridge(b, fname)
+	return captureBridge(&ns.captures, b, capturePath(fname))
 }
 
 // cliCaptureNetflow manages the CLI for starting and stopping captures to netflow.
@@ -308,13 +302,7 @@ func cliCaptureNetflow(ns *Namespace, c *minicli.Command, resp *minicli.Response
 	case c.BoolArgs["bridge"]:
 		// start capture to file to socket
 		if fname, ok := c.StringArgs["filename"]; ok {
-
-			// Ensure that relative paths are always relative to /files/
-			if !filepath.IsAbs(fname) {
-				fname = filepath.Join(*f_iomBase, fname)
-			}
-
-			return ns.captures.CaptureNetflowFile(b, fname)
+			return captureNetflowFile(&ns.captures, b, capturePath(fname))
 		}
 
 		// Capture -> netflow (socket)
@@ -350,3 +338,21 @@ func cliCaptureNetflow(ns *Namespace, c *minicli.Command, resp *minicli.Response
 		return unreachable()
 	}
 }
+
+// capturePath returns where a capture to fname is written: relative paths are
+// relative to the files directory.
+func capturePath(fname string) string {
+	if filepath.IsAbs(fname) {
+		return fname
+	}
+
+	return filepath.Join(*f_iomBase, fname)
+}
+
+// The handlers start captures through these so tests can observe the path
+// without a real bridge.
+var (
+	captureVM          = (*captures).CaptureVM
+	captureBridge      = (*captures).CaptureBridge
+	captureNetflowFile = (*captures).CaptureNetflowFile
+)
