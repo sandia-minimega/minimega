@@ -13,6 +13,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
@@ -36,8 +37,8 @@ type Tunnel struct {
 	quit  chan bool // tell the message pump to quit
 	chans chans
 
-	forwardIDs chan int
-	forwards   map[int]*forward
+	lastFID  atomic.Int64 // last forward ID, IDs start at 1
+	forwards map[int]*forward
 
 	sendLock sync.Mutex
 }
@@ -91,16 +92,8 @@ func ListenAndServe(transport io.ReadWriteCloser) error {
 		quit:  make(chan bool),
 		chans: makeChans(),
 
-		forwardIDs: make(chan int),
-		forwards:   make(map[int]*forward),
+		forwards: make(map[int]*forward),
 	}
-
-	// start a goroutine to generate forward IDs for us
-	go func() {
-		for id := 1; ; id++ {
-			t.forwardIDs <- id
-		}
-	}()
 
 	go t.mux()
 	return nil
@@ -117,8 +110,7 @@ func Dial(transport io.ReadWriteCloser) (*Tunnel, error) {
 		quit:  make(chan bool),
 		chans: makeChans(),
 
-		forwardIDs: make(chan int),
-		forwards:   make(map[int]*forward),
+		forwards: make(map[int]*forward),
 	}
 
 	handshake := &tunnelMessage{
@@ -138,13 +130,6 @@ func Dial(transport io.ReadWriteCloser) (*Tunnel, error) {
 	if !handshake.Ack {
 		return nil, fmt.Errorf("did not receive handshake ack: %v", handshake)
 	}
-
-	// start a goroutine to generate forward IDs for us
-	go func() {
-		for id := 1; ; id++ {
-			t.forwardIDs <- id
-		}
-	}()
 
 	// start the message mux
 	go t.mux()

@@ -79,6 +79,11 @@ type Server struct {
 
 	handlerDone chan struct{} // closed when responseHandler returns
 
+	stopReaper chan struct{} // closed by Destroy to stop clientReaper
+
+	reaperRate   time.Duration // how often clientReaper checks for expired clients
+	clientExpiry time.Duration // how long a client can go without a check-in
+
 	plumber *miniplumber.Plumber
 
 	// set to non-zero value by Server.Destroy
@@ -88,6 +93,12 @@ type Server struct {
 // NewServer creates a ron server. Must call Listen* to actually allow ron to
 // start accepting connections from clients.
 func NewServer(path, subpath string, plumber *miniplumber.Plumber) (*Server, error) {
+	return newServer(path, subpath, plumber, REAPER_RATE*time.Second, CLIENT_EXPIRED*time.Second)
+}
+
+// newServer creates a ron server that checks for expired clients every
+// reaperRate and expires clients that do not check in within clientExpiry.
+func newServer(path, subpath string, plumber *miniplumber.Plumber, reaperRate, clientExpiry time.Duration) (*Server, error) {
 	s := &Server{
 		UseVMs:        true,
 		conns:         make(map[string]net.Conn),
@@ -100,6 +111,9 @@ func NewServer(path, subpath string, plumber *miniplumber.Plumber) (*Server, err
 		lastBroadcast: time.Now(),
 		responses:     make(chan *Client, 1024),
 		handlerDone:   make(chan struct{}),
+		stopReaper:    make(chan struct{}),
+		reaperRate:    reaperRate,
+		clientExpiry:  clientExpiry,
 		plumber:       plumber,
 	}
 
@@ -132,12 +146,15 @@ func (s *Server) AutoUpdate() bool {
 }
 
 func (s *Server) Destroy() {
-	if s.destroyed() {
+	if !atomic.CompareAndSwapUint64(&s.isdestroyed, 0, 1) {
 		// already been destroyed once before
 		return
 	}
 
-	s.setDestroyed()
+	// keep reaping while Destroy waits, so that silent clients expire
+	if s.stopReaper != nil {
+		defer close(s.stopReaper)
+	}
 
 	// close all the serial connections
 	s.connsLock.Lock()
@@ -785,10 +802,6 @@ func (s *Server) UnregisterVM(vm VM) {
 	defer s.clientLock.Unlock()
 
 	delete(s.vms, vm.GetUUID())
-}
-
-func (s *Server) setDestroyed() {
-	atomic.StoreUint64(&s.isdestroyed, 1)
 }
 
 func (s *Server) destroyed() bool {
@@ -1473,18 +1486,21 @@ func (s *Server) commandCheckIn(id int, uuid string) {
 
 // clientReaper periodically flushes old entries from the client list
 func (s *Server) clientReaper() {
+	ticker := time.NewTicker(s.reaperRate)
+	defer ticker.Stop()
+
 	for {
-		if s.destroyed() {
+		select {
+		case <-s.stopReaper:
 			log.Debug("reaping client reaper")
 			return
+		case <-ticker.C:
 		}
-
-		time.Sleep(time.Duration(REAPER_RATE) * time.Second)
 
 		s.clientLock.Lock()
 		for k, v := range s.clients {
 			// checked in more recently than expiration time
-			active := time.Now().Sub(v.checkin) < CLIENT_EXPIRED*time.Second
+			active := time.Now().Sub(v.checkin) < s.clientExpiry
 
 			if !active {
 				log.Debug("client %v expired", k)
