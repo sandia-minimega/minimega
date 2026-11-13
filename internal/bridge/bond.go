@@ -85,6 +85,8 @@ func (b *Bridge) AddBond(name, mode, lacp string, fallback bool, interfaces map[
 	}
 
 	b.bonds[name] = interfaces
+	b.edgeHook()
+
 	return name, nil
 }
 
@@ -136,5 +138,7 @@ func (b *Bridge) deleteBond(name string) error {
 	}
 
 	delete(b.bonds, name)
+	b.edgeHook()
+
 	return nil
 }

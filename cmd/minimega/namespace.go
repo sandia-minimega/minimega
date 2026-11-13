@@ -204,13 +204,20 @@ func (n *Namespace) Destroy() error {
 	// unmount
 	n.clearCCMount("")
 
-	// Stop all captures
+	// Stop all captures: namespace captures first, with OpStop only
+	nsCaptureDestroy(n.Name)
 	n.captures.StopAll()
 	n.counter.Stop()
 
 	// Stop VNC record/replay
 	n.Recorder.Clear()
 	n.Player.Clear()
+
+	// Remove the tap mirrors before their taps go away: a mirror row stays in
+	// Open vSwitch when its output tap is deleted.
+	if err := mirrorDelete(n, Wildcard); err != nil {
+		log.Error("unable to delete mirrors: %v", err)
+	}
 
 	// Kill and flush all the VMs
 	n.Kill(Wildcard)
@@ -235,9 +242,6 @@ func (n *Namespace) Destroy() error {
 			return err
 		}
 	}
-
-	// We don't need to delete mirrors -- deleting the taps should clean those
-	// up automatically.
 
 	// Free up any VLANs associated with the namespace
 	vlans.Delete(n.Name, "")

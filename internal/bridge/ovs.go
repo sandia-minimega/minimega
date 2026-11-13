@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
@@ -131,8 +132,8 @@ func ovsSetPortQinQ(tap string, outer int) error {
 }
 
 // ovsAddMirror creates a mirror on bridge from src to dst. If src is empty,
-// mirrors the entire bridge.
-func ovsAddMirror(bridge, src, dst string) error {
+// mirrors the entire bridge. tags say who owns the mirror.
+func ovsAddMirror(bridge, src, dst string, vlans []int, tags MirrorTags) error {
 	findPort := func(name, tap string) []string {
 		return []string{
 			"--",
@@ -170,6 +171,16 @@ func ovsAddMirror(bridge, src, dst string) error {
 			"select-all=true",
 		)
 	}
+
+	if len(vlans) > 0 {
+		var vs []string
+		for _, v := range vlans {
+			vs = append(vs, strconv.Itoa(v))
+		}
+		args = append(args, "select-vlan="+strings.Join(vs, ","))
+	}
+
+	args = append(args, tags.args()...)
 
 	// add mirror to bridge
 	args = append(args,
@@ -217,19 +228,26 @@ func ovsDelMirror(bridge, tap string) error {
 // ovsCmdWrapper wraps `ovs-vsctl` commands, returning stdout, stderr, and any
 // error produced running the command.
 func ovsCmdWrapper(args []string) (string, error) {
+	out, err := ovsExec(args)
+	if err == nil {
+		return out, nil
+	}
+
+	if strings.Contains(out, "already exists") {
+		return "", errAlreadyExists
+	} else if strings.Contains(out, "no port named") {
+		return "", errNoSuchPort
+	}
+
+	return "", fmt.Errorf("ovs cmd failed: %v %v", args, out)
+}
+
+// ovsExec runs ovs-vsctl with args and returns its combined output. Tests
+// replace it.
+var ovsExec = func(args []string) (string, error) {
 	cmd := exec.Command("ovs-vsctl", args...)
 	log.Debug("running ovs cmd: %v", cmd)
 
 	out, err := cmd.CombinedOutput()
-	if err == nil {
-		return string(out), nil
-	}
-
-	if strings.Contains(string(out), "already exists") {
-		return "", errAlreadyExists
-	} else if strings.Contains(string(out), "no port named") {
-		return "", errNoSuchPort
-	}
-
-	return "", fmt.Errorf("ovs cmd failed: %v %v", args, string(out))
+	return string(out), err
 }

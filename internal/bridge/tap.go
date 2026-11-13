@@ -197,6 +197,8 @@ func (b *Bridge) destroyTap(t string) error {
 
 	tap.Defunct = true
 
+	b.failTapCaptures(t)
+
 	if tap.Host {
 		// Tap is managed by OVS -- calling del-port will delete it for us.
 		return nil

@@ -101,7 +101,7 @@ func bridgeInfo() string {
 }
 
 // hostTapCreate creates a host tap based on the supplied arguments.
-func hostTapCreate(b, tap string, v int) (string, error) {
+func hostTapCreate(ns, b, tap string, v int) (string, error) {
 	if b == "" {
 		b = DefaultBridge
 	}
@@ -121,6 +121,7 @@ func hostTapCreate(b, tap string, v int) (string, error) {
 
 	tap, err = br.CreateHostTap(tap, v)
 	if err == nil {
+		br.SetTapOwner(tap, ns, "")
 		mustWrite(filepath.Join(*f_base, "taps"), hostTapInfo())
 	}
 
@@ -207,29 +208,25 @@ func recoverHostTaps() error {
 				continue
 			}
 
-			fields := strings.Fields(scanner.Text())
-
-			if len(fields) != 3 {
-				return fmt.Errorf("expected exactly three columns in taps file: got %d", len(fields))
-			}
-
-			var (
-				bridge = fields[0]
-				tap    = fields[1]
-				alias  = fields[2]
-			)
-
-			br, err := bridges.Get(bridge)
+			r, err := parseHostTap(scanner.Text())
 			if err != nil {
-				return fmt.Errorf("unable to get bridge %s for host tap %s: %w", bridge, tap, err)
+				return err
 			}
 
-			vlan, err := vlans.GetVLAN("", alias)
+			br, err := bridges.Get(r.bridge)
 			if err != nil {
-				return fmt.Errorf("unable to get VLAN ID for alias %s on host tap %s: %w", alias, tap, err)
+				return fmt.Errorf("unable to get bridge %s for host tap %s: %w", r.bridge, r.tap, err)
 			}
 
-			br.RecoverTap(tap, "", vlan, true)
+			vlan, err := vlans.GetVLAN("", r.alias)
+			if err != nil {
+				return fmt.Errorf("unable to get VLAN ID for alias %s on host tap %s: %w", r.alias, r.tap, err)
+			}
+
+			br.RecoverTap(r.tap, "", vlan, true)
+			if r.namespace != "" {
+				br.SetTapOwner(r.tap, r.namespace, "")
+			}
 		}
 
 		if err := scanner.Err(); err != nil {
@@ -242,9 +239,34 @@ func recoverHostTaps() error {
 	return nil
 }
 
+// hostTapRecord is one line of the host taps recovery file.
+type hostTapRecord struct {
+	bridge, tap, alias, namespace string
+}
+
+// parseHostTap parses one line of the host taps recovery file. A line without
+// the namespace column takes the namespace from the VLAN alias.
+func parseHostTap(line string) (hostTapRecord, error) {
+	fields := strings.Fields(line)
+
+	switch len(fields) {
+	case 3:
+		a := vlans.ParseAlias("", fields[2])
+		return hostTapRecord{fields[0], fields[1], fields[2], a.Namespace}, nil
+	case 4:
+		return hostTapRecord{fields[0], fields[1], fields[2], fields[3]}, nil
+	}
+
+	return hostTapRecord{}, fmt.Errorf("expected three or four columns in taps file: got %d", len(fields))
+}
+
 // hostTapInfo returns formatted information about all the host taps.
 func hostTapInfo() string {
-	taps := bridges.HostTaps()
+	return formatHostTaps(bridges.HostTaps())
+}
+
+// formatHostTaps returns the host taps recovery file contents for taps.
+func formatHostTaps(taps []bridge.Tap) string {
 	if len(taps) == 0 {
 		return ""
 	}
@@ -254,11 +276,11 @@ func hostTapInfo() string {
 	w := new(tabwriter.Writer)
 	w.Init(&o, 5, 0, 1, ' ', 0)
 
-	fmt.Fprintf(w, "Bridge\tTap\tVLAN\n")
+	fmt.Fprintf(w, "Bridge\tTap\tVLAN\tNamespace\n")
 
 	for _, t := range taps {
 		alias := strings.Fields(vlans.PrintVLAN("", t.VLAN))[0]
-		fmt.Fprintf(w, "%v\t%v\t%v\n", t.Bridge, t.Name, alias)
+		fmt.Fprintf(w, "%v\t%v\t%v\t%v\n", t.Bridge, t.Name, alias, t.Namespace)
 	}
 
 	w.Flush()

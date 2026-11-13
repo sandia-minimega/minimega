@@ -224,6 +224,23 @@ Consult command help before mutating state; subcommand requirements evolve.
   holds commands for an updating client for up to two minutes. The update
   kills the `cc background` processes of the client. A read-only folder for the
   miniccc binary keeps a fixed version.
+- **Packet captures have IDs, states, and counters.** `capture` lists the ID,
+  state (`running`, `failed`, or `full`), packets, kernel drops, and file size
+  of each pcap capture, with `path` as the last column. A failed or full capture
+  stays in the list until `capture pcap delete id <id>`. `clear capture pcap`
+  stops only pcap captures. Give `snaplen=`, `filter=`, `maxsize=`,
+  `format=pcap|pcapng`, and (VM only) `direction=` after the file name instead of changing the namespace
+  settings around one capture.
+- **Namespace captures run on the head.** `capture pcap namespace <file>`
+  merges the edge traffic of every namespace host into one file on the node
+  that runs it and returns an ID. List with `capture pcap namespace` and stop
+  with `capture pcap delete namespace <id|file|all>` on that same node; plain
+  `capture` does not list them. Every mesh node, relays included, must support
+  it, or the start fails.
+- **A bridge has at most 32 working mirrors.** Open vSwitch silently ignores
+  more. Tap mirrors and captures share them; minimega refuses a new mirror at
+  32. `bridge mirrors` lists every Mirror row with its owner namespace and
+  kind, also rows that minimega did not make (`external`).
 - **Do not parse default tables by column position.** Select columns explicitly
   because command output is also consumed by phēnix, FIREWHEEL, and scripts.
 

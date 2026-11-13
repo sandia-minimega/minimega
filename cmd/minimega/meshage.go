@@ -19,6 +19,7 @@ import (
 	"github.com/sandia-minimega/minimega/v2/internal/iomeshage"
 	"github.com/sandia-minimega/minimega/v2/internal/meshage"
 	"github.com/sandia-minimega/minimega/v2/internal/miniplumber"
+	"github.com/sandia-minimega/minimega/v2/internal/nscapture"
 	"github.com/sandia-minimega/minimega/v2/internal/version"
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
@@ -72,6 +73,8 @@ func init() {
 	gob.Register(miniplumber.Message{})
 	gob.Register(meshageLogMessage{})
 	gob.Register(meshageStatusMessage{})
+	gob.Register(nscapture.Batch{})
+	gob.Register(nscapture.Control{})
 }
 
 func meshageStart(host, namespace string, degree, msaTimeout uint, broadcastIP string, port int) error {
@@ -138,7 +141,9 @@ func meshageMux() {
 
 			meshageStatusLock.RUnlock()
 		default:
-			log.Errorln("got invalid message!")
+			if !nsCaptureDeliver(m) {
+				log.Errorln("got invalid message!")
+			}
 		}
 	}
 }

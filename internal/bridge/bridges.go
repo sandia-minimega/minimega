@@ -14,7 +14,7 @@ import (
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 
-	"github.com/google/gopacket/pcap"
+	"github.com/gopacket/gopacket/pcap"
 )
 
 // Bridges manages a collection of `Bridge` structs.
@@ -106,17 +106,18 @@ func (b Bridges) newBridge(name string) error {
 	}
 
 	br := &Bridge{
-		Name:      name,
-		taps:      make(map[string]*Tap),
-		trunks:    make(map[string]bool),
-		tunnels:   make(map[string]bool),
-		mirrors:   make(map[string]bool),
-		bonds:     make(map[string]map[string]int),
-		captures:  make(map[int]capture),
-		captureID: captureID,
-		tapChan:   b.tapChan,
-		bondChan:  b.bondChan,
-		config:    make(map[string]string),
+		Name:         name,
+		taps:         make(map[string]*Tap),
+		trunks:       make(map[string]bool),
+		tunnels:      make(map[string]bool),
+		mirrors:      make(map[string]bool),
+		bonds:        make(map[string]map[string]int),
+		captures:     make(map[int]*capture),
+		edgeCaptures: make(map[string]*edgeCapture),
+		captureID:    captureID,
+		tapChan:      b.tapChan,
+		bondChan:     b.bondChan,
+		config:       make(map[string]string),
 	}
 
 	// Create the bridge
