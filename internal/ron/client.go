@@ -72,6 +72,10 @@ type client struct {
 
 	tunnel *minitunnel.Tunnel
 
+	// reversePending is true while a Tunnel.Reverse call for this client has
+	// not returned, protected by Server.clientLock
+	reversePending bool
+
 	// writeMu serializes calls to enc.Encode
 	writeMu sync.Mutex
 

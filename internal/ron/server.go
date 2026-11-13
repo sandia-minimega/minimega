@@ -1271,26 +1271,15 @@ func (s *Server) route(m *Message) {
 
 		if m.Type == MESSAGE_COMMAND {
 			if s.UseVMs {
-				vm, ok := s.vms[uuid]
-				if !ok {
+				filters := make([]*Filter, 0, len(m.Commands))
+				for _, cmd := range m.Commands {
+					filters = append(filters, cmd.Filter)
+				}
+
+				if !s.loadVMTags(uuid, c, filters) {
 					// odd, someone must have unregistered the client...
 					log.Error("unregistered client %v", uuid)
 					return
-				}
-				// update client's tags in case we're matching based on them
-				c.Tags = vm.GetTags()
-
-				// load the relevant info fields, overriding any tag values
-				for _, cmd := range m.Commands {
-					if cmd.Filter != nil && cmd.Filter.Tags != nil {
-						for k := range cmd.Filter.Tags {
-							// only replace non-zero fields
-							v, _ := vm.Info(k)
-							if v != "" {
-								c.Tags[k] = v
-							}
-						}
-					}
 				}
 			}
 
@@ -1369,6 +1358,33 @@ func (s *Server) route(m *Message) {
 	}
 
 	wg.Wait()
+}
+
+// loadVMTags sets c.Tags from the tags of the VM registered for uuid, then
+// overrides each key in the Tags of filters with the non-empty VM info field of
+// the same name, so that c.Matches can match on them. It returns false when no
+// VM is registered for uuid. The caller must hold clientLock.
+func (s *Server) loadVMTags(uuid string, c *client, filters []*Filter) bool {
+	vm, ok := s.vms[uuid]
+	if !ok {
+		return false
+	}
+
+	c.Tags = vm.GetTags()
+
+	for _, f := range filters {
+		if f == nil || f.Tags == nil {
+			continue
+		}
+
+		for k := range f.Tags {
+			if v, _ := vm.Info(k); v != "" {
+				c.Tags[k] = v
+			}
+		}
+	}
+
+	return true
 }
 
 // process responses, writing files when necessary

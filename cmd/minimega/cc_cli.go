@@ -110,6 +110,21 @@ to a remote port. The local port will be created on the minimega cluster host
 that the tunneling VM is running on. The remote port can be on the same VM or on
 a different VM the tunneling VM has network access to.
 
+"cc rtunnel" creates reverse tunnels. Each connected client that matches the
+current filter listens on the source port and tunnels TCP connections back to
+the minimega cluster host that the client is connected to. That host then
+connects to the destination host and port, which can be any host it has network
+access to. For example, to connect port 4444 on each client to a web server:
+
+	cc rtunnel 4444 myserver 80
+
+"cc rtunnel list" shows the reverse tunnels that are open on each client, or
+only on the given VM. "cc tunnel list" does not show reverse tunnels.
+
+"cc rtunnel" returns an error if no client matches the filter. If a client does
+not open its tunnel, the error gives the UUID of that client. The tunnels on the
+other clients stay open.
+
 "cc test-conn" allows users to test network connectivity from a guest to the
 given IP or domain name and port. The wait timeout should be specified as a Go
 duration string (e.g. 5s, 1m). If "udp" is used, a "base64 udp packet" that will
@@ -165,13 +180,14 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <tunnel,> <close,> <vm name or uuid> <id>",
 			"cc <tunnel,> <list,> <vm name, uuid, or all>",
 			"cc <rtunnel,> <src port> <host> <dst port>",
+			"cc <rtunnel,> <list,> [vm name, uuid, or all]",
 
 			"cc <delete,> <command,> <id or prefix or all>",
 			"cc <delete,> <response,> <id or prefix or all>",
 
 			"cc <test-conn,> <tcp,udp> <ip or fqdn> <port> wait <timeout> [base64 udp packet]",
 		},
-		Call: cliCCBroadcast,
+		Call: wrapCCCLI(cliCC),
 	},
 	{ // cc mount
 		HelpShort: "list mounted filesystems",
@@ -210,6 +226,93 @@ See "help cc" for more information.`,
 	},
 }
 
+// wrapCCCLI wraps the cc subcommands with the wrapper that ccCLIWrapper
+// selects for each command. The broadcast wrapper is cliCCBroadcast.
+func wrapCCCLI(fn wrappedCLIFunc) minicli.CLIFunc {
+	broadcast := minicli.CLIFunc(cliCCBroadcast)
+	vmTarget := wrapVMTargetCLI(fn)
+	rtunnel := wrapCCRTunnelCLI(fn)
+
+	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
+		ccCLIWrapper(c, broadcast, vmTarget, rtunnel)(c, respChan)
+	}
+}
+
+// ccCLIWrapper returns rtunnel for "cc rtunnel", vmTarget for "cc rtunnel
+// list" with a VM name or UUID, and broadcast for the other cc subcommands.
+// vmTarget ignores the "vm not found" errors from the hosts that do not run
+// the VM.
+func ccCLIWrapper(c *minicli.Command, broadcast, vmTarget, rtunnel minicli.CLIFunc) minicli.CLIFunc {
+	if !c.BoolArgs["rtunnel"] {
+		return broadcast
+	}
+
+	if !c.BoolArgs["list"] {
+		return rtunnel
+	}
+
+	if v := c.StringArgs["vm"]; v != "" && v != Wildcard {
+		return vmTarget
+	}
+
+	return broadcast
+}
+
+// wrapCCRTunnelCLI broadcasts "cc rtunnel" to all hosts in the namespace like
+// wrapBroadcastCLI, then merges the responses with mergeCCRTunnelResponses.
+func wrapCCRTunnelCLI(fn wrappedCLIFunc) minicli.CLIFunc {
+	localFunc := wrapSimpleCLI(fn)
+
+	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
+		ns := resolveNamespace(c)
+
+		// See note in wrapBroadcastCLI.
+		if c.Source != "" {
+			localFunc(c, respChan)
+			return
+		}
+
+		res := minicli.Responses{}
+
+		for resps := range runCommands(namespaceCommands(ns, c)...) {
+			res = append(res, resps...)
+		}
+
+		respChan <- mergeCCRTunnelResponses(res)
+	}
+}
+
+// mergeCCRTunnelResponses removes the responses from hosts that have no
+// matching client. When every host has no matching client, it keeps the first
+// of those responses so that the command still fails.
+func mergeCCRTunnelResponses(resps minicli.Responses) minicli.Responses {
+	res := minicli.Responses{}
+	var noClients *minicli.Response
+
+	for _, resp := range resps {
+		if isNoCCClients(resp.Error) {
+			if noClients == nil {
+				noClients = resp
+			}
+			continue
+		}
+
+		res = append(res, resp)
+	}
+
+	if len(res) == 0 && noClients != nil {
+		return minicli.Responses{noClients}
+	}
+
+	return res
+}
+
+// isNoCCClients reports whether err is the error text of ron.ErrNoClients.
+// Responses from other hosts carry only the text of the error.
+func isNoCCClients(err string) bool {
+	return strings.HasPrefix(err, ron.ErrNoClients.Error()+" ")
+}
+
 // Functions pointers to the various handlers for the subcommands
 var ccCliSubHandlers = map[string]wrappedCLIFunc{
 	"background":      cliCCBackground,
@@ -226,7 +329,7 @@ var ccCliSubHandlers = map[string]wrappedCLIFunc{
 	"recv":            cliCCFileRecv,
 	"responses":       cliCCResponses,
 	"exitcode":        cliCCExitCode,
-	"rtunnel":         cliCCTunnel,
+	"rtunnel":         cliCCRTunnel,
 	"send":            cliCCFileSend,
 	"tunnel":          cliCCTunnel,
 	"listen":          cliCCListen,
@@ -381,35 +484,10 @@ func cliCCTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	}
 
 	if c.BoolArgs["list"] {
-		// map VM name --> VM UUID
-		vms := make(map[string]string)
-
-		if v == Wildcard {
-			clients := ns.ccServer.GetClients()
-
-			for _, client := range clients {
-				vm := ns.FindVM(client.UUID)
-				if vm == nil {
-					return vmNotFound(client.UUID)
-				}
-
-				vms[vm.GetName()] = client.UUID
-			}
-		} else {
-			vm := ns.FindVM(v)
-			if vm == nil {
-				return vmNotFound(v)
-			}
-
-			vms[v] = vm.GetUUID()
+		names, vms, err := ccTunnelVMs(ns, v)
+		if err != nil {
+			return err
 		}
-
-		var names []string
-		for name := range vms {
-			names = append(names, name)
-		}
-
-		sort.Strings(names)
 
 		resp.Header = []string{"vm", "id", "src port", "dst", "dst port"}
 		resp.Tabular = [][]string{}
@@ -466,6 +544,100 @@ func cliCCTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	uuid := vm.GetUUID()
 
 	return ns.ccServer.Forward(uuid, src, host, dst)
+}
+
+// ccTunnelVMs returns the sorted names of the VMs that v selects and maps each
+// name to the UUID of that VM. v is a VM name, a UUID, or Wildcard for every
+// connected client.
+func ccTunnelVMs(ns *Namespace, v string) ([]string, map[string]string, error) {
+	// map VM name --> VM UUID
+	vms := make(map[string]string)
+
+	if v == Wildcard {
+		clients := ns.ccServer.GetClients()
+
+		for _, client := range clients {
+			vm := ns.FindVM(client.UUID)
+			if vm == nil {
+				return nil, nil, vmNotFound(client.UUID)
+			}
+
+			vms[vm.GetName()] = client.UUID
+		}
+	} else {
+		vm := ns.FindVM(v)
+		if vm == nil {
+			return nil, nil, vmNotFound(v)
+		}
+
+		vms[v] = vm.GetUUID()
+	}
+
+	var names []string
+	for name := range vms {
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+
+	return names, vms, nil
+}
+
+// rtunnel
+func cliCCRTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if c.BoolArgs["list"] {
+		return cliCCRTunnelList(ns, c, resp)
+	}
+
+	src, err := strconv.Atoi(c.StringArgs["src"])
+	if err != nil {
+		return fmt.Errorf("non-integer src: %v : %v", c.StringArgs["src"], err)
+	}
+
+	dst, err := strconv.Atoi(c.StringArgs["dst"])
+	if err != nil {
+		return fmt.Errorf("non-integer dst: %v : %v", c.StringArgs["dst"], err)
+	}
+
+	return ns.ccServer.Reverse(ns.ccFilter, src, c.StringArgs["host"], dst)
+}
+
+// rtunnel list
+func cliCCRTunnelList(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	v := c.StringArgs["vm"]
+	if v == "" {
+		v = Wildcard
+	}
+
+	names, vms, err := ccTunnelVMs(ns, v)
+	if err != nil {
+		return err
+	}
+
+	resp.Header = []string{"vm", "src port", "dst", "dst port"}
+	resp.Tabular = [][]string{}
+
+	for _, name := range names {
+		reverses, err := ns.ccServer.ListReverses(vms[name])
+		if err != nil {
+			return err
+		}
+
+		sort.SliceStable(reverses, func(i, j int) bool {
+			return reverses[i].Source < reverses[j].Source
+		})
+
+		for _, r := range reverses {
+			resp.Tabular = append(resp.Tabular, []string{
+				name,
+				strconv.Itoa(r.Source),
+				r.Host,
+				strconv.Itoa(r.Dest),
+			})
+		}
+	}
+
+	return nil
 }
 
 // responses

@@ -452,6 +452,15 @@ from the minimega host:
 cc rtunnel 4444 myserver 80
 ```
 
+To show the reverse tunnels that are open on each client, use
+`cc rtunnel list`. To show only the reverse tunnels on one VM, give its name or
+UUID:
+
+```minimega
+cc rtunnel list
+cc rtunnel list myvm
+```
+
 <a id="TOC_10."></a>
 
 ## Tags
