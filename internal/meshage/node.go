@@ -486,7 +486,7 @@ func (n *Node) dial(host string, solicited bool) error {
 	return nil
 }
 
-// MSA issues a Meshage State Annoucement, which contains a list of all the nodes connected to the broadcaster
+// MSA issues a Meshage State Announcement, which contains a list of all the nodes connected to the broadcaster
 func (n *Node) MSA() {
 	log.Debugln("MSA")
 

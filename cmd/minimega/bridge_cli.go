@@ -344,7 +344,7 @@ func cliBridge(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 	iface := c.StringArgs["interface"]
 	remoteIP := c.StringArgs["remote"]
 
-	// Get the specifed bridge. If we're listing the bridges, we'll get the
+	// Get the specified bridge. If we're listing the bridges, we'll get the
 	// default bridge which should be fine.
 	br, err := getBridge(c.StringArgs["bridge"])
 	if err != nil {

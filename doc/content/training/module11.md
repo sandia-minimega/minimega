@@ -152,7 +152,7 @@ $ bin/nfcat -gunzip foo.nf.gz > foo.ascii
 Tap mirror mirrors packets that traverse the source tap to the destination tap.
 
 This is useful in situations where you want to capture a lot of PCAP/Netflow data,
-but do not want to coduct the capture on the same node as your experiment. Using
+but do not want to conduct the capture on the same node as your experiment. Using
 `tap mirror` you can allow VMs to passively inspect traffic from other VMs to
 perform network monitoring.
 

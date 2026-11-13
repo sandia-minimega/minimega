@@ -31,7 +31,9 @@ def main() -> int:
         matches = list(EXAMPLE_RE.finditer(content))
 
         if len(matches) != len(SNIPPET_RE.findall(content)):
-            errors.append(f"{doc}: every .mm snippet must have an adjacent download link")
+            errors.append(
+                f"{doc}: every .mm snippet must have an adjacent download link"
+            )
         if len(matches) != len(DOWNLOAD_RE.findall(content)):
             errors.append(f"{doc}: unexpected or missing example download link")
 
@@ -63,7 +65,8 @@ def main() -> int:
         count = references[source]
         if count != 1:
             errors.append(
-                f"{source.relative_to(docs_dir)}: expected one documented use, found {count}"
+                f"{source.relative_to(docs_dir)}: "
+                f"expected one documented use, found {count}"
             )
 
     if errors:

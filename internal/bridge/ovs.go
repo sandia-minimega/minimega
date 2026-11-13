@@ -37,7 +37,7 @@ func ovsAddBridge(name string) (bool, error) {
 	// Linux limits interfaces to IFNAMSIZ bytes which is currently 16,
 	// including the null byte. We won't return an error as this limit may not
 	// affect the user but we should at least warn them that openvswitch may
-	// fail unexectedly.
+	// fail unexpectedly.
 	if len(name) > 15 {
 		log.Warn("bridge name is longer than 15 characters.. dragons ahead")
 	}

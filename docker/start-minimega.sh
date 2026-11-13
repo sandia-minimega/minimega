@@ -120,7 +120,7 @@ done
 
 # Check if there are bridge:port values to add
 if [[ -v "OVS_HOST_IFACE" ]]; then
-  iface=(${OVS_HOST_IFACE//:/ })
+  IFS=: read -r -a iface <<< "${OVS_HOST_IFACE}"
   bridge=${iface[0]}
 
   if [[ -n "${bridge}" ]]; then
@@ -130,7 +130,7 @@ if [[ -v "OVS_HOST_IFACE" ]]; then
   fi
 
   if [[ -n "${iface[1]}" ]]; then
-    ports=(${iface[1]//,/ })
+    IFS=, read -r -a ports <<< "${iface[1]}"
 
     for port in "${ports[@]}"; do
       echo -e "\tadding '${port}' port to '${bridge}' bridge..." | tee -a ${MM_LOGFILE}

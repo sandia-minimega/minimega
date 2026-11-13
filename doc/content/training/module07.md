@@ -196,7 +196,7 @@ In order to send files to a client, the files must be rooted in the files subdir
 
 [Download this example](module07_content/cc07.mm){ download="cc07.mm" }
 
-Files will be transfered in the next heartbeat, and will appear in the files subdirectory in the client's base directory. By default, this is /tmp/miniccc/files.
+Files will be transferred in the next heartbeat, and will appear in the files subdirectory in the client's base directory. By default, this is /tmp/miniccc/files.
 
 <a id="TOC_12."></a>
 

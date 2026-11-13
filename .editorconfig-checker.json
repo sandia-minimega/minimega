@@ -1,0 +1,10 @@
+{
+  "Disable": {
+    "IndentSize": true
+  },
+  "Exclude": [
+    "^LICENSE$",
+    "^LICENSES/",
+    "^tests/.*\\.want$"
+  ]
+}
