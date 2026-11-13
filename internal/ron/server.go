@@ -850,7 +850,7 @@ func (s *Server) serve(addr string, ln net.Listener) {
 		c, err := s.handshake(conn, "")
 		if err != nil {
 			if err != io.EOF {
-				// supress these, VM was probably never started
+				// suppress these, VM was probably never started
 				log.Error("handshake failed: %v", err)
 			}
 			conn.Close()
@@ -1457,7 +1457,7 @@ func (s *Server) updateClient(cin *Client) {
 	}
 }
 
-// mark which commands have been responsed to by which client
+// mark which commands have been responded to by which client
 func (s *Server) commandCheckIn(id int, uuid string) {
 	log.Debug("commandCheckIn %v %v", id, uuid)
 

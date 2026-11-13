@@ -1,4 +1,4 @@
-# intead of blocking on this command, run in the background:
+# instead of blocking on this command, run in the background:
 cc background protonuke -serve -dns 100.0.2.2
 # show all running processes
 cc process list all

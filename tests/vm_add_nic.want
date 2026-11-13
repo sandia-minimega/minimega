@@ -60,7 +60,7 @@ vlan       | bridge                     | ip
 [100, 110] | [mega_bridge, mega_bridge] | [, ]
 [100, 110] | [mega_bridge, mega_bridge] | [, ]
 
-## # still targetting bar
+## # still targeting bar
 ## cc exec bash -c 'ip addr | grep eth1'
 ## shell sleep 1
 ## cc exec bash -c 'ifconfig eth1 20.0.0.3 netmask 255.255.255.0 up'

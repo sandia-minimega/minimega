@@ -86,7 +86,7 @@ minimega$ quit
 sh$ bin/minimega -e quit
 ```
 
-- If minimega proccesses are still running after the console has been killed, use pkill
+- If minimega processes are still running after the console has been killed, use pkill
 
 ```text
 pkill minimega
@@ -234,7 +234,7 @@ Filters are case insensitive and may be stacked:
 
 If the column value is a list or an object (i.e. "[...]", "{...}"), then
 
-Substring matching can be specified explicity:
+Substring matching can be specified explicitly:
 
 ```text
 .filter state~run vm info
@@ -253,7 +253,7 @@ with another command, and will affect all subsequent commands:
 .sort true
 ```
 
-The .annnotate command will hide the host name in output when used.
+The .annotate command will hide the host name in output when used.
 
 ```text
 .annotate false
@@ -265,7 +265,7 @@ set to true to see the host name again.
 
 ## Stacking built-in commands
 
-Built-in commands can be used in conjunction with eachother to further refine output.
+Built-in commands can be used in conjunction with each other to further refine output.
 
 For example, to isolate the name and state of the VM and filter by a running state, run
 

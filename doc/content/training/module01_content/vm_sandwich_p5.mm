@@ -5,7 +5,7 @@ vm top
 
 # Now let's turn on qos to manipulate the network traffic
 qos add vm_left 0 loss 0.5
-# this will force the interface for vm_right to drop hald the packets it receives to simulate packet loss
+# this will force the interface for vm_right to drop half the packets it receives to simulate packet loss
 
 # let's see how this changes what we see over the network:
 shell sleep 20

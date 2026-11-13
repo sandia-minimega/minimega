@@ -324,7 +324,7 @@ source code meets `gofmt` and `go vet` standards.
 
 <a id="TOC_2.3."></a>
 
-### Auxillary Tools
+### Auxiliary Tools
 
 <a id="TOC_2.3.1."></a>
 

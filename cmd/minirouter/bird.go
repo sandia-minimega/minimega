@@ -307,7 +307,7 @@ func bgpFindOrCreate(bgpprocess string) *BGP {
 	return b
 }
 
-// In case Minirouter doesnt get a router ID
+// In case Minirouter does not get a router ID
 func getRouterID() string {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	p := make([]byte, 4)

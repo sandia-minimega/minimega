@@ -30,7 +30,7 @@ Example of creating a new disk:
 	disk create qcow2 foo.qcow2 100G
 
 The size argument is the size in bytes, or using optional suffixes "k"
-(kilobyte), "M" (megabyte), "G" (gigabyte), "T" (terabyte).		
+(kilobyte), "M" (megabyte), "G" (gigabyte), "T" (terabyte).
 		`,
 		Patterns: []string{"disk create <qcow2,raw> <image name> <size>"},
 		Call:     wrapSimpleCLI(cliDiskCreate),
@@ -97,7 +97,7 @@ If the destination name is omitted, a name will be randomly generated and the
 snapshot will be stored in the 'files' directory. Snapshots are always created
 in the 'files' directory.
 
-Users may use paths relative to the 'files' directory or absolute paths for inputs; 
+Users may use paths relative to the 'files' directory or absolute paths for inputs;
 however, the backing path will always be %s to the new image.`, backingType),
 		Patterns: []string{"disk snapshot <image> [dst image]"},
 		Call:     wrapSimpleCLI(cliDiskSnapshot),
@@ -117,8 +117,8 @@ Alternatively, 'set-backing' can be used to change the backing file pointer with
 The 'backing' argument can be omitted, causing all backing data to be written to 'image' making it independent.
 
 		disk rebase myimage.qcow2
-		
-Users may use paths relative to the 'files' directory or absolute paths for inputs; 
+
+Users may use paths relative to the 'files' directory or absolute paths for inputs;
 however, the backing path will always be %s to the rebased image.`, backingType),
 		Patterns: []string{
 			"disk <rebase,> <image> [backing file]",
@@ -129,7 +129,7 @@ however, the backing path will always be %s to the rebased image.`, backingType)
 	{
 		HelpShort: "commits the contents of the disk to its backing file",
 		HelpLong: `
-Commits the contents of 'image' to its backing file. 
+Commits the contents of 'image' to its backing file.
 'image' is left unchanged, but may be deleted if not needed.
 Example of committing:
 
@@ -145,7 +145,7 @@ IMPORTANT: Before shrinking an image, ensure changes have been made within the V
 Similarly, changes in the VM's OS will be required to grow the file system after increasing the disk size.
 
 The size argument is the size in bytes, or using optional suffixes "k"
-(kilobyte), "M" (megabyte), "G" (gigabyte), "T" (terabyte).		
+(kilobyte), "M" (megabyte), "G" (gigabyte), "T" (terabyte).
 It can be given as an absolute value or a relative +/- offset.
 
 Examples:

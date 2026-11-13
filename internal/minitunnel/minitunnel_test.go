@@ -33,7 +33,7 @@ type DummyServer struct {
 	net.Listener // embed
 	sync.Mutex   // embed
 
-	err error // any error that occured while being a dummy
+	err error // any error that occurred while being a dummy
 }
 
 func NewDummyServer(typ, laddr string) (*DummyServer, error) {

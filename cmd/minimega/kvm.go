@@ -968,7 +968,7 @@ func (vm *KvmVM) createBonds() error {
 		}
 
 		if err := vm.addBond(bond); err != nil {
-			return vm.setErrorf("unable to reate bond %v: %v", i, err)
+			return vm.setErrorf("unable to create bond %v: %v", i, err)
 		}
 
 		bond.created = true

@@ -11,6 +11,7 @@ udevadm settle
 chmod a+rx /
 modprobe loop
 
+# shellcheck disable=SC3045 # the init shell supports ulimit -n
 ulimit -n 999999
 
 ifconfig lo up

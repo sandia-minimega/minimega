@@ -71,9 +71,9 @@ start() {
   fi
   ulimit -n 1024000 -u 4096000
   mkdir -p $MM_BASE
-  pushd $MINIMEGA_DIR &>/dev/null
-  $MINIMEGA_DIR/bin/minimega -base=$MM_BASE -filepath=$MM_FILEPATH -degree=$MM_DEGREE -nostdin=$MM_DAEMON -context=$MM_CONTEXT -port=$MM_PORT -level=$MM_LOGLEVEL -logfile=$MM_LOGFILE ${@:1} &> /dev/null &
-  popd &>/dev/null
+  pushd "$MINIMEGA_DIR" &>/dev/null || return 1
+  $MINIMEGA_DIR/bin/minimega -base=$MM_BASE -filepath=$MM_FILEPATH -degree=$MM_DEGREE -nostdin=$MM_DAEMON -context=$MM_CONTEXT -port=$MM_PORT -level=$MM_LOGLEVEL -logfile=$MM_LOGFILE "${@:1}" &> /dev/null &
+  popd &>/dev/null || return 1
   sleep 1
   new_pid=`cat $MM_BASE/minimega.pid 2> /dev/null`
   if [ "$?" != "0" ]; then # if the process has already died
@@ -119,7 +119,7 @@ recover() {
   if [ "$?" == "0" ]; then # if it is running
     for save in /etc/minimega/saved_vms/*
     do
-      echo "Recovering: "`basename "$save"`
+      echo "Recovering: $(basename "$save")"
       $MINIMEGA_DIR/bin/minimega -e read $save
     done
     echo "Done."
@@ -147,7 +147,7 @@ check_if_running() {
 rtn=0
 case "$1" in
   start)
-    start ${@:2}
+    start "${@:2}"
     rtn=$?
     ;;
   stop)
@@ -156,7 +156,7 @@ case "$1" in
     ;;
   restart)
     stop
-    start ${@:2}
+    start "${@:2}"
     rtn=$?
     ;;
   status)

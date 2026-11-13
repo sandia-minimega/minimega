@@ -143,7 +143,7 @@ For example, the following shows several mouse movements, and someone typing foo
 
 ## Framebuffer
 
-Playback of framebuffer data uses a seperate tool, available in the minimega distribution, rfbplay.
+Playback of framebuffer data uses a separate tool, available in the minimega distribution, rfbplay.
 
 rfbplay can serve a directory of framebuffer files, and can playback in a MJPEG supported web browser (Firefox currently supports MJPEG, Chrome no longer does).
 

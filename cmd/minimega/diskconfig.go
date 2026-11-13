@@ -28,7 +28,7 @@ type DiskConfig struct {
 type DiskConfigs []DiskConfig
 
 // ParseDiskConfig processes the input specifying the disk image path, interface,
-// and cache mode and udpates the vm config accordingly.
+// and cache mode and updates the vm config accordingly.
 func ParseDiskConfig(spec string, snapshot bool) (*DiskConfig, error) {
 	// NOTE: diskspec currently uses comma as a structural delimiter:
 	//

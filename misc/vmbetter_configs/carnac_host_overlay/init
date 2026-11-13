@@ -66,6 +66,7 @@ yes | mkfs.ext4 /dev/md0
 mount /dev/md0 /scratch
 
 # bump open file handle limits
+# shellcheck disable=SC3045 # the init shell supports ulimit -n
 ulimit -n 999999
 
 # increase max PID
@@ -92,7 +93,7 @@ ip=$(ip addr show dev eth0 | grep -Po 'inet \K[^ ]+' | sed s/192.168./10.100./)
 ip addr add dev mega_bridge $ip
 
 # set the hostname based on reverse lookup
-hostname $(nslookup ${ip%/*} | sed -n 's/.*name = \(.\+\)./\1/p')
+hostname "$(nslookup "${ip%/*}" | sed -n 's/.*name = \(.\+\)./\1/p')"
 
 # ssh
 mkdir /var/run/sshd

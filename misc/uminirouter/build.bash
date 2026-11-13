@@ -20,10 +20,10 @@ wget https://busybox.net/downloads/binaries/1.21.1/busybox-x86_64
 mv busybox-x86_64 uminirouterfs/bin/busybox
 chmod a+rx uminirouterfs/bin/busybox
 
-cd uminirouterfs
+cd uminirouterfs || exit 1
 for i in `bin/busybox --list-full`
 do
-	ln -s /bin/busybox $i
+    ln -s /bin/busybox $i
 done
 cd ..
 
@@ -33,11 +33,11 @@ cp init uminirouterfs
 cp preinit uminirouterfs
 cp ../../bin/minirouter uminirouterfs
 cp ../../bin/miniccc uminirouterfs
-cp `which dhclient` uminirouterfs/sbin
-cp `which ip` uminirouterfs/sbin
-cp `which dnsmasq` uminirouterfs/usr/sbin
-cp `which bird` uminirouterfs/usr/sbin
-cp `which bird6` uminirouterfs/usr/sbin
+cp "$(which dhclient)" uminirouterfs/sbin
+cp "$(which ip)" uminirouterfs/sbin
+cp "$(which dnsmasq)" uminirouterfs/usr/sbin
+cp "$(which bird)" uminirouterfs/usr/sbin
+cp "$(which bird6)" uminirouterfs/usr/sbin
 
 go run ../ldd.go uminirouterfs/miniccc uminirouterfs
 go run ../ldd.go uminirouterfs/minirouter uminirouterfs
@@ -48,7 +48,7 @@ go run ../ldd.go uminirouterfs/usr/sbin/bird uminirouterfs
 go run ../ldd.go uminirouterfs/usr/sbin/bird6 uminirouterfs
 
 # scripts that dhclient depends on
-cp `which dhclient-script` uminirouterfs/sbin
+cp "$(which dhclient-script)" uminirouterfs/sbin
 mkdir -p uminirouterfs/etc/dhcp/dhclient-enter-hooks.d
 mkdir -p uminirouterfs/etc/dhcp/dhclient-exit-hooks.d
 cp /etc/dhcp/dhclient.conf uminirouterfs/etc/dhcp

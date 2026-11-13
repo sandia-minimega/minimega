@@ -34,7 +34,7 @@ Once completed remote into the host you want to be the "head" node
 
 ## Host Configuration:
 
-Before we can get our minimega cluster setup, we need to configure the hosts. We assume that all the nodes can talk to each other via some hostname, if thats not the case, lets get that setup. In our example, we'll use the nodes m1-m5 that are all on the 192.168.1.0/24 network.
+Before we can get our minimega cluster setup, we need to configure the hosts. We assume that all the nodes can talk to each other via some hostname, if that's not the case, lets get that setup. In our example, we'll use the nodes m1-m5 that are all on the 192.168.1.0/24 network.
 
 ### Hosts file
 

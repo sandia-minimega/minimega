@@ -1405,7 +1405,7 @@ func (vm *ContainerVM) ProcStats() (map[int]*ProcStats, error) {
 
 		// should always be an int...
 		if i, err := strconv.Atoi(v); err == nil {
-			// supress errors... processes may have exited between reading
+			// suppress errors... processes may have exited between reading
 			// tasks and trying to read stats
 			if p, err := GetProcStats(i); err == nil {
 				res[i] = p
@@ -1539,7 +1539,7 @@ func containerPopulateCgroups(vmID, vcpus, memory int) error {
 	// Set CPU bandwidth control for the cgroup to emulate the desired number
 	// of CPUs. This limits the tasks to a total run-time (quota) over a given
 	// period. To emulate a given number of VCPUs, we compute the quota by
-	// simply multipling the period by the number of VCPUs.  Both are then
+	// simply multiplying the period by the number of VCPUs.  Both are then
 	// converted to microseconds. Our default period is one second which allows
 	// a high burst capacity. Based on:
 	//

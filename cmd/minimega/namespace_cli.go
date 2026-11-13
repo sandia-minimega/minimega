@@ -658,7 +658,7 @@ func cliNamespaceRun(c *minicli.Command, respChan chan<- minicli.Responses) {
 	}
 
 	// HAX: Make sure we don't run strange nested commands. We have to test for
-	// these explicity rather than allow the handlers to check because the
+	// these explicitly rather than allow the handlers to check because the
 	// Source for the locally executed commands will be the current namespace
 	// and not "Meshage".
 	for _, forbidden := range []string{"read", "mesh send", "ns run", "vm launch"} {

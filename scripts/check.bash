@@ -8,11 +8,11 @@ ROOT_DIR="$( cd ${SCRIPT_DIR}/.. && pwd )"
 # set the version from the repo
 "$SCRIPT_DIR/version.bash" || exit $?
 
-DIRECTORY_ARRAY=("$ROOT_DIR/cmd $ROOT_DIR/internal $ROOT_DIR/pkg")
+DIRECTORY_ARRAY=("$ROOT_DIR/cmd" "$ROOT_DIR/internal" "$ROOT_DIR/pkg")
 
 echo "CHECKING FMT"
-for i in ${DIRECTORY_ARRAY[@]}; do
-    OUTPUT="$(find $i -type f -name '*.go' -exec gofmt -d -l {} \;)"
+for i in "${DIRECTORY_ARRAY[@]}"; do
+    OUTPUT="$(find "$i" -type f -name '*.go' -exec gofmt -d -l {} \;)"
     if [ -n "$OUTPUT" ]; then
         echo "$OUTPUT"
         echo "gofmt - FAILED"
@@ -25,10 +25,11 @@ echo
 
 # note: we redirect go vet's output on STDERR to STDOUT
 echo "VET PACKAGES"
-for i in ${DIRECTORY_ARRAY[@]}; do
-    for j in `ls $i | grep -v plumbing`
-    do
-        echo $j
+for i in "${DIRECTORY_ARRAY[@]}"; do
+    for path in "$i"/*/; do
+        j=$(basename "$path")
+        [[ $j == *plumbing* ]] && continue
+        echo "$j"
         go vet "$i/$j"
         if [[ $? != 0 ]]; then
             echo "go vet - FAILED"

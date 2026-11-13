@@ -23,10 +23,10 @@ wget https://busybox.net/downloads/binaries/1.21.1/busybox-x86_64
 mv busybox-x86_64 uminicccfs/bin/busybox
 chmod a+rx uminicccfs/bin/busybox
 
-cd uminicccfs
+cd uminicccfs || exit 1
 for i in `bin/busybox --list-full`
 do
-	ln -s /bin/busybox $i
+    ln -s /bin/busybox $i
 done
 cd ..
 
@@ -34,15 +34,15 @@ PATH=${PATH}:/usr/sbin:/sbin
 rm uminicccfs/sbin/ip
 cp init uminicccfs
 cp ../../bin/miniccc uminicccfs
-cp `which dhclient` uminicccfs/sbin
-cp `which ip` uminicccfs/sbin
+cp "$(which dhclient)" uminicccfs/sbin
+cp "$(which ip)" uminicccfs/sbin
 
 go run ../ldd.go uminicccfs/miniccc uminicccfs
 go run ../ldd.go uminicccfs/sbin/dhclient uminicccfs
 go run ../ldd.go uminicccfs/sbin/ip uminicccfs
 
 # scripts that dhclient depends on
-cp `which dhclient-script` uminicccfs/sbin
+cp "$(which dhclient-script)" uminicccfs/sbin
 mkdir -p uminicccfs/etc/dhcp/dhclient-enter-hooks.d
 mkdir -p uminicccfs/etc/dhcp/dhclient-exit-hooks.d
 cp /etc/dhcp/dhclient.conf uminicccfs/etc/dhcp

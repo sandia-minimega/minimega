@@ -9,11 +9,13 @@ mkdir -p "$ROOT_DIR/internal/version"
 # shellcheck source=VERSION
 source "$ROOT_DIR/VERSION"
 if ! REVISION="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null)"; then
-	echo "warning: Git metadata unavailable; using unknown revision" >&2
-	REVISION="unknown"
+    echo "warning: Git metadata unavailable; using unknown revision" >&2
+    REVISION="unknown"
 fi
 DATE="$(date +%F)"
 
+# The generated Go code is indented with tabs, as gofmt requires.
+# editorconfig-checker-disable
 cat > "$ROOT_DIR/internal/version/version.go" <<EOF
 package version
 
@@ -23,3 +25,4 @@ var (
 	Date     = "$DATE"
 )
 EOF
+# editorconfig-checker-enable

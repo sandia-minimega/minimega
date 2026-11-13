@@ -8,13 +8,14 @@ ROOT_DIR="$( cd ${SCRIPT_DIR}/.. && pwd )"
 # set the version from the repo
 "$SCRIPT_DIR/version.bash" || exit $?
 
-DIRECTORY_ARRAY=("$ROOT_DIR/cmd $ROOT_DIR/internal $ROOT_DIR/pkg")
+DIRECTORY_ARRAY=("$ROOT_DIR/cmd" "$ROOT_DIR/internal" "$ROOT_DIR/pkg")
 
 # testing
 echo "TESTING"
-for i in ${DIRECTORY_ARRAY[@]}; do
-    for j in `ls $i | grep -v plumbing`
-    do
+for i in "${DIRECTORY_ARRAY[@]}"; do
+    for path in "$i"/*/; do
+        j=$(basename "$path")
+        [[ $j == *plumbing* ]] && continue
         go test -race -shuffle=on $i/$j
         if [[ $? != 0 ]]; then
             exit 1

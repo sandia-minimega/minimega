@@ -47,7 +47,7 @@ Using default arguments otherwise, protonuke will connect over HTTP and HTTPS to
 
 - For any of the client services, the final argument of the protonuke command line is the hosts protonuke should connect to.
 - You can specify host names, IP addresses, or CIDR-notation subnets.
-- You can stack any of these by listing hosts, seperated by commas.
+- You can stack any of these by listing hosts, separated by commas.
 
 For example:
 
