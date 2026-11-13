@@ -1,0 +1,11 @@
+PointerEvent,0,256,128
+PointerEvent,1,256,128
+PointerEvent,0,256,128
+KeyEvent,true,Shift_L
+KeyEvent,true,L
+KeyEvent,false,L
+KeyEvent,false,Shift_L
+KeyEvent,true,s
+KeyEvent,false,s
+KeyEvent,true,Return
+KeyEvent,false,Return

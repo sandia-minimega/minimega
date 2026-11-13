@@ -145,6 +145,7 @@ func recover() error {
 
 			// add VM to namespace
 			ns.VMs.m[kvm.ID] = kvm
+			ns.VMs.hookExit(kvm)
 
 			state, err := VMStateFromString(vm.State)
 			if err != nil {

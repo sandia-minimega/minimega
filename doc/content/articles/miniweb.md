@@ -140,6 +140,10 @@ And then start `miniweb` with:
 $ bin/miniweb -key key.pem -cert cert.pem
 ```
 
+TLS also removes the "Running without HTTPS is not recommended" warning. The
+noVNC console shows this warning when the browser does not treat the page as
+secure.
+
 <a id="TOC_4."></a>
 
 ## Namespaces

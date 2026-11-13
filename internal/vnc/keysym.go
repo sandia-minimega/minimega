@@ -6,19 +6,33 @@ package vnc
 
 import (
 	"fmt"
-	"unicode"
+	"maps"
+	"slices"
 )
 
 // Inverse of keysym.
-var keysymInverse = map[uint32]string{}
+var keysymInverse = buildKeysymInverse()
 
-func init() {
-	for k, v := range keysym {
-		// Use the first mapping for each key
-		if _, ok := keysymInverse[v]; !ok {
-			keysymInverse[v] = k
+// preferredKeysyms are the names to use for keysyms that have more than one
+// name, where the first name in sort order is not the usual name.
+var preferredKeysyms = []string{"KP_Page_Down", "Mode_switch", "Page_Down"}
+
+// buildKeysymInverse maps each keysym to one name. It uses the preferred
+// name, or else the first name in sort order.
+func buildKeysymInverse() map[uint32]string {
+	res := make(map[uint32]string, len(keysym))
+
+	for _, k := range slices.Sorted(maps.Keys(keysym)) {
+		if _, ok := res[keysym[k]]; !ok {
+			res[keysym[k]] = k
 		}
 	}
+
+	for _, k := range preferredKeysyms {
+		res[keysym[k]] = k
+	}
+
+	return res
 }
 
 func xKeysymToString(k uint32) (string, error) {
@@ -37,19 +51,21 @@ func xStringToKeysym(s string) (uint32, error) {
 	return uint32(0), fmt.Errorf("unknown key: `%s`", s)
 }
 
-func asciiCharToKeysymString(c rune) (string, error) {
-	// ascii 0x20 - 0x7E map directly to keysym values.
-	// manually shift cases for tab, nl, and cr
-	if c == 0x9 || c == 0xa || c == 0xd {
-		c += 0xff00
-	} else if c >= unicode.MaxASCII {
-		return "", fmt.Errorf("unknown non-ascii character: %U %c", c, c)
+// pasteKey returns the kb name of the key that types c. It returns false if
+// paste cannot type c: paste types only printable ASCII, Tab, and Enter.
+func pasteKey(c rune) (string, bool) {
+	switch {
+	case c == '\t':
+		return "Tab", true
+	case c == '\n':
+		return "Return", true
+	case c >= 0x20 && c <= 0x7e:
+		// printable ASCII characters are also their keysyms
+		name, ok := keysymInverse[uint32(c)]
+		return name, ok
 	}
-	keysym, err := xKeysymToString(uint32(c))
-	if err != nil {
-		return "uint32(0)", fmt.Errorf("character has no keysym mapping: %c [%x]", c, c)
-	}
-	return keysym, nil
+
+	return "", false
 }
 
 func requiresShift(s string) bool {

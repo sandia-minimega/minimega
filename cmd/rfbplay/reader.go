@@ -12,21 +12,25 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type RecordingReader struct {
-	reader *bufio.Reader
-	buf    bytes.Buffer
-	err    error
-	offset int64
+	reader  *bufio.Reader
+	buf     bytes.Buffer
+	err     error
+	elapsed time.Duration
 }
 
 func NewRecordingReader(r *bufio.Reader) *RecordingReader {
 	return &RecordingReader{reader: r}
 }
 
-func (r *RecordingReader) Offset() int64 {
-	return r.offset
+// Elapsed returns the sum of the chunk delays up to the last chunk read. A
+// read that needs a new chunk also reads all the bytes of the previous chunks,
+// so this is the recording time of the next byte.
+func (r *RecordingReader) Elapsed() time.Duration {
+	return r.elapsed
 }
 
 func (r *RecordingReader) readChunk() error {
@@ -44,10 +48,11 @@ func (r *RecordingReader) readChunk() error {
 		return errors.New("malformed chunk header line (not two parts)")
 	}
 
-	r.offset, err = strconv.ParseInt(parts[0], 10, 64)
+	offset, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
 		return errors.New("malformed chunk header line (non-integer offset)")
 	}
+	r.elapsed += time.Duration(offset)
 
 	n, err := strconv.ParseInt(parts[1], 10, 64)
 	if err != nil {
@@ -76,20 +81,20 @@ func (r *RecordingReader) readChunk() error {
 	return nil
 }
 
+// Read reads the data of the chunks. At the end of the file, or after an
+// error, it returns the bytes that are left before it returns the error.
 func (r *RecordingReader) Read(dst []byte) (int, error) {
-	if r.err != nil {
-		return 0, r.err
-	}
-
-	// Read the next chunk
-	if len(dst) > r.buf.Len() {
+	if len(dst) > r.buf.Len() && r.err == nil {
 		r.err = r.readChunk()
-		if r.err != nil {
-			return 0, r.err
+		for r.err == nil && r.buf.Len() == 0 {
+			r.err = r.readChunk()
 		}
 	}
 
-	var n int
-	n, r.err = r.buf.Read(dst)
-	return n, r.err
+	if r.buf.Len() > 0 || len(dst) == 0 {
+		n, _ := r.buf.Read(dst)
+		return n, nil
+	}
+
+	return 0, r.err
 }

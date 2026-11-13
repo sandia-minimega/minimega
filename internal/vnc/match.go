@@ -15,10 +15,20 @@ import (
 	"github.com/anthonynsimon/bild/parallel"
 )
 
+// matchTemplate looks for template in img. If it finds it, it returns a left
+// click on the center of the template, in the coordinates of img.
 func matchTemplate(img, template image.Image) *PointerEvent {
 	imgBounds := img.Bounds()
 	templateBounds := template.Bounds()
 
+	w, h := imgBounds.Dx(), imgBounds.Dy()
+	tw, th := templateBounds.Dx(), templateBounds.Dy()
+	if tw == 0 || th == 0 || tw > w || th > h {
+		return nil
+	}
+
+	// Grayscale gives RGBA images with R = G = B. Pix[0] is the pixel at
+	// Bounds().Min, and each pixel has 4 bytes.
 	imgGray := effect.Grayscale(img)
 	templateGray := effect.Grayscale(template)
 
@@ -27,33 +37,32 @@ func matchTemplate(img, template image.Image) *PointerEvent {
 	minSAD := math.MaxFloat64
 	minX := 0
 	minY := 0
-	normFactor := float64(templateBounds.Dx() * templateBounds.Dy())
+	normFactor := float64(tw * th)
 
-	// Note: bild.parallel.Line assumes img.Bounds().Min.X is 0, which should
-	// be safe to assume for our freshly-opened PNG, even though Go's image pkg
-	// says: An image's bounds do not necessarily start at (0, 0)
-	parallel.Line(imgBounds.Dy()-templateBounds.Dy(), func(start, end int) {
+	parallel.Line(h-th+1, func(start, end int) {
 		for y := start; y < end; y++ {
-			for x := imgBounds.Min.X; x < imgBounds.Max.X-templateBounds.Dx(); x++ {
-				var SAD float64
+			for x := 0; x <= w-tw; x++ {
+				var sum int
 
 				// loop through the template image
-				for j := templateBounds.Min.Y; j < templateBounds.Max.Y; j++ {
-					for i := templateBounds.Min.X; i < templateBounds.Max.X; i++ {
-						sPos := (y+j)*imgGray.Stride + (x + i)
-						s := imgGray.Pix[sPos]
-						tPos := j*templateGray.Stride + i
-						t := templateGray.Pix[tPos]
+				for j := 0; j < th; j++ {
+					sRow := imgGray.Pix[(y+j)*imgGray.Stride+x*4:]
+					tRow := templateGray.Pix[j*templateGray.Stride:]
 
-						SAD += math.Abs(float64(s)-float64(t)) / normFactor
+					for i := 0; i < tw*4; i += 4 {
+						d := int(sRow[i]) - int(tRow[i])
+						if d < 0 {
+							d = -d
+						}
+						sum += d
 					}
 				}
 
-				// log.Debug("SAD at %v,%v is %v\n", x, y, SAD)
+				SAD := float64(sum) / normFactor
 
-				// save the best found position
+				// save the best found position, the first in row order on a tie
 				mux.Lock()
-				if minSAD > SAD {
+				if SAD < minSAD || SAD == minSAD && (y < minY || y == minY && x < minX) {
 					minSAD = SAD
 					minX = x
 					minY = y
@@ -63,7 +72,10 @@ func matchTemplate(img, template image.Image) *PointerEvent {
 		}
 	})
 
-	log.Debug("lowest SAD %v at %v,%v (center %v,%v)", minSAD, minX, minY, minX+templateBounds.Dx()/2, minY+templateBounds.Dy()/2)
+	x := imgBounds.Min.X + minX + tw/2
+	y := imgBounds.Min.Y + minY + th/2
+
+	log.Debug("lowest SAD %v at %v,%v (center %v,%v)", minSAD, imgBounds.Min.X+minX, imgBounds.Min.Y+minY, x, y)
 
 	// 20 seems to be a decent cut off...
 	if minSAD > 20.0 {
@@ -72,7 +84,7 @@ func matchTemplate(img, template image.Image) *PointerEvent {
 
 	return &PointerEvent{
 		ButtonMask: 1, // left click
-		XPosition:  uint16(minX + templateBounds.Dx()/2),
-		YPosition:  uint16(minY + templateBounds.Dy()/2),
+		XPosition:  uint16(x),
+		YPosition:  uint16(y),
 	}
 }

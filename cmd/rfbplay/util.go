@@ -47,6 +47,10 @@ func ReadPixel(reader io.Reader) (pixel color.RGBA, err error) {
 	return
 }
 
+// maxRectDim is the largest X+Width and Y+Height of a rectangle. The canvas
+// grows only to hold rectangles, so it has the same limit.
+const maxRectDim = 16384
+
 func ReadRectangle(buf io.Reader) (rect Rectangle, err error) {
 	// Try to read all the fields
 	var X, Y, Width, Height uint16
@@ -68,6 +72,10 @@ func ReadRectangle(buf io.Reader) (rect Rectangle, err error) {
 	}
 
 	log.Debug("rectangle: %d x %d at (%d, %d)", Width, Height, X, Y)
+
+	if int(X)+int(Width) > maxRectDim || int(Y)+int(Height) > maxRectDim {
+		return rect, fmt.Errorf("rectangle %d x %d at (%d, %d) is outside the %d x %d limit", Width, Height, X, Y, maxRectDim, maxRectDim)
+	}
 
 	rect.RGBA = image.NewRGBA(image.Rectangle{
 		image.Point{int(X), int(Y)},
