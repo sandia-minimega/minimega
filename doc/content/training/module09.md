@@ -199,7 +199,7 @@ One approach would be to have the writer count the number of readers and generat
 
 This is problematic as it requires the agent to check reader and pipe state at every potential write.
 
-Instead, we can have the pipe use a via to geneate unique values for every reader automatically when a write occurs:
+Instead, we can have the pipe use a via to generate unique values for every reader automatically when a write occurs:
 
 ```text
 minimega$ pipe foo via "normal -stddev 5.0"

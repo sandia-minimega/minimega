@@ -45,7 +45,7 @@ func fakeHostData(N int, uniform bool) []*HostStats {
 		})
 	}
 
-	// same seed so that we don't get unreproducable results
+	// same seed so that we don't get unreproducible results
 	r := rand.New(rand.NewSource(0))
 
 	// randomly shuffle the elements

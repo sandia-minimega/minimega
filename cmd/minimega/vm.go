@@ -783,7 +783,7 @@ func (vm *BaseVM) networkDisconnect(pos int) error {
 
 	nic := &vm.Networks[pos]
 
-	// Don't try to diconnect an interface that is already disconnected...
+	// Don't try to disconnect an interface that is already disconnected...
 	if nic.VLAN == DisconnectedVLAN {
 		return nil
 	}

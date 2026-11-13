@@ -137,7 +137,7 @@ func (p ServerTechPDU) Off(ports map[string]string) error {
 func (p ServerTechPDU) Cycle(ports map[string]string) error {
 	p.login()
 	for _, port := range ports {
-		log.Debug("Attempting to power cylce %v", port)
+		log.Debug("Attempting to power cycle %v", port)
 		err := p.readTelnet(prompt)
 		if err != nil {
 			return err

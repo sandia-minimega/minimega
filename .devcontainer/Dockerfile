@@ -3,6 +3,8 @@ FROM ${GO_IMAGE}
 
 ENV PATH="/opt/minimega-python/bin:/usr/local/go/bin:/go/bin:${PATH}"
 
+# The single quotes keep $PATH literal in the profile script.
+# hadolint ignore=SC2016
 RUN DEBIAN_FRONTEND=noninteractive apt-get update \
   && apt-get install -y --no-install-recommends \
     build-essential \
@@ -16,6 +18,8 @@ RUN DEBIAN_FRONTEND=noninteractive apt-get update \
     > /etc/profile.d/minimega-path.sh \
   && rm -rf /var/lib/apt/lists/*
 
+# USERNAME is the name of the container user, not a secret.
+# hadolint ignore=DL3064
 ARG USERNAME=vscode
 ARG USER_UID=1000
 ARG USER_GID=${USER_UID}

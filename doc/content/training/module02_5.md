@@ -36,7 +36,7 @@ The Kernel-based Virtual Machine (KVM) can be described as a self-contained virt
 
 KVM technology works by turning Linux into a hypervisor, allowing it to act as a host to guest Virtual Machines.
 
-Every KVM VM is implemented as a regular Linux process, and therefore has all the componenets needed by the hypervisor to run as a VM with dedicated virtual hardware.
+Every KVM VM is implemented as a regular Linux process, and therefore has all the components needed by the hypervisor to run as a VM with dedicated virtual hardware.
 
 Because KVM VMs have all the components needed to run as a self-contained Linux machine, they tend to require more resources to run.
 
@@ -111,7 +111,7 @@ You can find this script in the minimega directory:
 <minimega directory>/misc/vmbetter.bash
 ```
 
-The script itself is straight-forward and we leave its useage as an exercise for the reader.
+The script itself is straight-forward and we leave its usage as an exercise for the reader.
 
 However, there are some important fundamentals to understanding how vmbetter configuration works.
 
@@ -134,7 +134,7 @@ The configuration files contain a number of key sections:
 - parents
 
     -  vmbetter configs are recursive, and therefore load the properties and overlay directories of ancestor configurations before loading the child configurations
-    -  this allows for narrowly specified VMs enabling you to avoid loading unecessary software
+    -  this allows for narrowly specified VMs enabling you to avoid loading unnecessary software
 
 <a id="TOC_10."></a>
 

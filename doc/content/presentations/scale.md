@@ -118,7 +118,7 @@ Full-weight VMs are not always necessary. When possible, we deploy lightweight L
 
 Containers also have some disadvantages:
 
-- Always homogenous (same kernel as host, Linux only)
+- Always homogeneous (same kernel as host, Linux only)
 - No iptables for containers
 - Container breakout considered easier than VM breakout--avoid running untrusted code
 

@@ -306,7 +306,7 @@ so that users can open different and/or multiple views in different browser tabs
 or windows. The columns displayed in the VMs list have been expanded with
 additional information, and can be individually toggled for display. The search
 functionality has been fixed and will now search the full text of all the
-columns in a table as expcted. There are additional visual indication
+columns in a table as expected. There are additional visual indication
 improvements for VMs without screenshots, high host resource utilization, etc.
 Note that the auto-refresh behavior of the tables will automatically disable
 when there are more than 500 VMs, to prevent browser performance degradation.

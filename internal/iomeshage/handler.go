@@ -113,7 +113,7 @@ func (iom *IOMeshage) handleInfo(m *Message) {
 	}
 }
 
-// Transactions need unique TIDs, and a corresponing channel to return
+// Transactions need unique TIDs, and a corresponding channel to return
 // responses along. Returns a new TID and channel for the mux to respond along.
 func (iom *IOMeshage) newTID() (int64, <-chan *Message) {
 	iom.tidLock.Lock()
@@ -208,7 +208,7 @@ func (iom *IOMeshage) handlePart(m *Message, xfer bool) {
 
 	// we don't have the file in a complete state at least, do we have that
 	// specific part in flight somewhere? we consider a part to be
-	// transferrable IFF it exists on disk and is marked as being fully
+	// transferable IFF it exists on disk and is marked as being fully
 	// received.
 	iom.transferLock.RLock()
 	if t, ok := iom.transfers[m.Filename]; ok && t.Parts[m.Part] {

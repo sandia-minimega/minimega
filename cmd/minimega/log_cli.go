@@ -130,7 +130,7 @@ func cliLogLevel(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	for k := range c.BoolArgs {
 		level, _ := log.ParseLevel(k)
 
-		// Meshage events get included in debug logs... if we propogate those to the
+		// Meshage events get included in debug logs... if we propagate those to the
 		// meshage logger we end up in a memory-consuming loop.
 		if level == log.DEBUG {
 			for _, logger := range log.Loggers() {

@@ -47,7 +47,7 @@ function initVMInfoDataTable() {
                 callback(dataTablesData);
             });
         },
-        // custom DOM with Boostrap integration
+        // custom DOM with Bootstrap integration
         // http://stackoverflow.com/a/32253335
         "dom":
             "<'row'<'col-sm-5'i><'col-sm-7'p>>" +
@@ -70,16 +70,16 @@ function initVMInfoDataTable() {
             { "title": "Host", "data": "host" },
             { "title": "Name", "data": "name" },
             { "title": "State", "data": "state" , render:  function ( data, type, full, meta ) {
-				var res = "<span>"+data+"</span>";
-				if (data == "BUILDING" || data == "PAUSED") {
-					res += '<i class="fa fa-play-circle" id="'+full["name"]+'-start"></i>';
-				} else if (data == "RUNNING") {
-					res += '<i class="fa fa-pause-circle" id="'+full["name"]+'-stop"></i>';
-				}
-				res += '<i class="fa fa-times-circle" id="'+full["name"]+'-kill"></i>';
+                var res = "<span>"+data+"</span>";
+                if (data == "BUILDING" || data == "PAUSED") {
+                    res += '<i class="fa fa-play-circle" id="'+full["name"]+'-start"></i>';
+                } else if (data == "RUNNING") {
+                    res += '<i class="fa fa-pause-circle" id="'+full["name"]+'-stop"></i>';
+                }
+                res += '<i class="fa fa-times-circle" id="'+full["name"]+'-kill"></i>';
 
-				return res;
-			} },
+                return res;
+            } },
             { "title": "Uptime", "data": "uptime", "visible": false },
             { "title": "Type", "data": "type", "visible": false },
             //{ "title": "ID", "data": "id" },
@@ -130,26 +130,26 @@ function initVMInfoDataTable() {
         .appendTo('#vms-dataTable_wrapper .col-sm-6:eq(0)');
     */
 
-	// set onclick handler for all <i> to update VM
-	$(document).on("click", "#vms-dataTable i", function() {
-		var id = $(this).attr("id");
-		var name = id.substr(0, id.lastIndexOf("-"));
-		var action = id.substr(id.lastIndexOf("-")+1);
+    // set onclick handler for all <i> to update VM
+    $(document).on("click", "#vms-dataTable i", function() {
+        var id = $(this).attr("id");
+        var name = id.substr(0, id.lastIndexOf("-"));
+        var action = id.substr(id.lastIndexOf("-")+1);
 
-		var p = path;
-		if (!p.endsWith("/")) {
-			p += "/";
-		}
-		p += "vm/"+name+"/"+action;
+        var p = path;
+        if (!p.endsWith("/")) {
+            p += "/";
+        }
+        p += "vm/"+name+"/"+action;
 
-		$.ajax({
-			type: "POST",
-			url: p,
-			success: function() {
+        $.ajax({
+            type: "POST",
+            url: p,
+            success: function() {
                 vmDataTable.ajax.reload(null, false);
-			},
-		})
-	});
+            },
+        })
+    });
 
     if (VM_REFRESH_TIMEOUT >= 1000) {
         setInterval(function() {
@@ -177,7 +177,7 @@ function initVMTopDataTable() {
                 callback(dataTablesData);
             });
         },
-        // custom DOM with Boostrap integration
+        // custom DOM with Bootstrap integration
         // http://stackoverflow.com/a/32253335
         "dom":
             "<'row'<'col-sm-5'i><'col-sm-7'p>>" +

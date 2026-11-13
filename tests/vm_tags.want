@@ -21,7 +21,7 @@ tags
 {"color":"red"}
 {"shape":"square"}
 
-## # Make sure Tags are truely separate structures
+## # Make sure Tags are truly separate structures
 ## vm tag vm1 color blue
 ## .column tags vm info
 tags

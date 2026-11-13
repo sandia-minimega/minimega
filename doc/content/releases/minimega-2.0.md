@@ -212,7 +212,7 @@ protonuke guide for more information.
 
 #### Recursive file api
 
-The `file` API now supports recursively tranferring entire directories to
+The `file` API now supports recursively transferring entire directories to
 remote nodes. To transfer a directory, simply specify the directory to transfer
 with `file get` as usual. Additionally, the `file` API now allows only 3
 in-flight transfers at a time, queuing additional transfer requests.

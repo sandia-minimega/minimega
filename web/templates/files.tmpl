@@ -20,21 +20,21 @@
     $(document).ready(function() {
         $('nav a[href$="' + "files" + '"]').addClass("current-view");
 
-		var base = "/files/";
+        var base = "/files/";
 
-		// before is namespace
-		var path = window.location.pathname;
-		path = path.substr(0, path.indexOf(base));
-		// after is subdir
-		var subdir = window.location.pathname;
-		subdir = subdir.substr(subdir.indexOf(base)+base.length);
+        // before is namespace
+        var path = window.location.pathname;
+        path = path.substr(0, path.indexOf(base));
+        // after is subdir
+        var subdir = window.location.pathname;
+        subdir = subdir.substr(subdir.indexOf(base)+base.length);
 
-		$('nav a').each(function() {
-			var href = $(this).attr("href");
-			if (!href.startsWith("/")) {
-				$(this).attr("href", path+"/"+href);
-			}
-		});
+        $('nav a').each(function() {
+            var href = $(this).attr("href");
+            if (!href.startsWith("/")) {
+                $(this).attr("href", path+"/"+href);
+            }
+        });
 
         initFilesDataTable();
     });

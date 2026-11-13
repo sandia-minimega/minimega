@@ -59,6 +59,7 @@ sleep 10
 mount /dev/sda1 /scratch
 
 # bump open file handle limits
+# shellcheck disable=SC3045 # the init shell supports ulimit -n
 ulimit -n 999999
 
 # increase max PID
@@ -74,28 +75,29 @@ dhclient -v eth0
 /etc/init.d/openvswitch-switch start
 
 # find the 10G/40G interface to up
-for i in $(ls /sys/class/net); do
-	out=$(ls -l /sys/class/net/$i/device/driver 2>/dev/null | grep -e "ixgbe" -e "mlx")
-	if [ -n "$out" ]; then
-		ip link set $i up
-		NIC="$i"
-		break
-	fi
+for p in /sys/class/net/*; do
+    i=$(basename "$p")
+    out=$(readlink "$p/device/driver" 2>/dev/null | grep -e "ixgbe" -e "mlx")
+    if [ -n "$out" ]; then
+        ip link set $i up
+        NIC="$i"
+        break
+    fi
 done
 
 if [ -n "$NIC" ]; then
-	# setup mega_bridge
-	ovs-vsctl add-br mega_bridge
-	ovs-vsctl set Bridge mega_bridge stp_enable=false
-	ovs-vsctl add-port mega_bridge $NIC
-	ip link set mega_bridge up
+    # setup mega_bridge
+    ovs-vsctl add-br mega_bridge
+    ovs-vsctl set Bridge mega_bridge stp_enable=false
+    ovs-vsctl add-port mega_bridge $NIC
+    ip link set mega_bridge up
 
-	# set the ip on mega_bridge to mimic the management IP
-	ip=$(ip addr show dev eth0 | grep -Po 'inet \K[^ ]+' | sed s/172.17./172.16./)
-	ip addr add dev mega_bridge $ip
+    # set the ip on mega_bridge to mimic the management IP
+    ip=$(ip addr show dev eth0 | grep -Po 'inet \K[^ ]+' | sed s/172.17./172.16./)
+    ip addr add dev mega_bridge $ip
 
-	# set the hostname based on reverse lookup
-	hostname $(nslookup ${ip%/*} | sed -n 's/.*name = \(.\+\)./\1/p')
+    # set the hostname based on reverse lookup
+    hostname "$(nslookup "${ip%/*}" | sed -n 's/.*name = \(.\+\)./\1/p')"
 fi
 
 # ssh

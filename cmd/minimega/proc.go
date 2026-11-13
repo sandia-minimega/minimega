@@ -14,7 +14,7 @@ import (
 // #include <unistd.h>
 import "C"
 
-// ProcLimit is the maximum number of proceses to inspect per VM
+// ProcLimit is the maximum number of processes to inspect per VM
 const ProcLimit = 100
 
 var (

@@ -226,7 +226,7 @@ Open vSwitch server using the
 [`ovs-ctl`](https://docs.openvswitch.org/en/latest/ref/ovs-ctl.8/) program.
 
 Additional values can be appended to the `ovs-ctl start` command by using the
-`OVS_APPEND` environment variable, for example if you are runnng the
+`OVS_APPEND` environment variable, for example if you are running the
 ovsdb-server externally and only need the Open vSwitch client:
 
 ```shell

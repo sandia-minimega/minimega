@@ -1,6 +1,6 @@
 Thank you for your interest in contributing to minimega! We welcome contributions from everyone and appreciate your efforts to improve our project. This guide will help you understand how to contribute effectively.
 
-> Note: A failure to follow this guide may result in delay of PRs until there is compliance. 
+> Note: A failure to follow this guide may result in delay of PRs until there is compliance.
 
 ## Table of Contents
 
@@ -11,6 +11,7 @@ Thank you for your interest in contributing to minimega! We welcome contribution
   - [Suggesting Enhancements](#suggesting-enhancements)
   - [Submitting Code](#submitting-code)
     - [EditorConfig](#editorconfig)
+- [Code Quality](#code-quality)
 - [License](#license)
 
 ## Getting Started
@@ -65,7 +66,7 @@ If you encounter a bug or have a feature request, please open an issue in the [I
 
 ### Suggesting Enhancements
 
-We welcome suggestions for improvements! Please open an issue to discuss your ideas before implementing them. 
+We welcome suggestions for improvements! Please open an issue to discuss your ideas before implementing them.
 
 ### Submitting Code
 
@@ -111,7 +112,7 @@ We welcome suggestions for improvements! Please open an issue to discuss your id
     ```bash
     git commit -m "feat(auth): add user authentication feature"
     ```
-    If you need to write a longer commit message, you can do so by running `git commit`. This will open your default text editor where you can write a detailed commit message. The first line should be a brief summary conforming to the format above, followed by a blank line, and then a more detailed explanation. 
+    If you need to write a longer commit message, you can do so by running `git commit`. This will open your default text editor where you can write a detailed commit message. The first line should be a brief summary conforming to the format above, followed by a blank line, and then a more detailed explanation.
 
     Example:
     ```bash
@@ -121,12 +122,12 @@ We welcome suggestions for improvements! Please open an issue to discuss your id
     ```
 
 4. **Push to Your Fork**: Push to your branch and ensure CI/CD workflows are passing.
-    
+
     Example:
     ```bash
     git push origin feat-add-user-authentication
     ```
-    
+
 5. **Open a Pull Request**: Go to the original repository and open a [pull request](https://github.com/sandia-minimega/minimega/pulls). Provide a clear description of your changes and reference any related issues.
 
 ### Contributor names
@@ -150,6 +151,32 @@ Quick verification:
 3. Confirm the file is formatted according to that directory's rules.
 
 EditorConfig complements language-native formatters such as `gofmt`; continue to run language-specific formatters and tests before opening a pull request.
+
+## Code Quality
+
+This project uses [prek](https://prek.j178.dev/) (a Rust drop-in alternative to `pre-commit`) to enforce repository-wide checks such as `codespell`, `shellcheck`, `hadolint`, `yamllint`, `actionlint`, `zizmor`, `editorconfig-checker`, conventional commit validation, and general hygiene. The same checks run in CI via the [Lint workflow](workflows/lint.yml).
+
+Install the dev tooling and register the git `pre-commit` and `commit-msg` hooks once:
+
+```bash
+make install-dev
+```
+
+Run every hook against every file manually:
+
+```bash
+make lint
+# or, equivalently
+prek run --all-files
+```
+
+To run only the hooks that fix files (for example trailing whitespace and line endings):
+
+```bash
+prek run --all-files --group fix
+```
+
+Go-specific formatting and vetting continue to be enforced by `scripts/check.bash` (invoked via `make check`) since the repo does not currently maintain a top-level `golangci-lint` configuration.
 
 ## License
 By contributing to this project, you agree that your contributions will be licensed under the [GNU General Public License v3.0](https://github.com/sandia-minimega/minimega/blob/master/LICENSE) License.

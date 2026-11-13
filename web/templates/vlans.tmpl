@@ -20,13 +20,13 @@
     $(document).ready(function() {
         $('nav a[href$="' + "vlans" + '"]').addClass("current-view");
 
-		var path = window.location.pathname;
-		path = path.substr(0, path.indexOf("/vlans"));
+        var path = window.location.pathname;
+        path = path.substr(0, path.indexOf("/vlans"));
 
-		if (path != "") {
-			// trim off leading / to get the namespace name
-			$("h1.box-header").text("VLANs: "+path.substr(1));
-		}
+        if (path != "") {
+            // trim off leading / to get the namespace name
+            $("h1.box-header").text("VLANs: "+path.substr(1));
+        }
 
         initVLANsDataTable();
     });

@@ -151,7 +151,7 @@ Filters are case insensitive and may be stacked:
 If the column value is a list or an object (i.e. "[...]", "{...}"), then
 .filter implicitly uses substring matching.
 
-Substring matching can be specified explicity:
+Substring matching can be specified explicitly:
 
 	.filter state~run vm info
 	.filter state!~run vm info`,
@@ -230,7 +230,7 @@ only to the beginning of a command. For example:
 
  .alias vmr=.filter state=running vm info
 
-The alias is interpreted as the text up to the first "=". Runing .alias without
+The alias is interpreted as the text up to the first "=". Running .alias without
 any argument will list the existing aliases.
 
 This alias allows the user to type "vmr" rather than the using a filter to list

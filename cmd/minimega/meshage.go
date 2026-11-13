@@ -45,9 +45,9 @@ type meshageVMLaunch struct {
 }
 
 // meshageVMResponse is sent back to the scheduler to notify it of any errors
-// that occured
+// that occurred
 type meshageVMResponse struct {
-	Errors []string // Errors from launch, can't actualy encode error type
+	Errors []string // Errors from launch, can't actually encode error type
 	TID    int32    // unique ID for command/response pair
 }
 

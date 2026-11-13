@@ -1,0 +1,6 @@
+# Configuration file for zizmor. See https://docs.zizmor.sh/configuration/
+rules:
+  # The workflows call reusable workflows with the `./` local path syntax,
+  # which actionlint and the GitHub documentation use.
+  self-repository:
+    disable: true

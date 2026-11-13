@@ -28,7 +28,7 @@ The install is pretty straightforward. You just press next/install/finish. If it
 
 Note: When creating a VM in virtualbox you need to be sure to set certain settings. Otherwise you may have hardware issues when you move your virtualbox VM to KVM.
 
-Here are all the steps layed out for you.
+Here are all the steps laid out for you.
 
 Open Virtualbox
 
@@ -80,7 +80,7 @@ Click on Choose Existing Disk
 
 Navigate to your Ubuntu Server.qcow, mine was in C:\Users\mkunz\VirtualBox VMs\Demo\Ubuntu Server\Ubuntu Server.qcow
 
-The reason why we did this is because Minimega uses an IDE controller by default, with linux you likely wont run into issues, windows is a different story. If you see a BSOD with a stop 7b it's because of this.
+The reason why we did this is because Minimega uses an IDE controller by default, with linux you likely won't run into issues, windows is a different story. If you see a BSOD with a stop 7b it's because of this.
 
 Click on Empty and then the icon of a disk on the right and click choose virtual optical disk file and navigate to the ISO for Ubuntu Server.
 
