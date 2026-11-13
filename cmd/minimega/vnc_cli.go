@@ -133,7 +133,7 @@ func cliVNCPlay(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 		case c.BoolArgs["stop"]:
 			return true, ns.Player.Stop(id)
 		case c.BoolArgs["inject"]:
-			return true, ns.Player.Inject(id, rhost, c.StringArgs["cmd"])
+			return true, ns.Player.Inject(id, rhost, *f_iomBase, c.StringArgs["cmd"])
 		case c.BoolArgs["pause"]:
 			return true, ns.Player.Pause(id)
 		case c.BoolArgs["continue"]:
