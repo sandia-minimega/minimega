@@ -780,11 +780,23 @@ func (s *Server) RegisterVM(vm VM) {
 	s.vms[vm.GetUUID()] = vm
 }
 
+// UnregisterVM removes the VM and clears its cc_active state. Do not call it
+// while the VM lock is held: SetCCActive takes that lock.
 func (s *Server) UnregisterVM(vm VM) {
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
 	delete(s.vms, vm.GetUUID())
+	vm.SetCCActive(false)
+}
+
+// setCCActive sets cc_active on the VM registered for uuid, if there is one.
+// uuid is the key in s.clients, which handshake set to the s.vms key. Caller
+// must hold clientLock.
+func (s *Server) setCCActive(uuid string, active bool) {
+	if vm, ok := s.vms[uuid]; ok {
+		vm.SetCCActive(active)
+	}
 }
 
 func (s *Server) setDestroyed() {
@@ -988,6 +1000,7 @@ func (s *Server) handshake(conn net.Conn, expectedUUID string) (*client, error) 
 	c.checkin = time.Now()
 
 	s.clients[c.UUID] = c
+	s.setCCActive(c.UUID, true)
 
 	if update != "" {
 		s.startUpdate(c, update)
@@ -1016,7 +1029,7 @@ func bindClientUUID(m *Message, expectedUUID string) error {
 // client and transport handler for connections.
 func (s *Server) clientHandler(c *client) {
 	defer c.conn.Close()
-	defer s.removeClient(c.UUID)
+	defer s.removeClient(c)
 
 	// Set up minitunnel, dialing the server that should be running on the
 	// client's side. Data is Trunk'd via Messages.
@@ -1122,18 +1135,23 @@ func (s *Server) addClient(c *client) error {
 		return fmt.Errorf("client %v already exists!", c.UUID)
 	}
 	s.clients[c.UUID] = c
+	s.setCCActive(c.UUID, true)
 
 	return nil
 }
 
 // removeClient conditionally remove client from the client list, closing
-// connections if possible.
-func (s *Server) removeClient(uuid string) {
-	log.Debug("removeClient: %v", uuid)
-
+// connections if possible. It does nothing if the client list has a different
+// client for the same UUID, for example after the client reconnected.
+func (s *Server) removeClient(c *client) {
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
-	if c, ok := s.clients[uuid]; ok {
+
+	// updateClient replaces c.Client while it holds clientLock
+	uuid := c.UUID
+	log.Debug("removeClient: %v", uuid)
+
+	if s.clients[uuid] == c {
 		c.conn.Close()
 
 		// with the client conn closed, close any lingering plumbing
@@ -1150,6 +1168,7 @@ func (s *Server) removeClient(uuid string) {
 		close(c.cancelHeartbeat)
 
 		delete(s.clients, uuid)
+		s.setCCActive(uuid, false)
 	}
 }
 
@@ -1481,24 +1500,30 @@ func (s *Server) clientReaper() {
 
 		time.Sleep(time.Duration(REAPER_RATE) * time.Second)
 
-		s.clientLock.Lock()
-		for k, v := range s.clients {
-			// checked in more recently than expiration time
-			active := time.Now().Sub(v.checkin) < CLIENT_EXPIRED*time.Second
+		s.reapClients()
+	}
+}
 
-			if !active {
-				log.Debug("client %v expired", k)
-				// the same as removeClient except we already hold clientLock
-				v.conn.Close()
-				close(v.cancelHeartbeat)
-				delete(s.clients, k)
-			}
+// reapClients removes the clients that did not check in during the last
+// CLIENT_EXPIRED seconds. It sets cc_active to false for the VMs of these
+// clients and to true for the VMs of all other clients.
+func (s *Server) reapClients() {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
 
-			if vm, ok := s.vms[k]; ok {
-				vm.SetCCActive(active)
-			}
+	for k, v := range s.clients {
+		// checked in more recently than expiration time
+		active := time.Now().Sub(v.checkin) < CLIENT_EXPIRED*time.Second
+
+		if !active {
+			log.Debug("client %v expired", k)
+			// the same as removeClient except we already hold clientLock
+			v.conn.Close()
+			close(v.cancelHeartbeat)
+			delete(s.clients, k)
 		}
-		s.clientLock.Unlock()
+
+		s.setCCActive(k, active)
 	}
 }
 
