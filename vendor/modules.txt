@@ -70,6 +70,10 @@ github.com/twmb/murmur3
 # github.com/ziutek/telnet v0.1.0
 ## explicit; go 1.22.5
 github.com/ziutek/telnet
+# go.uber.org/goleak v1.3.0
+## explicit; go 1.20
+go.uber.org/goleak
+go.uber.org/goleak/internal/stack
 # golang.org/x/crypto v0.48.0
 ## explicit; go 1.24.0
 golang.org/x/crypto/bcrypt
