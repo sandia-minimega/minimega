@@ -325,8 +325,9 @@ func cliCCAutoUpdate(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 }
 
 // fetchCCUpdateFiles uses list to find the miniccc update binaries on the mesh
-// in the files directory and in subpath, and uses get to fetch each one.
-func fetchCCUpdateFiles(subpath string, list func(string) []string, get func(string) error) error {
+// in the files directory and in subpath, and uses get to fetch each one. It
+// returns an error if list cannot search the mesh.
+func fetchCCUpdateFiles(subpath string, list func(string) ([]string, error), get func(string) error) error {
 	dirs := []string{""}
 	if subpath != "" {
 		dirs = append(dirs, subpath)
@@ -336,7 +337,12 @@ func fetchCCUpdateFiles(subpath string, list func(string) []string, get func(str
 
 	for _, dir := range dirs {
 		for _, pattern := range []string{"miniccc", "miniccc.exe", "miniccc-*"} {
-			for _, file := range list(filepath.Join(dir, pattern)) {
+			files, err := list(filepath.Join(dir, pattern))
+			if err != nil {
+				return fmt.Errorf("unable to search the mesh for miniccc binaries: %w", err)
+			}
+
+			for _, file := range files {
 				file = filepath.Clean(file)
 				if seen[file] || filepath.Dir(file) != filepath.Clean(dir) || !ron.IsUpdateFile(filepath.Base(file)) {
 					continue
@@ -657,10 +663,11 @@ func cliCCFilter(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 // send
 func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	files := make([]string, len(c.ListArgs["file"]))
+	var files []string
 
-	// Ensure each file to be sent to the VM is present locally before sending.
-	for i, file := range c.ListArgs["file"] {
+	// Expand globs before fetching files through iomeshage, which only accepts
+	// individual filenames.
+	for _, file := range c.ListArgs["file"] {
 		original := file
 
 		// Strip base path from the file if it's present since the base path gets
@@ -672,6 +679,36 @@ func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 			}
 
 			file = rel
+		}
+
+		var expanded []ccSendFile
+		if filepath.IsAbs(file) {
+			matches, err := filepath.Glob(file)
+			if err != nil {
+				return err
+			}
+
+			for _, match := range matches {
+				expanded = append(expanded, ccSendFile{mesh: match, send: match})
+			}
+		} else {
+			var err error
+			expanded, err = ccSendExpand(ns.Name, file, iom.Info)
+			if err != nil {
+				return fmt.Errorf("unable to find file %s via the mesh: %w", original, err)
+			}
+		}
+
+		for _, f := range expanded {
+			if _, err := iomHelper(f.mesh, c.Source); err != nil {
+				return fmt.Errorf("unable to get file %s via the mesh: %w", original, err)
+			}
+
+			files = append(files, f.send)
+		}
+
+		if len(expanded) > 0 {
+			continue
 		}
 
 		_, err := iomHelper(file, c.Source)
@@ -690,7 +727,7 @@ func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 			}
 		}
 
-		files[i] = file
+		files = append(files, file)
 	}
 
 	cmd, err := ns.ccServer.NewFilesSendCommand(files)
@@ -700,6 +737,65 @@ func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 
 	resp.Data = ns.NewCommand(cmd)
 	return nil
+}
+
+// ccSendFile is a file that cc send fetches through iomeshage and then gives to
+// the ron server.
+type ccSendFile struct {
+	mesh string // path relative to the iomeshage base directory
+	send string // name relative to the ron server directory of the namespace
+}
+
+// ccSendExpand finds the files that a glob pattern matches on the mesh. It
+// searches the namespace directory first and the iomeshage base directory
+// second. It returns no files and no error when pattern is not a glob.
+func ccSendExpand(namespace, pattern string, info func(string) ([]string, error)) ([]ccSendFile, error) {
+	if !strings.ContainsAny(pattern, "*?[") {
+		return nil, nil
+	}
+
+	search := func(prefix string) ([]ccSendFile, error) {
+		glob := filepath.Join(prefix, pattern)
+
+		matches, err := info(glob)
+		if err != nil {
+			return nil, err
+		}
+
+		sort.Strings(matches)
+
+		var res []ccSendFile
+		for i, match := range matches {
+			if i > 0 && match == matches[i-1] {
+				continue
+			}
+
+			// info also returns the files below matched directories.
+			if ok, err := filepath.Match(glob, match); err != nil {
+				return nil, err
+			} else if !ok {
+				continue
+			}
+
+			send, err := filepath.Rel(prefix, match)
+			if err != nil {
+				return nil, err
+			}
+
+			res = append(res, ccSendFile{mesh: match, send: send})
+		}
+
+		return res, nil
+	}
+
+	if namespace != DefaultNamespace {
+		res, err := search(namespace)
+		if err != nil || len(res) > 0 {
+			return res, err
+		}
+	}
+
+	return search("")
 }
 
 // recv

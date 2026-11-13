@@ -146,8 +146,9 @@ func (iom *IOMeshage) info(file string) (*Files, error) {
 }
 
 // search the mesh for the file/glob/directory, returning a slice of string
-// matches. The search includes local matches.
-func (iom *IOMeshage) Info(file string) []string {
+// matches. The search includes local matches. Info returns an error when the
+// mesh search fails or times out.
+func (iom *IOMeshage) Info(file string) ([]string, error) {
 	var ret []string
 
 	// search locally
@@ -168,8 +169,7 @@ func (iom *IOMeshage) Info(file string) []string {
 	}
 	recipients, err := iom.node.Broadcast(m)
 	if err != nil {
-		log.Errorln(err)
-		return nil
+		return nil, err
 	}
 	if log.WillLog(log.DEBUG) {
 		log.Debug("sent info request to %v nodes", len(recipients))
@@ -196,12 +196,11 @@ func (iom *IOMeshage) Info(file string) []string {
 				}
 			}
 		case <-time.After(timeout):
-			log.Errorln(fmt.Errorf("timeout"))
-			return nil
+			return nil, fmt.Errorf("timeout")
 		}
 	}
 
-	return ret
+	return ret, nil
 }
 
 // Retrieve a file from the shortest path node that has it. Get blocks until
