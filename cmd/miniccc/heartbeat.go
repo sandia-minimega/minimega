@@ -62,6 +62,8 @@ func heartbeat() {
 		MACs:          client.MACs,
 		LastCommandID: client.LastCommandID,
 		Version:       version.Revision,
+		Capabilities:  client.Capabilities,
+		SHA256:        client.SHA256,
 		Processes:     make(map[int]*ron.Process),
 	}
 

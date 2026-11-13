@@ -127,10 +127,18 @@ If it fails, STDOUT will instead contain the following:
 
 	10.0.0.68:443 | fail
 
+"cc auto-update true" lets miniccc clients replace their binary with a matching
+miniccc binary from the files directory when the two binaries are different.
+When you enable the setting, each host gets the binaries over the mesh. The
+update kills the background processes that the client started. "cc clients"
+shows the capabilities of each client. Clients without the "auto-update"
+capability need a manual update.
+
 For more documentation, see the article "Command and Control API Tutorial".`,
 		Patterns: []string{
 			"cc",
 			"cc <listen,> <port>",
+			"cc <auto-update,> [true,false]",
 			"cc <clients,>",
 			"cc <filter,> [filter]...",
 			"cc <commands,>",
@@ -163,7 +171,7 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 
 			"cc <test-conn,> <tcp,udp> <ip or fqdn> <port> wait <timeout> [base64 udp packet]",
 		},
-		Call: wrapBroadcastCLI(cliCC),
+		Call: cliCCBroadcast,
 	},
 	{ // cc mount
 		HelpShort: "list mounted filesystems",
@@ -222,6 +230,7 @@ var ccCliSubHandlers = map[string]wrappedCLIFunc{
 	"send":            cliCCFileSend,
 	"tunnel":          cliCCTunnel,
 	"listen":          cliCCListen,
+	"auto-update":     cliCCAutoUpdate,
 	"test-conn":       cliCCTestConn,
 }
 
@@ -244,6 +253,105 @@ func cliCC(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 		[]string{
 			strconv.Itoa(ns.ccServer.Clients()),
 		},
+	}
+
+	return nil
+}
+
+// Values of Namespace.ccAutoUpdate.
+const (
+	ccAutoUpdateUnset int32 = iota
+	ccAutoUpdateTrue
+	ccAutoUpdateFalse
+)
+
+// cliCCBroadcast broadcasts cc commands to the hosts in the namespace. When
+// "cc auto-update" succeeds on all hosts, it records the setting for hosts
+// added later.
+func cliCCBroadcast(c *minicli.Command, respChan chan<- minicli.Responses) {
+	if c.Source != "" || !c.BoolArgs["auto-update"] || !(c.BoolArgs["true"] || c.BoolArgs["false"]) {
+		wrapBroadcastCLI(cliCC)(c, respChan)
+		return
+	}
+
+	out := make(chan minicli.Responses, 1)
+	wrapBroadcastCLI(cliCC)(c, out)
+	res := <-out
+
+	ok := true
+	for _, resp := range res {
+		if resp.Error != "" {
+			ok = false
+		}
+	}
+
+	if ok {
+		setting := ccAutoUpdateFalse
+		if c.BoolArgs["true"] {
+			setting = ccAutoUpdateTrue
+		}
+		resolveNamespace(c).ccAutoUpdate.Store(setting)
+	}
+
+	respChan <- res
+}
+
+func cliCCAutoUpdate(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if c.BoolArgs["true"] || c.BoolArgs["false"] {
+		enable := c.BoolArgs["true"]
+
+		// iom is nil only when the mesh is not running, for example in tests
+		if enable && iom != nil {
+			subpath := ns.Name
+			if ns.Name == DefaultNamespace {
+				subpath = ""
+			}
+
+			get := func(file string) error {
+				_, err := iomHelper(file, c.Source)
+				return err
+			}
+			if err := fetchCCUpdateFiles(subpath, iom.Info, get); err != nil {
+				return err
+			}
+		}
+
+		ns.ccServer.SetAutoUpdate(enable)
+		return nil
+	}
+
+	resp.Response = strconv.FormatBool(ns.ccServer.AutoUpdate())
+	return nil
+}
+
+// fetchCCUpdateFiles uses list to find the miniccc update binaries on the mesh
+// in the files directory and in subpath, and uses get to fetch each one.
+func fetchCCUpdateFiles(subpath string, list func(string) []string, get func(string) error) error {
+	dirs := []string{""}
+	if subpath != "" {
+		dirs = append(dirs, subpath)
+	}
+
+	seen := map[string]bool{}
+
+	for _, dir := range dirs {
+		for _, pattern := range []string{"miniccc", "miniccc.exe", "miniccc-*"} {
+			for _, file := range list(filepath.Join(dir, pattern)) {
+				file = filepath.Clean(file)
+				if seen[file] || filepath.Dir(file) != filepath.Clean(dir) || !ron.IsUpdateFile(filepath.Base(file)) {
+					continue
+				}
+				seen[file] = true
+
+				if err := get(file); err != nil {
+					return fmt.Errorf("unable to get file %s via the mesh: %w", file, err)
+				}
+			}
+		}
+	}
+
+	if len(seen) == 0 {
+		return errors.New("no miniccc binaries found on the mesh")
 	}
 
 	return nil
@@ -803,7 +911,7 @@ func cliCCLog(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 // clients
 func cliCCClients(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{
-		"uuid", "hostname", "arch", "os", "ip", "mac",
+		"uuid", "hostname", "arch", "os", "ip", "mac", "capabilities",
 	}
 
 	resp.Data = ns.ccServer.GetClientInfo()
@@ -816,6 +924,7 @@ func cliCCClients(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 			c.OS,
 			fmt.Sprintf("%v", c.IPs),
 			fmt.Sprintf("%v", c.MACs),
+			strings.Join(c.Capabilities, ","),
 		}
 
 		resp.Tabular = append(resp.Tabular, row)

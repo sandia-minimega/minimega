@@ -385,11 +385,22 @@ func runCommands(cmd ...*minicli.Command) <-chan minicli.Responses {
 // list. All commands will be prefixed with "namespace <name>", have their
 // source set to the namespace name, and be record false.
 func namespaceCommands(ns *Namespace, cmd *minicli.Command) []*minicli.Command {
+	var hosts []string
+	for host := range ns.Hosts {
+		hosts = append(hosts, host)
+	}
+
+	return namespaceHostCommands(ns, hosts, cmd)
+}
+
+// namespaceHostCommands is like namespaceCommands, but runs the command only
+// on the given hosts of the namespace.
+func namespaceHostCommands(ns *Namespace, hosts []string, cmd *minicli.Command) []*minicli.Command {
 	var cmds = []*minicli.Command{}
 
 	var peers []string
 
-	for host := range ns.Hosts {
+	for _, host := range hosts {
 		if host == hostname {
 			// Create a deep copy of the command by recompiling it
 			cmd2 := minicli.MustCompile(cmd.Original)

@@ -74,6 +74,10 @@ type Command struct {
 	// when Once is enabled.
 	Sent bool
 
+	// heldFor lists the UUIDs of updating clients that have not yet received
+	// this Once command. Protected by Server.commandLock.
+	heldFor map[string]bool
+
 	// plumber connections
 	Stdin  string
 	Stdout string

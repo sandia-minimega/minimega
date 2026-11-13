@@ -232,11 +232,15 @@ func cliNamespaceAddHost(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 	for i := range hosts {
 		// Add all the peers if we see a wildcard
 		if hosts[i] == Wildcard {
+			var added []string
 			for peer := range peers {
+				if !ns.Hosts[peer] {
+					added = append(added, peer)
+				}
 				ns.Hosts[peer] = true
 			}
 
-			return nil
+			return ns.sendCCAutoUpdate(added)
 		}
 
 		// Resolve `localhost` to actual hostname
@@ -251,8 +255,28 @@ func cliNamespaceAddHost(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 	}
 
 	// After all have been checked, updated the namespace
+	var added []string
 	for _, host := range hosts {
+		if !ns.Hosts[host] {
+			added = append(added, host)
+		}
 		ns.Hosts[host] = true
+	}
+
+	return ns.sendCCAutoUpdate(added)
+}
+
+// sendCCAutoUpdate sends the cc auto-update setting of the namespace to hosts
+// that were added to it, when this node recorded a setting.
+func (ns *Namespace) sendCCAutoUpdate(hosts []string) error {
+	setting := ns.ccAutoUpdate.Load()
+	if setting == ccAutoUpdateUnset || len(hosts) == 0 {
+		return nil
+	}
+
+	cmd := minicli.MustCompilef("cc auto-update %v", setting == ccAutoUpdateTrue)
+	if err := consume(runCommands(namespaceHostCommands(ns, hosts, cmd)...)); err != nil {
+		return fmt.Errorf("unable to set cc auto-update on new hosts: %w", err)
 	}
 
 	return nil

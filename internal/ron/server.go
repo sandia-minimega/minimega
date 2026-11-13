@@ -56,6 +56,15 @@ type Server struct {
 	clients    map[string]*client // map of active clients, each of which have a running handler
 	vms        map[string]VM      // map of uuid -> VM
 	clientLock sync.Mutex         // lock for clients and vms
+	autoUpdate bool
+
+	// updateTimeout limits how long the server holds commands for a client
+	// after it sends an update. Zero means UPDATE_TIMEOUT.
+	updateTimeout time.Duration
+
+	// hashes caches the SHA-256 hashes of staged update binaries
+	hashes   map[string]stagedHash
+	hashLock sync.Mutex
 
 	path string // path for serving files
 
@@ -105,6 +114,21 @@ func NewServer(path, subpath string, plumber *miniplumber.Plumber) (*Server, err
 	log.Info("registered new ron server: %v", filepath.Join(path, subpath))
 
 	return s, nil
+}
+
+// SetAutoUpdate enables or disables miniccc binary updates on client connect.
+func (s *Server) SetAutoUpdate(enabled bool) {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+	s.autoUpdate = enabled
+}
+
+// AutoUpdate reports whether miniccc binary updates on client connect are
+// enabled.
+func (s *Server) AutoUpdate() bool {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+	return s.autoUpdate
 }
 
 func (s *Server) Destroy() {
@@ -593,9 +617,11 @@ func (s *Server) GetClients() map[string]*Client {
 			OS:            c.OS,
 			Version:       c.Version,
 			Hostname:      c.Hostname,
+			SHA256:        c.SHA256,
 			LastCommandID: c.LastCommandID,
 			Processes:     make(map[int]*Process),
 		}
+		res[u].Capabilities = append(res[u].Capabilities, c.Capabilities...)
 		for _, ip := range c.IPs {
 			res[u].IPs = append(res[u].IPs, ip)
 		}
@@ -882,6 +908,8 @@ func (s *Server) handshake(conn net.Conn, expectedUUID string) (*client, error) 
 		return nil, err
 	}
 
+	update := s.updateFileFor(m.Client)
+
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
@@ -960,6 +988,10 @@ func (s *Server) handshake(conn net.Conn, expectedUUID string) (*client, error) 
 	c.checkin = time.Now()
 
 	s.clients[c.UUID] = c
+
+	if update != "" {
+		s.startUpdate(c, update)
+	}
 
 	return c, nil
 }
@@ -1134,7 +1166,7 @@ func (s *Server) sendCommands(uuid string) {
 	}
 
 	for k, v := range s.commands {
-		if !v.Once || !v.Sent {
+		if !v.Once || !v.Sent || (uuid != "" && v.heldFor[uuid]) {
 			m.Commands[k] = v.Copy()
 			v.Sent = true
 		}
@@ -1273,12 +1305,27 @@ func (s *Server) route(m *Message) {
 				}
 			}
 
-			c.maxCommandID = maxCommandID
-
 			if len(m2.Commands) == 0 {
+				c.maxCommandID = maxCommandID
 				log.Info("no commands for %v", uuid)
 				return
 			}
+
+			// keep maxCommandID so that the commands are sent after the update
+			if c.updating {
+				issuedLock.Lock()
+				defer issuedLock.Unlock()
+				for id, cmd := range m2.Commands {
+					if cmd.Once {
+						s.commands[id].holdFor(uuid)
+					}
+				}
+
+				log.Info("holding %v commands for %v during its update", len(m2.Commands), uuid)
+				return
+			}
+
+			c.maxCommandID = maxCommandID
 
 			m = &m2
 		}
@@ -1294,6 +1341,7 @@ func (s *Server) route(m *Message) {
 			defer issuedLock.Unlock()
 			for id := range m.Commands {
 				s.commands[id].Issued++
+				delete(s.commands[id].heldFor, uuid)
 			}
 		}
 	}

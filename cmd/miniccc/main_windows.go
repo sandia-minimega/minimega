@@ -94,6 +94,8 @@ func main() {
 	if !inInteractive {
 		var err error
 
+		runAsService = true
+
 		elog, err = eventlog.Open(svcName)
 		if err != nil {
 			log.Fatal("opening Windows event log: %v", err)
@@ -140,6 +142,8 @@ func resetClient() {
 		log.Fatal("unable to connect: %v", err)
 	}
 
+	refreshUpdateInfo()
+
 	done = make(chan struct{})
 
 	go mux(done)
@@ -152,6 +156,9 @@ const (
 )
 
 var elog *eventlog.Log
+
+// runAsService is true when the Windows Service Control Manager runs miniccc.
+var runAsService bool
 
 type miniSvc struct{}
 

@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -88,6 +89,10 @@ type Namespace struct {
 	ccServer *ron.Server
 	ccFilter *ron.Filter
 	ccPrefix string
+
+	// ccAutoUpdate is the last cc auto-update setting that this node sent to
+	// the hosts of the namespace. It is sent to hosts added later.
+	ccAutoUpdate atomic.Int32
 
 	ccMounts map[string]ccMount
 
