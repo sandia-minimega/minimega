@@ -1,0 +1,8 @@
+#!/bin/sh
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Only VMs booted with live.role=router run minirouter.
+if ! grep -q 'live.role=router' /proc/cmdline; then
+	exec sleep 2147483647
+fi
+
+exec /usr/bin/minirouter -v=false -logfile /var/log/minirouter.log

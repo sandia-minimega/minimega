@@ -337,3 +337,4 @@ packaging/debian/minimega/
 .codex/
 .opencode/
 .opencode-workspace/
+live-artifacts/
