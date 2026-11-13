@@ -23,8 +23,8 @@ type Command struct {
 }
 
 type Variant struct {
-	Pattern  string
-	Template string
+	Pattern      string
+	TemplateArgs []string
 
 	Args         []Arg
 	RequiredArgs []Arg
@@ -75,7 +75,7 @@ func NewVariant(pattern []minicli.PatternItem) *Variant {
 		}
 	}
 
-	v.Template = strings.Join(template, ", ")
+	v.TemplateArgs = template
 
 	return v
 }
