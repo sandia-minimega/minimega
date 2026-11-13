@@ -1,0 +1,38 @@
+extends: default
+
+# The minimega repo includes vendored Go dependencies, packaging configs, and
+# external assets we don't want to police. Keep yamllint scoped to the YAML we
+# author ourselves.
+
+ignore: |
+  vendor/
+  packages/
+  packaging/
+  lib/dist/
+  lib/minimega.egg-info/
+  bin/
+  rpmbuild/
+
+rules:
+  document-start: disable
+  document-end: disable
+  indentation:
+    indent-sequences: consistent
+    spaces: 2
+  line-length:
+    max: 160
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+    ignore: |
+      .github/workflows/
+  brackets:
+    max-spaces-inside: 1
+  braces:
+    max-spaces-inside: 1
+  comments:
+    min-spaces-from-content: 1
+  truthy:
+    check-keys: false
+  octal-values:
+    forbid-explicit-octal: true
+    forbid-implicit-octal: true

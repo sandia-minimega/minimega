@@ -1,0 +1,385 @@
+# Configuration file for `prek`, a git hook framework written in Rust.
+# See https://prek.j178.dev for more information.
+# Run manually: prek run --all-files
+#:schema https://www.schemastore.org/prek.json
+
+minimum_prek_version = "0.5.10"
+default_language_version.python = "3.12"
+default_language_version.golang = "1.24"
+
+# No hook checks these files: vendored Go modules and packages, third-party web
+# assets and scripts, build outputs, and the protonuke text corpora (fortune
+# files and lorem ipsum).
+exclude = { glob = [
+  "vendor/**",
+  "packages/**",
+  "web/grapheditor/**",
+  "web/xterm.js/**",
+  "web/novnc/**",
+  "web/libs/**",
+  "web/fonts/**",
+  "web/css/bootstrap*",
+  "web/css/font-awesome.css",
+  "web/js/bootstrap*",
+  "cmd/protonuke/email.go",
+  "cmd/protonuke/irc_data.go",
+  "misc/vmbetter_configs/buildbot_overlay/usr/local/bin/gimme",
+  "bin/**",
+  "lib/dist/**",
+  "lib/minimega.egg-info/**",
+  "rpmbuild/**",
+] }
+
+# `prek install` installs these Git hooks. conventional-pre-commit runs at the
+# commit-msg stage, so the commit-msg hook must be installed too.
+default_install_hook_types = ["pre-commit", "commit-msg"]
+
+# `prek update` uses only tags that are at least 30 days old, and ignores
+# pre-release tags.
+[update]
+cooldown_days = 30
+exclude_tags = ["*-{alpha,beta,rc}*"]
+
+# All hooks at the same priority level will run *concurrently* (in parallel),
+# and hooks with a lower priority will run before hooks with a higher priority.
+# See: https://prek.j178.dev/proposals/concurrency
+#
+# Hooks refer to these aliases with `priority = "fixers"` and so on:
+#   fixers: built-in hooks that modify files (e.g. fix line endings, remove trailing whitespace)
+#   format: hooks that modify files or that must run before the linters
+#   lint:   hooks that don't modify files (codespell, shellcheck, yamllint)
+#
+# Hooks that modify files are also in the `fix` group. To apply only the fixes:
+#   prek run --all-files --group fix
+[priorities]
+fixers = 0
+format = 1
+lint = 2
+#
+# NOTE: minimega does not currently maintain a project-level golangci-lint
+# config and relies on `gofmt` / `go vet` via `scripts/check.bash`. We do not
+# run `golangci-lint` from prek here; if/when a `.golangci.yml` is added at
+# the repo root, uncomment the corresponding hooks below.
+
+
+# Linting of GitHub Actions workflows for security issues
+# https://docs.zizmor.sh/audits/
+[[repos]]
+repo = "https://github.com/zizmorcore/zizmor-pre-commit"
+rev = "v1.30.1"
+
+[[repos.hooks]]
+id = "zizmor"
+args = [
+    "--no-progress",
+    "--fix"
+]
+groups = ["fix"]
+priority = "format"
+
+# Linting of GitHub Actions workflows for correctness (expressions, job
+# dependencies, action inputs); zizmor above covers security.
+[[repos]]
+repo = "https://github.com/rhysd/actionlint"
+rev = "v1.7.12"
+
+[[repos.hooks]]
+id = "actionlint"
+# actionlint v1.7.12 needs Go 1.25+ to build.
+language_version = "1.25"
+# Build the hook with its own go.mod, even when GOFLAGS sets -mod=vendor.
+env = { GOFLAGS = "-mod=mod" }
+priority = "lint"
+
+
+# EditorConfig: check that files follow .editorconfig
+[[repos]]
+repo = "https://github.com/editorconfig-checker/editorconfig-checker"
+rev = "v4.0.2"
+
+# Settings are in .editorconfig-checker.json. gofmt formats the Go code, so this
+# hook does not check Go files.
+[[repos.hooks]]
+id = "editorconfig-checker"
+alias = "ec"
+exclude_types = ["go"]
+# editorconfig-checker v4 needs Go 1.26+ to build.
+language_version = ">=1.26"
+# Build the hook with its own go.mod, even when GOFLAGS sets -mod=vendor.
+env = { GOFLAGS = "-mod=mod" }
+priority = "lint"
+
+
+# Spell checking
+[[repos]]
+repo = "https://github.com/codespell-project/codespell"
+rev = "v2.4.3"
+
+[[repos.hooks]]
+id = "codespell"
+args = [
+  "--ignore-words-list",
+  "ue,ot,ues,fo,nd,ist,te,iif,iam,parm,parms,ser,bord,nin,inout,readded,thru,wan,ans,ro,whitespaces,hax,hda,welp,requestor,checkin,clen,tolen,mone,rightt,admn,bootup,moreso",
+  # Vendored Go deps, large build artifacts, generated minidoc HTML, etc.
+  "--skip",
+  "vendor/*,lib/dist/*,lib/minimega.egg-info/*,packages/*,packaging/*,bin/*,rpmbuild/*,*.deb,*.rpm,*.tar,*.tar.gz,*.svg,*.lock,go.sum,LICENSES/*,doc/content/articles/*,misc/web/*"
+]
+priority = "lint"
+
+
+# Shell: ShellCheck (checks shell scripts for common issues)
+# Unfortunately, ShellCheck's standard pre-commit hook calls into Docker,
+#   which doesn't work well in CI, since the CI runs in a container.
+# Instead, use this neat hack that uses Python pip to download and
+#   install the ShellCheck binary.
+[[repos]]
+repo = "https://github.com/shellcheck-py/shellcheck-py"
+rev = "v0.11.0.1-1"
+
+[[repos.hooks]]
+id = "shellcheck"
+# The existing bash scripts use a number of patterns (sourced files,
+# word-splitting on intentional unquoted vars) that we'd rather flag as
+# advice than as a build break.
+args = [
+    "--severity=warning",
+    "--exclude=SC1090,SC1091,SC2086,SC2034,SC2154"
+]
+exclude = '^(vendor/|packages/|packaging/)'
+priority = "lint"
+
+
+# Dockerfile: hadolint
+# hadolint-py uses python pip to download and install the hadolint binary.
+# This is used instead of using Docker like the official hadolint
+# pre-commit hook, so it can work in CI without docker-in-docker.
+[[repos]]
+repo = "https://github.com/AleksaC/hadolint-py"
+rev = "v2.15.1"
+
+[[repos.hooks]]
+id = "hadolint"
+# DL3059 - Ignore consecutive RUN instructions in Dockerfile
+# DL3008/DL3015 - pinning every apt-get package version is impractical for base images rebuilt regularly
+args = ["--ignore", "DL3059", "--ignore", "DL3008", "--ignore", "DL3015"]
+exclude = '^(vendor/|packages/|packaging/)'
+priority = "format"
+
+
+# YAML: yamllint
+[[repos]]
+repo = "https://github.com/adrienverge/yamllint.git"
+rev = "v1.38.0"
+
+[[repos.hooks]]
+id = "yamllint"
+args = [
+    "--strict",
+    "--config-file=.yamllint.yml"
+]
+priority = "lint"
+
+
+# Enforce conventional commit messages
+[[repos]]
+repo = "https://github.com/compilerla/conventional-pre-commit"
+rev = "v4.4.0"
+
+[[repos.hooks]]
+id = "conventional-pre-commit"
+stages = ["commit-msg"]
+args = [
+  "feat",
+  "fix",
+  "docs",
+  "style",
+  "refactor",
+  "test",
+  "chore"
+]
+priority = "format"
+
+
+# General checks built into prek
+[[repos]]
+repo = "builtin"
+
+[[repos.hooks]]
+id = "trailing-whitespace"
+groups = ["fix"]
+args = ["--markdown-linebreak-ext=md"]
+types_or = [
+  "python",
+  "go",
+  "markdown",
+  "yaml",
+  "json",
+  "shell"
+]
+# router_test.go expects output lines that end with a tab.
+exclude = '^(vendor/|packages/|packaging/|lib/dist/|lib/minimega\.egg-info/|bin/|rpmbuild/|internal/version/version\.go$|cmd/minimega/router_test\.go$)'
+priority = "fixers"
+
+[[repos.hooks]]
+id = "check-added-large-files"
+# Repo currently ships .deb/.rpm artifacts; raise the threshold so we don't
+# block routine commits, but still catch genuinely huge files.
+args = ["--maxkb=10240"]
+exclude = '^(vendor/|.*\.deb$|.*\.rpm$|.*\.tar(\.gz)?$|.*\.buildinfo$|.*\.changes$)'
+priority = "format"
+
+[[repos.hooks]]
+id = "check-case-conflict"
+priority = "format"
+
+[[repos.hooks]]
+id = "check-illegal-windows-names"
+priority = "format"
+
+[[repos.hooks]]
+id = "end-of-file-fixer"
+groups = ["fix"]
+types_or = [
+  "python",
+  "go",
+  "markdown",
+  "shell"
+]
+exclude = '^(vendor/|packages/|packaging/|lib/dist/|lib/minimega\.egg-info/|bin/|rpmbuild/|internal/version/version\.go$)'
+priority = "fixers"
+
+[[repos.hooks]]
+id = "fix-byte-order-marker"
+groups = ["fix"]
+priority = "fixers"
+
+[[repos.hooks]]
+id = "check-yaml"
+exclude = '^(vendor/|packages/|packaging/)'
+priority = "format"
+
+[[repos.hooks]]
+id = "check-json"
+exclude = '^(vendor/|packages/|packaging/)|(^|/)devcontainer\.json$'
+priority = "format"
+
+# Dev container configuration files are JSON with comments (JSONC).
+[[repos.hooks]]
+id = "check-jsonc"
+types = ["json"]
+files = '(^|/)devcontainer\.json$'
+args = ["--allow-trailing-commas"]
+priority = "format"
+
+[[repos.hooks]]
+id = "check-xml"
+exclude = '^vendor/'
+priority = "format"
+
+[[repos.hooks]]
+id = "check-merge-conflict"
+priority = "format"
+
+[[repos.hooks]]
+id = "check-executables-have-shebangs"
+exclude = { glob = [
+    "vendor/**",
+    "packages/**",
+    "packaging/**",
+    "**/*.desktop",
+    "**/*.ps1",
+    "**/*.bat",
+    "**/*.cmd",
+]}
+priority = "format"
+
+[[repos.hooks]]
+id = "check-shebang-scripts-are-executable"
+exclude = '^(vendor/|packages/|packaging/)'
+priority = "format"
+
+# The vmbetter overlays link to binaries in bin/, which exist only after a build.
+[[repos.hooks]]
+id = "check-symlinks"
+exclude = '^misc/vmbetter_configs/'
+priority = "format"
+
+# The repository has symlinks (for example in doc/). This catches a symlink
+# that a checkout without symlink support changed into a regular file.
+[[repos.hooks]]
+id = "destroyed-symlinks"
+priority = "format"
+
+# protonuke contains a fixed SSH host key for its SSH server traffic.
+[[repos.hooks]]
+id = "detect-private-key"
+exclude = '^(vendor/|cmd/protonuke/ssh\.go$)'
+priority = "format"
+
+[[repos.hooks]]
+id = "forbid-new-submodules"
+priority = "format"
+
+# Leftovers from merges, patches, editors, and macOS Finder.
+[[repos.hooks]]
+id = "deny-filename-pattern"
+name = "deny temporary and backup files"
+args = ['\.(orig|rej|swp)$', '~$', '^\.DS_Store$']
+priority = "format"
+
+[[repos.hooks]]
+id = "deny-pattern"
+name = "deny do-not-merge markers"
+args = ['\bDO NOT (MERGE|COMMIT)\b', '\bNOCOMMIT\b']
+exclude = '^(vendor/|prek\.toml$)'
+priority = "lint"
+
+# The module path is github.com/sandia-minimega/minimega/v2. An import without
+# the /v2 suffix refers to the old module.
+[[repos.hooks]]
+id = "deny-pattern"
+name = "deny imports of the old module path"
+args = ['"github\.com/sandia-minimega/minimega/(?!v2/)']
+types = ["go"]
+exclude = '^vendor/'
+priority = "lint"
+
+# Python code uses spaces for indentation. gofmt formats the Go code.
+[[repos.hooks]]
+id = "normalize-indentation"
+args = ["--indent=spaces"]
+types = ["python"]
+exclude = '^(vendor/|lib/dist/)'
+groups = ["fix"]
+priority = "fixers"
+
+[[repos.hooks]]
+id = "check-toml"
+exclude = '^vendor/'
+priority = "format"
+
+[[repos.hooks]]
+id = "mixed-line-ending"
+args = ["--fix=no"]
+exclude = '^(vendor/|packages/|packaging/|lib/dist/)'
+priority = "fixers"
+
+[[repos.hooks]]
+id = "check-vcs-permalinks"
+description = "Ensures that links to vcs websites are permalinks"
+exclude = '^vendor/'
+priority = "format"
+
+[[repos.hooks]]
+id = "no-commit-to-branch"
+name = "branch name validation"
+description = "Prevent committing to 'master', 'main', or any branch that aren't kebab-case (only allows letters, numbers, and hyphens)"
+args = [
+  "--branch",
+  "master",
+  "--branch",
+  "main",
+  "--pattern",
+  '.*[^\w-].*'
+]
+priority = "format"
