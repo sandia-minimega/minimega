@@ -50,7 +50,7 @@ RUN apt-get update \
     less libpcap-dev ntfs-3g openssh-client \
     openvswitch-switch qemu-kvm qemu-utils \
     iptables ffmpeg \
-  && apt autoremove -y \
+  && apt-get autoremove -y \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/* \
   && rm -rf /var/cache/apt/archives/*

@@ -98,7 +98,7 @@ The first part we will talk about is defining the 2 Virtual Machines that will b
 
 ## Step 1 - Namespaces
 
-minimega supports namespaces, so it is a good practice to declare a namespace before anyhing else.
+minimega supports namespaces, so it is a good practice to declare a namespace before anything else.
 
 That's why the first command is a namespace command.
 
@@ -217,11 +217,11 @@ This will apply the changes defined in your commands.
 
 ## Step 4 - Launching does not mean we are done!
 
-The next command launches the router VM, however you should know that the VM is not yet useable!
+The next command launches the router VM, however you should know that the VM is not yet usable!
 
 Launching means it is in a ready state, and waiting to be started.
 
-You will notice in the script we sleep for a number of seconds to allow the router configurations to process before proceding.
+You will notice in the script we sleep for a number of seconds to allow the router configurations to process before proceeding.
 
 Then, we start all of the VMs. This puts everything in the `RUNNING` state, ready for our experiment.
 

@@ -87,7 +87,7 @@ func setupMeshageLogging(node string) error {
 
 	level := logLevel
 
-	// Meshage events get included in debug logs... if we propogate those here we
+	// Meshage events get included in debug logs... if we propagate those here we
 	// end up in a memory-consuming loop.
 	if level == log.DEBUG {
 		level = log.INFO

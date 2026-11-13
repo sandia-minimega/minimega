@@ -26,7 +26,7 @@ trim_trailing_whitespace = true
 [*.json]
 insert_final_newline = unset
 
-[Makefile]
+[{Makefile,packaging/debian/rules}]
 indent_style = tab
 insert_final_newline = true
 
