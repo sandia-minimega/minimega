@@ -96,7 +96,7 @@ Development = [
   { "Namespace Internals" = "articles/developer/namespaces.md" },
   { Naming = "articles/developer/naming.md" },
   { "Status Updates" = "articles/developer/status_updates.md" },
-  { Vendoring = "articles/developer/vendoring.md" },
+  { Dependencies = "articles/developer/dependencies.md" },
 ]
 
 [[project.nav]]

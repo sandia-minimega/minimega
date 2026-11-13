@@ -41,7 +41,6 @@ jobs:
       - name: Build API documentation tools
         env:
           GOBIN: ${{ github.workspace }}/bin
-          GOFLAGS: -mod=vendor
         run: |
           ./scripts/version.bash
           go install ./cmd/apigen ./cmd/minimega ./cmd/minirouter ./cmd/pyapigen
