@@ -7,7 +7,11 @@ package ron
 import (
 	"encoding/gob"
 	"net"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestBindClientUUIDUsesSerialIdentity(t *testing.T) {
@@ -97,5 +101,51 @@ func TestSendCommandsTracksIssuedCommands(t *testing.T) {
 
 	if got := s.GetCommand(1).Issued; got != 2 {
 		t.Fatalf("issued after reconnect = %d, want 2", got)
+	}
+}
+
+// A client that sees a command's response count go up must be able to read
+// that response from disk: cc users poll "cc commands" and then read the
+// response files. A large stdout widens the window between the two.
+func TestResponseCountedOnlyAfterFilesWritten(t *testing.T) {
+	s := &Server{
+		path:        t.TempDir(),
+		commands:    map[int]*Command{1: {ID: 1}},
+		clients:     map[string]*client{},
+		responses:   make(chan *Client, 1),
+		handlerDone: make(chan struct{}),
+	}
+	go s.responseHandler()
+	defer func() {
+		close(s.responses)
+		<-s.handlerDone
+	}()
+
+	stdout := strings.Repeat("x", 64<<20)
+	s.responses <- &Client{
+		UUID:      "client",
+		Responses: []*Response{{ID: 1, Stdout: stdout, Stderr: "oops", ExitCode: 3, RecordExitCode: true}},
+	}
+
+	// spin rather than sleep so the check runs as soon as the count moves
+	deadline := time.Now().Add(10 * time.Second)
+	for len(s.GetCommand(1).CheckedIn) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("response was never counted")
+		}
+	}
+
+	dir := filepath.Join(s.responsePath(nil), "1", "client")
+	code, err := os.ReadFile(filepath.Join(dir, "exitcode"))
+	if err != nil || string(code) != "3" {
+		t.Errorf("exitcode after check-in = %q, %v; want \"3\"", code, err)
+	}
+	out, err := os.ReadFile(filepath.Join(dir, "stdout"))
+	if err != nil || len(out) != len(stdout) {
+		t.Errorf("stdout after check-in has %d bytes, %v; want %d", len(out), err, len(stdout))
+	}
+	errOut, err := os.ReadFile(filepath.Join(dir, "stderr"))
+	if err != nil || string(errOut) != "oops" {
+		t.Errorf("stderr after check-in = %q, %v; want \"oops\"", errOut, err)
 	}
 }

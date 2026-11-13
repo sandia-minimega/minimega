@@ -1244,42 +1244,49 @@ func (s *Server) responseHandler() {
 		// ingest responses from this client
 		for _, v := range cin.Responses {
 			log.Debug("got response %v : %v", cin.UUID, v.ID)
+			s.writeResponse(cin.UUID, v)
+			// count the response only once its files can be read, since cc
+			// users poll the count and then read the files
 			s.commandCheckIn(v.ID, cin.UUID)
+		}
+	}
+}
 
-			path := filepath.Join(s.responsePath(&v.ID), cin.UUID)
+// writeResponse records a client's response to a command in the response
+// folder. Errors are logged: the client did respond, so it is still counted.
+func (s *Server) writeResponse(uuid string, v *Response) {
+	path := filepath.Join(s.responsePath(&v.ID), uuid)
 
-			if err := s.makeResponseDir(); err != nil {
-				log.Error("could not record response %v for %v: %v", v.ID, cin.UUID, err)
-				continue
-			}
+	if err := s.makeResponseDir(); err != nil {
+		log.Error("could not record response %v for %v: %v", v.ID, uuid, err)
+		return
+	}
 
-			if err := os.MkdirAll(path, os.FileMode(0770)); err != nil {
-				log.Error("could not record response %v for %v: %v", v.ID, cin.UUID, err)
-				continue
-			}
+	if err := os.MkdirAll(path, os.FileMode(0770)); err != nil {
+		log.Error("could not record response %v for %v: %v", v.ID, uuid, err)
+		return
+	}
 
-			// generate exitcode file
-			if v.RecordExitCode {
-				err := ioutil.WriteFile(filepath.Join(path, "exitcode"), []byte(strconv.Itoa(v.ExitCode)), os.FileMode(0660))
-				if err != nil {
-					log.Error("could not record exit code %v for %v: %v", v.ID, cin.UUID, err)
-				}
-			}
+	// generate exitcode file
+	if v.RecordExitCode {
+		err := ioutil.WriteFile(filepath.Join(path, "exitcode"), []byte(strconv.Itoa(v.ExitCode)), os.FileMode(0660))
+		if err != nil {
+			log.Error("could not record exit code %v for %v: %v", v.ID, uuid, err)
+		}
+	}
 
-			// generate stdout and stderr if they exist
-			if v.Stdout != "" {
-				err := ioutil.WriteFile(filepath.Join(path, "stdout"), []byte(v.Stdout), os.FileMode(0660))
-				if err != nil {
-					log.Error("could not record stdout %v for %v: %v", v.ID, cin.UUID, err)
-				}
-			}
+	// generate stdout and stderr if they exist
+	if v.Stdout != "" {
+		err := ioutil.WriteFile(filepath.Join(path, "stdout"), []byte(v.Stdout), os.FileMode(0660))
+		if err != nil {
+			log.Error("could not record stdout %v for %v: %v", v.ID, uuid, err)
+		}
+	}
 
-			if v.Stderr != "" {
-				err := ioutil.WriteFile(filepath.Join(path, "stderr"), []byte(v.Stderr), os.FileMode(0660))
-				if err != nil {
-					log.Error("could not record stderr %v for %v: %v", v.ID, cin.UUID, err)
-				}
-			}
+	if v.Stderr != "" {
+		err := ioutil.WriteFile(filepath.Join(path, "stderr"), []byte(v.Stderr), os.FileMode(0660))
+		if err != nil {
+			log.Error("could not record stderr %v for %v: %v", v.ID, uuid, err)
 		}
 	}
 }

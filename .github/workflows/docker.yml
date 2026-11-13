@@ -8,17 +8,23 @@ on:
 permissions:
   contents: read
 
+# One run per pull request or ref, covering the build and the live tests:
+# a new commit on a pull request cancels the superseded run, and pushes queue.
+concurrency:
+  group: docker-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   push-to-ghcr:
     name: Build Docker image
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    concurrency:
-      group: docker-${{ github.event.pull_request.number || github.ref }}
-      cancel-in-progress: ${{ github.event_name == 'pull_request' }}
     permissions:
       packages: write
       contents: read
+    outputs:
+      image: ${{ steps.ref.outputs.image }}
+      artifact: ${{ steps.ref.outputs.artifact }}
     steps:
       - name: Check out the repo
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,5 +66,48 @@ jobs:
           context: .
           file: docker/Dockerfile
           push: ${{ github.event_name == 'push' }}
+          # pull requests can't push, so keep the image locally for the live tests
+          load: ${{ github.event_name != 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+      - name: Select image for live tests
+        id: ref
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          # the immutable short-SHA tag identifies exactly this build
+          image="$(echo "$TAGS" | grep -E ':[0-9a-f]{7,}$' | head -1)"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          if [[ "$EVENT" != "push" ]]; then
+            echo "artifact=minimega-image" >> "$GITHUB_OUTPUT"
+          fi
+          echo "live tests will use ${image}"
+      - name: Export image for live tests
+        if: github.event_name != 'push'
+        env:
+          IMAGE: ${{ steps.ref.outputs.image }}
+        run: docker save "$IMAGE" | gzip -1 > "$RUNNER_TEMP/minimega-image.tar.gz"
+      - name: Upload image for live tests
+        if: github.event_name != 'push'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: minimega-image
+          path: ${{ runner.temp }}/minimega-image.tar.gz
+          retention-days: 1
+          compression-level: 0
+
+  live-tests:
+    name: Live tests
+    needs: push-to-ghcr
+    # The 22-VM run is costly: test pull requests and master, not every branch
+    # push. A same-repo pull request gets both events, so this also runs once
+    # per commit instead of twice.
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/master'
+    permissions:
+      contents: read
+      packages: read
+    uses: ./.github/workflows/live.yml
+    with:
+      image: ${{ needs.push-to-ghcr.outputs.image }}
+      image-artifact: ${{ needs.push-to-ghcr.outputs.artifact }}
