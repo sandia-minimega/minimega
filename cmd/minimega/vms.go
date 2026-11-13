@@ -358,11 +358,12 @@ func (vms *VMs) Kill(target string) error {
 	})
 }
 
-// Flush VMs matching target.
+// Flush VMs matching target. Flush destroys the taps of the VMs before it
+// returns.
 func (vms *VMs) Flush(target string, cc *ron.Server) error {
 	var mapLock sync.Mutex
 
-	return vms.Apply(target, func(vm VM, _ bool) (bool, error) {
+	err := vms.Apply(target, func(vm VM, _ bool) (bool, error) {
 		if vm.GetState()&(VM_QUIT|VM_ERROR) == 0 {
 			return false, nil
 		}
@@ -386,11 +387,27 @@ func (vms *VMs) Flush(target string, cc *ron.Server) error {
 
 		return true, nil
 	})
+
+	// destroy the taps of all the flushed VMs in one pass of the reaper
+	reapTaps()
+
+	return err
 }
 
 // FlushAll deletes VMs that are in the QUIT or ERROR state, disconnecting them
-// from the provided ron.Server first.
+// from the provided ron.Server first. FlushAll destroys the taps of the VMs
+// before it returns.
 func (vms *VMs) FlushAll(cc *ron.Server) error {
+	vms.flushAll(cc)
+
+	// destroy the taps of all the flushed VMs in one pass of the reaper
+	reapTaps()
+
+	return nil
+}
+
+// flushAll deletes VMs like FlushAll but leaves their taps for the reaper.
+func (vms *VMs) flushAll(cc *ron.Server) {
 	vms.mu.Lock()
 	defer vms.mu.Unlock()
 
@@ -420,8 +437,6 @@ func (vms *VMs) FlushAll(cc *ron.Server) error {
 		}
 	}
 	wg.Wait()
-
-	return nil
 }
 
 func (vms *VMs) ProcStats(d time.Duration) []*VMProcStats {

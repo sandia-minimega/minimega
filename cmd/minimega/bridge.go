@@ -40,6 +40,14 @@ type Tap struct {
 
 var bridges = bridge.NewBridges(DefaultBridge, TapFmt, BondFmt)
 
+// reapTaps removes the defunct taps on all bridges now. It logs an error because
+// the work that marked the taps is already done and the periodic reaper retries.
+func reapTaps() {
+	if err := bridges.ReapTaps(); err != nil {
+		log.Error("reaping taps: %v", err)
+	}
+}
+
 // tapReaperStart periodically calls bridges.ReapTaps
 func tapReaperStart() {
 	go func() {
@@ -174,20 +182,20 @@ func hostTapDelete(ns *Namespace, s string) error {
 		return nil
 	}
 
+	var err error
+
 	if s == Wildcard {
 		for tap := range ns.Taps {
-			if err := delTap(tap); err != nil {
-				return err
+			if err = delTap(tap); err != nil {
+				break
 			}
 		}
-
-		return nil
-	}
-
-	err := delTap(s)
-	if err == nil {
+	} else if err = delTap(s); err == nil {
 		mustWrite(filepath.Join(*f_base, "taps"), hostTapInfo())
 	}
+
+	// remove the deleted taps before the command returns
+	reapTaps()
 
 	return err
 }
