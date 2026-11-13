@@ -1,0 +1,36 @@
+#!/bin/sh
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Run miniccc over the virtio-serial "cc" port. The port can register after
+# rcS has run, so look it up in sysfs and give it time to appear. VMs launched
+# with "vm config backchannel false" have no such port, so idle instead of
+# letting init respawn this script in a tight loop.
+find_cc() {
+	for p in /sys/class/virtio-ports/*; do
+		if [ "$(cat "$p/name" 2>/dev/null)" = cc ]; then
+			echo "/dev/${p##*/}"
+			return 0
+		fi
+	done
+	return 1
+}
+i=0
+while ! port=$(find_cc) && [ $i -lt 60 ]; do
+	sleep 0.5
+	i=$((i + 1))
+done
+if [ -z "$port" ]; then
+	exec sleep 2147483647
+fi
+
+# On routers, "router commit" arrives over cc as soon as miniccc connects and
+# runs "minirouter -u", which needs the minirouter daemon's socket. Wait for
+# it so the first commit is not lost.
+if grep -q 'live.role=router' /proc/cmdline; then
+	i=0
+	while [ ! -S /tmp/minirouter/minirouter ] && [ $i -lt 60 ]; do
+		sleep 0.5
+		i=$((i + 1))
+	done
+fi
+
+exec /usr/bin/miniccc -v=false -serial "$port" -logfile /var/log/miniccc.log

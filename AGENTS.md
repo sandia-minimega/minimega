@@ -116,6 +116,27 @@ status. Automation must inspect the output or explicitly compare `.got` and
 `.want`. Use `.filter`, `.columns`, and `.annotate false` to remove unstable
 fields, and never accept `.got` without reviewing it.
 
+### Live integration tests
+
+[`tests/live/`](tests/live/) boots KVM topologies from a minimega Docker image
+and drives them over the command socket; CI runs it after the Docker workflow
+publishes an image. It needs root, Docker, `/dev/kvm`, and the `openvswitch`
+module. Each test group is a sub-folder (a `topology.mm` plus its `//go:build
+live` Go tests); `tests/live/harness/` is the shared helper package, and
+`tests/live/core/` is the 22-VM group; the guest image is built by the
+image's own `vmbetter` from `tests/live/image/live.conf`. See
+[`tests/live/README.md`](tests/live/README.md).
+
+```bash
+sudo LIVE_PULL=0 tests/live/run.sh minimega:dev
+GOFLAGS=-mod=vendor go vet -tags live ./tests/live/...
+```
+
+Keep each group's `topology.mm` and `topology_test.go` in sync (for example
+`tests/live/core/topology.mm` and `tests/live/core/topology_test.go`), and
+extend the live tests when a change affects VM lifecycle, networking,
+minirouter, or miniccc behavior.
+
 ## Change conventions
 
 - Run `gofmt` on changed Go files and follow nearby package and test patterns.

@@ -1,0 +1,165 @@
+name: Live Tests
+
+# End-to-end tests that run a real minimega deployment from a Docker image,
+# boot a 22-VM KVM topology (tests/live/core/topology.mm), and exercise it over the
+# command socket. See tests/live/README.md.
+#
+# Called by the Docker workflow with the image it just built. Run by hand
+# (Actions > Live Tests > Run workflow, or `gh workflow run live.yml --ref
+# <branch>`), it builds the dispatched branch from docker/Dockerfile and tests
+# that, so it works on a fork without a pull request. Set "image" to test an
+# existing image instead.
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: Image reference to test
+        required: true
+        type: string
+      image-artifact:
+        description: Name of an artifact holding the image as a gzipped "docker save" tarball (used when the image was not pushed)
+        required: false
+        type: string
+        default: ""
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Image to test, e.g. ghcr.io/sandia-minimega/minimega:master (empty builds this branch)
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  # Manual runs without an image build the dispatched ref, as the Docker
+  # workflow does for pull requests (the image stays local and is handed over
+  # as an artifact).
+  build:
+    name: Build Docker image
+    if: github.event_name == 'workflow_dispatch' && inputs.image == ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    outputs:
+      image: minimega:live
+      artifact: minimega-image
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup || true
+          df -h /
+
+      - name: Build container image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          load: true
+          tags: minimega:live
+
+      - name: Export image
+        run: docker save minimega:live | gzip -1 > "$RUNNER_TEMP/minimega-image.tar.gz"
+
+      - name: Upload image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: minimega-image
+          path: ${{ runner.temp }}/minimega-image.tar.gz
+          retention-days: 1
+          compression-level: 0
+
+  live:
+    name: Live tests (KVM)
+    needs: build
+    # build is skipped when the caller supplies an image
+    if: ${{ !cancelled() && needs.build.result != 'failure' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      IMAGE: ${{ inputs.image || needs.build.outputs.image }}
+      IMAGE_ARTIFACT: ${{ inputs.image-artifact || needs.build.outputs.artifact }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Free disk space
+        run: |
+          # the image, its guest build and 22 VMs need room; drop preinstalled
+          # toolchains we do not use
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup || true
+          df -h /
+
+      - name: Check host support (KVM, Open vSwitch)
+        run: |
+          # GitHub-hosted Linux runners expose /dev/kvm; make it usable and
+          # load the Open vSwitch datapath the container's ovs-ctl needs.
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+          sudo modprobe openvswitch
+          lsmod | grep -E '^(kvm|openvswitch)'
+          nproc; free -h
+
+      - name: Download image artifact
+        if: env.IMAGE_ARTIFACT != ''
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ env.IMAGE_ARTIFACT }}
+          path: ${{ runner.temp }}/image
+
+      - name: Load image artifact
+        if: env.IMAGE_ARTIFACT != ''
+        run: |
+          gunzip -c "${{ runner.temp }}/image/minimega-image.tar.gz" | docker load
+          rm -rf "${{ runner.temp }}/image"
+          echo "LIVE_PULL=0" >> "$GITHUB_ENV"
+
+      - name: Log in to GitHub Container Registry
+        if: env.IMAGE_ARTIFACT == '' && startsWith(env.IMAGE, 'ghcr.io/')
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build test binary
+        run: GOFLAGS=-mod=vendor go test -c -tags live -o "${{ runner.temp }}/live.test" ./tests/live/core
+
+      - name: Run live tests
+        run: |
+          sudo --preserve-env=GITHUB_STEP_SUMMARY,LIVE_PULL \
+            LIVE_TEST_BIN="${{ runner.temp }}/live.test" \
+            LIVE_ARTIFACTS="${{ github.workspace }}/live-artifacts" \
+            tests/live/run.sh "$IMAGE"
+
+      - name: Fix artifact permissions
+        if: always()
+        run: sudo chown -R "$(id -u):$(id -g)" live-artifacts || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: live-test-artifacts
+          path: live-artifacts
+          retention-days: 14
+          if-no-files-found: warn

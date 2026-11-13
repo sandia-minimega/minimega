@@ -1,0 +1,28 @@
+#!/bin/sh
+# udhcpc hook: configure the leased address. Only eth0 installs a default
+# route so dual-homed guests keep a single, predictable gateway.
+[ -n "$1" ] || exit 1
+
+case "$1" in
+deconfig)
+	ip -4 addr flush dev "$interface"
+	ip link set "$interface" up
+	;;
+bound | renew)
+	ip -4 addr flush dev "$interface"
+	ifconfig "$interface" "$ip" netmask "${subnet:-255.255.255.0}" up
+	if [ "$interface" = "eth0" ] && [ -n "$router" ]; then
+		while route del default 2>/dev/null; do :; done
+		for gw in $router; do
+			route add default gw "$gw" dev "$interface"
+			break
+		done
+	fi
+	if [ "$interface" = "eth0" ] && [ -n "$dns" ]; then
+		: > /etc/resolv.conf
+		[ -n "$domain" ] && echo "search $domain" >> /etc/resolv.conf
+		for ns in $dns; do echo "nameserver $ns" >> /etc/resolv.conf; done
+	fi
+	;;
+esac
+exit 0

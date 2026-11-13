@@ -1,0 +1,93 @@
+#!/bin/sh
+# System initialization for the minimega live test guest.
+#
+# Kernel command line parameters understood here:
+#   live.role=host|router   router enables forwarding and runs minirouter
+#   live.hostname=<name>    hostname reported to minimega by miniccc
+#   live.dhcp=0             skip DHCP (interfaces are only brought up)
+#   live.serial=1           write a heartbeat to ttyS0 ("vm config serial-ports")
+#   live.debug=1            dump network state to the kernel console after boot
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /dev/shm
+mount -t devpts devpts /dev/pts
+mount -t tmpfs tmpfs /tmp
+mount -t tmpfs tmpfs /run
+mount -t tmpfs tmpfs /var/run 2>/dev/null
+
+ROLE=host
+NAME=
+DHCP=1
+SERIAL=0
+DEBUG=0
+for arg in $(cat /proc/cmdline); do
+	case "$arg" in
+	live.role=*) ROLE="${arg#*=}" ;;
+	live.hostname=*) NAME="${arg#*=}" ;;
+	live.dhcp=*) DHCP="${arg#*=}" ;;
+	live.serial=*) SERIAL="${arg#*=}" ;;
+	live.debug=*) DEBUG="${arg#*=}" ;;
+	esac
+done
+hostname "${NAME:-live-$ROLE}"
+
+# Load bundled modules; built-in or already-loaded modules fail harmlessly.
+while read -r mod; do
+	insmod "/lib/modules/live/$mod" 2>/dev/null
+done < /etc/modules.live
+mdev -s 2>/dev/null
+
+# Give NICs and virtio ports a moment to appear.
+has_eth() {
+	for n in /sys/class/net/eth*; do
+		[ -e "$n" ] && return 0
+	done
+	return 1
+}
+i=0
+while [ $i -lt 20 ] && ! has_eth; do
+	sleep 0.5
+	i=$((i + 1))
+done
+
+# Mirror udev's /dev/virtio-ports/<name> symlinks for miniccc.
+mkdir -p /dev/virtio-ports
+for port in /sys/class/virtio-ports/*; do
+	[ -e "$port/name" ] || continue
+	ln -sf "/dev/$(basename "$port")" "/dev/virtio-ports/$(cat "$port/name")"
+done
+
+ip link set lo up
+for dev in /sys/class/net/eth*; do
+	[ -e "$dev" ] || continue
+	ip link set "$(basename "$dev")" up
+done
+
+if [ "$ROLE" = "router" ]; then
+	sysctl -w net.ipv4.ip_forward=1 >/dev/null
+	sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+elif [ "$DHCP" = "1" ]; then
+	for dev in /sys/class/net/eth*; do
+		[ -e "$dev" ] || continue
+		# -b: background until a lease is obtained, -A: retry pause; the
+		# router may not serve DHCP until minimega commits its config.
+		udhcpc -i "$(basename "$dev")" -s /usr/share/udhcpc/default.script -b -S -t 3 -T 2 -A 3 -x hostname:"$(hostname)"
+	done
+fi
+
+# With "vm config serial-ports 1" the first ISA serial port QEMU exposes is
+# ttyS0 (minimega replaces QEMU's default serial device). Emit a heartbeat so
+# "vm serial" has something to read.
+if [ "$SERIAL" = "1" ]; then
+	stty -F /dev/ttyS0 115200 raw -echo 2>/dev/null
+	(while true; do echo "LIVE-SERIAL $(hostname)" > /dev/ttyS0 2>/dev/null; sleep 1; done) &
+fi
+
+if [ "$DEBUG" = "1" ]; then
+	(sleep 10; { ip -4 addr; ip route; cat /etc/resolv.conf; } > /dev/console 2>&1) &
+fi
+
+echo "live guest $(hostname) ready (role=$ROLE)" > /dev/tty1
