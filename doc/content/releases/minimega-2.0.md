@@ -205,7 +205,7 @@ external email corpus. A single file or directory may be specified. If a
 directory is specified, a random file from that directory will be used when
 generating email.
 
-See the [SMTP](../articles/protonuke.md#TOC_2.2.3.) section of the
+See the [SMTP](../articles/protonuke.md#smtp) section of the
 protonuke guide for more information.
 
 <a id="TOC_2.2.9."></a>

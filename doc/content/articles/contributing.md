@@ -1,13 +1,9 @@
 # Contributing and Development Guide
 
-<a id="TOC_1."></a>
-
 ## Contributing code
 
 minimega is an open source project and we welcome contributions from the
 community.
-
-<a id="TOC_2."></a>
 
 ## Trivial patches
 
@@ -20,15 +16,11 @@ a pull request.
 When submitting a trivial patch, include the text 'trivial' in the pull request
 title.
 
-<a id="TOC_3."></a>
-
 ## Discuss your design
 
 New ideas and better solutions to existing code are always welcome. Open a
 GitHub issue before implementing a non-trivial change so the design and approach
 can be discussed.
-
-<a id="TOC_4."></a>
 
 ## Development style
 
@@ -41,8 +33,6 @@ Unless the development in question is aimed at reformatting a piece of the
 codebase, you should adhere to the style in that particular section of code.
 minimega is growing rapidly and often times newer code is more well thought out
 (or not) than older code.
-
-<a id="TOC_5."></a>
 
 ## EditorConfig
 
@@ -62,8 +52,6 @@ Quick verification:
 EditorConfig complements language-native formatters such as `gofmt`; continue
 to run language-specific formatters and tests before opening a pull request.
 
-<a id="TOC_6."></a>
-
 ## Tests
 
 Add unit tests using Go's unit test framework whenever possible. If your code
@@ -75,8 +63,6 @@ binaries (`protonuke`, `miniccc`, etc.), then make sure your change works on
 Windows as well.
 
 Write runtime tests using [minitest](minitest.md).
-
-<a id="TOC_7."></a>
 
 ## Documentation
 
@@ -90,12 +76,18 @@ it locally with:
 
 ```bash
 python3 -m pip install -r doc/requirements.txt
-./scripts/zensical_build.py serve
+./scripts/docs.bash serve
 ```
 
-Use `./scripts/zensical_build.py build --strict` to run Zensical's strict link and anchor
-validation without starting a preview server. Building generated API
-documentation requires Linux and the native minimega build dependencies.
+`scripts/docs.bash` builds the generated API reference with `apigen` and
+`pyapigen`, checks the example scripts with `scripts/check-docs.py`, and then
+runs Zensical. Use `./scripts/docs.bash build` for a one-shot build with
+Zensical's strict link and anchor validation. Both modes build minimega, so
+they require Linux and the native build dependencies; on macOS or Windows use
+the devcontainer described in
+[`.devcontainer/README.md`](https://github.com/sandia-minimega/minimega/blob/master/.devcontainer/README.md).
+To render the Markdown alone, without the generated reference pages, run
+`./scripts/zensical_build.py serve`.
 
 The
 [Docs workflow](https://github.com/sandia-minimega/minimega/blob/master/.github/workflows/docs.yml)
@@ -103,15 +95,38 @@ validates pull requests and deploys `master` through GitHub Pages. Repository
 administrators must select **GitHub Actions** as the Pages source in repository
 settings.
 
-<a id="TOC_8."></a>
+## Naming conventions
+
+The names of the project's components are always lower-case, even at the start
+of a sentence. Use these spellings in documentation, commit messages, and
+comments:
+
+- minimega
+- miniccc
+- minirouter
+- miniweb
+- protonuke
+- vmbetter
+- powerbot
+- igor
+
+Good:
+
+```text
+minimega is a tool for managing virtual machines.
+```
+
+Bad:
+
+```text
+Igor, MiniMega, and MiniCCC work together to manage a cluster.
+```
 
 ## Tracking issues
 
 If your change is being committed to a branch other than `master`, include
 "updates issue NNN" in the commit log. Never close an issue on a commit in a
 branch other than `master` unless that ticket is specific to that branch.
-
-<a id="TOC_9."></a>
 
 ## Commit messages
 
@@ -120,8 +135,6 @@ Try to adhere to common Git commit message
 When working on a one or two tools or packages, we typically prefix the summary
 with the its name (e.g. `minimega: ...`, `minimega,minicli: ...`). For commits
 that span many components, we typically prefix them with `various: ...`.
-
-<a id="TOC_10."></a>
 
 ## Submitting a patch
 
@@ -138,16 +151,12 @@ all of the commits in your patchset, including updates to documentation.
 If your patchset fixes a listed issue, make sure 'fixes issue #NNN' is in the
 commit log, so the issue is referenced to your work.
 
-<a id="TOC_11."></a>
-
 ## Code review
 
 When a pull request is made, at least one contributor will review the patchset,
 make comments, and either wait for more feedback or authorize the patch with a
 'LGTM' (looks good to me) phrase. After authorization, any committer may merge
 the pull request.
-
-<a id="TOC_12."></a>
 
 ## Working with GitHub
 
@@ -158,8 +167,6 @@ Of specific use may be
 [syncing a fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/syncing-a-fork) with an
 upstream repo, and
 [checking out a pull request locally](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/checking-out-pull-requests-locally).
-
-<a id="TOC_13."></a>
 
 ## Copyright
 

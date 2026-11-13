@@ -28,23 +28,46 @@ capture experiment data.
 
 ## Getting started
 
-- Follow the [installation guide](articles/installing.md) to build or install
-  minimega.
-- Use the [quickstart](articles/tutorials/quickstart.md) to launch a first
-  virtual experiment.
-- Read the [user guide](articles/usage.md) for startup, scripting, cluster, and
-  logging details.
-- Browse the generated [command API](reference/minimega.md).
+1. [Install minimega](articles/installing.md) from a package, the Docker
+   image, or source, and prepare the host.
+2. Follow the [quickstart](articles/quickstart.md) to build an image and
+   launch a first virtual machine.
+3. Learn how to [run minimega](articles/running.md) as a service, with
+   startup flags and environment variables.
+4. Learn the [command line](articles/cli.md): output filtering, scripts, and
+   the command socket.
+5. Read [Running in Docker](articles/docker.md) if you use the container
+   image.
+
+## User guides
+
+The user guides cover one area each: the
+[VM lifecycle](articles/vm-lifecycle.md), the
+[virtual machine types](articles/vmtypes.md) and the
+[VM configuration reference](articles/vm-config-reference.md),
+[building images](articles/vmbetter.md) and
+[disk images](articles/disk-images.md),
+[host networking](articles/networking.md) and
+[routing with minirouter](articles/router.md),
+[capture and instrumentation](articles/capture.md),
+[command and control](articles/cc.md),
+[namespaces](articles/namespaces.md) and
+[clusters](articles/cluster.md), and
+[troubleshooting](articles/troubleshooting.md). The generated
+[command reference](reference/minimega.md) documents every command.
 
 ## Training
 
-The [Mini101 course](training/module01.md) provides a comprehensive walkthrough
-of minimega. Module 1 is an all-in-one guide; later modules cover individual
-features in depth. The [historical miniclass](training/miniclass/index.md)
-preserves the older self-paced course recovered from the former Sandia website.
+The [miniclass](training/miniclass/index.md) is the minimega training course.
+Part I builds one experiment end to end and is the place to start after the
+quickstart; later parts cover each feature area, other guest types, and
+clusters. An [instructor syllabus](training/miniclass/syllabus.md) turns it
+into a one-day or two-day class.
 
 ## Support and development
 
 - Report bugs and request features in the
   [GitHub issue tracker](https://github.com/sandia-minimega/minimega/issues).
 - Read the [contribution guide](articles/contributing.md).
+- The [historical miniclass](legacy/miniclass/index.md) and other legacy
+  material are kept under Legacy for reference.

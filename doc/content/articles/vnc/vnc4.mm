@@ -1,2 +1,2 @@
-# stop recording on vm bar
-vnc stop kb bar
+# stop recording on vm desktop
+vnc stop kb desktop
