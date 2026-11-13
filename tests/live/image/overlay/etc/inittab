@@ -1,0 +1,7 @@
+# busybox init configuration for the minimega live test guest
+::sysinit:/etc/init.d/rcS
+::respawn:/usr/local/sbin/run-miniccc
+::respawn:/usr/local/sbin/run-minirouter
+tty1::respawn:-/bin/sh
+::ctrlaltdel:/sbin/reboot
+::shutdown:/bin/umount -a -r
