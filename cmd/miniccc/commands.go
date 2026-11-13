@@ -28,7 +28,7 @@ func processCommand(cmd *ron.Command) {
 
 	// get any files needed for the command
 	if len(cmd.FilesSend) != 0 {
-		recvFiles(cmd.FilesSend)
+		recvFiles(cmd.FilesSend, cmd.FilesSendDir)
 	}
 
 	// kill processes before starting new ones
