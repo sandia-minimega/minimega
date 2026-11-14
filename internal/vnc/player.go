@@ -7,6 +7,7 @@ package vnc
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
@@ -149,6 +150,12 @@ func (p *Player) PlaybackString(id, rhost, str string) error {
 func (p *Player) playback(id, rhost, filename string) (*playback, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+
+	return p.playbackLocked(id, rhost, filename)
+}
+
+// playbackLocked starts a playback. The caller must hold p.mu for writing.
+func (p *Player) playbackLocked(id, rhost, filename string) (*playback, error) {
 	// clear out any old playbacks
 	p.reap()
 
@@ -167,7 +174,10 @@ func (p *Player) playback(id, rhost, filename string) (*playback, error) {
 	return pb, pb.Start(filename)
 }
 
-func (p *Player) Inject(id, rhost, s string) error {
+// Inject sends an event to the playback for id or, if there is none, to the VM
+// directly. A LoadFile event with no running playback starts one, resolving a
+// relative filename against dir.
+func (p *Player) Inject(id, rhost, dir, s string) error {
 	// check to see that we have a valid event
 	e, err := parseEvent(s)
 	if err != nil {
@@ -200,7 +210,12 @@ func (p *Player) Inject(id, rhost, s string) error {
 	case *LoadFileEvent:
 		// This is an injected LoadFile event without a running playback. This is
 		// equivalent to starting a new vnc playback.
-		_, err := p.playback(id, rhost, e.File)
+		file := e.File
+		if !filepath.IsAbs(file) {
+			file = filepath.Join(dir, file)
+		}
+
+		_, err := p.playbackLocked(id, rhost, file)
 		return err
 	case *WaitForItEvent:
 		return fmt.Errorf("unhandled inject event for non-running playback: %T", e)

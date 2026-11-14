@@ -133,7 +133,7 @@ func (p *playback) Start(filename string) error {
 		for {
 			msg, err := p.Conn.ReadMessage()
 			if err != nil {
-				if !p.closed { // if already closed, don't care about error. likely eof
+				if !p.Closed() { // if already closed, don't care about error. likely eof
 					log.Error("server to playback error: %v", err)
 				}
 				break
@@ -165,43 +165,65 @@ func (p *playback) Start(filename string) error {
 
 func (p *playback) Step() error {
 	p.Lock()
-	defer p.Unlock()
 
 	if p.state != Play || p.closed {
+		p.Unlock()
 		return errors.New("playback not stepable")
 	}
+	p.Unlock()
 
-	p.signal <- signal{kind: Step}
-
-	return nil
+	return p.send(signal{kind: Step})
 }
 
 func (p *playback) Pause() error {
 	p.Lock()
-	defer p.Unlock()
-
 	if p.state != Play || p.closed {
+		p.Unlock()
 		return errors.New("playback not pauseable")
 	}
+	p.Unlock()
 
-	p.signal <- signal{kind: Pause}
+	if err := p.send(signal{kind: Pause}); err != nil {
+		return err
+	}
+
+	p.Lock()
 	p.state = Pause
+	p.Unlock()
 
 	return nil
 }
 
 func (p *playback) Continue() error {
 	p.Lock()
-	defer p.Unlock()
-
 	if p.state != Pause || p.closed {
+		p.Unlock()
 		return errors.New("playback not playable")
 	}
+	p.Unlock()
 
-	p.signal <- signal{kind: Play}
+	if err := p.send(signal{kind: Play}); err != nil {
+		return err
+	}
+
+	p.Lock()
 	p.state = Play
+	p.Unlock()
 
 	return nil
+}
+
+// send hands a control signal to the play loop. It must be called without the
+// playback lock: the play loop takes that lock (addDuration, setFile, setStep)
+// between lines, before it can receive, so sending while holding it deadlocks.
+// signal is never closed; a stopped playback is seen through done.
+func (p *playback) send(s signal) error {
+	select {
+	case p.signal <- s:
+		return nil
+	case <-p.done:
+		return errors.New("playback has already stopped")
+	}
 }
 
 func (p *playback) Stop() error {
@@ -213,7 +235,6 @@ func (p *playback) Stop() error {
 		return nil
 	}
 
-	close(p.signal)
 	close(p.done)
 	p.closed = true
 	log.Info("Finished playback on %v", p.ID)
@@ -232,27 +253,26 @@ func (p *playback) Inject(cmd string) error {
 
 func (p *playback) InjectEvent(e interface{}) error {
 	p.Lock()
-	defer p.Unlock()
-
 	if p.closed {
+		p.Unlock()
 		return errors.New("playback has already stopped")
 	}
 
 	if event, ok := e.(Event); ok {
 		p.out <- event
+		p.Unlock()
 		return nil
 	}
+	p.Unlock()
 
 	switch e := e.(type) {
 	case *LoadFileEvent:
-		p.signal <- signal{kind: LoadFile, data: e}
+		return p.send(signal{kind: LoadFile, data: e})
 	case *WaitForItEvent:
-		p.signal <- signal{kind: WaitForIt, data: e}
+		return p.send(signal{kind: WaitForIt, data: e})
 	default:
 		return fmt.Errorf("unknown event: %v", e)
 	}
-
-	return nil
 }
 
 func (p *playback) GetStep() (string, error) {
@@ -331,6 +351,9 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 				v.addDuration(-duration)
 
 				goto Event
+			case <-v.done:
+				log.Info("abort playback of %v due to stop", f.Name())
+				return nil
 			case sig, ok := <-v.signal:
 				if !ok {
 					// signal channel closed -- bail
@@ -346,10 +369,11 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 
 				switch sig.kind {
 				case Pause:
-					sig, ok := <-v.signal
-					if !ok {
-						// signal channel closed -- bail
-						log.Info("abort playback of %v due to signal", f.Name())
+					var sig signal
+					select {
+					case sig = <-v.signal:
+					case <-v.done:
+						log.Info("abort playback of %v due to stop", f.Name())
 						return nil
 					}
 
@@ -365,7 +389,7 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 
 					goto Event
 				case LoadFile:
-					e := sig.data.(LoadFileEvent)
+					e := sig.data.(*LoadFileEvent)
 
 					if err := v.playFile(f, e.File); err != nil {
 						return err
