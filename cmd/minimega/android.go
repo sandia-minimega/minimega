@@ -809,15 +809,13 @@ func (vm *AndroidVM) createBonds() error {
 	for i := range vm.Bonds {
 		bond := &vm.Bonds[i]
 
-		if bond.created {
+		if bond.Created {
 			continue
 		}
 
 		if err := vm.addBond(bond); err != nil {
 			return vm.setErrorf("unable to create android bond %v: %v", i, err)
 		}
-
-		bond.created = true
 	}
 
 	if len(vm.Bonds) > 0 {

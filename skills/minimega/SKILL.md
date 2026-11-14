@@ -183,6 +183,7 @@ host name                          # inspect local host
 mesh status                        # inspect cluster connectivity
 vm info                            # inspect VMs
 vlans                              # inspect allocated VLANs
+vlans blacklist                    # inspect blacklisted VLANs
 file list                          # inspect iomeshage files
 cc clients                         # inspect miniccc clients and capabilities
 cc auto-update [true,false]        # show or set miniccc auto-update per namespace
@@ -213,6 +214,15 @@ Consult command help before mutating state; subcommand requirements evolve.
   limits each host to 64 active Android VMs, or fewer when ports are occupied.
 - **Namespace deletion is destructive.** It kills VMs and removes namespace
   captures, VLAN aliases, and taps.
+- **Remove one blacklisted VLAN with `clear vlans blacklist <vlan>`.** Do not
+  use `clear vlans all` for this; it clears every alias in every namespace.
+  The command fails if the VLAN is not blacklisted or in use. It checks VMs on
+  this node and all namespace hosts, but VM configs, queued or launching VMs,
+  and host taps on this node only. It also fails if a namespace host does not
+  return its VMs; remove hosts that left the mesh with `ns del-hosts`. It
+  cannot stop commands on other hosts. Without a VLAN ID, `clear vlans
+  blacklist` clears aliases that start with `blacklist`. The blacklist is local
+  to each node.
 - **Most functional operations alter the host.** Use an isolated Linux system
   for privileged tests involving KVM, Open vSwitch, taps, mounts, or cgroups.
 - **`cc auto-update` updates only capable clients.** A client gets an update

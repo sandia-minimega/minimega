@@ -157,8 +157,8 @@ When changing [`cmd/minimega/`](cmd/minimega/):
 
 - Route asynchronous command execution through `runCommands`; do not call
   `minicli.ProcessCommand` directly.
-- Acquire locks in this order: `cmdChannel`, `vmLock`, `VM.lock`, then other
-  locks. minimega locks precede locks in other packages.
+- Acquire locks in this order: `cmdChannel`, `vlanUseLock`, `vmLock`,
+  `VM.lock`, then other locks. minimega locks precede locks in other packages.
 - Use exported `VMs` and namespace helpers instead of directly accessing global
   maps or namespace state.
 - Lowercase helpers may require an existing lock; preserve `// LOCK: ...`

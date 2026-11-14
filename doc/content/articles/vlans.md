@@ -96,6 +96,32 @@ that VLAN. Users may also use this feature to blacklist VLANs by hand:
 minimega[dev2]$ vlans blacklist 333
 ```
 
+To remove one VLAN from the blacklist, use the `clear vlans blacklist` API with
+the VLAN ID:
+
+```text
+minimega[dev2]$ clear vlans blacklist 333
+```
+
+The command fails if the VLAN is not blacklisted or in use. The command checks
+the VMs on this node and on the hosts in each namespace that this node knows
+about. It checks VM configurations, saved VM configurations, queued and
+launching VMs, and host taps on this node only. Kill and flush those VMs and
+clear those configurations first. While the command runs, other commands on
+this node cannot use the VLAN. The blacklist is local to each node.
+
+The command also fails if a host in one of those namespaces does not return its
+VMs. If a host left the mesh, remove it from each namespace that contains it
+with `ns del-hosts`. For example, to remove `node5` from the `dev2` namespace:
+
+```text
+minimega[dev2]$ ns del-hosts node5
+```
+
+The command cannot stop commands on other hosts. A host can connect a VM to the
+VLAN after it returns its VMs. Do not use the VLAN on other hosts while the
+command runs.
+
 <a id="TOC_1.2."></a>
 
 ### clear vlans API

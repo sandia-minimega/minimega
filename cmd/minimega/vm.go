@@ -409,6 +409,8 @@ func (vm *BaseVM) addBond(bond *BondConfig) error {
 		br.SetTapQinQ(bond.Name, bond.VLAN)
 	}
 
+	bond.Created = true
+
 	return nil
 }
 

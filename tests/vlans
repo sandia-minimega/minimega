@@ -42,3 +42,15 @@ vlans range 120 130
 vm config net B # should be 120
 vlans
 vm config net
+
+# Blacklist
+vlans blacklist
+clear vlans blacklist 101
+vlans blacklist
+clear vlans blacklist 101
+clear vlans blacklist 4096
+vm config net 333
+clear vlans blacklist 333
+clear vm config net
+clear vlans blacklist 333
+vlans blacklist

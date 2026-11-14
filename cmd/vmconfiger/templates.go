@@ -249,7 +249,7 @@ const clearTemplate = `{
 			mask = k
 		}
 
-		ns.vmConfig.Clear(mask)
+		ns.clearVMConfig(mask)
 
 		return nil
 	}),
