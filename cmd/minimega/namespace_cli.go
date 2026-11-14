@@ -31,7 +31,11 @@ With no arguments, "namespace" prints summary info about namespaces:
 - active : active or not
 
 When a namespace is specified, it changes the active namespace or runs a single
-command in the different namespace.`,
+command in the different namespace.
+
+Namespace names may only contain letters, numbers, hyphens, underscores, and
+periods. The names "." and ".." are rejected because the namespace name is used
+as a directory name.`,
 		Patterns: []string{
 			"namespace [name]",
 			"namespace <name> (command)",
@@ -148,15 +152,12 @@ func cliNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 	resp := &minicli.Response{Host: hostname}
 
 	if name, ok := c.StringArgs["name"]; ok {
-		// check the name is sane
-		if !validName.MatchString(name) {
-			resp.Error = validNameErr.Error()
+		// validates the name and creates the namespace if it is new
+		if _, err := GetOrCreateNamespace(name); err != nil {
+			resp.Error = err.Error()
 			respChan <- minicli.Responses{resp}
 			return
 		}
-
-		// validates the name and creates the namespace if it is new
-		GetOrCreateNamespace(name)
 
 		if c.Subcommand != nil {
 			// Tag the subcommand (rather than switching the active namespace
@@ -522,7 +523,11 @@ func cliNamespaceDelBridge(ns *Namespace, c *minicli.Command, resp *minicli.Resp
 }
 
 func cliNamespaceSave(c *minicli.Command, respChan chan<- minicli.Responses) {
-	ns := resolveNamespace(c)
+	ns, err := resolveNamespace(c)
+	if err != nil {
+		respChan <- errResp(err)
+		return
+	}
 
 	resp := &minicli.Response{Host: hostname}
 
@@ -594,7 +599,11 @@ func cliClearNamespace(c *minicli.Command, respChan chan<- minicli.Responses) {
 
 	// clean up any bridges that we created
 	if c.Source == "" {
-		ns := GetOrCreateNamespace(name)
+		ns, err := GetOrCreateNamespace(name)
+		if err != nil {
+			respChan <- errResp(err)
+			return
+		}
 
 		cmds := []*minicli.Command{}
 
@@ -669,7 +678,11 @@ func cliNamespaceRun(c *minicli.Command, respChan chan<- minicli.Responses) {
 		}
 	}
 
-	ns := resolveNamespace(c)
+	ns, err := resolveNamespace(c)
+	if err != nil {
+		respChan <- errResp(err)
+		return
+	}
 
 	res := minicli.Responses{}
 

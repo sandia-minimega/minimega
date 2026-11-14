@@ -34,7 +34,10 @@ func recover() error {
 	for namespace, vms := range namespaces {
 		log.Info("recovering vms for namespace %s", namespace)
 
-		ns := GetOrCreateNamespace(namespace)
+		ns, err := GetOrCreateNamespace(namespace)
+		if err != nil {
+			return fmt.Errorf("unable to recover namespace %s: %w", namespace, err)
+		}
 
 		for _, vm := range vms {
 			body, err := ioutil.ReadFile(filepath.Join(*f_base, vm.VMID, "name"))

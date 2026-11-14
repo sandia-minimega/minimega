@@ -393,7 +393,10 @@ func cliCCBroadcast(c *minicli.Command, respChan chan<- minicli.Responses) {
 		if c.BoolArgs["true"] {
 			setting = ccAutoUpdateTrue
 		}
-		resolveNamespace(c).ccAutoUpdate.Store(setting)
+		// the broadcast fails first when the namespace name is not valid
+		if ns, err := resolveNamespace(c); err == nil {
+			ns.ccAutoUpdate.Store(setting)
+		}
 	}
 
 	respChan <- res
@@ -1234,7 +1237,11 @@ func cliCCTestConn(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 // cliCCMount needs to collect mounts from both the local ccMounts for the
 // namespace and across the cluster.
 func cliCCMount(c *minicli.Command, respChan chan<- minicli.Responses) {
-	ns := resolveNamespace(c)
+	ns, err := resolveNamespace(c)
+	if err != nil {
+		respChan <- errResp(err)
+		return
+	}
 
 	// makeResponse creates a response from the namespace's ccMounts
 	makeResponse := func() *minicli.Response {
@@ -1279,7 +1286,11 @@ func cliCCMount(c *minicli.Command, respChan chan<- minicli.Responses) {
 }
 
 func cliCCMountUUID(c *minicli.Command, respChan chan<- minicli.Responses) {
-	ns := resolveNamespace(c)
+	ns, err := resolveNamespace(c)
+	if err != nil {
+		respChan <- errResp(err)
+		return
+	}
 
 	resp := &minicli.Response{Host: hostname}
 
@@ -1506,7 +1517,11 @@ func cliCCClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 }
 
 func cliCCClearMount(c *minicli.Command, respChan chan<- minicli.Responses) {
-	ns := resolveNamespace(c)
+	ns, err := resolveNamespace(c)
+	if err != nil {
+		respChan <- errResp(err)
+		return
+	}
 
 	resp := &minicli.Response{Host: hostname}
 

@@ -191,7 +191,11 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 		return
 	}
 
-	ns := resolveNamespace(c)
+	ns, err := resolveNamespace(c)
+	if err != nil {
+		respChan <- errResp(err)
+		return
+	}
 
 	resp := &minicli.Response{Host: hostname}
 
@@ -263,11 +267,16 @@ func cliRead(c *minicli.Command, respChan chan<- minicli.Responses) {
 		forward(runCommands(cmd), respChan)
 
 		if namespace != "" {
-			log.Info("read switching to namespace `%v`", namespace)
-
 			// update the namespace that we prepend to match the newly
-			// activated namespace
-			ns = GetOrCreateNamespace(namespace)
+			// activated namespace; the namespace command already reported a rejected name
+			next, err := GetOrCreateNamespace(namespace)
+			if err != nil {
+				log.Warn("read not switching to namespace `%v`: %v", namespace, err)
+				continue
+			}
+
+			log.Info("read switching to namespace `%v`", namespace)
+			ns = next
 		}
 	}
 

@@ -319,7 +319,9 @@ func main() {
 	}
 
 	// has to happen after meshageNode is created
-	GetOrCreateNamespace(DefaultNamespace)
+	if _, err := GetOrCreateNamespace(DefaultNamespace); err != nil {
+		log.Fatal("unable to create default namespace: %v", err)
+	}
 	SetNamespace(DefaultNamespace)
 
 	// set default VLAN range

@@ -26,6 +26,18 @@ func registerNamespace(t *testing.T, name string) {
 	}
 }
 
+// mustResolveNamespace calls resolveNamespace and fails the test on error.
+func mustResolveNamespace(t *testing.T, c *minicli.Command) *Namespace {
+	t.Helper()
+
+	ns, err := resolveNamespace(c)
+	if err != nil {
+		t.Fatalf("resolveNamespace: %v", err)
+	}
+
+	return ns
+}
+
 // TestResolveNamespaceFallsBackToActive covers the compatibility half of the
 // contract: a command carrying no namespace of its own must resolve exactly as
 // it always did, via the process-wide active namespace. The interactive CLI,
@@ -41,13 +53,13 @@ func TestResolveNamespaceFallsBackToActive(t *testing.T) {
 		t.Fatalf("SetNamespace: %v", err)
 	}
 
-	if got := resolveNamespace(nil).Name; got != "ambient" {
+	if got := mustResolveNamespace(t, nil).Name; got != "ambient" {
 		t.Errorf("resolveNamespace(nil) = %q, want %q", got, "ambient")
 	}
 
 	untagged := &minicli.Command{Original: "vm info"}
 
-	if got := resolveNamespace(untagged).Name; got != "ambient" {
+	if got := mustResolveNamespace(t, untagged).Name; got != "ambient" {
 		t.Errorf("untagged command resolved to %q, want %q", got, "ambient")
 	}
 }
@@ -68,7 +80,7 @@ func TestResolveNamespacePrefersTheTag(t *testing.T) {
 
 	cmd := &minicli.Command{Original: "vm info", Namespace: "tagged"}
 
-	if got := resolveNamespace(cmd).Name; got != "tagged" {
+	if got := mustResolveNamespace(t, cmd).Name; got != "tagged" {
 		t.Errorf("tagged command resolved to %q, want %q", got, "tagged")
 	}
 }
@@ -152,7 +164,13 @@ func TestConcurrentNamespaceResolution(t *testing.T) {
 			cmd := &minicli.Command{Original: "vm info", Namespace: name}
 
 			for range iterations {
-				if got := resolveNamespace(cmd).Name; got != name {
+				ns, err := resolveNamespace(cmd)
+				if err != nil {
+					errs <- err
+					return
+				}
+
+				if got := ns.Name; got != name {
 					errs <- fmt.Errorf("resolved to %q, want %q", got, name)
 					return
 				}
