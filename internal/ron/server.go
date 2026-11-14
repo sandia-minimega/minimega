@@ -355,7 +355,7 @@ func (s *Server) DialSerial(path, uuid string) error {
 			// This blocks, but will return on a loss of connection to the client.
 			s.clientHandler(cli)
 
-			log.Info("client handler for %s completed", path)
+			log.Debug("client handler for %s completed", path)
 		}
 	}()
 
@@ -761,14 +761,14 @@ func (s *Server) DeleteResponses(prefix string) error {
 // ClearResponses deletes all responses received so far. It may not affect
 // responses that are still in-flight.
 func (s *Server) ClearResponses() error {
-	log.Info("clearing responses")
+	log.Debug("clearing responses")
 
 	// grab the client lock so that no more responses can be processed until
 	// we're finished.
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
-	log.Info("cleared responses")
+	log.Debug("cleared responses")
 
 	return os.RemoveAll(s.responsePath(nil))
 }
@@ -846,7 +846,7 @@ func (s *Server) serve(addr string, ln net.Listener) {
 
 		remote := conn.RemoteAddr()
 
-		log.Info("client connected: %v -> %v", remote, addr)
+		log.Debug("client connected: %v -> %v", remote, addr)
 		c, err := s.handshake(conn, "")
 		if err != nil {
 			if err != io.EOF {
@@ -941,7 +941,7 @@ func (s *Server) handshake(conn net.Conn, expectedUUID string) (*client, error) 
 	}
 
 	if majorVersion(m.Version) > 0 {
-		log.Info("starting heartbeat to client %s", m.Client.UUID)
+		log.Debug("starting heartbeat to client %s", m.Client.UUID)
 
 		// Only send heartbeats to client if message version is present to prevent
 		// older clients from failing against this version of the server (sending a
@@ -1265,7 +1265,7 @@ func (s *Server) route(m *Message) {
 		}
 
 		if c.maxCommandID == maxCommandID {
-			log.Info("no commands for %v", uuid)
+			log.Debug("no commands for %v", uuid)
 			return
 		}
 
@@ -1296,7 +1296,7 @@ func (s *Server) route(m *Message) {
 
 			if len(m2.Commands) == 0 {
 				c.maxCommandID = maxCommandID
-				log.Info("no commands for %v", uuid)
+				log.Debug("no commands for %v", uuid)
 				return
 			}
 
@@ -1450,7 +1450,7 @@ func (s *Server) updateClient(cin *Client) {
 		// the client probably disconnected between sending the heartbeat and
 		// us processing it. We'll still process any command responses but
 		// shouldn't try to update the client itself.
-		log.Info("unknown client %v", cin.UUID)
+		log.Debug("unknown client %v", cin.UUID)
 		return
 	}
 
@@ -1464,7 +1464,7 @@ func (s *Server) updateClient(cin *Client) {
 	vm, ok := s.vms[cin.UUID]
 	if !ok {
 		// see above but for the VM.
-		log.Info("unregistered client %v", cin.UUID)
+		log.Debug("unregistered client %v", cin.UUID)
 		return
 	}
 

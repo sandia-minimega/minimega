@@ -49,6 +49,6 @@ func run(c *Command) chan *miniclient.Response {
 		}
 	}
 
-	log.Info("running: %v", c)
+	log.Debug("running: %v", c)
 	return mm.Run(c.String())
 }

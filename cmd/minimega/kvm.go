@@ -867,7 +867,7 @@ func (vm *KvmVM) connectVNC() error {
 						// for cut text, send text immediately as string if not bi-directional
 						if cut, ok := msg.(*vnc.ClientCutText); ok && !vm.BidirectionalCopyPaste {
 							if cut.Length > 0 {
-								log.Info("sending text for ClientCutText: %s", cut.Text)
+								log.Debug("sending text for ClientCutText: %d bytes", len(cut.Text))
 								err = ns.Player.PlaybackString(vm.Name, vm.vncShim.Addr().String(), string(cut.Text))
 								if err != nil {
 									log.Warnln(err)

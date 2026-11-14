@@ -191,28 +191,24 @@ func hostStatsMemory() (int, int, error) {
 				return 0, 0, fmt.Errorf("cannot parse meminfo MemTotal: %v", err)
 			}
 			memTotal = m
-			log.Debug("got memTotal %v", memTotal)
 		case "MemFree:":
 			m, err := strconv.Atoi(d[1])
 			if err != nil {
 				return 0, 0, fmt.Errorf("cannot parse meminfo MemFree: %v", err)
 			}
 			memFree = m
-			log.Debug("got memFree %v", memFree)
 		case "Buffers:":
 			m, err := strconv.Atoi(d[1])
 			if err != nil {
 				return 0, 0, fmt.Errorf("cannot parse meminfo Buffers: %v", err)
 			}
 			memBuffers = m
-			log.Debug("got memBuffers %v", memBuffers)
 		case "Cached:":
 			m, err := strconv.Atoi(d[1])
 			if err != nil {
 				return 0, 0, fmt.Errorf("cannot parse meminfo Cached: %v", err)
 			}
 			memCached = m
-			log.Debug("got memCached %v", memCached)
 		}
 	}
 

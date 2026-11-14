@@ -202,7 +202,6 @@ func (n *Node) Mesh() mesh {
 // connectionListener accepts connections on tcp/port for both solicited and unsolicited
 // client connections.
 func (n *Node) connectionListener() {
-	log.Debugln("connectionListener")
 	ln, err := net.Listen("tcp", fmt.Sprintf(":%d", n.port))
 	if err != nil {
 		log.Fatalln(err)
@@ -488,8 +487,6 @@ func (n *Node) dial(host string, solicited bool) error {
 
 // MSA issues a Meshage State Annoucement, which contains a list of all the nodes connected to the broadcaster
 func (n *Node) MSA() {
-	log.Debugln("MSA")
-
 	// rate limit MSA spam to once per MSA timeout / 2
 	n.msaLock.Lock()
 	defer n.msaLock.Unlock()
@@ -547,7 +544,6 @@ func (n *Node) MSA() {
 }
 
 func (n *Node) sequence() uint64 {
-	log.Debugln("sequence")
 	n.sequenceLock.Lock()
 	defer n.sequenceLock.Unlock()
 	n.sequences[n.instance]++

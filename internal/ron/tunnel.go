@@ -220,7 +220,6 @@ func Trunk(remote io.ReadCloser, uuid string, fn func(*Message) error) {
 	for err == nil {
 		buf := make([]byte, 32*1024)
 		n, err = remote.Read(buf)
-		log.Debug("trunking %v bytes for %v", n, uuid)
 		if err == nil {
 			m := &Message{
 				Type:   MESSAGE_TUNNEL,

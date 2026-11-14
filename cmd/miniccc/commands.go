@@ -213,12 +213,12 @@ func runCommand(stdin, stdout, stderr string, command []string, background bool)
 
 		go func() {
 			cmd.Wait()
-			log.Info("command exited: %v", command)
+			log.Debug("command exited: %v", command)
 			if bufout.Len() > 0 {
-				log.Info("%s", bufout.String())
+				log.Debug("%s", bufout.String())
 			}
 			if buferr.Len() > 0 {
-				log.Info("%s", buferr.String())
+				log.Debug("%s", buferr.String())
 			}
 
 			client.Lock()
