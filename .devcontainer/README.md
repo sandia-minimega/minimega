@@ -1,7 +1,7 @@
 # minimega development container
 
 Use this container for Linux source builds and unit tests when developing on
-macOS or Windows. It provides Go 1.24, vendored module resolution, libpcap
+macOS or Windows. It provides Go 1.24, libpcap
 headers, and the Python tooling used by the build scripts. It is a development
 environment, not the privileged minimega deployment image under `docker/`.
 
@@ -31,7 +31,7 @@ Run the smallest checks that cover the change:
 ```bash
 ./scripts/check.bash
 ./scripts/test.bash
-GOFLAGS=-mod=vendor go test ./pkg/...
+go test ./pkg/...
 git diff --check
 ```
 

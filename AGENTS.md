@@ -4,8 +4,7 @@
 
 minimega is a Go platform for managing KVM virtual machines, Android emulators,
 Linux containers, networks, and distributed experiments. The root module is
-`github.com/sandia-minimega/minimega/v2`, requires Go 1.24 or newer, and uses
-vendored dependencies through `GOFLAGS=-mod=vendor`.
+`github.com/sandia-minimega/minimega/v2` and requires Go 1.24 or newer.
 
 Read the guide that matches the task instead of rediscovering repository
 behavior:
@@ -19,7 +18,7 @@ behavior:
   testing on macOS or Windows.
 - Read the relevant article in
   [`doc/content/articles/developer/`](doc/content/articles/developer/) before
-  changing locking, namespaces, naming, status updates, or vendored dependencies.
+  changing locking, namespaces, naming, status updates, or dependencies.
 - Read [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md) before opening or
   updating a pull request.
 
@@ -54,8 +53,8 @@ behavior change makes it stale.
   [`packaging/`](packaging/) contain container, service, Debian, and RPM
   configuration.
 - [`packages/`](packages/) contains maintained local module forks;
-  [`vendor/`](vendor/) contains dependency copies; [`web/`](web/) includes
-  bundled third-party projects.
+  [`web/`](web/) bundles Bootstrap, Font Awesome, Glyphicons, jQuery,
+  DataTables, D3, grapher, mxGraph (`web/grapheditor/`), noVNC and xterm.js.
 - [`lib/`](lib/) contains Python package metadata; `lib/minimega.py` is
   generated.
 
@@ -81,9 +80,9 @@ go version
 During iteration, run the narrowest relevant test:
 
 ```bash
-GOFLAGS=-mod=vendor go test ./pkg/minicli
-GOFLAGS=-mod=vendor go test ./cmd/minimega -run '^TestName$'
-GOFLAGS=-mod=vendor go test -race ./cmd/minimega -run '^TestName$'
+go test ./pkg/minicli
+go test ./cmd/minimega -run '^TestName$'
+go test -race ./cmd/minimega -run '^TestName$'
 ```
 
 Use `-race` for concurrency, namespace, meshage, and VM lifecycle changes.
@@ -143,9 +142,8 @@ fields, and never accept `.got` without reviewing it.
 - Files under [`doc/content/releases/`](doc/content/releases/) and
   [`doc/content/presentations/`](doc/content/presentations/) are legacy
   documentation; do not modify or update them.
-- Do not run `go mod tidy`, regenerate `vendor/`, or change dependencies unless
-  dependency maintenance is the task. Keep changed local forks under `packages/`
-  aligned with their `vendor/` copies and preserve license notices.
+- Do not run `go mod tidy` or change dependencies unless dependency maintenance
+  is the task. Preserve license notices in `LICENSES/` and `packages/`.
 - Surface invalid configuration and operational errors through existing response
   and logging patterns; do not add silent fallbacks.
 - Never add credentials, keys, proprietary data, VM images, packet captures, or
