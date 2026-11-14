@@ -108,6 +108,16 @@ func GetDevice() (string, error) {
 // ConnectImage exports a image using the NBD protocol using the qemu-nbd. If
 // successful, returns the NBD device.
 func ConnectImage(image string) (string, error) {
+	return connectImage(image, false)
+}
+
+// ConnectImageReadOnly is like ConnectImage, but exports the image read-only
+// so that nothing written to the NBD device can modify the image.
+func ConnectImageReadOnly(image string) (string, error) {
+	return connectImage(image, true)
+}
+
+func connectImage(image string, readOnly bool) (string, error) {
 	var err error
 
 	for i := 0; i < maxConnectRetries; i++ {
@@ -131,9 +141,15 @@ func ConnectImage(image string) (string, error) {
 			continue
 		}
 
-		log.Debug("connect nbd: %v -> %v", image, nbdPath)
+		log.Debug("connect nbd: %v -> %v (read-only: %v)", image, nbdPath, readOnly)
 
-		out, cerr := processWrapper("qemu-nbd", "-c", nbdPath, image)
+		args := []string{"qemu-nbd"}
+		if readOnly {
+			args = append(args, "--read-only")
+		}
+		args = append(args, "-c", nbdPath, image)
+
+		out, cerr := processWrapper(args...)
 
 		nbdLock.Unlock()
 
