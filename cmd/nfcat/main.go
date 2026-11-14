@@ -118,6 +118,13 @@ func readPacketXXX(r *bufio.Reader) (*gonetflow.Packet, error) {
 		// what looks like a new header
 		peek, err := r.Peek(3)
 		if err == io.EOF {
+			// A clean end leaves at most the one padding byte that
+			// readRecordXXX did not consume. Anything longer is a truncated
+			// header, not padding.
+			if len(peek) > 1 {
+				return nil, io.ErrUnexpectedEOF
+			}
+			r.Discard(len(peek))
 			return p, nil
 		} else if err != nil {
 			return nil, err
