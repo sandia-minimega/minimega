@@ -144,6 +144,8 @@ fields, and never accept `.got` without reviewing it.
   documentation; do not modify or update them.
 - Do not run `go mod tidy` or change dependencies unless dependency maintenance
   is the task. Preserve license notices in `LICENSES/` and `packages/`.
+  `scripts/licenses.bash` generates `LICENSES/go/` from the Go build; update
+  the other `LICENSES/` files by hand when bundled non-module code changes.
 - Surface invalid configuration and operational errors through existing response
   and logging patterns; do not add silent fallbacks.
 - Never add credentials, keys, proprietary data, VM images, packet captures, or
