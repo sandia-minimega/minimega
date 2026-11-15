@@ -14,6 +14,10 @@ addFilter("env-script-interpreter /opt/minimega/misc/vmbetter_configs/")
 addFilter("zero-length /opt/minimega/misc/vmbetter_configs/")
 # The bundled documentation, overlays, and web files contain identical files at the paths that use them.
 addFilter("files-duplicate /opt/minimega/")
+# scripts/licenses.bash saves a license for each Go module, and modules from one project share the same text.
+addFilter("files-duplicate /usr/share/doc/minimega/LICENSES/go/")
+# scripts/licenses.bash saves the whole source of modules whose license requires it, such as goircd.
+addFilter("install-file-in-docs /usr/share/doc/minimega/LICENSES/go/")
 # The bundled documentation, overlays, and web files contain identical files at the paths that use them.
 addFilter("files-duplicated-waste ")
 # %post links libpcap.so.0.8, which the Ubuntu-built programs need, to the libpcap of the system.

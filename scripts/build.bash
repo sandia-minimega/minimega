@@ -55,6 +55,8 @@ for i in "${DIRECTORY_ARRAY[@]}"; do
 done
 echo
 
+"$SCRIPT_DIR/licenses.bash" || exit $?
+
 # Build Python bindings
 $ROOT_DIR/bin/pyapigen -out $ROOT_DIR/lib/minimega.py $ROOT_DIR/bin/minimega
 
