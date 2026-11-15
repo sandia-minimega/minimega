@@ -94,6 +94,14 @@ Before submitting a Go change, run:
 git diff --check
 ```
 
+`./scripts/test.bash` writes a combined cover profile to `coverage.out` (set
+`COVERPROFILE` to change the path). View it with
+`go tool cover -html=coverage.out` or summarize it per package with
+`./scripts/coverage.bash coverage.out`. Set `JUNITFILE` to also write a JUnit
+report through `gotestsum`. The Test workflow sets it, annotates failing tests,
+adds the test and coverage summaries to its job summary, and uploads the JUnit
+report, profile, and HTML coverage report as the `test-results` artifact.
+
 Run `./scripts/all.bash` when the change affects full builds or generated
 documentation. The scripts assume GNU/Linux and regenerate ignored binaries,
 version metadata, generated API Markdown, Python bindings, and distributions; inspect the
