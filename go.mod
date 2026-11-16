@@ -7,7 +7,7 @@ require (
 	github.com/anthonynsimon/bild v0.14.0
 	github.com/c9s/goprocinfo v0.0.0-20210130143923-c95fcf8c64a8
 	github.com/dutchcoders/goftp v0.0.0-20170301105846-ed59a591ce14
-	github.com/fsnotify/fsnotify v1.9.0
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/goftp/server v0.0.0-20200708154336-f64f7c2d8a42
 	github.com/google/gopacket v1.1.19
 	github.com/jbuchbinder/gopnm v0.0.0-20251119211316-bb594e0d2e34
@@ -19,6 +19,7 @@ require (
 	github.com/thoj/go-ircevent v0.0.0-20210723090443-73e444401d64
 	github.com/twmb/murmur3 v1.1.8
 	github.com/ziutek/telnet v0.1.0
+	go.uber.org/goleak v1.3.0
 	golang.org/x/crypto v0.48.0
 	golang.org/x/net v0.50.0
 	golang.org/x/sys v0.41.0

@@ -46,7 +46,7 @@ func processCommand(cmd *ron.Command) {
 	}
 
 	if len(cmd.Command) != 0 {
-		resp.Stdout, resp.Stderr, resp.ExitCode = runCommand(cmd.Stdin, cmd.Stdout, cmd.Stderr, cmd.Command, cmd.Background)
+		resp.Stdout, resp.Stderr, resp.ExitCode = runCommand(cmd)
 		// don't record exit code if this is a background command
 		resp.RecordExitCode = !cmd.Background
 	}
@@ -62,9 +62,10 @@ func processCommand(cmd *ron.Command) {
 	appendResponse(resp)
 }
 
-// lookPath wraps exec.LookPath to check $PATH and the files path
-func lookPath(file string) (string, error) {
-	path, err := exec.LookPath(file)
+// lookPath wraps exec.LookPath to check $PATH and the files path. A non-nil
+// env provides the $PATH in place of the client's own environment.
+func lookPath(file string, env []string) (string, error) {
+	path, err := lookPathEnv(file, env)
 	if err == nil {
 		return path, nil
 	}
@@ -78,30 +79,40 @@ func lookPath(file string) (string, error) {
 	return exec.LookPath(file)
 }
 
-func runCommand(stdin, stdout, stderr string, command []string, background bool) (string, string, int) {
+func runCommand(c *ron.Command) (string, string, int) {
 	done := make(chan struct{})
 	var bufout, buferr bytes.Buffer
 
-	path, err := lookPath(command[0])
+	cmd := &exec.Cmd{
+		Args: c.Command,
+	}
+
+	if c.Session != "" {
+		release, err := setSession(cmd, c.Session)
+		if err != nil {
+			log.Errorln(err)
+			close(done)
+			return "", err.Error(), -1
+		}
+		defer release()
+	}
+
+	path, err := lookPath(c.Command[0], cmd.Env)
 	if err != nil {
 		log.Errorln(err)
 		close(done)
 		return "", err.Error(), -1
 	}
+	cmd.Path = path
 
-	cmd := &exec.Cmd{
-		Path: path,
-		Args: command,
-	}
-
-	if stdin != "" {
+	if c.Stdin != "" {
 		pStdin, err := cmd.StdinPipe()
 		if err != nil {
 			log.Errorln(err)
 			return "", "", -1
 		}
 
-		cStdin, err := NewPlumberReader(stdin)
+		cStdin, err := NewPlumberReader(c.Stdin)
 		if err != nil {
 			log.Errorln(err)
 			return "", "", -1
@@ -124,7 +135,7 @@ func runCommand(stdin, stdout, stderr string, command []string, background bool)
 		}()
 	}
 
-	if stdout != "" {
+	if c.Stdout != "" {
 		pStdout, err := cmd.StdoutPipe()
 		if err != nil {
 			log.Errorln(err)
@@ -132,7 +143,7 @@ func runCommand(stdin, stdout, stderr string, command []string, background bool)
 			return "", "", -1
 		}
 
-		cStdout, err := NewPlumberWriter(stdout)
+		cStdout, err := NewPlumberWriter(c.Stdout)
 		if err != nil {
 			log.Errorln(err)
 			close(done)
@@ -158,7 +169,7 @@ func runCommand(stdin, stdout, stderr string, command []string, background bool)
 		cmd.Stdout = &bufout
 	}
 
-	if stderr != "" {
+	if c.Stderr != "" {
 		pStderr, err := cmd.StderrPipe()
 		if err != nil {
 			log.Errorln(err)
@@ -166,7 +177,7 @@ func runCommand(stdin, stdout, stderr string, command []string, background bool)
 			return "", "", -1
 		}
 
-		cStderr, err := NewPlumberWriter(stderr)
+		cStderr, err := NewPlumberWriter(c.Stderr)
 		if err != nil {
 			log.Errorln(err)
 			close(done)
@@ -192,9 +203,9 @@ func runCommand(stdin, stdout, stderr string, command []string, background bool)
 		cmd.Stderr = &buferr
 	}
 
-	log.Info("executing: %v", command)
+	log.Info("executing: %v", c.Command)
 
-	if background {
+	if c.Background {
 		log.Debug("starting in background")
 		if err := cmd.Start(); err != nil {
 			log.Errorln(err)
@@ -207,13 +218,13 @@ func runCommand(stdin, stdout, stderr string, command []string, background bool)
 		defer client.Unlock()
 		client.Processes[pid] = &Process{
 			PID:     pid,
-			Command: command,
+			Command: c.Command,
 			process: cmd.Process,
 		}
 
 		go func() {
 			cmd.Wait()
-			log.Info("command exited: %v", command)
+			log.Info("command exited: %v", c.Command)
 			if bufout.Len() > 0 {
 				log.Info("%s", bufout.String())
 			}

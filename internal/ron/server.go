@@ -56,6 +56,15 @@ type Server struct {
 	clients    map[string]*client // map of active clients, each of which have a running handler
 	vms        map[string]VM      // map of uuid -> VM
 	clientLock sync.Mutex         // lock for clients and vms
+	autoUpdate bool
+
+	// updateTimeout limits how long the server holds commands for a client
+	// after it sends an update. Zero means UPDATE_TIMEOUT.
+	updateTimeout time.Duration
+
+	// hashes caches the SHA-256 hashes of staged update binaries
+	hashes   map[string]stagedHash
+	hashLock sync.Mutex
 
 	path string // path for serving files
 
@@ -68,6 +77,13 @@ type Server struct {
 
 	responses chan *Client // queue of incoming responses, consumed by the response processor
 
+	handlerDone chan struct{} // closed when responseHandler returns
+
+	stopReaper chan struct{} // closed by Destroy to stop clientReaper
+
+	reaperRate   time.Duration // how often clientReaper checks for expired clients
+	clientExpiry time.Duration // how long a client can go without a check-in
+
 	plumber *miniplumber.Plumber
 
 	// set to non-zero value by Server.Destroy
@@ -77,6 +93,12 @@ type Server struct {
 // NewServer creates a ron server. Must call Listen* to actually allow ron to
 // start accepting connections from clients.
 func NewServer(path, subpath string, plumber *miniplumber.Plumber) (*Server, error) {
+	return newServer(path, subpath, plumber, REAPER_RATE*time.Second, CLIENT_EXPIRED*time.Second)
+}
+
+// newServer creates a ron server that checks for expired clients every
+// reaperRate and expires clients that do not check in within clientExpiry.
+func newServer(path, subpath string, plumber *miniplumber.Plumber, reaperRate, clientExpiry time.Duration) (*Server, error) {
 	s := &Server{
 		UseVMs:        true,
 		conns:         make(map[string]net.Conn),
@@ -88,10 +110,15 @@ func NewServer(path, subpath string, plumber *miniplumber.Plumber) (*Server, err
 		subpath:       subpath,
 		lastBroadcast: time.Now(),
 		responses:     make(chan *Client, 1024),
+		handlerDone:   make(chan struct{}),
+		stopReaper:    make(chan struct{}),
+		reaperRate:    reaperRate,
+		clientExpiry:  clientExpiry,
 		plumber:       plumber,
 	}
 
-	if err := os.MkdirAll(s.responsePath(nil), 0775); err != nil {
+	// the response folder is created when the first response or file arrives
+	if err := os.MkdirAll(s.path, 0775); err != nil {
 		return nil, err
 	}
 
@@ -103,13 +130,31 @@ func NewServer(path, subpath string, plumber *miniplumber.Plumber) (*Server, err
 	return s, nil
 }
 
+// SetAutoUpdate enables or disables miniccc binary updates on client connect.
+func (s *Server) SetAutoUpdate(enabled bool) {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+	s.autoUpdate = enabled
+}
+
+// AutoUpdate reports whether miniccc binary updates on client connect are
+// enabled.
+func (s *Server) AutoUpdate() bool {
+	s.clientLock.Lock()
+	defer s.clientLock.Unlock()
+	return s.autoUpdate
+}
+
 func (s *Server) Destroy() {
-	if s.destroyed() {
+	if !atomic.CompareAndSwapUint64(&s.isdestroyed, 0, 1) {
 		// already been destroyed once before
 		return
 	}
 
-	s.setDestroyed()
+	// keep reaping while Destroy waits, so that silent clients expire
+	if s.stopReaper != nil {
+		defer close(s.stopReaper)
+	}
 
 	// close all the serial connections
 	s.connsLock.Lock()
@@ -147,6 +192,60 @@ func (s *Server) Destroy() {
 		time.Sleep(5 * time.Second)
 	}
 	close(s.responses)
+
+	// wait for queued responses to be written before removing empty folders
+	if s.handlerDone != nil {
+		<-s.handlerDone
+	}
+
+	s.removeEmptyDirs()
+}
+
+// removeEmptyDirs removes the response folder and then the subpath folder if
+// they are empty. It removes only folders below s.path, never s.path itself
+// or a folder that is not empty.
+func (s *Server) removeEmptyDirs() {
+	for _, dir := range []string{s.responsePath(nil), filepath.Join(s.path, s.subpath)} {
+		if !isSubdir(s.path, dir) {
+			continue
+		}
+
+		if err := removeDirIfEmpty(dir); err != nil {
+			log.Warn("unable to remove empty folder %v: %v", dir, err)
+		}
+	}
+}
+
+// isSubdir returns true if dir is below base and is not base itself.
+func isSubdir(base, dir string) bool {
+	rel, err := filepath.Rel(base, dir)
+	if err != nil {
+		return false
+	}
+
+	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+// removeDirIfEmpty removes dir if it exists and is empty.
+func removeDirIfEmpty(dir string) error {
+	f, err := os.Open(dir)
+	if os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+
+	_, err = f.Readdirnames(1)
+	f.Close()
+
+	if err == nil {
+		// dir is not empty
+		return nil
+	} else if err != io.EOF {
+		return err
+	}
+
+	return os.Remove(dir)
 }
 
 // Listen starts accepting TCP connections on the specified port, accepting
@@ -428,6 +527,98 @@ func (s *Server) GetResponses(raw bool) (string, error) {
 	return res, err
 }
 
+// GetClientResponses returns the stdout and stderr recorded for each client
+// that responded to command id, or to every command if id is nil. Results are
+// sorted by command ID then client UUID.
+func (s *Server) GetClientResponses(id *int) ([]ClientResponse, error) {
+	res := []ClientResponse{}
+
+	var ids []int
+	if id != nil {
+		ids = append(ids, *id)
+	} else {
+		entries, err := os.ReadDir(s.responsePath(nil))
+		if os.IsNotExist(err) {
+			return res, nil
+		} else if err != nil {
+			return nil, err
+		}
+
+		for _, e := range entries {
+			if v, err := strconv.Atoi(e.Name()); err == nil && e.IsDir() {
+				ids = append(ids, v)
+			}
+		}
+	}
+
+	for _, v := range ids {
+		base := s.responsePath(&v)
+
+		entries, err := os.ReadDir(base)
+		if os.IsNotExist(err) && id != nil {
+			return nil, fmt.Errorf("no responses for %v", v)
+		} else if err != nil {
+			return nil, err
+		}
+
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+
+			r := ClientResponse{ID: v, UUID: e.Name()}
+
+			for name, dst := range map[string]*string{"stdout": &r.Stdout, "stderr": &r.Stderr} {
+				path := filepath.Join(base, e.Name(), name)
+
+				// a received file may have created a directory with this name
+				if fi, err := os.Stat(path); os.IsNotExist(err) || (err == nil && !fi.Mode().IsRegular()) {
+					continue
+				}
+
+				data, err := os.ReadFile(path)
+				if err != nil {
+					return nil, err
+				}
+				*dst = string(data)
+			}
+
+			res = append(res, r)
+		}
+	}
+
+	sort.Slice(res, func(i, j int) bool {
+		if res[i].ID != res[j].ID {
+			return res[i].ID < res[j].ID
+		}
+		return res[i].UUID < res[j].UUID
+	})
+
+	return res, nil
+}
+
+// GetClientInfo returns a serializable summary of every active client, sorted
+// by UUID.
+func (s *Server) GetClientInfo() []ClientInfo {
+	res := []ClientInfo{}
+
+	for _, c := range s.GetClients() {
+		res = append(res, ClientInfo{
+			UUID:     c.UUID,
+			Hostname: c.Hostname,
+			Arch:     c.Arch,
+			OS:       c.OS,
+			Version:  c.Version,
+			IPs:      c.IPs,
+			MACs:     c.MACs,
+		})
+	}
+
+	sort.Slice(res, func(i, j int) bool { return res[i].UUID < res[j].UUID })
+
+	return res
+}
+
 // GetClients returns a list of every active client
 func (s *Server) GetClients() map[string]*Client {
 	s.clientLock.Lock()
@@ -443,9 +634,11 @@ func (s *Server) GetClients() map[string]*Client {
 			OS:            c.OS,
 			Version:       c.Version,
 			Hostname:      c.Hostname,
+			SHA256:        c.SHA256,
 			LastCommandID: c.LastCommandID,
 			Processes:     make(map[int]*Process),
 		}
+		res[u].Capabilities = append(res[u].Capabilities, c.Capabilities...)
 		for _, ip := range c.IPs {
 			res[u].IPs = append(res[u].IPs, ip)
 		}
@@ -611,10 +804,6 @@ func (s *Server) UnregisterVM(vm VM) {
 	delete(s.vms, vm.GetUUID())
 }
 
-func (s *Server) setDestroyed() {
-	atomic.StoreUint64(&s.isdestroyed, 1)
-}
-
 func (s *Server) destroyed() bool {
 	return atomic.LoadUint64(&s.isdestroyed) > 0
 }
@@ -627,6 +816,22 @@ func (s *Server) responsePath(id *int) string {
 	}
 
 	return filepath.Join(s.path, s.subpath, RESPONSE_PATH, strconv.Itoa(*id))
+}
+
+// makeResponseDir creates the response folder and its parents if they do not
+// exist.
+func (s *Server) makeResponseDir() error {
+	return os.MkdirAll(s.responsePath(nil), 0775)
+}
+
+// recvFile writes part of a file that a client sent to the response folder.
+func (s *Server) recvFile(uuid string, f *File) error {
+	if err := s.makeResponseDir(); err != nil {
+		return err
+	}
+
+	fpath := filepath.Join(s.responsePath(&f.ID), uuid, f.Name)
+	return f.Recv(fpath)
 }
 
 // serve
@@ -658,7 +863,7 @@ func (s *Server) serve(addr string, ln net.Listener) {
 		c, err := s.handshake(conn, "")
 		if err != nil {
 			if err != io.EOF {
-				// supress these, VM was probably never started
+				// suppress these, VM was probably never started
 				log.Error("handshake failed: %v", err)
 			}
 			conn.Close()
@@ -715,6 +920,8 @@ func (s *Server) handshake(conn net.Conn, expectedUUID string) (*client, error) 
 	if err := bindClientUUID(&m, expectedUUID); err != nil {
 		return nil, err
 	}
+
+	update := s.updateFileFor(m.Client)
 
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
@@ -795,6 +1002,10 @@ func (s *Server) handshake(conn net.Conn, expectedUUID string) (*client, error) 
 
 	s.clients[c.UUID] = c
 
+	if update != "" {
+		s.startUpdate(c, update)
+	}
+
 	return c, nil
 }
 
@@ -874,8 +1085,7 @@ func (s *Server) clientHandler(c *client) {
 					err = s.sendFile(c, m.File.Name)
 				} else {
 					// client sent file
-					fpath := filepath.Join(s.responsePath(&m.File.ID), c.UUID, m.File.Name)
-					err = m.File.Recv(fpath)
+					err = s.recvFile(c.UUID, m.File)
 				}
 			case MESSAGE_CLIENT:
 				if c.mangled {
@@ -969,7 +1179,7 @@ func (s *Server) sendCommands(uuid string) {
 	}
 
 	for k, v := range s.commands {
-		if !v.Once || !v.Sent {
+		if !v.Once || !v.Sent || (uuid != "" && v.heldFor[uuid]) {
 			m.Commands[k] = v.Copy()
 			v.Sent = true
 		}
@@ -1074,26 +1284,15 @@ func (s *Server) route(m *Message) {
 
 		if m.Type == MESSAGE_COMMAND {
 			if s.UseVMs {
-				vm, ok := s.vms[uuid]
-				if !ok {
+				filters := make([]*Filter, 0, len(m.Commands))
+				for _, cmd := range m.Commands {
+					filters = append(filters, cmd.Filter)
+				}
+
+				if !s.loadVMTags(uuid, c, filters) {
 					// odd, someone must have unregistered the client...
 					log.Error("unregistered client %v", uuid)
 					return
-				}
-				// update client's tags in case we're matching based on them
-				c.Tags = vm.GetTags()
-
-				// load the relevant info fields, overriding any tag values
-				for _, cmd := range m.Commands {
-					if cmd.Filter != nil && cmd.Filter.Tags != nil {
-						for k := range cmd.Filter.Tags {
-							// only replace non-zero fields
-							v, _ := vm.Info(k)
-							if v != "" {
-								c.Tags[k] = v
-							}
-						}
-					}
 				}
 			}
 
@@ -1108,12 +1307,27 @@ func (s *Server) route(m *Message) {
 				}
 			}
 
-			c.maxCommandID = maxCommandID
-
 			if len(m2.Commands) == 0 {
+				c.maxCommandID = maxCommandID
 				log.Info("no commands for %v", uuid)
 				return
 			}
+
+			// keep maxCommandID so that the commands are sent after the update
+			if c.updating {
+				issuedLock.Lock()
+				defer issuedLock.Unlock()
+				for id, cmd := range m2.Commands {
+					if cmd.Once {
+						s.commands[id].holdFor(uuid)
+					}
+				}
+
+				log.Info("holding %v commands for %v during its update", len(m2.Commands), uuid)
+				return
+			}
+
+			c.maxCommandID = maxCommandID
 
 			m = &m2
 		}
@@ -1129,6 +1343,7 @@ func (s *Server) route(m *Message) {
 			defer issuedLock.Unlock()
 			for id := range m.Commands {
 				s.commands[id].Issued++
+				delete(s.commands[id].heldFor, uuid)
 			}
 		}
 	}
@@ -1158,8 +1373,37 @@ func (s *Server) route(m *Message) {
 	wg.Wait()
 }
 
+// loadVMTags sets c.Tags from the tags of the VM registered for uuid, then
+// overrides each key in the Tags of filters with the non-empty VM info field of
+// the same name, so that c.Matches can match on them. It returns false when no
+// VM is registered for uuid. The caller must hold clientLock.
+func (s *Server) loadVMTags(uuid string, c *client, filters []*Filter) bool {
+	vm, ok := s.vms[uuid]
+	if !ok {
+		return false
+	}
+
+	c.Tags = vm.GetTags()
+
+	for _, f := range filters {
+		if f == nil || f.Tags == nil {
+			continue
+		}
+
+		for k := range f.Tags {
+			if v, _ := vm.Info(k); v != "" {
+				c.Tags[k] = v
+			}
+		}
+	}
+
+	return true
+}
+
 // process responses, writing files when necessary
 func (s *Server) responseHandler() {
+	defer close(s.handlerDone)
+
 	for cin := range s.responses {
 		log.Debug("responseHandler: %v", cin.UUID)
 
@@ -1169,37 +1413,49 @@ func (s *Server) responseHandler() {
 		// ingest responses from this client
 		for _, v := range cin.Responses {
 			log.Debug("got response %v : %v", cin.UUID, v.ID)
+			s.writeResponse(cin.UUID, v)
+			// count the response only once its files can be read, since cc
+			// users poll the count and then read the files
 			s.commandCheckIn(v.ID, cin.UUID)
+		}
+	}
+}
 
-			path := filepath.Join(s.responsePath(&v.ID), cin.UUID)
+// writeResponse records a client's response to a command in the response
+// folder. Errors are logged: the client did respond, so it is still counted.
+func (s *Server) writeResponse(uuid string, v *Response) {
+	path := filepath.Join(s.responsePath(&v.ID), uuid)
 
-			if err := os.MkdirAll(path, os.FileMode(0770)); err != nil {
-				log.Error("could not record response %v for %v: %v", v.ID, cin.UUID, err)
-				continue
-			}
+	if err := s.makeResponseDir(); err != nil {
+		log.Error("could not record response %v for %v: %v", v.ID, uuid, err)
+		return
+	}
 
-			// generate exitcode file
-			if v.RecordExitCode {
-				err := ioutil.WriteFile(filepath.Join(path, "exitcode"), []byte(strconv.Itoa(v.ExitCode)), os.FileMode(0660))
-				if err != nil {
-					log.Error("could not record exit code %v for %v: %v", v.ID, cin.UUID, err)
-				}
-			}
+	if err := os.MkdirAll(path, os.FileMode(0770)); err != nil {
+		log.Error("could not record response %v for %v: %v", v.ID, uuid, err)
+		return
+	}
 
-			// generate stdout and stderr if they exist
-			if v.Stdout != "" {
-				err := ioutil.WriteFile(filepath.Join(path, "stdout"), []byte(v.Stdout), os.FileMode(0660))
-				if err != nil {
-					log.Error("could not record stdout %v for %v: %v", v.ID, cin.UUID, err)
-				}
-			}
+	// generate exitcode file
+	if v.RecordExitCode {
+		err := ioutil.WriteFile(filepath.Join(path, "exitcode"), []byte(strconv.Itoa(v.ExitCode)), os.FileMode(0660))
+		if err != nil {
+			log.Error("could not record exit code %v for %v: %v", v.ID, uuid, err)
+		}
+	}
 
-			if v.Stderr != "" {
-				err := ioutil.WriteFile(filepath.Join(path, "stderr"), []byte(v.Stderr), os.FileMode(0660))
-				if err != nil {
-					log.Error("could not record stderr %v for %v: %v", v.ID, cin.UUID, err)
-				}
-			}
+	// generate stdout and stderr if they exist
+	if v.Stdout != "" {
+		err := ioutil.WriteFile(filepath.Join(path, "stdout"), []byte(v.Stdout), os.FileMode(0660))
+		if err != nil {
+			log.Error("could not record stdout %v for %v: %v", v.ID, uuid, err)
+		}
+	}
+
+	if v.Stderr != "" {
+		err := ioutil.WriteFile(filepath.Join(path, "stderr"), []byte(v.Stderr), os.FileMode(0660))
+		if err != nil {
+			log.Error("could not record stderr %v for %v: %v", v.ID, uuid, err)
 		}
 	}
 }
@@ -1237,7 +1493,7 @@ func (s *Server) updateClient(cin *Client) {
 	}
 }
 
-// mark which commands have been responsed to by which client
+// mark which commands have been responded to by which client
 func (s *Server) commandCheckIn(id int, uuid string) {
 	log.Debug("commandCheckIn %v %v", id, uuid)
 
@@ -1253,18 +1509,21 @@ func (s *Server) commandCheckIn(id int, uuid string) {
 
 // clientReaper periodically flushes old entries from the client list
 func (s *Server) clientReaper() {
+	ticker := time.NewTicker(s.reaperRate)
+	defer ticker.Stop()
+
 	for {
-		if s.destroyed() {
+		select {
+		case <-s.stopReaper:
 			log.Debug("reaping client reaper")
 			return
+		case <-ticker.C:
 		}
-
-		time.Sleep(time.Duration(REAPER_RATE) * time.Second)
 
 		s.clientLock.Lock()
 		for k, v := range s.clients {
 			// checked in more recently than expiration time
-			active := time.Now().Sub(v.checkin) < CLIENT_EXPIRED*time.Second
+			active := time.Now().Sub(v.checkin) < s.clientExpiry
 
 			if !active {
 				log.Debug("client %v expired", k)

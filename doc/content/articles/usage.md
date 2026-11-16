@@ -308,6 +308,10 @@ JSON encoded commands and responses using the following schema:
     "Error": {
         "type": "string",
         "description": "Error, if any"
+    },
+    "Data": {
+        "type": "any",
+        "description": "structured data, if any, set by some commands such as vm info, host, and cc"
     }
     }
 }

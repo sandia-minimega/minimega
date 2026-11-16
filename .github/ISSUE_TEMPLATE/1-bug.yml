@@ -61,5 +61,8 @@ body:
       options:
         - label: "I have included no proprietary/sensitive information in my issue."
           required: true
-        - label: "I have searched the existing issues and believe this is not a duplicate of an existing bug report. If this bug is not the same as another bug, but closely related, please link to the related issue(s). If it's a duplicate, add your information to an existing issue instead of creating a new one."
+        - label: >-
+            I have searched the existing issues and believe this is not a duplicate of an existing bug report.
+            If this bug is not the same as another bug, but closely related, please link to the related issue(s).
+            If it's a duplicate, add your information to an existing issue instead of creating a new one.
           required: true

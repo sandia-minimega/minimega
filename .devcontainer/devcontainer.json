@@ -4,9 +4,6 @@
     "dockerfile": "Dockerfile",
     "context": ".."
   },
-  "containerEnv": {
-    "GOFLAGS": "-mod=vendor"
-  },
   "customizations": {
     "vscode": {
       "extensions": [

@@ -111,6 +111,61 @@ Client information is stored by UUID in minimega. When a client responds to a
 command, the response is logged by minimega in a subdirectory named after the
 UUID for that client. We'll discuss responses later.
 
+### Automatic updates
+
+Miniccc can update itself when it connects to minimega. Enable this per
+namespace with `cc auto-update true`. minimega then serves a miniccc binary from
+its files directory when that binary differs from the client binary.
+Disable it with `cc auto-update false`. Run `cc auto-update` to show the
+current setting.
+
+The update occurs only for a client that has the `auto-update` capability. The
+`capabilities` column of `cc clients` shows the capabilities of each client. A
+client has this capability only when it can create a file in the folder that
+contains its binary. Older miniccc binaries do not have this capability, and you
+must update them manually. For each of these clients that runs a different
+revision, minimega logs a warning.
+
+To keep a fixed miniccc version in a VM, mount the folder that contains the
+miniccc binary as read-only. The client then does not have the `auto-update`
+capability.
+
+For each client, minimega looks for these file names in this order:
+
+1. `miniccc-<os>-<arch>`, for example `miniccc-linux-arm64`. On Windows, add
+   the `.exe` extension, for example `miniccc-windows-amd64.exe`.
+2. `miniccc`, or `miniccc.exe` for a Windows client. minimega uses this name
+   only when the client architecture is the same as the host architecture.
+
+For each name, minimega looks in the namespace subdirectory of the files
+directory first, and then in the files directory. When minimega does not find
+a binary for a client, it logs a warning and does not update the client.
+
+When you run `cc auto-update true`, each host in the namespace gets the miniccc
+binaries over the mesh, as `cc send` gets files. Put the binaries in the files
+directory of one host before you run the command. If no host has a miniccc
+binary, the command fails and the setting does not change.
+
+A host keeps its existing copy of a binary when no `-headnode` is set. To
+change the binaries, first remove the old copies from the files directory on
+the other hosts. Then run `cc auto-update true` again.
+
+When you add hosts with `ns add-hosts`, the new hosts also get the setting.
+This occurs only when you run `ns add-hosts` on the node that ran
+`cc auto-update`, and only until that node restarts.
+
+minimega holds commands for a client during its update. It sends the commands
+when the client connects again. If the client does not connect again in two
+minutes, minimega logs a warning and sends the commands.
+
+A miniccc Windows service exits after it installs the update. The service
+recovery action that `miniccc.exe -install` sets then starts the new binary.
+
+**WARNING:** The update kills the background processes that miniccc started
+with `cc background`. Both miniccc and minimega log a warning when this occurs.
+Enable auto-update when you do not need background commands, or start them
+again after the update.
+
 <a id="TOC_4."></a>
 
 ## Executing Commands
@@ -169,6 +224,50 @@ Processes started in the background can later be listed and killed using the
 ```
 
 [Download this example](cc/process.mm){ download="process.mm" }
+
+<a id="TOC_4.3."></a>
+
+### User sessions
+
+Commands run as the user running miniccc. On Windows, miniccc normally runs as
+a service in a session that is isolated from the desktop, so a command cannot
+show a window to the logged-in user, change the display, or use that user's
+profile.
+
+To run a command in the logged-in user's desktop session instead, add a
+`session` option before the command:
+
+```minimega
+cc exec session=user whoami
+cc background session=user charmap.exe
+cc background session=elevated regedit.exe
+```
+
+On Windows, `session=user` runs the command as the logged-in user, with that user's
+environment and profile. `session=elevated` does the same with the user's
+administrator rights, which only differs from `session=user` for an
+administrator logged in with User Account Control enabled. The program is found
+using the user's `PATH` and runs in miniccc's working directory.
+
+miniccc tries to identify the logged-in user on the console, or otherwise
+picks the lowest numbered active session (e.g. a remote desktop connection).
+The command fails if:
+
+- no user is logged in
+- `session=elevated` is used and the user is not an administrator
+- miniccc is not running as the LocalSystem service
+
+On Linux, the session option is ignored and commands run as miniccc's own user.
+
+Applications installed from the Microsoft Store only start from a process
+that is already running in the user's session. Launch them through a shell:
+
+```minimega
+cc background session=user cmd /c start notepad
+```
+
+**NOTE:** A miniccc client that predates this option ignores it and runs the
+command as usual.
 
 <a id="TOC_5."></a>
 
@@ -395,6 +494,15 @@ from the minimega host:
 
 ```minimega
 cc rtunnel 4444 myserver 80
+```
+
+To show the reverse tunnels that are open on each client, use
+`cc rtunnel list`. To show only the reverse tunnels on one VM, give its name or
+UUID:
+
+```minimega
+cc rtunnel list
+cc rtunnel list myvm
 ```
 
 <a id="TOC_10."></a>

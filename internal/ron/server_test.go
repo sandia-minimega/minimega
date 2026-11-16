@@ -6,8 +6,16 @@ package ron
 
 import (
 	"encoding/gob"
+	"io"
 	"net"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
+	"time"
+
+	"go.uber.org/goleak"
 )
 
 func TestBindClientUUIDUsesSerialIdentity(t *testing.T) {
@@ -97,5 +105,124 @@ func TestSendCommandsTracksIssuedCommands(t *testing.T) {
 
 	if got := s.GetCommand(1).Issued; got != 2 {
 		t.Fatalf("issued after reconnect = %d, want 2", got)
+	}
+}
+
+func TestDestroyStopsServerGoroutines(t *testing.T) {
+	ignore := goleak.IgnoreCurrent()
+
+	s := newTestServer(t, t.TempDir(), "ns")
+	// let clientReaper reach its wait, so that Destroy must interrupt it
+	time.Sleep(10 * time.Millisecond)
+	s.Destroy()
+
+	goleak.VerifyNone(t, ignore)
+}
+
+func TestDestroyReapsSilentTCPClient(t *testing.T) {
+	s, err := newServer(t.TempDir(), "ns", nil, 10*time.Millisecond, 50*time.Millisecond)
+	if err != nil {
+		t.Fatalf("newServer: %v", err)
+	}
+	s.UseVMs = false
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	port := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+
+	if err := s.Listen(port); err != nil {
+		t.Fatalf("Listen(%d): %v", port, err)
+	}
+
+	conn, err := net.Dial("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.Close() })
+
+	if _, err := io.WriteString(conn, "RON"); err != nil {
+		t.Fatal(err)
+	}
+	var magic [3]byte
+	if _, err := io.ReadFull(conn, magic[:]); err != nil || string(magic[:]) != "RON" {
+		t.Fatalf("read magic bytes = %q, %v", magic, err)
+	}
+
+	m := &Message{
+		Type:    MESSAGE_CLIENT,
+		UUID:    "c6a2a0f4-5f0e-4b8e-9d5c-2f0b1c9e7a31",
+		Client:  &Client{UUID: "c6a2a0f4-5f0e-4b8e-9d5c-2f0b1c9e7a31"},
+		Version: "v1",
+	}
+	if err := gob.NewEncoder(conn).Encode(m); err != nil {
+		t.Fatal(err)
+	}
+
+	for deadline := time.Now().Add(5 * time.Second); s.Clients() != 1; {
+		if time.Now().After(deadline) {
+			t.Fatalf("Clients() = %d, want 1", s.Clients())
+		}
+		time.Sleep(time.Millisecond)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.Destroy()
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(15 * time.Second):
+		t.Fatal("Destroy did not return while a silent TCP client was connected")
+	}
+}
+
+// A client that sees a command's response count go up must be able to read
+// that response from disk: cc users poll "cc commands" and then read the
+// response files. A large stdout widens the window between the two.
+func TestResponseCountedOnlyAfterFilesWritten(t *testing.T) {
+	s := &Server{
+		path:        t.TempDir(),
+		commands:    map[int]*Command{1: {ID: 1}},
+		clients:     map[string]*client{},
+		responses:   make(chan *Client, 1),
+		handlerDone: make(chan struct{}),
+	}
+	go s.responseHandler()
+	defer func() {
+		close(s.responses)
+		<-s.handlerDone
+	}()
+
+	stdout := strings.Repeat("x", 64<<20)
+	s.responses <- &Client{
+		UUID:      "client",
+		Responses: []*Response{{ID: 1, Stdout: stdout, Stderr: "oops", ExitCode: 3, RecordExitCode: true}},
+	}
+
+	// spin rather than sleep so the check runs as soon as the count moves
+	deadline := time.Now().Add(10 * time.Second)
+	for len(s.GetCommand(1).CheckedIn) == 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("response was never counted")
+		}
+	}
+
+	dir := filepath.Join(s.responsePath(nil), "1", "client")
+	code, err := os.ReadFile(filepath.Join(dir, "exitcode"))
+	if err != nil || string(code) != "3" {
+		t.Errorf("exitcode after check-in = %q, %v; want \"3\"", code, err)
+	}
+	out, err := os.ReadFile(filepath.Join(dir, "stdout"))
+	if err != nil || len(out) != len(stdout) {
+		t.Errorf("stdout after check-in has %d bytes, %v; want %d", len(out), err, len(stdout))
+	}
+	errOut, err := os.ReadFile(filepath.Join(dir, "stderr"))
+	if err != nil || string(errOut) != "oops" {
+		t.Errorf("stderr after check-in = %q, %v; want \"oops\"", errOut, err)
 	}
 }

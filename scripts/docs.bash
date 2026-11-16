@@ -16,8 +16,7 @@ esac
 
 "$ROOT_DIR/scripts/version.bash"
 
-GOBIN="$ROOT_DIR/bin" GOFLAGS="${GOFLAGS:--mod=vendor}" \
-    go install ./cmd/apigen ./cmd/minimega ./cmd/minirouter ./cmd/pyapigen
+GOBIN="$ROOT_DIR/bin" go install ./cmd/apigen ./cmd/minimega ./cmd/minirouter ./cmd/pyapigen
 
 "$ROOT_DIR/scripts/doc.bash"
 python3 "$ROOT_DIR/scripts/check-docs.py" "$ROOT_DIR/doc/content"

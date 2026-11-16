@@ -145,6 +145,8 @@ func resetClient() {
 		log.Fatal("unable to connect: %v", err)
 	}
 
+	refreshUpdateInfo()
+
 	done = make(chan struct{})
 
 	go mux(done)

@@ -27,7 +27,7 @@ var (
 	f_httpGzip      = flag.Bool("httpgzip", false, "gzip image served in http/https pages")
 	f_irc           = flag.Bool("irc", false, "enable irc service")
 	f_ircport       = flag.String("ircport", "6667", "port to use for IRC client or server")
-	f_channels      = flag.String("channels", "#general,#random", "overwrite default IRC channels to join, seperated by commas")
+	f_channels      = flag.String("channels", "#general,#random", "overwrite default IRC channels to join, separated by commas")
 	f_messages      = flag.String("messages", "", "path to file containing IRC client messages to use")
 	f_markov        = flag.Bool("markov", true, "use markov chains")
 	f_httpCookies   = flag.Bool("httpcookies", false, "enable cookie jar in http/https clients")
@@ -63,7 +63,7 @@ func usage() {
 	flag.PrintDefaults()
 	fmt.Fprintf(os.Stderr, `
   targets may include a hostname, ip address, subnet (for example 10.0.0.0/24) or
-  comma seperated list of hosts/ip addresses (for example
+  comma separated list of hosts/ip addresses (for example
   10.0.0.1,10.0.0.5,google.com). If a subnet or list is specified, protonuke will
   attempt to connect to each host simultaneously, so use with caution.
 `)

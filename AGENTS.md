@@ -4,8 +4,7 @@
 
 minimega is a Go platform for managing KVM virtual machines, Android emulators,
 Linux containers, networks, and distributed experiments. The root module is
-`github.com/sandia-minimega/minimega/v2`, requires Go 1.24 or newer, and uses
-vendored dependencies through `GOFLAGS=-mod=vendor`.
+`github.com/sandia-minimega/minimega/v2` and requires Go 1.24 or newer.
 
 Read the guide that matches the task instead of rediscovering repository
 behavior:
@@ -19,7 +18,7 @@ behavior:
   testing on macOS or Windows.
 - Read the relevant article in
   [`doc/content/articles/developer/`](doc/content/articles/developer/) before
-  changing locking, namespaces, naming, status updates, or vendored dependencies.
+  changing locking, namespaces, naming, status updates, or dependencies.
 - Read [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md) before opening or
   updating a pull request.
 
@@ -54,8 +53,8 @@ behavior change makes it stale.
   [`packaging/`](packaging/) contain container, service, Debian, and RPM
   configuration.
 - [`packages/`](packages/) contains maintained local module forks;
-  [`vendor/`](vendor/) contains dependency copies; [`web/`](web/) includes
-  bundled third-party projects.
+  [`web/`](web/) bundles Bootstrap, Font Awesome, Glyphicons, jQuery,
+  DataTables, D3, grapher, mxGraph (`web/grapheditor/`), noVNC and xterm.js.
 - [`lib/`](lib/) contains Python package metadata; `lib/minimega.py` is
   generated.
 
@@ -81,9 +80,9 @@ go version
 During iteration, run the narrowest relevant test:
 
 ```bash
-GOFLAGS=-mod=vendor go test ./pkg/minicli
-GOFLAGS=-mod=vendor go test ./cmd/minimega -run '^TestName$'
-GOFLAGS=-mod=vendor go test -race ./cmd/minimega -run '^TestName$'
+go test ./pkg/minicli
+go test ./cmd/minimega -run '^TestName$'
+go test -race ./cmd/minimega -run '^TestName$'
 ```
 
 Use `-race` for concurrency, namespace, meshage, and VM lifecycle changes.
@@ -94,6 +93,14 @@ Before submitting a Go change, run:
 ./scripts/test.bash
 git diff --check
 ```
+
+`./scripts/test.bash` writes a combined cover profile to `coverage.out` (set
+`COVERPROFILE` to change the path). View it with
+`go tool cover -html=coverage.out` or summarize it per package with
+`./scripts/coverage.bash coverage.out`. Set `JUNITFILE` to also write a JUnit
+report through `gotestsum`. The Test workflow sets it, annotates failing tests,
+adds the test and coverage summaries to its job summary, and uploads the JUnit
+report, profile, and HTML coverage report as the `test-results` artifact.
 
 Run `./scripts/all.bash` when the change affects full builds or generated
 documentation. The scripts assume GNU/Linux and regenerate ignored binaries,
@@ -115,6 +122,27 @@ An expectation mismatch prints `got != want` but does not produce a failing exit
 status. Automation must inspect the output or explicitly compare `.got` and
 `.want`. Use `.filter`, `.columns`, and `.annotate false` to remove unstable
 fields, and never accept `.got` without reviewing it.
+
+### Live integration tests
+
+[`tests/live/`](tests/live/) boots KVM topologies from a minimega Docker image
+and drives them over the command socket; CI runs it after the Docker workflow
+publishes an image. It needs root, Docker, `/dev/kvm`, and the `openvswitch`
+module. Each test group is a sub-folder (a `topology.mm` plus its `//go:build
+live` Go tests); `tests/live/harness/` is the shared helper package, and
+`tests/live/core/` is the 22-VM group; the guest image is built by the
+image's own `vmbetter` from `tests/live/image/live.conf`. See
+[`tests/live/README.md`](tests/live/README.md).
+
+```bash
+sudo LIVE_PULL=0 tests/live/run.sh minimega:dev
+go vet -tags live ./tests/live/...
+```
+
+Keep each group's `topology.mm` and `topology_test.go` in sync (for example
+`tests/live/core/topology.mm` and `tests/live/core/topology_test.go`), and
+extend the live tests when a change affects VM lifecycle, networking,
+minirouter, or miniccc behavior.
 
 ## Change conventions
 
@@ -143,9 +171,10 @@ fields, and never accept `.got` without reviewing it.
 - Files under [`doc/content/releases/`](doc/content/releases/) and
   [`doc/content/presentations/`](doc/content/presentations/) are legacy
   documentation; do not modify or update them.
-- Do not run `go mod tidy`, regenerate `vendor/`, or change dependencies unless
-  dependency maintenance is the task. Keep changed local forks under `packages/`
-  aligned with their `vendor/` copies and preserve license notices.
+- Do not run `go mod tidy` or change dependencies unless dependency maintenance
+  is the task. Preserve license notices in `LICENSES/` and `packages/`.
+  `scripts/licenses.bash` generates `LICENSES/go/` from the Go build; update
+  the other `LICENSES/` files by hand when bundled non-module code changes.
 - Surface invalid configuration and operational errors through existing response
   and logging patterns; do not add silent fallbacks.
 - Never add credentials, keys, proprietary data, VM images, packet captures, or

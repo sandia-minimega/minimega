@@ -184,7 +184,8 @@ mesh status                        # inspect cluster connectivity
 vm info                            # inspect VMs
 vlans                              # inspect allocated VLANs
 file list                          # inspect iomeshage files
-cc clients                         # inspect miniccc clients
+cc clients                         # inspect miniccc clients and capabilities
+cc auto-update [true,false]        # show or set miniccc auto-update per namespace
 capture                            # inspect active captures
 ```
 
@@ -214,6 +215,15 @@ Consult command help before mutating state; subcommand requirements evolve.
   captures, VLAN aliases, and taps.
 - **Most functional operations alter the host.** Use an isolated Linux system
   for privileged tests involving KVM, Open vSwitch, taps, mounts, or cgroups.
+- **`cc auto-update` updates only capable clients.** A client gets an update
+  only when `cc clients` shows `auto-update` in its `capabilities` column and
+  its binary hash differs from the staged binary. Older miniccc binaries need a
+  manual update. minimega looks for `miniccc-<os>-<arch>` (`.exe` on Windows),
+  then for `miniccc` or `miniccc.exe` only for the host architecture. Each host
+  gets these files over the mesh when you run `cc auto-update true`. minimega
+  holds commands for an updating client for up to two minutes. The update
+  kills the `cc background` processes of the client. A read-only folder for the
+  miniccc binary keeps a fixed version.
 - **Do not parse default tables by column position.** Select columns explicitly
   because command output is also consumed by phēnix, FIREWHEEL, and scripts.
 

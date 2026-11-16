@@ -321,7 +321,7 @@ func (l *patternLexer) lexComment() (stateFn, error) {
 		case `"`, `'`:
 			return nil, errors.New("single and double quotes are not allowed")
 		case l.terminal:
-			// Found terminal toke, prepare to emit item
+			// Found terminal token, prepare to emit item
 			l.newItem.Text += content
 
 			if list, err := l.checkList(); err != nil {

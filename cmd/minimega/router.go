@@ -481,7 +481,7 @@ func (r *Router) writeConfig(w io.Writer) error {
 	return nil
 }
 
-// Commit completes the changes to the Minirouter configuartion file
+// Commit completes the changes to the Minirouter configuration file
 func (r *Router) Commit(ns *Namespace) error {
 	log.Debugln("Commit")
 
@@ -492,6 +492,11 @@ func (r *Router) Commit(ns *Namespace) error {
 	path := *f_iomBase
 	if namespace := r.vm.GetNamespace(); namespace != DefaultNamespace {
 		path = filepath.Join(*f_iomBase, namespace)
+	}
+
+	// the namespace folder may not exist yet
+	if err := os.MkdirAll(path, 0775); err != nil {
+		return err
 	}
 
 	f, err := os.Create(filepath.Join(path, filename))
@@ -658,7 +663,7 @@ func routerIsValidIP(i string) bool {
 	return true
 }
 
-// Checks if the IP Currenlty Exists
+// Checks if the IP Currently Exists
 func (r *Router) routerIPExistance(n int, i string, loopback bool) bool {
 	if loopback {
 		for _, v := range r.Loopbacks {
@@ -722,7 +727,7 @@ func (r *Router) DHCPAddRouter(addr, rtr string) error {
 	return nil
 }
 
-// Adds DNS server infromation to the router for DHCP
+// Adds DNS server information to the router for DHCP
 func (r *Router) DHCPAddDNS(addr, dns string) error {
 	d := r.dhcpFindOrCreate(addr)
 

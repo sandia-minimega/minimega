@@ -8,19 +8,34 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"reflect"
 	"sync"
 	"testing"
+	"time"
 
 	. "github.com/sandia-minimega/minimega/v2/internal/minitunnel"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
+	"go.uber.org/goleak"
 )
 
 func init() {
 	log.AddLogger("stderr", os.Stderr, log.DEBUG, true)
 }
 
+// pipe returns both ends of a transport and closes them when the test ends,
+// which stops the mux of each tunnel.
+func pipe(t *testing.T) (net.Conn, net.Conn) {
+	g, h := net.Pipe()
+	t.Cleanup(func() {
+		g.Close()
+		h.Close()
+	})
+
+	return g, h
+}
+
 func goListenAndServe(g net.Conn) chan error {
-	err := make(chan error)
+	err := make(chan error, 1)
 
 	go func() {
 		err <- ListenAndServe(g)
@@ -33,7 +48,7 @@ type DummyServer struct {
 	net.Listener // embed
 	sync.Mutex   // embed
 
-	err error // any error that occured while being a dummy
+	err error // any error that occurred while being a dummy
 }
 
 func NewDummyServer(typ, laddr string) (*DummyServer, error) {
@@ -104,7 +119,7 @@ func (d *DummyClient) Receive(expect string) error {
 }
 
 func TestHandshake(t *testing.T) {
-	g, h := net.Pipe()
+	g, h := pipe(t)
 
 	errChan := goListenAndServe(g)
 
@@ -120,7 +135,7 @@ func TestHandshake(t *testing.T) {
 }
 
 func TestTunnel(t *testing.T) {
-	g, h := net.Pipe()
+	g, h := pipe(t)
 
 	errChan := goListenAndServe(g)
 
@@ -166,7 +181,7 @@ func TestTunnel(t *testing.T) {
 }
 
 func TestMultiTunnel(t *testing.T) {
-	g, h := net.Pipe()
+	g, h := pipe(t)
 
 	errChan := goListenAndServe(g)
 
@@ -229,7 +244,7 @@ func TestMultiTunnel(t *testing.T) {
 }
 
 func TestReverse(t *testing.T) {
-	g, h := net.Pipe()
+	g, h := pipe(t)
 
 	errChan := goListenAndServe(g)
 
@@ -263,6 +278,7 @@ func TestReverse(t *testing.T) {
 		t.Fatalf("%v", err)
 	}
 
+	s.Lock()
 	if s.err != nil {
 		t.Fatalf("%v", s.err)
 	}
@@ -274,7 +290,7 @@ func TestReverse(t *testing.T) {
 }
 
 func TestFowardInvalid(t *testing.T) {
-	g, h := net.Pipe()
+	g, h := pipe(t)
 
 	errChan := goListenAndServe(g)
 
@@ -295,7 +311,7 @@ func TestFowardInvalid(t *testing.T) {
 }
 
 func TestReverseInvalid(t *testing.T) {
-	g, h := net.Pipe()
+	g, h := pipe(t)
 
 	errChan := goListenAndServe(g)
 
@@ -312,5 +328,78 @@ func TestReverseInvalid(t *testing.T) {
 	errListen := <-errChan
 	if errListen != nil {
 		t.Fatalf("ListenAndServe: %v", errListen)
+	}
+}
+
+func TestClosedTransportStopsTunnel(t *testing.T) {
+	ignore := goleak.IgnoreCurrent()
+
+	g, h := net.Pipe()
+	errChan := goListenAndServe(g)
+
+	if _, err := Dial(h); err != nil {
+		t.Fatalf("Dial: %v", err)
+	}
+	if err := <-errChan; err != nil {
+		t.Fatalf("ListenAndServe: %v", err)
+	}
+
+	h.Close()
+
+	goleak.VerifyNone(t, ignore)
+}
+
+func TestListReverses(t *testing.T) {
+	g, h := net.Pipe()
+	defer g.Close()
+	defer h.Close()
+
+	errChan := goListenAndServe(g)
+
+	tun, errDial := Dial(h)
+	if errDial != nil {
+		t.Fatalf("Dial: %v", errDial)
+	}
+
+	if errListen := <-errChan; errListen != nil {
+		t.Fatalf("ListenAndServe: %v", errListen)
+	}
+
+	if got := tun.ListReverses(); len(got) != 0 {
+		t.Fatalf("ListReverses before Reverse = %v, want none", got)
+	}
+
+	ln, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := ln.Addr().(*net.TCPAddr).Port
+	ln.Close()
+
+	if err := tun.Reverse(src, "localhost", 80); err != nil {
+		t.Fatalf("Reverse: %v", err)
+	}
+
+	// the remote end refuses both of these, so neither is recorded
+	if err := tun.Reverse(src, "localhost", 81); err == nil {
+		t.Fatal("nil error on Reverse to a port in use")
+	}
+	if err := tun.Reverse(-1, "localhost", 82); err == nil {
+		t.Fatal("nil error on Reverse to an invalid port")
+	}
+
+	want := []ReverseTunnel{{Source: src, Host: "localhost", Dest: 80}}
+	if got := tun.ListReverses(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("ListReverses = %v, want %v", got, want)
+	}
+
+	h.Close()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for len(tun.ListReverses()) != 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("ListReverses after close = %v, want none", tun.ListReverses())
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

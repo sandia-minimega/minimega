@@ -16,6 +16,9 @@ COPY . .
 
 RUN ./scripts/all.bash
 
+# Resolve the LICENSES symlinks, which point into web/, as the packages do.
+RUN mkdir -p /licenses && cp -rL LICENSE LICENSES /licenses/
+
 
 # -- documentation builder --
 FROM ${PYTHON_IMAGE} AS docbuilder
@@ -44,13 +47,16 @@ FROM ${BASE_IMAGE}
 ENV DEBIAN_FRONTEND="noninteractive" \
     PATH="$PATH:/opt/minimega/bin"
 
+# libxkbfile1: the Android emulator (vm launch android, with the Android SDK
+# mounted into the container) links against it.
 RUN apt-get update \
   && apt-get install -y \
     bash-completion dnsmasq iproute2 isc-dhcp-client \
     less libpcap-dev ntfs-3g openssh-client \
     openvswitch-switch qemu-kvm qemu-utils \
     iptables ffmpeg \
-  && apt autoremove -y \
+    libxkbfile1 \
+  && apt-get autoremove -y \
   && apt-get clean -y \
   && rm -rf /var/lib/apt/lists/* \
   && rm -rf /var/cache/apt/archives/*
@@ -60,6 +66,7 @@ RUN apt-get update \
 # needed in a deployment, the disk utilization difference is minimal,
 # and ensures any future tools get included in the Docker image.
 COPY --from=gobuilder /minimega/bin/ /opt/minimega/bin/
+COPY --from=gobuilder /licenses/ /usr/share/doc/minimega/
 
 # Pre-generate the bash tab-completion script so it's available out of the
 # box for interactive shells inside the container (e.g. `docker exec -it

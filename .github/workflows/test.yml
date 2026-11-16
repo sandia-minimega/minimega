@@ -28,4 +28,39 @@ jobs:
           go-version-file: go.mod
 
       - name: Run tests
+        env:
+          JUNITFILE: junit.xml
         run: ./scripts/test.bash
+
+      # annotate_only needs no checks: write, so it also works for fork pull requests.
+      - name: Report test results
+        if: ${{ !cancelled() && hashFiles('junit.xml') != '' }}
+        uses: mikepenz/action-junit-report@a16be3a69023e9bd7e748ede768b3282ea7b30ce # v6.7.1
+        with:
+          report_paths: junit.xml
+          annotate_only: true
+          detailed_summary: true
+          include_skipped: false
+          failed_summary_logs: true
+          require_tests: true
+          fail_on_parse_error: true
+
+      - name: Report coverage
+        if: ${{ !cancelled() && hashFiles('coverage.out') != '' }}
+        run: |
+          {
+            echo "## Unit test coverage"
+            echo
+            ./scripts/coverage.bash coverage.out
+          } >> "$GITHUB_STEP_SUMMARY"
+          go tool cover -html=coverage.out -o coverage.html
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-results
+          path: |
+            junit.xml
+            coverage.out
+            coverage.html

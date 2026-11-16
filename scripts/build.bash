@@ -8,7 +8,7 @@ ROOT_DIR="$( cd ${SCRIPT_DIR}/.. && pwd )"
 # set the version from the repo
 "$SCRIPT_DIR/version.bash" || exit $?
 
-DIRECTORY_ARRAY=("$ROOT_DIR/cmd $ROOT_DIR/cmd/plumbing")
+DIRECTORY_ARRAY=("$ROOT_DIR/cmd" "$ROOT_DIR/cmd/plumbing")
 
 # build packages with race detection
 #echo "BUILD RACE PACKAGES (linux)"
@@ -28,9 +28,11 @@ DIRECTORY_ARRAY=("$ROOT_DIR/cmd $ROOT_DIR/cmd/plumbing")
 
 # build packages
 echo "BUILD PACKAGES (linux)"
-for i in ${DIRECTORY_ARRAY[@]}; do
-    for j in `ls $i | grep -v plumbing`; do
-        echo $j
+for i in "${DIRECTORY_ARRAY[@]}"; do
+    for path in "$i"/*/; do
+        j=$(basename "$path")
+        [[ $j == *plumbing* ]] && continue
+        echo "$j"
         go install -ldflags="-s -w" $i/$j
         if [[ $? != 0 ]]; then
             exit 1
@@ -40,9 +42,11 @@ done
 
 # build windows packages
 echo "BUILD PACKAGES (windows)"
-for i in ${DIRECTORY_ARRAY[@]}; do
-    for j in `ls $i | grep -E "protonuke|miniccc"`; do
-        echo $j
+for i in "${DIRECTORY_ARRAY[@]}"; do
+    for path in "$i"/*/; do
+        j=$(basename "$path")
+        [[ $j =~ protonuke|miniccc ]] || continue
+        echo "$j"
         GOOS=windows go build -ldflags="-s -w" -o $ROOT_DIR/bin/$j.exe $i/$j
         if [[ $? != 0 ]]; then
             exit 1
@@ -50,6 +54,8 @@ for i in ${DIRECTORY_ARRAY[@]}; do
     done
 done
 echo
+
+"$SCRIPT_DIR/licenses.bash" || exit $?
 
 # Build Python bindings
 $ROOT_DIR/bin/pyapigen -out $ROOT_DIR/lib/minimega.py $ROOT_DIR/bin/minimega
@@ -63,9 +69,9 @@ fi
 if [ ! -z "$py_path" ]; then
     echo "BUILD PYTHON DIST"
     $py_path -m pip install build
-    pushd $ROOT_DIR/lib
+    pushd "$ROOT_DIR/lib" || exit 1
     $py_path -m build
-    popd
+    popd || exit 1
 fi
 
 unset GOOS

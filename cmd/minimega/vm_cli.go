@@ -413,7 +413,7 @@ You can also specify the maximum dimension:
 		HelpShort: "write VM state (e.g., memory) and disk to file",
 		HelpLong: `
 Save runtime state and disk of a VM to files, which can later be booted with 'vm config
-state ...' and 'vm config disk ...', respectively. The state file will likely have a 
+state ...' and 'vm config disk ...', respectively. The state file will likely have a
 dependency with the corresponding disk snapshot image.
 
 State/RAM and disk files are written to the files directory based on the name of the VM

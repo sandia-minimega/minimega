@@ -6,12 +6,14 @@ package main
 
 import (
 	"encoding/base64"
+	"encoding/gob"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -30,6 +32,13 @@ type ccMount struct {
 	Addr string
 	// Path where the filesystem is mounted
 	Path string
+}
+
+func init() {
+	// for serializing Data across the mesh
+	gob.Register([]ron.Command{})
+	gob.Register([]ron.ClientInfo{})
+	gob.Register([]ron.ClientResponse{})
 }
 
 var ccCLIHandlers = []minicli.Handler{
@@ -59,6 +68,19 @@ This will prevent the command from being sent again if the client restarts (for
 example, after a reboot).
 
 	cc exec-once shutdown -r now
+
+Executed commands run as the miniccc client's own user. On Windows this is
+normally a service, which cannot interact with the desktop. To run a command in
+the logged-in user's desktop session instead, specify session.
+"session=user" runs the command as a logged-in user, and "session=elevated"
+tries to run with that user's administrator rights. For example:
+
+	cc exec session=user whoami
+	cc background session=elevated regedit.exe
+
+On Windows, the command fails if no user is logged in or if "session=elevated"
+is selected and the logged-in user does not have privileges. On Linux, the
+session option is ignored and commands run as the miniccc client's own user.
 
 Responses are organized in a structure within <filepath>/miniccc_responses, and
 include subdirectories for each client response named by the client's UUID.
@@ -102,6 +124,21 @@ to a remote port. The local port will be created on the minimega cluster host
 that the tunneling VM is running on. The remote port can be on the same VM or on
 a different VM the tunneling VM has network access to.
 
+"cc rtunnel" creates reverse tunnels. Each connected client that matches the
+current filter listens on the source port and tunnels TCP connections back to
+the minimega cluster host that the client is connected to. That host then
+connects to the destination host and port, which can be any host it has network
+access to. For example, to connect port 4444 on each client to a web server:
+
+	cc rtunnel 4444 myserver 80
+
+"cc rtunnel list" shows the reverse tunnels that are open on each client, or
+only on the given VM. "cc tunnel list" does not show reverse tunnels.
+
+"cc rtunnel" returns an error if no client matches the filter. If a client does
+not open its tunnel, the error gives the UUID of that client. The tunnels on the
+other clients stay open.
+
 "cc test-conn" allows users to test network connectivity from a guest to the
 given IP or domain name and port. The wait timeout should be specified as a Go
 duration string (e.g. 5s, 1m). If "udp" is used, a "base64 udp packet" that will
@@ -119,10 +156,18 @@ If it fails, STDOUT will instead contain the following:
 
 	10.0.0.68:443 | fail
 
+"cc auto-update true" lets miniccc clients replace their binary with a matching
+miniccc binary from the files directory when the two binaries are different.
+When you enable the setting, each host gets the binaries over the mesh. The
+update kills the background processes that the client started. "cc clients"
+shows the capabilities of each client. Clients without the "auto-update"
+capability need a manual update.
+
 For more documentation, see the article "Command and Control API Tutorial".`,
 		Patterns: []string{
 			"cc",
 			"cc <listen,> <port>",
+			"cc <auto-update,> [true,false]",
 			"cc <clients,>",
 			"cc <filter,> [filter]...",
 			"cc <commands,>",
@@ -149,13 +194,14 @@ For more documentation, see the article "Command and Control API Tutorial".`,
 			"cc <tunnel,> <close,> <vm name or uuid> <id>",
 			"cc <tunnel,> <list,> <vm name, uuid, or all>",
 			"cc <rtunnel,> <src port> <host> <dst port>",
+			"cc <rtunnel,> <list,> [vm name, uuid, or all]",
 
 			"cc <delete,> <command,> <id or prefix or all>",
 			"cc <delete,> <response,> <id or prefix or all>",
 
 			"cc <test-conn,> <tcp,udp> <ip or fqdn> <port> wait <timeout> [base64 udp packet]",
 		},
-		Call: wrapBroadcastCLI(cliCC),
+		Call: wrapCCCLI(cliCC),
 	},
 	{ // cc mount
 		HelpShort: "list mounted filesystems",
@@ -194,6 +240,93 @@ See "help cc" for more information.`,
 	},
 }
 
+// wrapCCCLI wraps the cc subcommands with the wrapper that ccCLIWrapper
+// selects for each command. The broadcast wrapper is cliCCBroadcast.
+func wrapCCCLI(fn wrappedCLIFunc) minicli.CLIFunc {
+	broadcast := minicli.CLIFunc(cliCCBroadcast)
+	vmTarget := wrapVMTargetCLI(fn)
+	rtunnel := wrapCCRTunnelCLI(fn)
+
+	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
+		ccCLIWrapper(c, broadcast, vmTarget, rtunnel)(c, respChan)
+	}
+}
+
+// ccCLIWrapper returns rtunnel for "cc rtunnel", vmTarget for "cc rtunnel
+// list" with a VM name or UUID, and broadcast for the other cc subcommands.
+// vmTarget ignores the "vm not found" errors from the hosts that do not run
+// the VM.
+func ccCLIWrapper(c *minicli.Command, broadcast, vmTarget, rtunnel minicli.CLIFunc) minicli.CLIFunc {
+	if !c.BoolArgs["rtunnel"] {
+		return broadcast
+	}
+
+	if !c.BoolArgs["list"] {
+		return rtunnel
+	}
+
+	if v := c.StringArgs["vm"]; v != "" && v != Wildcard {
+		return vmTarget
+	}
+
+	return broadcast
+}
+
+// wrapCCRTunnelCLI broadcasts "cc rtunnel" to all hosts in the namespace like
+// wrapBroadcastCLI, then merges the responses with mergeCCRTunnelResponses.
+func wrapCCRTunnelCLI(fn wrappedCLIFunc) minicli.CLIFunc {
+	localFunc := wrapSimpleCLI(fn)
+
+	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
+		ns := resolveNamespace(c)
+
+		// See note in wrapBroadcastCLI.
+		if c.Source != "" {
+			localFunc(c, respChan)
+			return
+		}
+
+		res := minicli.Responses{}
+
+		for resps := range runCommands(namespaceCommands(ns, c)...) {
+			res = append(res, resps...)
+		}
+
+		respChan <- mergeCCRTunnelResponses(res)
+	}
+}
+
+// mergeCCRTunnelResponses removes the responses from hosts that have no
+// matching client. When every host has no matching client, it keeps the first
+// of those responses so that the command still fails.
+func mergeCCRTunnelResponses(resps minicli.Responses) minicli.Responses {
+	res := minicli.Responses{}
+	var noClients *minicli.Response
+
+	for _, resp := range resps {
+		if isNoCCClients(resp.Error) {
+			if noClients == nil {
+				noClients = resp
+			}
+			continue
+		}
+
+		res = append(res, resp)
+	}
+
+	if len(res) == 0 && noClients != nil {
+		return minicli.Responses{noClients}
+	}
+
+	return res
+}
+
+// isNoCCClients reports whether err is the error text of ron.ErrNoClients.
+// Responses from other hosts carry only the text of the error.
+func isNoCCClients(err string) bool {
+	return strings.HasPrefix(err, ron.ErrNoClients.Error()+" ")
+}
+
 // Functions pointers to the various handlers for the subcommands
 var ccCliSubHandlers = map[string]wrappedCLIFunc{
 	"background":      cliCCBackground,
@@ -210,10 +343,11 @@ var ccCliSubHandlers = map[string]wrappedCLIFunc{
 	"recv":            cliCCFileRecv,
 	"responses":       cliCCResponses,
 	"exitcode":        cliCCExitCode,
-	"rtunnel":         cliCCTunnel,
+	"rtunnel":         cliCCRTunnel,
 	"send":            cliCCFileSend,
 	"tunnel":          cliCCTunnel,
 	"listen":          cliCCListen,
+	"auto-update":     cliCCAutoUpdate,
 	"test-conn":       cliCCTestConn,
 }
 
@@ -236,6 +370,105 @@ func cliCC(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 		[]string{
 			strconv.Itoa(ns.ccServer.Clients()),
 		},
+	}
+
+	return nil
+}
+
+// Values of Namespace.ccAutoUpdate.
+const (
+	ccAutoUpdateUnset int32 = iota
+	ccAutoUpdateTrue
+	ccAutoUpdateFalse
+)
+
+// cliCCBroadcast broadcasts cc commands to the hosts in the namespace. When
+// "cc auto-update" succeeds on all hosts, it records the setting for hosts
+// added later.
+func cliCCBroadcast(c *minicli.Command, respChan chan<- minicli.Responses) {
+	if c.Source != "" || !c.BoolArgs["auto-update"] || !(c.BoolArgs["true"] || c.BoolArgs["false"]) {
+		wrapBroadcastCLI(cliCC)(c, respChan)
+		return
+	}
+
+	out := make(chan minicli.Responses, 1)
+	wrapBroadcastCLI(cliCC)(c, out)
+	res := <-out
+
+	ok := true
+	for _, resp := range res {
+		if resp.Error != "" {
+			ok = false
+		}
+	}
+
+	if ok {
+		setting := ccAutoUpdateFalse
+		if c.BoolArgs["true"] {
+			setting = ccAutoUpdateTrue
+		}
+		resolveNamespace(c).ccAutoUpdate.Store(setting)
+	}
+
+	respChan <- res
+}
+
+func cliCCAutoUpdate(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if c.BoolArgs["true"] || c.BoolArgs["false"] {
+		enable := c.BoolArgs["true"]
+
+		// iom is nil only when the mesh is not running, for example in tests
+		if enable && iom != nil {
+			subpath := ns.Name
+			if ns.Name == DefaultNamespace {
+				subpath = ""
+			}
+
+			get := func(file string) error {
+				_, err := iomHelper(file, c.Source)
+				return err
+			}
+			if err := fetchCCUpdateFiles(subpath, iom.Info, get); err != nil {
+				return err
+			}
+		}
+
+		ns.ccServer.SetAutoUpdate(enable)
+		return nil
+	}
+
+	resp.Response = strconv.FormatBool(ns.ccServer.AutoUpdate())
+	return nil
+}
+
+// fetchCCUpdateFiles uses list to find the miniccc update binaries on the mesh
+// in the files directory and in subpath, and uses get to fetch each one.
+func fetchCCUpdateFiles(subpath string, list func(string) []string, get func(string) error) error {
+	dirs := []string{""}
+	if subpath != "" {
+		dirs = append(dirs, subpath)
+	}
+
+	seen := map[string]bool{}
+
+	for _, dir := range dirs {
+		for _, pattern := range []string{"miniccc", "miniccc.exe", "miniccc-*"} {
+			for _, file := range list(filepath.Join(dir, pattern)) {
+				file = filepath.Clean(file)
+				if seen[file] || filepath.Dir(file) != filepath.Clean(dir) || !ron.IsUpdateFile(filepath.Base(file)) {
+					continue
+				}
+				seen[file] = true
+
+				if err := get(file); err != nil {
+					return fmt.Errorf("unable to get file %s via the mesh: %w", file, err)
+				}
+			}
+		}
+	}
+
+	if len(seen) == 0 {
+		return errors.New("no miniccc binaries found on the mesh")
 	}
 
 	return nil
@@ -265,35 +498,10 @@ func cliCCTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	}
 
 	if c.BoolArgs["list"] {
-		// map VM name --> VM UUID
-		vms := make(map[string]string)
-
-		if v == Wildcard {
-			clients := ns.ccServer.GetClients()
-
-			for _, client := range clients {
-				vm := ns.FindVM(client.UUID)
-				if vm == nil {
-					return vmNotFound(client.UUID)
-				}
-
-				vms[vm.GetName()] = client.UUID
-			}
-		} else {
-			vm := ns.FindVM(v)
-			if vm == nil {
-				return vmNotFound(v)
-			}
-
-			vms[v] = vm.GetUUID()
+		names, vms, err := ccTunnelVMs(ns, v)
+		if err != nil {
+			return err
 		}
-
-		var names []string
-		for name := range vms {
-			names = append(names, name)
-		}
-
-		sort.Strings(names)
 
 		resp.Header = []string{"vm", "id", "src port", "dst", "dst port"}
 		resp.Tabular = [][]string{}
@@ -352,6 +560,100 @@ func cliCCTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	return ns.ccServer.Forward(uuid, src, host, dst)
 }
 
+// ccTunnelVMs returns the sorted names of the VMs that v selects and maps each
+// name to the UUID of that VM. v is a VM name, a UUID, or Wildcard for every
+// connected client.
+func ccTunnelVMs(ns *Namespace, v string) ([]string, map[string]string, error) {
+	// map VM name --> VM UUID
+	vms := make(map[string]string)
+
+	if v == Wildcard {
+		clients := ns.ccServer.GetClients()
+
+		for _, client := range clients {
+			vm := ns.FindVM(client.UUID)
+			if vm == nil {
+				return nil, nil, vmNotFound(client.UUID)
+			}
+
+			vms[vm.GetName()] = client.UUID
+		}
+	} else {
+		vm := ns.FindVM(v)
+		if vm == nil {
+			return nil, nil, vmNotFound(v)
+		}
+
+		vms[v] = vm.GetUUID()
+	}
+
+	var names []string
+	for name := range vms {
+		names = append(names, name)
+	}
+
+	sort.Strings(names)
+
+	return names, vms, nil
+}
+
+// rtunnel
+func cliCCRTunnel(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if c.BoolArgs["list"] {
+		return cliCCRTunnelList(ns, c, resp)
+	}
+
+	src, err := strconv.Atoi(c.StringArgs["src"])
+	if err != nil {
+		return fmt.Errorf("non-integer src: %v : %v", c.StringArgs["src"], err)
+	}
+
+	dst, err := strconv.Atoi(c.StringArgs["dst"])
+	if err != nil {
+		return fmt.Errorf("non-integer dst: %v : %v", c.StringArgs["dst"], err)
+	}
+
+	return ns.ccServer.Reverse(ns.ccFilter, src, c.StringArgs["host"], dst)
+}
+
+// rtunnel list
+func cliCCRTunnelList(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	v := c.StringArgs["vm"]
+	if v == "" {
+		v = Wildcard
+	}
+
+	names, vms, err := ccTunnelVMs(ns, v)
+	if err != nil {
+		return err
+	}
+
+	resp.Header = []string{"vm", "src port", "dst", "dst port"}
+	resp.Tabular = [][]string{}
+
+	for _, name := range names {
+		reverses, err := ns.ccServer.ListReverses(vms[name])
+		if err != nil {
+			return err
+		}
+
+		sort.SliceStable(reverses, func(i, j int) bool {
+			return reverses[i].Source < reverses[j].Source
+		})
+
+		for _, r := range reverses {
+			resp.Tabular = append(resp.Tabular, []string{
+				name,
+				strconv.Itoa(r.Source),
+				r.Host,
+				strconv.Itoa(r.Dest),
+			})
+		}
+	}
+
+	return nil
+}
+
 // responses
 func cliCCResponses(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	s := c.StringArgs["id"]
@@ -359,20 +661,37 @@ func cliCCResponses(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 
 	if s == Wildcard {
 		r, err := ns.ccServer.GetResponses(raw)
-		if err == nil {
-			resp.Response = r
+		if err != nil {
+			return err
 		}
-		return err
+
+		data, err := ns.ccServer.GetClientResponses(nil)
+		if err != nil {
+			return err
+		}
+
+		resp.Response = r
+		resp.Data = data
+		return nil
 	} else if v, err := strconv.Atoi(s); err == nil {
 		r, err := ns.ccServer.GetResponse(v, raw)
-		if err == nil {
-			resp.Response = r
+		if err != nil {
+			return err
 		}
-		return err
+
+		data, err := ns.ccServer.GetClientResponses(&v)
+		if err != nil {
+			return err
+		}
+
+		resp.Response = r
+		resp.Data = data
+		return nil
 	}
 
 	// must be searching for a prefix
 	var match bool
+	data := []ron.ClientResponse{}
 
 	for _, c := range ns.ccServer.GetCommands() {
 		if c.Prefix == s {
@@ -381,7 +700,13 @@ func cliCCResponses(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 				return err
 			}
 
+			d, err := ns.ccServer.GetClientResponses(&c.ID)
+			if err != nil {
+				return err
+			}
+
 			resp.Response += s + "\n"
+			data = append(data, d...)
 
 			match = true
 		}
@@ -390,6 +715,14 @@ func cliCCResponses(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 	if !match {
 		return fmt.Errorf("no such prefix: `%v`", s)
 	}
+
+	sort.Slice(data, func(i, j int) bool {
+		if data[i].ID != data[j].ID {
+			return data[i].ID < data[j].ID
+		}
+		return data[i].UUID < data[j].UUID
+	})
+	resp.Data = data
 
 	return nil
 }
@@ -570,15 +903,12 @@ func cliCCFileRecv(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 
 // background (just exec with background==true)
 func cliCCBackground(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
-
-	cmd := &ron.Command{
-		Background: true,
-		Command:    command,
-		Stdin:      stdin,
-		Stdout:     stdout,
-		Stderr:     stderr,
+	cmd, err := ccCommandPreProcess(c.ListArgs["command"])
+	if err != nil {
+		return err
 	}
+
+	cmd.Background = true
 
 	resp.Data = ns.NewCommand(cmd)
 	return nil
@@ -586,16 +916,13 @@ func cliCCBackground(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 
 // background-once (just exec with background==true)
 func cliCCBackgroundOnce(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
-
-	cmd := &ron.Command{
-		Once:       true,
-		Background: true,
-		Command:    command,
-		Stdin:      stdin,
-		Stdout:     stdout,
-		Stderr:     stderr,
+	cmd, err := ccCommandPreProcess(c.ListArgs["command"])
+	if err != nil {
+		return err
 	}
+
+	cmd.Once = true
+	cmd.Background = true
 
 	resp.Data = ns.NewCommand(cmd)
 	return nil
@@ -633,13 +960,9 @@ func cliCCProcessKillAll(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 
 // exec
 func cliCCExec(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
-
-	cmd := &ron.Command{
-		Command: command,
-		Stdin:   stdin,
-		Stdout:  stdout,
-		Stderr:  stderr,
+	cmd, err := ccCommandPreProcess(c.ListArgs["command"])
+	if err != nil {
+		return err
 	}
 
 	resp.Data = ns.NewCommand(cmd)
@@ -648,15 +971,12 @@ func cliCCExec(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 
 // exec-once
 func cliCCExecOnce(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	stdin, stdout, stderr, command := ccCommandPreProcess(c.ListArgs["command"])
-
-	cmd := &ron.Command{
-		Once:    true,
-		Command: command,
-		Stdin:   stdin,
-		Stdout:  stdout,
-		Stderr:  stderr,
+	cmd, err := ccCommandPreProcess(c.ListArgs["command"])
+	if err != nil {
+		return err
 	}
+
+	cmd.Once = true
 
 	resp.Data = ns.NewCommand(cmd)
 	return nil
@@ -715,30 +1035,40 @@ func cliCCProcess(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	return nil
 }
 
-// parse out key/value pairs from the command list for stdio
-func ccCommandPreProcess(c []string) (stdin, stdout, stderr string, command []string) {
-	// pop key/value pairs (up to three) for stdio plumber redirection
-	for i := 0; i < 3 && i < len(c); i++ {
-		f := strings.Split(c[i], "=")
-		if len(f) == 1 {
-			command = c[i:]
-			return
+// ccCommandPreProcess pops the leading key/value options off of the command
+// list and returns a command with those options set.
+func ccCommandPreProcess(c []string) (*ron.Command, error) {
+	cmd := &ron.Command{}
+
+	for i, v := range c {
+		key, val, ok := strings.Cut(v, "=")
+		if !ok {
+			cmd.Command = c[i:]
+			return cmd, nil
 		}
-		switch f[0] {
+
+		switch key {
 		case "stdin":
-			stdin = f[1]
+			cmd.Stdin = val
 		case "stdout":
-			stdout = f[1]
+			cmd.Stdout = val
 		case "stderr":
-			stderr = f[1]
+			cmd.Stderr = val
+		case "session":
+			session := ron.Session(val)
+			if !slices.Contains(ron.ValidSessions, session) {
+				return nil, fmt.Errorf("invalid session: `%v`", val)
+			}
+
+			cmd.Session = session
 		default:
 			// perhaps some goofy filename with an = in it
-			command = c[i:]
-			return
+			cmd.Command = c[i:]
+			return cmd, nil
 		}
 	}
-	command = c[3:]
-	return
+
+	return nil, errors.New("missing command")
 }
 
 func cliCCLog(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -764,8 +1094,10 @@ func cliCCLog(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 // clients
 func cliCCClients(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	resp.Header = []string{
-		"uuid", "hostname", "arch", "os", "ip", "mac",
+		"uuid", "hostname", "arch", "os", "ip", "mac", "capabilities",
 	}
+
+	resp.Data = ns.ccServer.GetClientInfo()
 
 	for _, c := range ns.ccServer.GetClients() {
 		row := []string{
@@ -775,6 +1107,7 @@ func cliCCClients(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 			c.OS,
 			fmt.Sprintf("%v", c.IPs),
 			fmt.Sprintf("%v", c.MACs),
+			strings.Join(c.Capabilities, ","),
 		}
 
 		resp.Tabular = append(resp.Tabular, row)
@@ -800,8 +1133,11 @@ func cliCCCommand(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	}
 	sort.Ints(ids)
 
+	data := make([]ron.Command, 0, len(ids))
+
 	for _, id := range ids {
 		v := commands[id]
+		data = append(data, *v)
 		row := []string{
 			strconv.Itoa(v.ID),
 			v.Prefix,
@@ -830,6 +1166,8 @@ func cliCCCommand(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 
 		resp.Tabular = append(resp.Tabular, row)
 	}
+
+	resp.Data = data
 
 	return nil
 }

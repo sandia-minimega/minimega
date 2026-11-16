@@ -1,2 +1,4 @@
-export GOBIN="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )/bin"
-export GOFLAGS=-mod=vendor
+# shellcheck shell=bash
+# Source this file; do not run it.
+GOBIN="$( cd "$( dirname "${BASH_SOURCE[0]}" )/.." && pwd )/bin"
+export GOBIN
