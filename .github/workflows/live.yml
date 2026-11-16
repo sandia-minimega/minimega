@@ -4,12 +4,13 @@ name: Live Tests
 # boot a 22-VM KVM topology (tests/live/core/topology.mm), and exercise it over the
 # command socket. See tests/live/README.md.
 #
-# Called by the Docker workflow: on master with the image it just pushed, on
-# pull requests with no image, so this job builds the checked-out code from
-# docker/Dockerfile and tests it in the same job. Run by hand (Actions > Live
-# Tests > Run workflow, or `gh workflow run live.yml --ref <branch>`), it
-# builds the dispatched branch the same way, so it works on a fork without a
-# pull request. Set "image" to test an existing image instead.
+# Called by the Docker workflow: on master with the minimega and miniweb images
+# it just pushed, on pull requests with no images, so this job builds the
+# checked-out code from docker/Dockerfile and tests it in the same job. Run by
+# hand (Actions > Live Tests > Run workflow, or `gh workflow run live.yml --ref
+# <branch>`), it builds the dispatched branch the same way, so it works on a
+# fork without a pull request. Set "image" (and optionally "miniweb-image") to
+# test existing images instead.
 
 on:
   workflow_call:
@@ -19,10 +20,20 @@ on:
         required: false
         type: string
         default: ""
+      miniweb-image:
+        description: miniweb image reference to test with image (empty derives it from image)
+        required: false
+        type: string
+        default: ""
   workflow_dispatch:
     inputs:
       image:
         description: Image to test, e.g. ghcr.io/sandia-minimega/minimega:master (empty builds this branch)
+        required: false
+        default: ""
+        type: string
+      miniweb-image:
+        description: miniweb image to test with image, e.g. ghcr.io/sandia-minimega/miniweb:master (empty derives it from image)
         required: false
         default: ""
         type: string
@@ -39,6 +50,8 @@ jobs:
     env:
       IMAGE: ${{ inputs.image || 'minimega:live' }}
       BUILD: ${{ inputs.image == '' }}
+      # empty lets run.sh derive the miniweb image from the minimega image
+      LIVE_MINIWEB_IMAGE: ${{ inputs.image == '' && 'miniweb:live' || inputs.miniweb-image }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -78,11 +91,23 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile
+          target: minimega
           push: false
           load: true
           tags: ${{ env.IMAGE }}
 
-      - name: Use the local image
+      - name: Build miniweb container image
+        if: env.BUILD == 'true'
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: .
+          file: docker/Dockerfile
+          target: miniweb
+          push: false
+          load: true
+          tags: ${{ env.LIVE_MINIWEB_IMAGE }}
+
+      - name: Use the local images
         if: env.BUILD == 'true'
         run: echo "LIVE_PULL=0" >> "$GITHUB_ENV"
 
@@ -99,7 +124,7 @@ jobs:
 
       - name: Run live tests
         run: |
-          sudo --preserve-env=GITHUB_STEP_SUMMARY,LIVE_PULL \
+          sudo --preserve-env=GITHUB_STEP_SUMMARY,LIVE_PULL,LIVE_MINIWEB_IMAGE \
             LIVE_TEST_BIN="${{ runner.temp }}/live.test" \
             LIVE_ARTIFACTS="${{ github.workspace }}/live-artifacts" \
             tests/live/run.sh "$IMAGE"
