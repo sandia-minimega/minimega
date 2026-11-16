@@ -518,7 +518,14 @@ func cliNamespaceDelBridge(ns *Namespace, c *minicli.Command, resp *minicli.Resp
 		cmds = append(cmds, cmd)
 	}
 
-	return consume(runCommands(cmds...))
+	if err := consume(runCommands(cmds...)); err != nil {
+		return err
+	}
+
+	// stop tracking the bridge so clear namespace doesn't try to delete it again
+	delete(ns.Bridges, b)
+
+	return nil
 }
 
 func cliNamespaceSave(c *minicli.Command, respChan chan<- minicli.Responses) {
