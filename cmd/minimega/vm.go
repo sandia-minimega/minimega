@@ -146,7 +146,7 @@ var vmInfo = []string{
 	// kvm fields
 	"vcpus", "disks", "snapshot", "initrd", "kernel", "cdrom", "save",
 	"append", "serial-ports", "virtio-ports", "vnc_port", "usb-use-xhci",
-	"tpm-socket", "bidirectional-copy-paste",
+	"tpm-socket", "bidirectional-copy-paste", "vga",
 	// android fields
 	"android_avd", "android_console_port", "android_adb_port", "android_serial",
 	"android_grpc_port",

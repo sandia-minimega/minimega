@@ -39,7 +39,10 @@ func connectWsHandler(vmType, host string, port int) func(*websocket.Conn) {
 
 		log.Debug("ws client connected to %v", rhost)
 
-		go io.Copy(ws, remote)
+		go func() {
+			io.Copy(ws, remote)
+			ws.Close()
+		}()
 		io.Copy(remote, ws)
 
 		log.Debug("ws client disconnected from %v", rhost)
@@ -59,7 +62,10 @@ func consoleWsHandler(tty *os.File, pid int) func(*websocket.Conn) {
 			return
 		}
 
-		go io.Copy(ws, tty)
+		go func() {
+			io.Copy(ws, tty)
+			ws.Close()
+		}()
 		io.Copy(tty, ws)
 
 		proc.Kill()

@@ -98,7 +98,12 @@ func TestLive(t *testing.T) {
 		p("Screenshot", testScreenshot, inv),
 		p("Serial", testSerial, inv),
 		p("QMP", testQMP, inv),
-		p("VNCRecord", testVNCRecord, inv),
+		p("VNCShim", testVNCShim, inv),
+		p("VNCRecordFB", testVNCRecordFB, inv),
+		p("VNCKeyboard", testVNCKeyboard, cc),
+		p("VNCType", testVNCType, cc),
+		p("VNCInjectLoadFile", testVNCInjectLoadFile, cc),
+		p("VNCKill", testVNCKill, inv),
 		p("Tags", testTags, cc),
 		p("Top", testTop, inv),
 		p("StopStart", testStopStart, cc),
@@ -951,29 +956,6 @@ func testQMP(t *testing.T) {
 	if !strings.Contains(out, "return") {
 		t.Errorf("query-name: %s", out)
 	}
-}
-
-func testVNCRecord(t *testing.T) {
-	host, path := harness.Artifact(t, "host-a1.fb")
-	harness.MustRun(t, "vnc record fb host-a1 "+path)
-	time.Sleep(5 * time.Second)
-	listed := false
-	for _, r := range harness.MustTable(t, "vnc") {
-		if r["name"] == "host-a1" && strings.Contains(r["filename"], "host-a1.fb") {
-			listed = true
-		}
-	}
-	if !listed {
-		t.Errorf("vnc does not list the recording: %v", harness.MustTable(t, "vnc"))
-	}
-	harness.MustRun(t, "vnc stop fb host-a1")
-	// the recorder flushes its gzip stream as it shuts down
-	harness.Eventually(t, 10*time.Second, time.Second, func() error {
-		if n, err := harness.FBChunks(host); err != nil || n == 0 {
-			return fmt.Errorf("framebuffer recording has %d chunks: %v", n, err)
-		}
-		return nil
-	})
 }
 
 func testTags(t *testing.T) {

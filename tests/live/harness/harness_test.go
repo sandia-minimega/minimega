@@ -6,8 +6,6 @@ package harness
 
 import (
 	"bytes"
-	"compress/gzip"
-	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -176,28 +174,6 @@ func TestDistinctColors(t *testing.T) {
 	}
 	if _, err := DistinctColors([]byte("not a png")); err == nil {
 		t.Error("garbage: want an error")
-	}
-}
-
-func TestFBChunks(t *testing.T) {
-	write := func(chunks ...string) string {
-		path := filepath.Join(t.TempDir(), "x.fb")
-		var b bytes.Buffer
-		z := gzip.NewWriter(&b)
-		for _, c := range chunks {
-			fmt.Fprintf(z, "%d %d\r\n%s\r\n", 1000, len(c), c)
-		}
-		z.Close()
-		if err := os.WriteFile(path, b.Bytes(), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		return path
-	}
-	if n, err := FBChunks(write()); err != nil || n != 0 {
-		t.Errorf("empty recording: %d chunks, %v; want 0", n, err)
-	}
-	if n, err := FBChunks(write("abc", "de\r\nf")); err != nil || n != 2 {
-		t.Errorf("two chunks: %d, %v; want 2", n, err)
 	}
 }
 

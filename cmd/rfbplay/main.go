@@ -7,16 +7,20 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"encoding/binary"
 	"errors"
 	"flag"
 	"fmt"
 	"image"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
@@ -27,8 +31,8 @@ type Rectangle struct {
 }
 
 type FramebufferUpdate struct {
-	// How long to wait before this update should be applied
-	Offset int64
+	// The recording time of the first byte of the update
+	Elapsed time.Duration
 	// The rectangles that should be updated
 	Rectangles []Rectangle
 }
@@ -49,7 +53,7 @@ type vncPixelFormat struct {
 }
 
 var (
-	f_port = flag.Int("port", 9004, "port to start rfbplay webservice")
+	f_port = flag.Int("port", 9004, "port to start rfbplay webservice (directory mode only)")
 )
 
 var pixelFormat = vncPixelFormat{
@@ -72,72 +76,83 @@ func usage() {
 	flag.PrintDefaults()
 }
 
-func readFile(f http.File) (chan *FramebufferUpdate, error) {
+// readFile decodes the gzip recording in f and sends each update on the
+// returned channel. It closes the channel at the end of the recording, on an
+// error, or when ctx is canceled. It does not close f.
+func readFile(ctx context.Context, f io.Reader) (<-chan *FramebufferUpdate, error) {
 	gzipReader, err := gzip.NewReader(f)
 	if err != nil {
 		return nil, err
 	}
-	bufioReader := bufio.NewReader(gzipReader)
-	reader := NewRecordingReader(bufioReader)
+	reader := NewRecordingReader(bufio.NewReader(gzipReader))
 	output := make(chan *FramebufferUpdate)
 
 	go func() {
-		defer f.Close()
 		defer close(output)
 
-		var err error
-		for err == nil {
-			err = readUpdate(reader, output)
-		}
+		for {
+			update, err := readUpdate(reader)
+			if err != nil {
+				if err != io.EOF {
+					log.Errorln("error decoding recording:", err)
+				}
+				return
+			}
 
-		if err != nil && err != io.EOF {
-			log.Errorln("error decoding recording:", err)
+			select {
+			case output <- update:
+			case <-ctx.Done():
+				return
+			}
 		}
 	}()
 
 	return output, nil
 }
 
-func readUpdate(reader *RecordingReader, output chan *FramebufferUpdate) error {
+func readUpdate(reader *RecordingReader) (*FramebufferUpdate, error) {
 	// Decode the message type
 	var mType uint8
 	if err := binary.Read(reader, binary.BigEndian, &mType); err != nil {
 		if err == io.EOF {
-			return err // No more updates
+			return nil, err // No more updates
 		}
-		return errors.New("unable to decode message type")
+		return nil, errors.New("unable to decode message type")
 	}
 
 	log.Debugln("message type:", mType)
 
 	// Skip message that aren't framebuffer updates
 	if mType != 0 {
-		return errors.New("unable to decode, found non-framebuffer update")
+		return nil, errors.New("unable to decode, found non-framebuffer update")
 	}
 
-	update := FramebufferUpdate{}
-	update.Offset = reader.Offset()
+	update := &FramebufferUpdate{Elapsed: reader.Elapsed()}
 
 	// Skip the one byte of padding
-	if _, err := reader.Read(make([]byte, 1)); err != nil {
-		return errors.New("unable to skip padding")
+	if _, err := io.ReadFull(reader, make([]byte, 1)); err != nil {
+		return nil, errors.New("unable to skip padding")
 	}
 
 	// Decode the number of rectangles
 	var numRects uint16
 	if err := binary.Read(reader, binary.BigEndian, &numRects); err != nil {
-		return errors.New("unable to decode number of rectangles")
+		return nil, errors.New("unable to decode number of rectangles")
 	}
 
 	log.Debugln("number of rectangles:", numRects)
 
 	// Read all the rectangles
+	pixels := maxUpdatePixels
 	for len(update.Rectangles) < int(numRects) {
 		var err error
 
-		rect, err := ReadRectangle(reader)
+		rect, err := ReadRectangle(reader, pixels)
 		if err != nil {
-			return err
+			return nil, err
+		}
+		if rect.EncodingType != DesktopSize {
+			pixels -= rect.Rect.Dx() * rect.Rect.Dy()
 		}
 
 		switch rect.EncodingType {
@@ -152,14 +167,42 @@ func readUpdate(reader *RecordingReader, output chan *FramebufferUpdate) error {
 		}
 
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		update.Rectangles = append(update.Rectangles, rect)
 	}
 
-	output <- &update
-	return nil
+	return update, nil
+}
+
+// serveTranscode serves the recordings in dir on ln and then calls run with
+// the URL of the recording name and out. The listener is ready before run
+// starts. serveTranscode closes ln when run returns.
+func serveTranscode(ln net.Listener, dir, name, out string, run func(src, out string) error) error {
+	srv := &http.Server{Handler: &playbackServer{http.Dir(dir)}}
+	defer srv.Close()
+
+	go func() {
+		if err := srv.Serve(ln); err != nil && err != http.ErrServerClosed {
+			log.Error("serve recordings: %v", err)
+		}
+	}()
+
+	src := &url.URL{Scheme: "http", Host: ln.Addr().String(), Path: "/" + name}
+
+	return run(src.String(), out)
+}
+
+// transcodeFile serves the recording in on a free loopback port and calls
+// serveTranscode with run.
+func transcodeFile(in, out string, run func(src, out string) error) error {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return err
+	}
+
+	return serveTranscode(ln, filepath.Dir(in), filepath.Base(in), out, run)
 }
 
 func main() {
@@ -173,9 +216,6 @@ func main() {
 
 	log.Init()
 
-	addr := ":" + strconv.Itoa(*f_port)
-	log.Info("serving recordings from %s on %s", flag.Arg(0), addr)
-
 	switch flag.NArg() {
 	case 1: // just serve a directory and mjpeg streams
 		// Ensure that the first arg is an existent directory
@@ -184,20 +224,17 @@ func main() {
 			usage()
 			os.Exit(1)
 		}
+		addr := ":" + strconv.Itoa(*f_port)
+		log.Info("serving recordings from %s on %s", flag.Arg(0), addr)
+
 		http.Handle("/", &playbackServer{http.Dir(flag.Arg(0))})
-		http.ListenAndServe(addr, nil)
+		log.Fatalln(http.ListenAndServe(addr, nil))
 	case 2: // transcode with ffmpeg
 		in := flag.Arg(0)
 		out := flag.Arg(1)
 		log.Debug("transcoding %v to %v", in, out)
 
-		path := filepath.Dir(in)
-		fname := filepath.Base(in)
-		http.Handle("/", &playbackServer{http.Dir(path)})
-		go http.ListenAndServe(addr, nil)
-
-		err := transcode(fname, out)
-		if err != nil {
+		if err := transcodeFile(in, out, transcode); err != nil {
 			log.Fatalln(err)
 		}
 	default:

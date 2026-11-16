@@ -5,11 +5,8 @@
 package harness
 
 import (
-	"bufio"
 	"bytes"
-	"compress/gzip"
 	"errors"
-	"fmt"
 	"image/png"
 	"io"
 	"net"
@@ -68,38 +65,4 @@ func DistinctColors(b []byte) (int, error) {
 		}
 	}
 	return len(seen), nil
-}
-
-// FBChunks counts the framebuffer chunks in a VNC recording: a gzip stream of
-// "<offset> <n>\r\n<n bytes>\r\n". A recording that is still being written
-// counts the chunks complete so far.
-func FBChunks(path string) (int, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return 0, err
-	}
-	defer f.Close()
-
-	z, err := gzip.NewReader(f)
-	if err != nil {
-		return 0, err
-	}
-	r := bufio.NewReader(z)
-	n := 0
-	for {
-		var offset, size int64
-		if _, err := fmt.Fscanf(r, "%d %d\r\n", &offset, &size); err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-				return n, nil
-			}
-			return n, fmt.Errorf("chunk %d header: %w", n, err)
-		}
-		if _, err := io.CopyN(io.Discard, r, size+2); err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
-				return n, nil
-			}
-			return n, err
-		}
-		n++
-	}
 }
