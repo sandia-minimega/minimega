@@ -580,14 +580,14 @@ func (n *Namespace) hostSlice() []string {
 // processVMDisks parses a list of diskspecs using processVMDisk and updates the
 // active vmConfig.
 func (n *Namespace) processVMDisks(vals []string) error {
-	n.vmConfig.Disks = DiskConfigs{}
+	// parse into disks and only replace the config once all specs are valid
+	disks := DiskConfigs{}
 
 	var ideCount int
 
 	for _, spec := range vals {
 		disk, err := ParseDiskConfig(spec, n.vmConfig.Snapshot)
 		if err != nil {
-			n.vmConfig.Disks = DiskConfigs{}
 			return err
 		}
 
@@ -596,15 +596,16 @@ func (n *Namespace) processVMDisks(vals []string) error {
 		}
 
 		// check for disk conflicts in a single VM
-		for _, d2 := range n.vmConfig.Disks {
+		for _, d2 := range disks {
 			if disk.Path == d2.Path {
-				n.vmConfig.Disks = DiskConfigs{}
 				return fmt.Errorf("disk conflict: %v", d2.Path)
 			}
 		}
 
-		n.vmConfig.Disks = append(n.vmConfig.Disks, *disk)
+		disks = append(disks, *disk)
 	}
+
+	n.vmConfig.Disks = disks
 
 	if ideCount > 3 {
 		// Warn or return an error? Maybe some systems support more than four?
@@ -633,13 +634,11 @@ func (n *Namespace) parseVMNets(vals []string) ([]NetConfig, error) {
 	for _, spec := range vals {
 		nic, err := ParseNetConfig(spec, nics)
 		if err != nil {
-			n.vmConfig.Networks = NetConfigs{}
 			return nil, err
 		}
 
 		vlan, err := lookupVLAN(n.Name, nic.Alias)
 		if err != nil {
-			n.vmConfig.Networks = NetConfigs{}
 			return nil, err
 		}
 
@@ -659,7 +658,6 @@ func (n *Namespace) parseVMBonds(vals []string) ([]BondConfig, error) {
 	for _, spec := range vals {
 		bond, err := ParseBondConfig(spec)
 		if err != nil {
-			n.vmConfig.Bonds = BondConfigs{}
 			return nil, err
 		}
 
@@ -673,32 +671,26 @@ func (n *Namespace) parseVMBonds(vals []string) ([]BondConfig, error) {
 // processVMNets parses a list of netspecs using parseVMNet and updates the
 // active vmConfig.
 func (n *Namespace) processVMNets(vals []string) error {
-	n.vmConfig.Networks = NetConfigs{}
-
+	// only replace the config once all specs parse
 	nics, err := n.parseVMNets(vals)
 	if err != nil {
 		return err
 	}
 
-	for _, nic := range nics {
-		n.vmConfig.Networks = append(n.vmConfig.Networks, nic)
-	}
+	n.vmConfig.Networks = NetConfigs(nics)
 	return nil
 }
 
 // processVMBonds parses a list of bondspecs using parseVMBonds and updates the
 // active vmConfig.
 func (n *Namespace) processVMBonds(vals []string) error {
-	n.vmConfig.Bonds = BondConfigs{}
-
+	// only replace the config once all specs parse
 	bonds, err := n.parseVMBonds(vals)
 	if err != nil {
 		return err
 	}
 
-	for _, bond := range bonds {
-		n.vmConfig.Bonds = append(n.vmConfig.Bonds, bond)
-	}
+	n.vmConfig.Bonds = BondConfigs(bonds)
 	return nil
 }
 
