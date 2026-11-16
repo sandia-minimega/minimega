@@ -143,6 +143,8 @@ func (iom *IOMeshage) Delete(path string) error {
 					return err
 				}
 			}
+
+			continue
 		}
 
 		if err := os.RemoveAll(f); err != nil {
