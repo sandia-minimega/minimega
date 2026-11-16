@@ -12,8 +12,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"text/tabwriter"
+	"unicode"
 
 	"github.com/sandia-minimega/minimega/v2/internal/bridge"
 	"github.com/sandia-minimega/minimega/v2/internal/qemu"
@@ -409,4 +411,46 @@ func validColocate(vmConfig VMConfig, s string) error {
 
 	// TODO: could check if s is a known VM
 	return nil
+}
+
+// parseMapConfig parses a "vm config <field> <key> [value]" line written by a
+// map field's WriteConfig. Key and value are Go-quoted when written; unquoted
+// input from older versions is also accepted (value is the rest of the line,
+// possibly empty).
+func parseMapConfig(line string) (key, value string) {
+	rest := line
+	for i := 0; i < 3; i++ { // skip "vm", "config", "<field>"
+		rest = strings.TrimSpace(rest)
+		if j := strings.IndexFunc(rest, unicode.IsSpace); j >= 0 {
+			rest = rest[j:]
+		} else {
+			rest = ""
+		}
+	}
+
+	// unquote consumes a leading quoted string, if there is one
+	unquote := func() (string, bool) {
+		rest = strings.TrimSpace(rest)
+		if q, err := strconv.QuotedPrefix(rest); err == nil {
+			if s, err := strconv.Unquote(q); err == nil {
+				rest = strings.TrimSpace(rest[len(q):])
+				return s, true
+			}
+		}
+		return "", false
+	}
+
+	var ok bool
+	if key, ok = unquote(); !ok {
+		j := strings.IndexFunc(rest, unicode.IsSpace)
+		if j < 0 {
+			j = len(rest)
+		}
+		key, rest = rest[:j], strings.TrimSpace(rest[j:])
+	}
+	if value, ok = unquote(); !ok {
+		value = rest
+	}
+
+	return key, value
 }
