@@ -621,6 +621,13 @@ func cliPreprocessor(c *minicli.Command) error {
 				log.Debug("cliPreprocessor: skipping preprocessing for ListArg[%s][%d]", k, k2)
 				continue
 			}
+			// cc send expands file globs on the mesh and then gets each match.
+			if k == "file" && c.BoolArgs["send"] {
+				if glob, ok := ccSendGlob(os.ExpandEnv(v)); ok {
+					c.ListArgs[k][k2] = glob
+					continue
+				}
+			}
 			v2, err := cliPreprocess(v)
 			if err != nil {
 				return err
