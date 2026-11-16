@@ -199,7 +199,6 @@ func (n *Node) BroadcastRecipients() []string {
 // appropriate handlers, and to the receiver channel should the message be intended for this
 // node.
 func (n *Node) messageHandler() {
-	log.Debugln("messageHandler")
 	for {
 		m := <-n.messagePump
 		if log.WillLog(log.DEBUG) {

@@ -87,7 +87,7 @@ func ParseDiskConfig(spec string, snapshot bool) (*DiskConfig, error) {
 		return nil, err
 	}
 
-	log.Info(`got path="%v", interface="%v", cache="%v"`, p, i, c)
+	log.Debug(`got path="%v", interface="%v", cache="%v"`, p, i, c)
 
 	p = checkPath(p)
 

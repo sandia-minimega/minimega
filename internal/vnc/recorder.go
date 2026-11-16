@@ -276,8 +276,6 @@ func (fb *fbRecorder) Record() {
 				}
 
 				prev = time.Now()
-
-				log.Debug(" fb wrote %d bytes", n)
 			}
 		}
 	}()

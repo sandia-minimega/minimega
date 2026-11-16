@@ -303,7 +303,7 @@ func diskInject(dst, partition string, pairs map[string]string, options []string
 
 			_, err = os.Stat(nbdPath + "p1")
 			if err == nil {
-				log.Info("partitions detected after %d attempt(s)", i)
+				log.Debug("partitions detected after %d attempt(s)", i)
 				break
 			}
 

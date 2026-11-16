@@ -126,7 +126,7 @@ func templateHandler(w http.ResponseWriter, r *http.Request) {
 
 // filesHandler ignores subpaths and renders the files template
 func filesHandler(w http.ResponseWriter, r *http.Request) {
-	log.Info("files handler: %v", r.URL.Path)
+	log.Debug("files handler: %v", r.URL.Path)
 
 	base := "/files/"
 
@@ -138,7 +138,7 @@ func filesHandler(w http.ResponseWriter, r *http.Request) {
 	cmd.Command = fmt.Sprintf("ns run file list %q", subdir)
 	data := runTabular(cmd)
 
-	log.Info("path: `%v`, subdir: `%v`", path, subdir)
+	log.Debug("path: `%v`, subdir: `%v`", path, subdir)
 
 	// count how many distinct files
 	files := map[string]bool{}
@@ -203,7 +203,7 @@ func filesHandler(w http.ResponseWriter, r *http.Request) {
 //
 //	/vm/<name>/screenshot.png
 func screenshotHandler(w http.ResponseWriter, r *http.Request, name string) {
-	log.Info("screenshotHandler handler: %v", r.URL.Path)
+	log.Debug("screenshotHandler handler: %v", r.URL.Path)
 
 	size := r.URL.Query().Get("size")
 	do_encode := r.URL.Query().Get("base64") != ""
@@ -283,7 +283,7 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request, name string) {
 //	/vm/<name>/connect/
 //	/vm/<name>/connect/ws
 func connectHandler(w http.ResponseWriter, r *http.Request, name string) {
-	log.Info("connect request: %v", r.URL.Path)
+	log.Debug("connect request: %v", r.URL.Path)
 
 	// find info about the VM that we need to connect
 	var vmType string
@@ -361,7 +361,7 @@ func connectHandler(w http.ResponseWriter, r *http.Request, name string) {
 //	POST /vm/<name>/stop
 //	POST /vm/<name>/kill
 func vmHandler(w http.ResponseWriter, r *http.Request) {
-	log.Info("vm request: %v", r.URL.Path)
+	log.Debug("vm request: %v", r.URL.Path)
 
 	fields := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(fields) < 3 {
@@ -410,7 +410,7 @@ func vmHandler(w http.ResponseWriter, r *http.Request) {
 //	/vms/top.json
 //	/vms/new
 func vmsHandler(w http.ResponseWriter, r *http.Request) {
-	log.Info("vms request: %v", r.URL)
+	log.Debug("vms request: %v", r.URL)
 
 	fields := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(fields) != 2 {
@@ -651,7 +651,7 @@ func commandHandler(w http.ResponseWriter, r *http.Request) {
 //
 //	/vm/<name>/android/...
 func androidHandler(w http.ResponseWriter, r *http.Request, name string, fields []string) {
-	log.Info("android handler: %v", r.URL.Path)
+	log.Debug("android handler: %v", r.URL.Path)
 
 	if !isAndroidVM(r, name) {
 		http.NotFound(w, r)

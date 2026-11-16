@@ -61,7 +61,6 @@ func NewBridges(d, tf, bf string) *Bridges {
 				log.Fatal("unable to stat file -- %v %v", fpath, err)
 			}
 
-			log.Debug("tapCount: %v", tapCount)
 		}
 	}()
 
@@ -71,7 +70,6 @@ func NewBridges(d, tf, bf string) *Bridges {
 
 		for bondCount := 0; ; bondCount++ {
 			bondChan <- fmt.Sprintf(bf, bondCount)
-			log.Debug("bondCount: %v", bondCount)
 		}
 	}()
 

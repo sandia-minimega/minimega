@@ -244,7 +244,7 @@ outer:
 	for {
 		for _, f := range iom.Status() {
 			if strings.Contains(f.Filename, file) {
-				log.Info("iomHelper waiting on %v: %v/%v", f.Filename, len(f.Parts), f.NumParts)
+				log.Debug("iomHelper waiting on %v: %v/%v", f.Filename, len(f.Parts), f.NumParts)
 
 				if updatee != "" && time.Since(lastStatus) >= period {
 					var status string
