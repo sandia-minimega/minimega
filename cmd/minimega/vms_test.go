@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"fmt"
+	"reflect"
+	"testing"
+)
 
 func testVM(vmType VMType, state VMState) VM {
 	base := &BaseVM{
@@ -105,6 +109,53 @@ func TestVMsCountTypeState(t *testing.T) {
 			got := vms.CountTypeState(tt.vmType, tt.mask)
 			if got != tt.want {
 				t.Fatalf("expected %d, got %d", tt.want, got)
+			}
+		})
+	}
+}
+
+// Flush and FlushAll remove the VMs in the QUIT and ERROR states and keep
+// the others. They flush the VMs in parallel, and they change the map only
+// after the flushes, so the race detector finds no map access in parallel.
+func TestVMsFlush(t *testing.T) {
+	for _, all := range []bool{false, true} {
+		name := "Flush"
+		if all {
+			name = "FlushAll"
+		}
+
+		t.Run(name, func(t *testing.T) {
+			originalBase := *f_base
+			*f_base = t.TempDir()
+			t.Cleanup(func() { *f_base = originalBase })
+
+			states := []VMState{VM_QUIT, VM_ERROR, VM_RUNNING, VM_PAUSED}
+			vms := &VMs{m: map[int]VM{}}
+			want := map[int]bool{}
+			for i := 0; i < 16; i++ {
+				state := states[i%len(states)]
+				vms.m[i] = testFlushableKVM(t, i, fmt.Sprintf("vm-%d", i), "test", state)
+				if state&(VM_QUIT|VM_ERROR) == 0 {
+					want[i] = true
+				}
+			}
+
+			var err error
+			if all {
+				err = vms.FlushAll(nil)
+			} else {
+				err = vms.Flush(Wildcard, nil)
+			}
+			if err != nil {
+				t.Fatalf("flush: %v", err)
+			}
+
+			got := map[int]bool{}
+			for id := range vms.m {
+				got[id] = true
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("VMs after the flush = %v, want %v", got, want)
 			}
 		})
 	}

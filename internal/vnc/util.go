@@ -5,18 +5,26 @@
 package vnc
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
 )
 
-func writeMessage(w io.Writer, msgType uint8, msg interface{}) error {
-	if err := binary.Write(w, binary.BigEndian, &msgType); err != nil {
-		return fmt.Errorf("unable to write message type -- %s", err.Error())
+// writeMessage encodes the message type and the parts in big-endian order,
+// and writes the message to w in one Write call.
+func writeMessage(w io.Writer, msgType uint8, parts ...any) error {
+	var buf bytes.Buffer
+	buf.WriteByte(msgType)
+
+	for _, part := range parts {
+		if err := binary.Write(&buf, binary.BigEndian, part); err != nil {
+			return fmt.Errorf("unable to encode message: %w", err)
+		}
 	}
 
-	if err := binary.Write(w, binary.BigEndian, msg); err != nil {
-		return fmt.Errorf("unable to write message -- %s", err.Error())
+	if _, err := w.Write(buf.Bytes()); err != nil {
+		return fmt.Errorf("unable to write message: %w", err)
 	}
 
 	return nil

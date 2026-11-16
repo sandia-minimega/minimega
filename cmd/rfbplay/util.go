@@ -47,7 +47,18 @@ func ReadPixel(reader io.Reader) (pixel color.RGBA, err error) {
 	return
 }
 
-func ReadRectangle(buf io.Reader) (rect Rectangle, err error) {
+// maxRectDim is the largest X+Width and Y+Height of a rectangle. The canvas
+// grows only to hold rectangles, so it has the same limit.
+// The QEMU VNC limit is not checked here; 8192 is larger than usual displays.
+const maxRectDim = 8192
+
+// maxUpdatePixels is the largest total area of the rectangles with pixels in
+// one update: one full desktop. It is a variable for the tests.
+var maxUpdatePixels = maxRectDim * maxRectDim
+
+// ReadRectangle reads a rectangle header. It refuses a rectangle with pixels
+// that has an area larger than maxPixels, before it allocates the image.
+func ReadRectangle(buf io.Reader, maxPixels int) (rect Rectangle, err error) {
 	// Try to read all the fields
 	var X, Y, Width, Height uint16
 
@@ -69,9 +80,23 @@ func ReadRectangle(buf io.Reader) (rect Rectangle, err error) {
 
 	log.Debug("rectangle: %d x %d at (%d, %d)", Width, Height, X, Y)
 
-	rect.RGBA = image.NewRGBA(image.Rectangle{
-		image.Point{int(X), int(Y)},
-		image.Point{int(X) + int(Width), int(Y) + int(Height)}})
+	if int(X)+int(Width) > maxRectDim || int(Y)+int(Height) > maxRectDim {
+		return rect, fmt.Errorf("rectangle %d x %d at (%d, %d) is outside the %d x %d limit", Width, Height, X, Y, maxRectDim, maxRectDim)
+	}
+
+	r := image.Rect(int(X), int(Y), int(X)+int(Width), int(Y)+int(Height))
+
+	// A DesktopSize rectangle has no pixel data.
+	if rect.EncodingType == DesktopSize {
+		rect.RGBA = &image.RGBA{Rect: r}
+		return
+	}
+
+	if r.Dx()*r.Dy() > maxPixels {
+		return rect, fmt.Errorf("rectangle %d x %d at (%d, %d) is larger than the %d pixels left for the update", Width, Height, X, Y, maxPixels)
+	}
+
+	rect.RGBA = image.NewRGBA(r)
 
 	return
 }

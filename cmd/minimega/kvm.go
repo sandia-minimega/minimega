@@ -19,6 +19,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -182,7 +183,8 @@ type KVMConfig struct {
 	VirtioPorts string
 
 	// Specify the graphics card to emulate. "cirrus" or "std" should work with
-	// most operating systems.
+	// most operating systems. Use "virtio" to let a VNC client, such as the
+	// browser console, change the screen size of the VM.
 	//
 	// Default: "std"
 	Vga string
@@ -260,6 +262,9 @@ type KvmVM struct {
 
 	vncShim net.Listener // shim for VNC connections
 	VNCPort int
+
+	// onExit, if set, receives the VM name when QEMU exits.
+	onExit *exitHook
 }
 
 type BlockDevice struct {
@@ -813,6 +818,33 @@ func (vm *KvmVM) connectQMP() (err error) {
 	return errors.New("qmp timeout")
 }
 
+// proxyVNC connects one VNC client of the shim to the QEMU VNC socket of the
+// VM. addr is the shim address, which paste-as-keys playback dials.
+func (vm *KvmVM) proxyVNC(ns *Namespace, addr string, remote net.Conn) {
+	defer remote.Close()
+
+	name := vm.GetName()
+
+	local, err := net.Dial("unix", vm.path("vnc"))
+	if err != nil {
+		log.Error("unable to dial vnc socket of vm %v: %v", name, err)
+		return
+	}
+
+	opts := vnc.ProxyOptions{
+		Name:              name,
+		ExtendedClipboard: vm.BidirectionalCopyPaste,
+		OnMessage:         func(m vnc.ClientMessage) { ns.Recorder.Route(name, m) },
+		OnPaste: func(text string) {
+			if err := ns.Player.Paste(name, addr, text); err != nil {
+				log.Warn("unable to paste to vm %v: %v", name, err)
+			}
+		},
+	}
+
+	vnc.Proxy(remote, local, opts)
+}
+
 func (vm *KvmVM) connectVNC() error {
 	if vm.Baremetal {
 		return nil
@@ -833,68 +865,9 @@ func (vm *KvmVM) connectVNC() error {
 		// should never create...
 		ns := GetOrCreateNamespace(vm.Namespace)
 
-		for {
-			// Sit waiting for new connections
-			remote, err := l.Accept()
-			if err != nil && strings.Contains(err.Error(), "use of closed network connection") {
-				return
-			} else if err != nil {
-				log.Errorln(err)
-				return
-			}
-
-			log.Info("vnc shim connect: %v -> %v", remote.RemoteAddr(), vm.Name)
-
-			go func() {
-				defer remote.Close()
-
-				// Dial domain socket
-				local, err := net.Dial("unix", vm.path("vnc"))
-				if err != nil {
-					log.Error("unable to dial vm vnc: %v", err)
-					return
-				}
-				defer local.Close()
-
-				// copy local -> remote
-				go io.Copy(remote, local)
-
-				// Reads will implicitly copy from remote -> local
-				tee := io.TeeReader(remote, local)
-				for {
-					msg, err := vnc.ReadClientMessage(tee)
-					if err == nil {
-						// for cut text, send text immediately as string if not bi-directional
-						if cut, ok := msg.(*vnc.ClientCutText); ok && !vm.BidirectionalCopyPaste {
-							if cut.Length > 0 {
-								log.Debug("sending text for ClientCutText: %d bytes", len(cut.Text))
-								err = ns.Player.PlaybackString(vm.Name, vm.vncShim.Addr().String(), string(cut.Text))
-								if err != nil {
-									log.Warnln(err)
-								}
-							}
-						}
-						ns.Recorder.Route(vm.GetName(), msg)
-						continue
-					}
-
-					// shim is no longer connected
-					if err == io.EOF || strings.Contains(err.Error(), "broken pipe") {
-						log.Info("vnc shim quit: %v", vm.Name)
-						break
-					}
-
-					// ignore these
-					if strings.Contains(err.Error(), "unknown client-to-server message") {
-						log.Debugln(err)
-						continue
-					}
-
-					// unknown error
-					log.Warnln(err)
-				}
-			}()
-		}
+		vnc.Serve(l, func(remote net.Conn) {
+			vm.proxyVNC(ns, l.Addr().String(), remote)
+		})
 	}()
 
 	return nil
@@ -1112,6 +1085,27 @@ func (vm *KvmVM) launch() error {
 	return nil
 }
 
+// exitHook gives the VM name to fn when QEMU exits, until detach is called.
+type exitHook struct {
+	fn       func(name string)
+	detached atomic.Bool
+}
+
+// run calls fn with name, unless h is nil or detached.
+func (h *exitHook) run(name string) {
+	if h != nil && h.fn != nil && !h.detached.Load() {
+		h.fn(name)
+	}
+}
+
+// detach stops the later calls of fn. A QEMU exit that runs now can still
+// call fn.
+func (h *exitHook) detach() {
+	if h != nil {
+		h.detached.Store(true)
+	}
+}
+
 func (vm *KvmVM) waitForExit(p *os.Process, wait chan bool) {
 	// Create goroutine to wait for process to exit
 	go func() {
@@ -1127,6 +1121,10 @@ func (vm *KvmVM) waitForExit(p *os.Process, wait chan bool) {
 				}
 			}
 		}
+
+		// Stop VNC work before the state change, so that no relaunch of the name
+		// can start first. Run it without vm.lock, so that VM calls do not wait.
+		vm.onExit.run(vm.GetName())
 
 		vm.lock.Lock()
 		defer vm.lock.Unlock()
@@ -1489,11 +1487,6 @@ func (vm VMConfig) qemuArgs(id int, vmPath string) []string {
 
 	args = append(args, "-pidfile")
 	args = append(args, filepath.Join(vmPath, "qemu.pid"))
-
-	if !vm.Baremetal {
-		args = append(args, "-k")
-		args = append(args, "en-us")
-	}
 
 	if vm.CPU != "" {
 		args = append(args, "-cpu")

@@ -26,6 +26,9 @@ for i in "${DIRECTORY_ARRAY[@]}"; do
     done
 done
 
+# The harness unit tests need no root, KVM, or Docker.
+PACKAGES+=("$ROOT_DIR/tests/live/harness/")
+
 # testing
 echo "TESTING"
 "${GOTEST[@]}" -race -shuffle=on -coverprofile="$COVERPROFILE" "${PACKAGES[@]}" || exit 1

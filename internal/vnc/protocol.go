@@ -5,7 +5,6 @@
 package vnc
 
 import (
-	"encoding/binary"
 	"fmt"
 	"image"
 	"io"
@@ -147,16 +146,7 @@ func (m *SetEncodings) Write(w io.Writer) error {
 	// Ensure length is set correctly
 	m.NumberOfEncodings = uint16(len(m.Encodings))
 
-	if err := writeMessage(w, TypeSetEncodings, m._SetEncodings); err != nil {
-		return err
-	}
-
-	// Write variable length encodings
-	if err := binary.Write(w, binary.BigEndian, &m.Encodings); err != nil {
-		return fmt.Errorf("unable to write encodings -- %v", err)
-	}
-
-	return nil
+	return writeMessage(w, TypeSetEncodings, m._SetEncodings, m.Encodings)
 }
 
 func (m *FramebufferUpdateRequest) Write(w io.Writer) error {
@@ -188,14 +178,5 @@ func (m *ClientCutText) Write(w io.Writer) error {
 	// Ensure length is set correctly
 	m.Length = int32(len(m.Text))
 
-	if err := writeMessage(w, TypeClientCutText, m._ClientCutText); err != nil {
-		return err
-	}
-
-	// Write variable length encodings
-	if err := binary.Write(w, binary.BigEndian, &m.Text); err != nil {
-		return fmt.Errorf("unable to write text -- %s", err.Error())
-	}
-
-	return nil
+	return writeMessage(w, TypeClientCutText, m._ClientCutText, m.Text)
 }

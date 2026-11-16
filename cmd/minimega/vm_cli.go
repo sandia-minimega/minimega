@@ -66,6 +66,8 @@ Additional fields are available for KVM-based VMs:
 - vnc_port      : port for VNC shim
 - usb-use-xhci  : usb controller (true = xhci; false = ehci)
 - tpm-socket	: path of emulated tpm socket
+- bidirectional-copy-paste : true if VNC clipboard text goes to qemu-vdagent
+- vga           : graphics card that QEMU emulates (for example, std or virtio)
 
 Additional fields are available for container-based VMs:
 
