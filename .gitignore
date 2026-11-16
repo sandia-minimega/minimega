@@ -74,7 +74,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -305,6 +304,7 @@ bin
 volatile
 /LICENSES/go/
 internal/version/version.go
+lib/VERSION
 doc/content/reference/minimega.md
 doc/content/reference/minirouter.md
 

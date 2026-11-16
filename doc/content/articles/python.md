@@ -22,25 +22,24 @@ display their info, and then kill them:
 ```python
 import minimega
 
-mm = minimega.connect(debug=True)
+with minimega.connect(debug=True) as mm:
+    print('launching vms')
+    mm.vm_launch_kvm(10)
 
-print 'launching vms'
-mm.vm_launch_kvm(10)
+    print('vm info:')
+    minimega.print_rows(mm.vm_info())
 
-print 'vm info:'
-minimega.print_rows(mm.vm_info())
+    print('starting vms')
+    mm.vm_start('all')
 
-print 'starting vms'
-mm.vm_start('all')
+    print('vm info:')
+    minimega.print_rows(mm.vm_info())
 
-print 'vm info:'
-minimega.print_rows(mm.vm_info())
+    print('killing vms')
+    mm.vm_kill('all')
 
-print 'killing vms'
-mm.vm_kill('all')
-
-print 'flushing vms'
-mm.vm_flush()
+    print('flushing vms')
+    mm.vm_flush()
 ```
 
 The `connect` method wraps `minimega.minimega.__init__`:
@@ -48,25 +47,52 @@ The `connect` method wraps `minimega.minimega.__init__`:
 ```python
 help(minimega.connect):
 
-connect(path='/tmp/minimega/minimega', raise_errors=True, debug=False, namespace=None, timeout=60)
+connect(path='/tmp/minimega/minimega', raise_errors=True, debug=False, namespace=None)
     Connect to the minimega instance with UNIX socket at <path> and return
     a new minimega API object. See help(minimega.minimega) for an
-    explaination of the other parameters.
+    explanation of the other parameters.
 
 help(minimega.minimega.__init__):
 
-__init__(self, path, raise_errors, debug, namespace, timeout) unbound minimega.minimega method
+__init__(self, path, raise_errors, debug, namespace)
     Connects to the minimega instance with UNIX socket at <path>. If
     <raise_errors> is set, the Python APIs will raise an Exception whenever
     minimega returns a response with an error. If <debug> is set, debugging
     information will be printed. The <namespace> parameter allows you to
     "bind" the minimega object to a particular namespace (see
-    help(minimega.minimega.namespace) for more info on namespaces). The
-    <timeout> parameter allow you to set a command timeout.
+    help(minimega.minimega.namespace) for more info on namespaces).
 ```
 
 By default, the domain socket is only read/writable by root so the Python
 script must run as root (or the domain socket can be chmod'd appropriately).
+
+A `minimega` client owns a live UNIX socket. Use `close()` when done, or prefer
+`with minimega.connect(...) as mm:` so the socket is closed automatically when
+the block exits. The context manager does not suppress exceptions raised inside
+the block.
+
+If `connect()` opens the socket but fails during its initial version check, it
+closes the socket before re-raising the error.
+
+### Threading and multiprocessing
+
+A `minimega` client object owns a live socket connection, lock, and response
+state. One connection is serial: all responses from one command must be read
+before the next command can be issued. If the client is closed while streamed
+responses are pending, the connection is closed and unread responses are
+discarded with the socket. Use `minimega.discard(mm)` to drain pending responses
+when the response contents are not needed and the connection will continue to be
+used.
+
+Use one connection per process. Do not pickle a connected client or share it
+across `multiprocessing` workers. Instead, call `minimega.connect(...)` inside
+each worker process.
+
+The `namespace()` helper creates a shallow wrapper around the same underlying
+connection. It is a convenience for namespace scoping, not a separate transport
+or process-isolation boundary. Namespace wrappers share the parent connection's
+socket, lock, and response state, so they should not outlive the parent
+connection context.
 
 <a id="TOC_3."></a>
 
@@ -86,6 +112,18 @@ All commands have arguments based on the underlying CLI which are checked by
 the Python bindings. If an argument is invalid, a `ValueError` will be raised
 with a description of the error.
 
+For command-and-control operations, use `cc_filtered(...)` to scope a group of
+`cc` commands and automatically clear the filter when the block exits:
+
+```python
+with minimega.connect() as mm:
+    with mm.cc_filtered("uuid=abc"):
+        mm.cc_exec_once("pkill iperf3")
+```
+
+`cc_filtered` rejects blank filters, raises if setting the filter returns any
+error, and clears the filter even when the block raises.
+
 <a id="TOC_4."></a>
 
 ## namespaces
@@ -96,13 +134,13 @@ that connection in that namespace. Second, users can use `with` statements to
 run commands in a particular namespace:
 
 ```python
-mm = minimega.connect()
-with mm.namespace("foo") as mm:
-    mm.vm_launch_kvm(1)
+with minimega.connect() as mm:
+    with mm.namespace("foo") as ns:
+        ns.vm_launch_kvm(1)
 
-with mm.namespace("foo") as mm:
-    with mm.namespace("bar") as mm2:
-        for resp in mm.vm_info():
-            for row in resp.get("Tabular", []) or []:
-                mm2.vm_launch_kvm(row[1])
+    with mm.namespace("foo") as ns:
+        with mm.namespace("bar") as ns2:
+            for resp in ns.vm_info():
+                for row in resp.get("Tabular", []) or []:
+                    ns2.vm_launch_kvm(row[1])
 ```

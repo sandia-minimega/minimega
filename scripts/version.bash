@@ -14,6 +14,8 @@ if ! REVISION="$(git -C "$ROOT_DIR" rev-parse HEAD 2>/dev/null)"; then
 fi
 DATE="$(date +%F)"
 
+printf '%s\n' "$VERSION" > "$ROOT_DIR/lib/VERSION"
+
 # The generated Go code is indented with tabs, as gofmt requires.
 # editorconfig-checker-disable
 cat > "$ROOT_DIR/internal/version/version.go" <<EOF
