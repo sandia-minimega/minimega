@@ -642,7 +642,7 @@ func cliVMCdrom(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 				err = nil
 			}
 
-			return true, nil
+			return true, err
 		})
 	} else if c.BoolArgs["change"] {
 		f := c.StringArgs["path"]
@@ -1098,13 +1098,14 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 	var fn vmApplyFunc
 
 	if c.BoolArgs["add"] {
+		// parse once, outside Apply's concurrent callbacks
+		nics, err := ns.parseVMNets(c.ListArgs["netspec"])
+		if err != nil {
+			return err
+		}
+
 		// this will do the work of adding the interface to the vm
 		fn = func(vm VM, _ bool) (bool, error) {
-			nics, err := ns.parseVMNets(c.ListArgs["netspec"])
-			if err != nil {
-				return true, err
-			}
-
 			type nicAdder interface {
 				AddNIC(NetConfig) error
 			}
@@ -1115,11 +1116,9 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 			}
 
 			for _, n := range nics {
-				err = adder.AddNIC(n)
-			}
-
-			if err != nil {
-				return true, err
+				if err := adder.AddNIC(n); err != nil {
+					return true, err
+				}
 			}
 
 			log.Info("vm networks: %v", vm.GetNetworks())
