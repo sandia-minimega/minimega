@@ -456,7 +456,7 @@ Default: empty map
 
 			if c.StringArgs["value"] == "" {
 				if ns.vmConfig.VolumePaths != nil {
-					r.Response = ns.vmConfig.VolumePaths[c.StringArgs["value"]]
+					r.Response = ns.vmConfig.VolumePaths[c.StringArgs["key"]]
 				}
 				return nil
 			}
@@ -1240,7 +1240,7 @@ Default: empty map
 
 			if c.StringArgs["value"] == "" {
 				if ns.vmConfig.Tags != nil {
-					r.Response = ns.vmConfig.Tags[c.StringArgs["value"]]
+					r.Response = ns.vmConfig.Tags[c.StringArgs["key"]]
 				}
 				return nil
 			}
@@ -1578,7 +1578,7 @@ func (v *BaseConfig) WriteConfig(w io.Writer) error {
 		return err
 	}
 	for k, v := range v.Tags {
-		fmt.Fprintf(w, "vm config tags %v %v\n", k, v)
+		fmt.Fprintf(w, "vm config tags %q %q\n", k, v)
 	}
 
 	return nil
@@ -1623,7 +1623,11 @@ func (v *BaseConfig) ReadConfig(r io.Reader, ns string, vmConfig *VMConfig) erro
 				return err
 			}
 		case "tags":
-			v.Tags[config[1]] = config[2]
+			if v.Tags == nil {
+				v.Tags = make(map[string]string)
+			}
+			k, val := parseMapConfig(line)
+			v.Tags[k] = val
 		}
 	}
 
@@ -1695,7 +1699,7 @@ func (v *ContainerConfig) WriteConfig(w io.Writer) error {
 		fmt.Fprintf(w, "vm config fifos %v\n", v.Fifos)
 	}
 	for k, v := range v.VolumePaths {
-		fmt.Fprintf(w, "vm config volume %v %v\n", k, v)
+		fmt.Fprintf(w, "vm config volume %q %q\n", k, v)
 	}
 
 	return nil
@@ -1726,7 +1730,11 @@ func (v *ContainerConfig) ReadConfig(r io.Reader, ns string, vmConfig *VMConfig)
 		case "fifos":
 			v.Fifos, _ = strconv.ParseUint(config[1], 10, 64)
 		case "volume":
-			v.VolumePaths[config[1]] = config[2]
+			if v.VolumePaths == nil {
+				v.VolumePaths = make(map[string]string)
+			}
+			k, val := parseMapConfig(line)
+			v.VolumePaths[k] = val
 		}
 	}
 
