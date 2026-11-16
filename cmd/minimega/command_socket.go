@@ -6,11 +6,14 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 	"github.com/sandia-minimega/minimega/v2/pkg/miniclient"
@@ -48,9 +51,31 @@ func commandSocketRemove() {
 func commandSocketHandle(c net.Conn) {
 	defer c.Close()
 
-	enc := json.NewEncoder(c)
+	// enc is shared with the status goroutine, so serialize writes.
+	var inflight atomic.Bool
+	enc := json.NewEncoder(&lockedWriter{w: c})
 	dec := json.NewDecoder(c)
 	done := make(chan struct{})
+
+	// One status channel per connection, forwarded only while a command is
+	// running so that stale updates don't corrupt the response stream.
+	name := fmt.Sprintf("cmdsocket-%p", c)
+	status := make(chan string, 16)
+	addStatusMessageChannel(name, status)
+	defer delStatusMessageChannel(name)
+
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case s := <-status:
+				if inflight.Load() {
+					sendLocalStatus(enc, s)
+				}
+			}
+		}
+	}()
 
 	var err error
 
@@ -145,21 +170,7 @@ func commandSocketHandle(c net.Conn) {
 			cmd.SetRecord(false)
 		}
 
-		go func() {
-			for {
-				status := make(chan string)
-
-				addStatusMessageChannel("cmdsocket", status)
-
-				select {
-				case <-done:
-					delStatusMessageChannel("cmdsocket")
-					return
-				case s := <-status:
-					sendLocalStatus(enc, s)
-				}
-			}
-		}()
+		inflight.Store(true)
 
 		// HAX: Work around so that we can add the more boolean.
 		var prev minicli.Responses
@@ -176,6 +187,8 @@ func commandSocketHandle(c net.Conn) {
 			prev = resp
 		}
 
+		inflight.Store(false)
+
 		if err == nil {
 			err = sendLocalResp(enc, prev, false, r.TTY)
 		}
@@ -191,6 +204,18 @@ func commandSocketHandle(c net.Conn) {
 	} else if err != nil {
 		log.Errorln(err)
 	}
+}
+
+// lockedWriter serializes Write calls (json.Encoder issues one per Encode).
+type lockedWriter struct {
+	mu sync.Mutex
+	w  io.Writer
+}
+
+func (l *lockedWriter) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.w.Write(p)
 }
 
 func readLocalRequest(dec *json.Decoder) (*miniclient.Request, error) {

@@ -133,7 +133,12 @@ func meshageMux() {
 			meshageStatusLock.RLock()
 
 			for _, c := range meshageStatusChans {
-				c <- fmt.Sprintf("[%s]: %s", msg.From, msg.Status)
+				// never block while holding the lock; drop if the consumer is
+				// behind or gone
+				select {
+				case c <- fmt.Sprintf("[%s]: %s", msg.From, msg.Status):
+				default:
+				}
 			}
 
 			meshageStatusLock.RUnlock()

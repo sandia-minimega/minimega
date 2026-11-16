@@ -354,7 +354,7 @@ func main() {
 	if !*f_nostdin {
 		// start status handler
 		go func() {
-			status := make(chan string)
+			status := make(chan string, 16)
 
 			addStatusMessageChannel("localcli", status)
 
