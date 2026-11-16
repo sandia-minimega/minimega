@@ -281,3 +281,22 @@ func TestQuotes(t *testing.T) {
 		}
 	}
 }
+
+// Comments run through the real CLI path (Compile + ProcessCommand) must be
+// recorded in history, as documented.
+func TestCompileCommentRecorded(t *testing.T) {
+	Reset()
+	Register(testHandler)
+
+	c, err := Compile("# configure rack 3")
+	if err != nil || c == nil {
+		t.Fatalf("unable to Compile: %v", err)
+	}
+
+	for range ProcessCommand(c) {
+	}
+
+	if got, want := History(), "# configure rack 3"; got != want {
+		t.Errorf("got history %q, want %q", got, want)
+	}
+}
