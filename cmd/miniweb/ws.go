@@ -53,6 +53,14 @@ func consoleWsHandler(tty *os.File, pid int) func(*websocket.Conn) {
 			tty.Close()
 		}()
 
+		// attached: cancel the reaper for never-attached consoles
+		ptyMu.Lock()
+		if t, ok := ptyReapers[pid]; ok {
+			t.Stop()
+			delete(ptyReapers, pid)
+		}
+		ptyMu.Unlock()
+
 		proc, err := os.FindProcess(pid)
 		if err != nil {
 			log.Error("unable to find process: %v", pid)
