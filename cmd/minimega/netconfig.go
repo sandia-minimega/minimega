@@ -429,11 +429,15 @@ func ParseBondConfig(spec string) (*BondConfig, error) {
 		return nil, errors.New("malformed bondspec")
 	}
 
-	// find bond mode setting so interfaces to be bonded can be inferred
+	// find bond mode setting so interfaces to be bonded can be inferred, the
+	// options follow the mode: [lacp [no-lacp-fallback]] [qinq] [name]
+	var rest []string
+
 	for i, e := range f {
 		if isBondMode(e) {
 			ifaces = f[:i]
-			b = e
+			b = strings.ToLower(e)
+			rest = f[i+1:]
 			break
 		}
 	}
@@ -442,43 +446,24 @@ func ParseBondConfig(spec string) (*BondConfig, error) {
 		return nil, errors.New("malformed bondspec")
 	}
 
-	switch len(f) {
-	case 4:
-		if isLACPMode(f[3]) {
-			l = f[3]
-		} else if isQinQ(f[3]) {
-			q = true
-		} else { // assume bond name
-			n = f[3]
+	if len(rest) > 0 && isLACPMode(rest[0]) {
+		l, rest = rest[0], rest[1:]
+
+		if len(rest) > 0 && isNoFallback(rest[0]) {
+			nf, rest = true, rest[1:]
 		}
-	case 5:
-		if isQinQ(f[3]) {
-			q, n = true, f[4]
-		} else if isLACPMode(f[3]) && isNoFallback(f[4]) {
-			l, nf = f[3], true
-		} else if isLACPMode(f[3]) && isQinQ(f[4]) {
-			l, q = f[3], true
-		} else if isLACPMode(f[3]) {
-			l, n = f[3], f[4]
-		} else {
-			return nil, errors.New("malformed bondspec")
-		}
-	case 6:
-		if isLACPMode(f[3]) && isNoFallback(f[4]) && isQinQ(f[5]) {
-			l, nf, q = f[3], true, true
-		} else if isLACPMode(f[3]) && isNoFallback(f[4]) {
-			l, nf, n = f[3], true, f[5]
-		} else if isLACPMode(f[3]) && isQinQ(f[4]) {
-			l, q, n = f[3], true, f[5]
-		} else {
-			return nil, errors.New("malformed bondspec")
-		}
-	case 7:
-		if isLACPMode(f[3]) && isNoFallback(f[4]) && isQinQ(f[5]) {
-			l, nf, q, n = f[3], true, true, f[6]
-		} else {
-			return nil, errors.New("malformed bondspec")
-		}
+	}
+
+	if len(rest) > 0 && isQinQ(rest[0]) {
+		q, rest = true, rest[1:]
+	}
+
+	if len(rest) > 0 {
+		n, rest = rest[0], rest[1:]
+	}
+
+	if len(rest) > 0 {
+		return nil, errors.New("malformed bondspec")
 	}
 
 	log.Info(

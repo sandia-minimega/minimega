@@ -29,6 +29,27 @@ func (b *Bridge) AddBond(name, mode, lacp string, fallback bool, interfaces map[
 		return name, fmt.Errorf("bond %v already exists on bridge %v", name, b.Name)
 	}
 
+	// validate before touching OVS so a bad config never strands the taps
+	var opts []string
+	// https://www.man7.org/linux/man-pages/man5/ovs-vswitchd.conf.db.5.html#Port_TABLE
+	// https://access.redhat.com/documentation/en-us/red_hat_openstack_platform/13/html/advanced_overcloud_customization/overcloud-network-interface-bonding#open-vswitch-bonding-options
+	switch mode {
+	case "active-backup", "balance-slb", "balance-tcp":
+		if mode == "balance-tcp" && lacp == "off" {
+			return name, fmt.Errorf("LACP mode must be set to active or passive for balance-tcp bond mode")
+		}
+
+		opts = append(opts, fmt.Sprintf("lacp=%s", lacp))
+
+		if lacp != "off" && fallback {
+			opts = append(opts, "other_config:lacp-fallback-ab=true")
+		}
+
+		opts = append(opts, fmt.Sprintf("bond_mode=%s", mode))
+	default:
+		return name, fmt.Errorf("unsupported bond mode provided: %s", mode)
+	}
+
 	// ovs-vsctl add-bond <bridge name> <bond name> <list of interfaces>
 	args := []string{"add-bond", b.Name, name}
 
@@ -41,27 +62,8 @@ func (b *Bridge) AddBond(name, mode, lacp string, fallback bool, interfaces map[
 		}
 	}
 
-	args = append(args, "--", "set", "port", name)
-	args = append(args, fmt.Sprintf("tag=%v", vlan))
-
-	// https://www.man7.org/linux/man-pages/man5/ovs-vswitchd.conf.db.5.html#Port_TABLE
-	// https://access.redhat.com/documentation/en-us/red_hat_openstack_platform/13/html/advanced_overcloud_customization/overcloud-network-interface-bonding#open-vswitch-bonding-options
-	switch mode {
-	case "active-backup", "balance-slb", "balance-tcp":
-		if mode == "balance-tcp" && lacp == "off" {
-			return name, fmt.Errorf("LACP mode must be set to active or passive for balance-tcp bond mode")
-		}
-
-		args = append(args, fmt.Sprintf("lacp=%s", lacp))
-
-		if lacp != "off" && fallback {
-			args = append(args, "other_config:lacp-fallback-ab=true")
-		}
-
-		args = append(args, fmt.Sprintf("bond_mode=%s", mode))
-	default:
-		return name, fmt.Errorf("unsupported bond mode provided: %s", mode)
-	}
+	args = append(args, "--", "set", "port", name, fmt.Sprintf("tag=%v", vlan))
+	args = append(args, opts...)
 
 	if _, err := ovsCmdWrapper(args); err != nil {
 		// add taps back to ovs since bond wasn't created

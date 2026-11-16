@@ -217,13 +217,13 @@ func cliTapCreate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 
 	if err != nil {
 		// One of the above cases failed, try to clean up the tap
-		br, err := getBridge(b)
-		if err == nil {
-			err = br.DestroyTap(tap)
+		br, cerr := getBridge(b)
+		if cerr == nil {
+			cerr = br.DestroyTap(tap)
 		}
-		if err != nil {
+		if cerr != nil {
 			// Welp, we're boned
-			log.Error("zombie host tap -- %v %v", tap, err)
+			log.Error("zombie host tap -- %v %v", tap, cerr)
 		}
 		return err
 	}
