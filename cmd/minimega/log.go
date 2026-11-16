@@ -64,13 +64,17 @@ func (this meshageLogWriter) log(l []byte) {
 		Log:   msg,
 	}
 
+	// read the node now, while minilog holds its lock, rather than in the
+	// goroutine, which may run after the logger is removed
+	node := meshageNode
+
 	go func() {
-		if _, ok := meshageNode.Mesh()[this.dest]; !ok {
+		if _, ok := node.Mesh()[this.dest]; !ok {
 			log.Warn("log destination node not found: %s", this.dest)
 			return
 		}
 
-		meshageNode.Set(to, m)
+		node.Set(to, m)
 	}()
 }
 

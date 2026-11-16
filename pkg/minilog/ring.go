@@ -17,6 +17,10 @@ type Ring struct {
 }
 
 func NewRing(size int) *Ring {
+	if size < 1 {
+		size = 1
+	}
+
 	return &Ring{
 		r:    ring.New(size),
 		size: size,
