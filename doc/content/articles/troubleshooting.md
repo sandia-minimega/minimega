@@ -1,66 +1,256 @@
-# Network Troubleshooting
+# Troubleshooting
 
+This page lists the problems that occur most often in minimega. For
+each problem, it gives the checks that usually locate it. A walkthrough follows
+for the most common class of problem: two VMs that cannot talk to each other.
+The page assumes that you installed minimega and read
+[Running minimega](running.md). The network section also assumes that you know
+how to launch VMs and a [minirouter](router.md).
 
-<a id="TOC_1."></a>
+Two habits shorten most investigations. First, raise the log level and read
+the log. `log level debug` at the prompt, or `-level debug -logfile <file>` at
+startup, shows the QEMU, dnsmasq and Open vSwitch commands that minimega runs
+and their output. Second, run `check` to make sure that the external tools
+that minimega depends on are present and new enough.
 
-## Introduction
+## Common problems
 
-When setting up an experiment, numerous issues can prevent VMs from being able
-to connect to one another. This article describes some troubleshooting steps
-that may help to resolve the issue.
+### minimega will not compile
 
-<a id="TOC_2."></a>
+To build from source, you need the Go version that `go.mod` names (1.24 or
+newer). You also need access to the Go module proxy, or a module cache that
+already holds the dependencies (see
+[Dependencies](developer/dependencies.md#building-offline)). Run
+`scripts/build.bash`. The build also needs a C compiler and the libpcap
+development headers (`libpcap-dev` on Debian and Ubuntu). minimega uses cgo in
+`cmd/minimega/proc.go`, `cmd/minimega/disk.go` and `internal/bridge/qos.go`.
+The gopacket pcap bindings link against libpcap. Missing C headers therefore
+cause a build failure.
 
-## Environment
+### minimega appears to already be running
 
-We will use the following simple test environment to concretely describe where
-potential connectivity issues may arise:
+At startup, minimega looks for the command socket `<base>/minimega`. If a
+previous instance crashed, it leaves the socket behind. Start with `-recover`
+to remove the socket and re-adopt VMs that the old instance was running. Start
+with `-force` to remove the socket and start clean. If a live instance owns the
+base directory, neither flag helps. Run `pgrep -a minimega` first to find out.
+`-e` and `-attach` look for the same socket. When they fail with
+`dial unix <base>/minimega: connect: ...` (no such file or connection refused),
+the `-base` value usually does not match the base directory of the daemon.
+
+### Something crashed
+
+- Make sure that the disk is not full. `-level debug` on a busy host writes a
+  lot of data. `log level error` at runtime turns it down.
+- Read the log around the crash. When minimega stops on SIGINT or SIGTERM,
+  `-panic` at startup makes it dump goroutine stacks. The `quit` command does
+  not. A bug report needs those stacks.
+- Restart with `-recover` to pick up VMs that are still running.
+- If the host is in a bad state, use `nuke`. It kills every QEMU and container
+  that minimega started, removes its taps and bridges, deletes the base
+  directory, and then exits. It is a reset, not a routine command.
+- Report reproducible crashes as issues on GitHub with the version, the
+  command file and the log.
+
+### Lingering taps or bridges
+
+`nuke` removes the taps and bridges that minimega created. However, after a
+hard crash, Open vSwitch can still hold ports that no longer have a process
+behind them. Inspect and clean up with `ovs-vsctl`:
+
+```bash
+# ovs-vsctl show
+# ovs-vsctl del-port mega_bridge mega_tap3
+# ovs-vsctl del-br mega_bridge
+```
+
+Deleting a bridge deletes every port on it. `ip link delete mega_tap3`
+removes a tap device that was already dropped from the bridge.
+
+### Taps or VMs do not see each other
+
+The cause is almost always a VLAN mismatch. The `vlan` column of `vm info`
+shows the VLAN of each interface. `ovs-vsctl show` shows the `tag:` that Open
+vSwitch gave the port. A VLAN alias (`vm config net LAN`) and a number
+(`vm config net 100`) are different networks, unless the alias resolves to
+that number. `vlans` lists the mapping. When traffic
+crosses a GRE or VXLAN tunnel between hosts, the MTU also causes problems. Run
+`ping -M do -s 1472 <ip>` from a guest. The result tells you whether
+full-size frames get through.
+
+### A VM stays in BUILDING or goes to ERROR
+
+`vm info` shows the state. `vm flush` discards VMs in `ERROR`, so you can
+relaunch them. The log has the reason. The most common reason is that QEMU
+exits before minimega can reach its control socket:
 
 ```text
-# Create three VM environment:
+ERROR unable to connect to qmp socket: dial unix /tmp/minimega/0/qmp: connect:
+connection refused. qemu output: Could not access KVM kernel module: No such
+file or directory
+failed to initialize KVM: No such file or directory
+```
+
+Everything after `qemu output:` is QEMU's own message and names the problem.
+Here the `kvm` module is not loaded. Other frequent messages report these
+problems:
+
+- A disk image path that does not exist. Make sure that `-filepath` and the
+  `disks` column are correct.
+- A `-cpu` or `-machine` option that the installed QEMU does not support
+  (`vm config qemu-append`).
+
+### Unable to load kvm_intel or kvm_amd
+
+```text
+# modprobe kvm_intel
+modprobe: ERROR: could not insert 'kvm_intel': Operation not supported
+```
+
+Hardware virtualization is disabled or unavailable. On bare metal, enable VT-x
+or AMD-V in the firmware. Inside a VM, you need nested virtualization enabled
+on the outer hypervisor. `dmesg | grep -i kvm` reports what the kernel found.
+`ls -l /dev/kvm` must show that the file exists and that the user that runs
+minimega can write to it.
+
+### VMs are slow
+
+- `vm top` and `top` on the host tell you whether you launched more
+  VMs than the host has cores or memory for.
+- `dmesg | grep -i kvm` shows KVM warnings such as unsupported CPU features
+  that force emulation.
+- `optimize ksm true` turns on kernel same-page merging. This reclaims memory
+  across VMs that booted from the same image. `optimize hugepages <path>` and
+  `optimize affinity true` help CPU-bound experiments. `optimize` with no
+  arguments shows the current configuration.
+- Before you blame the VMs, make sure that the disks (`smartctl`, `iostat`) and
+  the network (`nload`) are not saturated.
+
+### dnsmasq starts and immediately exits
+
+minimega runs `dnsmasq` bound to the address of the tap that you gave it
+(`--bind-interfaces --listen-address <ip>`). If another DNS server already owns
+port 53 on that address or on all addresses, `dnsmasq` fails to start. The
+other server is most often a system-wide `dnsmasq` or the one that
+NetworkManager starts. Find the owner with `ss -ulpn 'sport = :53'`. The stub
+of systemd-resolved listens only on `127.0.0.53` and usually coexists.
+`dnsmasq start` still succeeds. After dnsmasq exits, minimega logs its error
+message at the default error level.
+
+### The mesh does not form
+
+Every node must run the same minimega version. At connection time, minimega
+logs a peer with a different build as `remote node version mismatch`.
+`mesh status` shows the mesh `size`, your `degree`, the `peers` that you are
+connected to, and the `context` and `port` in use. All nodes must share the
+context and port. For discovery to work, all nodes must also be in the same
+broadcast domain. Where broadcast is not available, `mesh dial <hostname>`
+connects to a peer directly. Make sure that port 9000 (or your `-port`) is open
+between hosts. See
+[Cluster setup](cluster.md).
+
+### VNC from the web does not connect
+
+The web console goes through the VNC proxy of minimega for the VM (the
+`vnc_port` column of `vm info`). If someone attached a VNC viewer to the same
+VM, the session is shared. Some viewers do not work with a shared session.
+Disconnect the other client. Also make sure that you started miniweb with the
+same `-base` as minimega. The VM list comes from the daemon that miniweb can
+reach.
+
+### miniccc clients never appear
+
+- The agent and minimega must come from the same release. At handshake,
+  minimega logs a version mismatch as `mismatched miniccc version on <hostname>`
+  and refuses very old agents with `miniccc client too old`. Rebuild the image
+  with the current miniccc.
+- `vm config backchannel` must be `true` (the default) for the serial channel
+  to exist. A `vm config virtio-ports` port named `cc` collides with it.
+- TCP clients connect only after `cc listen <port>` in the namespace. They must
+  present the UUID of a VM in that namespace.
+- Look at the log of the agent inside the guest (`/miniccc.log` in the stock
+  images) and at `cc clients`. The `cc_active` column of `vm info` shows
+  whether minimega received a message from the agent in the last 30 seconds.
+
+See [Command and control](cc.md) for the details.
+
+### Open vSwitch cheat sheet
+
+minimega controls Open vSwitch through `ovs-vsctl`. These read-only commands
+show what it built:
+
+```bash
+# ovs-vsctl show                      # bridges, ports and their VLAN tags
+# ovs-vsctl list Bridge               # database records, also Port and Interface
+# ovs-ofctl show mega_bridge          # OpenFlow port numbers and link state
+# ovs-ofctl dump-flows mega_bridge    # flows, useful when qos or mirrors are in play
+# ovs-appctl fdb/show mega_bridge     # learned MAC addresses per port and VLAN
+```
+
+### Reaching into and out of an experiment
+
+A tap with an address puts the host on an experiment VLAN:
+
+```minimega
+minimega$ tap create 100 ip 10.0.0.1/24
+```
+
+From then on, SSH from a guest to `10.0.0.1` reaches the host. Standard SSH
+port forwarding gives a guest a controlled path out. Run this command on the
+guest:
+
+```bash
+$ ssh -L 1234:proxy.example.com:80 user@10.0.0.1
+```
+
+A browser in the guest that uses `127.0.0.1:1234` as its proxy reaches whatever
+the host can reach. dnsmasq binds to the tap address. The `cc listen` TCP port
+is open on every interface of the host. Be careful. A tap joins the network
+stack of the host to the experiment.
+
+## Network troubleshooting
+
+When two VMs cannot connect, work outward from the closest hop. This section
+uses a three-VM environment to show the steps:
+
+```minimega
 # A --- router --- B
 
-# Create a router between two subnets
+# a minirouter between two subnets
 clear vm config
 vm config kernel $images/minirouter.kernel
-vm config kernel $images/minirouter.initrd
+vm config initrd $images/minirouter.initrd
+vm config memory 3072
 vm config net A B
 vm launch kvm router
+vm start router
 
-# Configure router, enable dhcp for VMs and OSPF between interfaces
 router router interface 0 10.0.0.1/24
 router router dhcp 10.0.0.1 range 10.0.0.2 10.0.0.2
 router router route ospf 0 0
-router router interface 1 20.0.0.1/24
-router router dhcp 20.0.0.1 range 20.0.0.2 20.0.0.2
+router router interface 1 10.0.1.1/24
+router router dhcp 10.0.1.1 range 10.0.1.2 10.0.1.2
 router router route ospf 0 1
-router router
+router router commit
 
-vm start router
-
-# Create two clients, one in each subnet
+# one client in each subnet
 clear vm config
 vm config kernel $images/miniccc.kernel
 vm config initrd $images/miniccc.initrd
+vm config memory 3072
 vm config net A
 vm launch kvm A
 vm config net B
 vm launch kvm B
-
 vm start all
 ```
 
-In this environment, we assume that we wish to connect from VM A to VM B and
-vice versa.
+The goal is for A to reach B and back.
 
-<a id="TOC_3."></a>
+### Ping
 
-## Ping
-
-Ping is one of the most basic connectivity tests. It can be used to ping
-another IP address on the same subnet or on another subnet if there is a route
-between them. For example, a working ping from A to the router interface on the
-same subnet:
+Ping first, because it separates the two failure classes. A working ping from
+A to the router's interface on A's subnet:
 
 ```text
 $ ping -c 3 10.0.0.1
@@ -74,73 +264,84 @@ PING 10.0.0.1 (10.0.0.1) 56(84) bytes of data.
 rtt min/avg/max/mdev = 0.079/0.083/0.085/0.003 ms
 ```
 
-If there ping cannot reach the destination, it would look something like:
+This is a ping that cannot get there:
 
 ```text
-$ ping -c 3 30.0.0.1
-PING 30.0.0.1 (30.0.0.1) 56(84) bytes of data.
+$ ping -c 3 10.0.2.1
+PING 10.0.2.1 (10.0.2.1) 56(84) bytes of data.
 From 10.0.0.1 icmp_seq=1 Destination Host Unreachable
 From 10.0.0.1 icmp_seq=2 Destination Host Unreachable
 From 10.0.0.1 icmp_seq=3 Destination Host Unreachable
 
---- 30.0.0.1 ping statistics ---
+--- 10.0.2.1 ping statistics ---
 3 packets transmitted, 0 received, +3 errors, 100% packet loss, time 2043ms
 ```
 
-Ping can be used to differentiate between a subnet issue and a routing issue.
-If VM A can ping VM B, we are in great shape, we will likely be able to connect
-from VM A to B. If we cannot, we should test whether VM A can ping the router
-interface on the same subnet (i.e. 10.0.0.1). If it can, we should then test
-whether VM A can ping the router interface on the B subnet (i.e. 20.0.0.1). If
-we cannot, we most likely have a routing issue. If VM A cannot ping the router
-at all, we most likely have a subnet issue.
+If A can ping B, connectivity is fine and the problem is at a higher layer. If
+not, ping the near interface of the router, `10.0.0.1`. If that works, ping
+its far interface, `10.0.1.1`. A failure there is a routing problem. If A
+cannot reach `10.0.0.1`, it is a subnet problem.
 
-<a id="TOC_4."></a>
+### Subnet problems
 
-## Subnet issues
+A can fail to reach a router interface on its own subnet for these reasons:
 
-There are a number of reasons that VM A might not be able to ping the router
-interface on the same subnet. We enumerate a few below:
+- Mistyped VLANs. Both interfaces must be on the same VLAN for layer 2
+  connectivity. Compare the `vlan` column of `vm info` for both VMs.
+- Duplicate IPs. Two VMs with the same address on one subnet conflict.
+- Mismatched subnets. Both addresses must fall in the same network with the
+  same mask. If they do not, the guests will not consider each other local. To
+  make sure that they match, use `ipcalc 10.0.0.2/24` on the host or calculate
+  the network by hand.
+
+`ip neighbor` in a guest shows the layer 2 neighbors that it resolved:
 
 ```text
-- Mistyped VLANS: when configuring the VLANs, one or both of the VLANs were mistyped. VMs must be on the same VLAN to ensure layer 2 connectivity.
-- Duplicate IPs: the IP addresses of the VMs are identical. VMs must have distinct IP addresses on the same subnet to ensure layer 3 connectivity.
-- Subnets misconfigured: the IP address of the VMs are in different subnets. The broadcast address must be the same to ensure layer 3 connectivity.
-```
-
-A helpful tool to enumerate the IPs in a subnet is available on the
-[Go Playground](https://go.dev/play/p/m8TNTtygK0). Simply change the CIDR
-on line 10 and then hit run and the output will be all the IPs in the subnet.
-If both IPs are not in the list, then you will not have layer 3 connectivity.
-The last IP in the list is the broadcast IP and is typically not used by an
-individual VM.
-
-`ip neighbor` can be used to list the layer 2 neighbors for an interface:
-
+$ ip neighbor
 10.0.0.1 dev eth0 lladdr 00:19:7e:7d:2b:d2 REACHABLE
-
-If the table is empty or the entry says `FAILED`, there is likely a layer 2
-issue.
-
-`tcpdump` can be used to sniff traffic on an interface. This can be helpful to
-see if packets are making it to the VM but are being dropped by the kernel. For
-example:
-
-```text
-$ tcpdump -i eth0
 ```
 
-If you can see pings but are not getting a response, there is likely a subnet
-misconfiguration or a firewall blocking pings.
+An empty table, or an entry marked `FAILED`, means that ARP does not get
+through and the problem is at layer 2. `tcpdump -i eth0` on the target shows
+whether packets arrive at all. If you see the pings but no replies, suspect a
+subnet mismatch or a guest firewall.
 
-<a id="TOC_5."></a>
+### Routing problems
 
-## Routing issues
+- Make sure that every address and mask on every router interface is correct.
+  A typo in one mask hides a whole subnet.
+- On a minirouter, ask bird what it knows. bird runs with its control socket
+  at `/bird.sock`. Use cc to reach it:
 
-Routing issues can be difficult to diagnose, especially in large networks.
-Here, we list some basic troubleshooting ideas but it is far from exhaustive.
+    ```minimega
+    minimega$ cc filter name=router
+    minimega$ cc exec birdc -s /bird.sock show protocols all
+    minimega$ cc exec birdc -s /bird.sock show route
+    minimega$ cc commands
+    minimega$ cc responses <id>
+    ```
 
-```text
-- Double check all IPs and masks
-- [Check bird status](http://bird.network.cz/?get_doc&v=20&f=bird-4.html) (if using minirouter)
-```
+    `cc exec` does not print the output of bird. Find the ID of each command
+    with `cc commands`, and then `cc responses <id>` prints the output.
+
+    The `router` VM in this example has OSPF configured, so the OSPF protocol
+    is `up` and the neighboring subnet appears in the route table. minirouter
+    uses bird 1.x. The
+    [bird 1.6 documentation](https://bird.network.cz/?get_doc&v=16&f=bird.html)
+    explains the output.
+- `traceroute` from a guest shows where packets stop.
+- A guest needs a default route or a specific route back. A one-way ping
+  usually means that the reply has no route back.
+
+## See also
+
+- [Running minimega](running.md) for startup flags, logging and recovery.
+- [Host networking](networking.md) for taps, bridges, VLANs and dnsmasq.
+- [Routing with minirouter](router.md).
+- [Cluster setup](cluster.md) for the mesh.
+- [Command and control](cc.md) for miniccc.
+- Reference: [`check`](../reference/minimega.md#check),
+  [`nuke`](../reference/minimega.md#nuke),
+  [`optimize`](../reference/minimega.md#optimize),
+  [`mesh status`](../reference/minimega.md#mesh-status),
+  [`log level`](../reference/minimega.md#log-level).

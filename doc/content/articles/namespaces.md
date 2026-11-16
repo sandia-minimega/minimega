@@ -1,435 +1,272 @@
 # Namespaces
 
+Namespaces let you configure and launch VMs across a cluster without deciding
+which host runs each VM. Namespaces also keep experiments separate, so several
+people can share the same hosts. Every VM, tap, capture, VLAN alias, and
+`vm config` template belongs to exactly one namespace. The `vm`, `host`, `cc`,
+and `capture` commands operate on the active namespace.
 
-<a id="TOC_1."></a>
+The design goal was to leave the single-host API alone. After the namespace
+contains those nodes, a script that runs an experiment on your laptop runs
+unchanged on a hundred-node cluster. This page covers the `namespace` and `ns`
+commands, queueing and the scheduler, and how the other APIs behave inside a
+namespace. [Cluster setup](cluster.md) covers how to build the cluster itself
+(the mesh and `deploy`).
 
-## Introduction
+## The default namespace
 
-One of the early feature requests for minimega was a scheduler that would launch
-VMs across a cluster of machines as easily as VMs are launched on a single
-machine. In minimega 2.3, we introduced the concept of `namespaces`, which
-attempts to provide this functionality. In minimega 2.4, we enabled namespaces
-by default.
+minimega starts in the `minimega` namespace. It is special in two ways. If you
+delete it, minimega recreates it automatically. At creation, it contains only
+the local node. To run VMs on other nodes from the default namespace, you must
+add the nodes with `ns add-hosts`.
 
-<a id="TOC_2."></a>
+The prompt shows the active namespace. You can also start the command line or
+`-e` with a namespace preselected. `minimega -attach -namespace foo` and
+`minimega -e -namespace foo vm info` prepend `namespace foo` to every command
+(see [Running minimega](running.md)).
 
-## Overview
+## The `namespace` command
 
-namespaces are a way to automatically pool resources across a cluster.
-Specifically, namespaces allow you to configure and launch VMs without worrying
-too much about which host that they actually run on. namespaces also provide a
-logical separation between experiments, allowing for multitenancy among
-cooperating users.
+If the namespace does not exist, `namespace <name>` creates it. The command also
+makes the namespace active:
 
-One of the design goals for namespaces was to minimize changes to the existing
-API. Specifically, we wanted to allow users to create the same scripts to run
-experiments on a single host and on a cluster of hundreds of hosts. To support
-this, there are minimal changes to the existing APIs (except behind the scenes,
-of course) and a few new namespace-specific APIs.
-
-<a id="TOC_2.1."></a>
-
-### Default namespace
-
-By default, minimega starts out in the `minimega` namespace. This namespace is
-special for several reasons:
-
-- If you delete it, it gets recreated automatically.
-- It only contains the local node on creation.
-
-<a id="TOC_2.2."></a>
-
-### namespace API
-
-namespaces are managed by the `namespace` API. For example, to create a new
-namespace called `foo` and set it as the active namespace:
-
-```text
+```minimega
 minimega[minimega]$ namespace foo
 minimega[foo]$
 ```
 
-Now that the namespace `foo` is active, commands will apply only to resources,
-such as VMs, that belong to the namespace. In a clustered environment, a
-newly-created namespace includes all nodes in the mesh **except** the local node,
-which is treated as the head node. When there are not any nodes in the mesh, the
-namespace includes just the local node.
+From then on, commands apply to resources that belong to `foo`. In a cluster, a
+new namespace contains every node in the mesh except the local node. minimega
+treats the local node as the head node. If the mesh has no peers, the namespace
+contains only the local node.
 
-To return to the default namespace, use:
+`clear namespace` returns to the default namespace without deleting anything:
 
-```text
+```minimega
 minimega[foo]$ clear namespace
 minimega[minimega]$
 ```
 
-When run without arguments, `namespace` prints summary info about namespaces:
+`namespace` alone lists the namespaces:
 
-```text
+```minimega
 minimega[minimega]$ namespace
-namespace | vms | vlans    | active
-foo       | 0   |          | false
-minimega  | 0   | 101-4096 | true
+host | namespace | vlans    | active
+mm0  | foo       |          | false
+mm0  | minimega  | 101-4096 | true
 ```
 
-To make it easier to run commands that target a namespace, users may prefix
-commands with the namespace they with to use. For example, to display
-information about VMs running inside the `foo` namespace, any of the following
-work:
+The `vlans` column is empty until the namespace has its own VLAN range (see
+[VLANs](#vlans) below).
 
-```text
-minimega[minimega]$ namespace foo
-minimega[foo]$ .columns name,state,namespace vm info
-name     | state    | namespace
-vm-foo-0 | BUILDING | foo
+To run a single command in another namespace without switching, prefix it
+with the namespace name. These two forms are equivalent:
 
-
-minimega[minimega]$ namespace foo .columns name,state,namespace vm info
-name     | state    | namespace
-vm-foo-0 | BUILDING | foo
-
-
-minimega[minimega]$ .columns name,state,namespace namespace foo vm info
-name     | state    | namespace
-vm-foo-0 | BUILDING | foo
+```minimega
+minimega[minimega]$ namespace foo .columns name,state vm info
+minimega[minimega]$ .columns name,state namespace foo vm info
 ```
 
-Finally, to delete a namespace, again use the `clear namespace` API:
+`clear namespace <name>` destroys a namespace. The command kills its VMs, stops
+its captures, and deletes its VLAN aliases and host taps. It tears down any
+`ns bridge` that the namespace created. It does the same on every host in the
+cluster. `clear namespace all` destroys every namespace. minimega recreates the
+default namespace empty.
 
-```text
-minimega$ clear namespace foo
-```
+## The `ns` command
 
-Deleting a namespace will clean up all state associated with the namespace
-including: killing VMs, stopping captures, deleting VLAN aliases, removing
-host taps.
+`ns` inspects and changes the active namespace.
 
-<a id="TOC_2.3."></a>
+### Hosts
 
-### ns API
-
-The `ns` API allows users to view and configure parameters of the active
-namespace such as which hosts belong to the namespace.
-
-To display the list of hosts, use `ns hosts`:
-
-```text
+```minimega
 minimega[foo]$ ns hosts
 ccc[1-5]
-```
-
-To add hosts to the namespace, use `ns add-hosts`:
-
-```text
 minimega[foo]$ ns add-hosts ccc[6-10]
-```
-
-minimega only adds hosts that are already part of the mesh.
-
-To remove hosts, use `ns del-hosts`:
-
-```text
 minimega[foo]$ ns del-hosts ccc[1,3,5,7,9]
 ```
 
-An important parameter is whether VMs should be queued or not. This is
-configured by the `ns queueing` option which defaults to false. See the
-Launching VMs section below for an explanation of queueing.
+`ns add-hosts` accepts names, ranges, `localhost`, and `all` (every mesh
+peer). A host must already be part of the mesh. `ns del-hosts all` empties the
+host list.
 
-The `ns` API also allows you to control parameters of the scheduler such as how
-the scheduler determines which host is the least loaded. This is done via the
-`ns load` API:
+### Queueing and the scheduler
 
-```text
-minimega$ ns load cpucommit
-```
+Each namespace has its own `vm config` template and its own saved
+configurations, so users do not overwrite the configuration of other users.
+`vm launch <type> <name> <saved config>` works for each namespace, as described
+in [VM lifecycle](vm-lifecycle.md#saved-configurations).
 
-See the Scheduler section below for a description of the different ways the
-scheduler can compute load.
+By default, `vm launch` creates VMs immediately. The scheduler picks a host for
+each VM and launches it there. If queueing is enabled, `vm launch` only adds VMs
+to a queue. To run the scheduler, call `vm launch` with no arguments. `ns
+schedule` does the same thing. Queueing lets the scheduler see the whole
+experiment before placing anything:
 
-`ns` can also be used to display the current VM queue with `ns queue` and
-information about the schedules it has run so far with `ns schedule status`.
-
-<a id="TOC_2.4."></a>
-
-### Launching VMs
-
-VMs are configured with the `vm config` APIs. Each namespace has a separate
-`vm config` to prevent users from clobbering each other's configurations.
-
-When queueing is enabled and when the user calls `vm launch` the specified VMs
-are not created immediately -- they are instead added to a queue. This queue
-allows the scheduler to make smarter decisions about where it launches VMs. For
-example, the scheduler could schedule VMs with the same VLANs or disk image on
-the same host.
-
-Each call to `vm launch` queues a new VM:
-
-```text
-minimega[minimega]$ namespace foo
+```minimega
 minimega[foo]$ ns queueing true
 minimega[foo]$ vm launch kvm a
 minimega[foo]$ vm launch kvm b
-minimega[foo]$ vm info
 minimega[foo]$ ns queue
-... displays VM configuration for a and b ...
-```
-
-Calling `vm launch` with no additional arguments flushes the queue and invokes
-the scheduler:
-
-```text
+... configuration of a and b ...
 minimega[foo]$ vm launch
 minimega[foo]$ ns schedule status
-start               | end                 | state     | launched | failures | total | hosts
-02 Jan 06 15:04 MST | 02 Jan 06 15:04 MST | completed | 1        | 0        | 1     | 1
+host | start               | end                 | state     | launched | failures | total | hosts
+mm0  | 02 Jan 06 15:04 MST | 02 Jan 06 15:04 MST | completed | 2        | 0        | 2     | 1
 ```
 
-The scheduler, described below, distributes the queued VMs to nodes in the
-namespace and starts them. Once the queue is flushed, the VMs become visible in
-`vm info`.
+`ns queue` shows what is waiting. `ns flush` discards the queue without
+launching anything. `ns schedule status` lists every scheduler run so far.
+Queued VMs do not appear in `vm info` until minimega launches them.
 
-<a id="TOC_2.5."></a>
+### Load
 
-### Scheduler
+The scheduler places each VM on the least loaded host. `ns load` shows or
+changes how the scheduler measures load, from the `host` statistics of every
+host in the namespace:
 
-The scheduler for namespaces is fairly simple -- for each VM, it finds the least
-loaded node and schedules the VM on it. Load is calculated in one of the
-following ways:
+- `cpucommit` (the default): total vCPU commit divided by the number of CPUs
+- `memcommit`: total memory commit divided by total memory
+- `netcommit`: total number of network interfaces
 
-```text
-* CPU commit      : Sum of the Virtual CPUs across all launched VMs.
-* Network commit  : Sum of the count of network interfaces across all launched VMs.
-* Memory load     : Sum of the total memory minus the total memory reserved for all launched VMs.
-```
+The commits count every VM on the host, in any namespace. Because of this, the
+scheduler avoids hosts that are already busy with other experiments. The
+scheduler always sorts a host that reached its `coschedule` limit last.
 
-These values are summed across all VMs running on the host, regardless of
-namespace. This means that the scheduler will avoid launching new VMs on already
-busy nodes if there are multiple namespaces are using the same nodes or there
-are VMs running outside of a namespace.
+### Placement hints
 
-In order to allow users to statically schedule some portions of their experiment
-(such as when there is hardware or people in the loop), there are three APIs to modify VM placement on a per-VM basis:
+Three `vm config` fields pin VMs to hosts or to each other:
 
-```text
-* vm config schedule   : schedule these VMs on a particular node
-* vm config coschedule : limit the number of coscheduled VMs
-* vm config colocate   : schedule VM on the same node as another VM
-```
+- `vm config schedule <host>` puts the VM on that host.
+- `vm config coschedule <n>` limits how many other VMs can share the host.
+  `0` means the VM runs alone. `-1` (the default) means no limit.
+- `vm config colocate <vm>` puts the VM on the same host as a VM that is
+  already launched or queued.
 
-These three APIs can be used together or separately:
-
-```text
+```minimega
 minimega$ vm config schedule ccc50
 minimega$ vm config coschedule 0
 minimega$ vm launch kvm solo
 ```
 
-Instructs the scheduler to launch a VM called `solo` on ccc50 and not to
-schedule any other VMs on ccc50.
+launches `solo` on `ccc50` and keeps every other VM off that host, while
 
-```text
-minimega$ vm config coschedule 0
-minimega$ vm launch kvm solo
-```
-
-Instructs the scheduler to launch a VM called `solo` on any node and not to
-schedule any other VMs on that node.
-
-```text
-minimega$ vm config coschedule 3
-minimega$ vm launch kvm quad[0-3]
-```
-
-Instructs the scheduler to launch four VMs called quad[0-3] on any node and not
-to schedule at most four other VMs on those nodes. Note: because of the way the
-least loaded scheduler works, quad[0-3] will most likely not be scheduled on the
-same node.
-
-```text
+```minimega
 minimega$ vm launch kvm a
 minimega$ vm config colocate a
-minimega$ vm launch kvm b
-```
-
-Instructs the scheduler to schedule `b` on the same node as `a`.
-
-```text
 minimega$ vm config coschedule 1
-minimega$ vm launch kvm a
-minimega$ vm config colocate a
 minimega$ vm launch kvm b
 ```
 
-Instructs the scheduler to schedule `b` on the same node as `a` on the same
-node with no other VMs.
+puts `b` next to `a` and lets nothing else join them. You cannot set `schedule`
+and `colocate` in the same template. Suppose that you use `coschedule 3` on a
+range such as `quad[0-3]`. The four VMs do not share a host. The least-loaded
+rule spreads them out, unless you also `colocate` them.
 
-Note that `vm config schedule` and `vm config colocate` cannot be used for the
-same VM as this could lead to conflicts in VM placement.
+### Dry runs
 
-<a id="TOC_2.5.1."></a>
+`ns schedule dry-run` computes a placement for the queued VMs without
+launching them. `ns schedule mv` edits the placement. `ns schedule dump` prints
+it. `ns schedule` then launches the VMs according to it:
 
-#### Dry-run
-
-The `ns` API also allows users to perform dry runs with the scheduler. This
-will determine VM placement but stop before launching any VMs. The VM placement
-is displayed back to the user for editing with the `ns schedule mv` API. For
-example, if we launched four VMs with queueing enabled:
-
-```text
+```minimega
 minimega$ ns queueing true
 minimega$ vm launch kvm vm[0-3]
 minimega$ ns schedule dry-run
-vm   | dst
-vm0  | mm0
-vm1  | mm1
-vm2  | mm2
-vm3  | mm3
-```
-
-We can then move one or more VMs:
-
-```text
+host | vm  | dst
+mm0  | vm0 | mm0
+mm0  | vm1 | mm1
+mm0  | vm2 | mm2
+mm0  | vm3 | mm3
 minimega$ ns schedule mv vm0 mm1
 minimega$ ns schedule mv vm[1-2] mm0
 minimega$ ns schedule dump
-vm   | dst
-vm0  | mm1
-vm1  | mm0
-vm2  | mm0
-vm3  | mm3
+host | vm  | dst
+mm0  | vm0 | mm1
+mm0  | vm1 | mm0
+mm0  | vm2 | mm0
+mm0  | vm3 | mm3
+minimega$ ns schedule
 ```
 
-To launch the VMs based on the edited VM placement, simply run `ns schedule`:
+You can move only named VMs. VMs that you launch by count (`vm launch kvm 4`)
+get their names at launch.
 
-```text
-minimega$ ns schedule dump
-```
+### Private bridges
 
-Note that only named VMs can be manipulated in this manner. If you launch VMs
-with a number (i.e. `vm launch kvm 4`), the VMs do not have names until they
-are launched.
+`ns bridge <name> [vxlan,gre]` creates a bridge on every host in the namespace
+and connects them with a full mesh of GRE (the default) or VXLAN tunnels. Each
+namespace uses its own tunnel key, so the bridges stay isolated:
 
-<a id="TOC_2.6."></a>
-
-### Private bridge
-
-The `ns bridge` API creates a bridge on all the hosts in the namespace and then
-creates a fully connected mesh of GRE or VXLAN tunnels between them. This
-bridge can then be used when launching VMs:
-
-```text
+```minimega
 minimega$ namespace foo
 minimega$ ns bridge foo
 minimega$ vm config net foo,LAN
 minimega$ vm launch kvm 2
 ```
 
-minimega uses tunnel keys on the GRE or VXLAN tunnels so that each namespace
-has an isolated bridge. This allows VLANs to be reused although this is not
-currently supported.
+Bridge names themselves are not namespaced. We recommend that you prefix them
+with the namespace name. `ns del-bridge <name>` destroys the bridge.
+`clear namespace <name>` does it for you.
 
-Note that bridge names are not automatically namespaced -- users may wish to
-follow a convention of prefixing the bridge name with the namespace name. This
-may happen automatically in a future release.
+### Running commands on every host
 
-The bridge can be manually destroyed using the `ns del-bridge` API or it will
-be automatically destroyed when the namespace is destroyed.
+`ns run <command>` runs a command on every host in the namespace and collects
+the responses. If the head node is a member, `ns run` includes it. `ns run`
+replaces `mesh send all` for namespace-scoped work. You cannot run `read`,
+`mesh send`, `vm launch`, or a nested `ns run` this way.
 
-<a id="TOC_2.7."></a>
-
-### Replacing mesh send all
-
-Before namespaces, users would call `mesh send all` to run a command across the
-cluster and then run the command locally as well if it applied to the head
-node. To help with running commands across nodes in a namespace which can be a
-segment of the mesh, we created the `ns run` API. This API runs the subcommand
-on all nodes in the namespace including the head node, if it is part of the
-namespace.
-
-<a id="TOC_2.8."></a>
-
-### Save
-
-The `ns save` API can be used to take a full experiment snapshot of a running
-experiment. This API first pauses all VMs in the experiment and then calls
-`vm save` on each VM to capture both its memory and disk state as separate
-files. In addition, the command records a minimega script to relaunch the
-running VMs using the saved disk and memory files via the `vm config state`
-and `vm config disk` APIs. This snapshot capability will work for both KVM and
-container type VMs. For KVMs without a disk (kernel/initrd), only the memory
-state is saved. For containers, no state is saved -- the vm config is simply
-copied to the relaunch script.
-
-The state files and relaunch script are saved in a user-specified subdirectory
-where `<name>` is the passed-in name of the saved experiment:
-
-```text
-<minimega filepath>/saved/<name>/vm1.hdd
-<minimega filepath>/saved/<name>/vm1.state
-<minimega filepath>/saved/<name>/vm2.hdd
-<minimega filepath>/saved/<name>/vm2.state
-...
-<minimega filepath>/saved/<name>/launch.mm
+```minimega
+minimega[foo]$ ns run host
 ```
 
-Notes: This command will block until VMs have completed the disk save portion
-of the snapshot. After that, the memory save portion will continue to run in
-the background until finished. Progress can be monitored by running
-`ns save` or `vm save` without arguments. This command does not
-restart any VMs after it completes, so they will be left in a paused state. The
-saved experiment can be restarted using the `read` command and passing it
-the generated minimega script.
+### Saving a namespace
 
-Warning: The process of saving both disk and memory state for an entire
-experiment can result in large files created on the host filesystem. Before
-running, verify there is enough storage available.
+`ns save <name>` pauses every VM in the namespace. It saves the memory state and
+disk of each KVM VM. It also writes a `launch.mm` that relaunches the
+experiment. `ns save` records containers and Android VMs as configuration only,
+because `vm save` supports KVM VMs alone. `ns save` with no arguments reports
+progress. See [Saving and restoring experiments](save-restore.md) for the file
+layout and the restore procedure.
 
-<a id="TOC_2.9."></a>
+## Other commands inside a namespace
 
-### vm API
+### `vm`
 
-Besides the changes noted above to `vm launch`, all of the `vm` APIs are
-namespace-specific. These commands are broadcast out to all hosts in the
-namespace and the responses are collected on the issuing node. `vm` APIs that
-target one or more VMs now apply to VMs across the namespace on any host.
+All `vm` commands are namespace aware. minimega sends them to every host in the
+namespace and collects the responses on the issuing node. Because of this,
+`vm info`, `vm start`, and the rest see VMs wherever they run. VM names are
+unique within a namespace across hosts. The same name can exist in different
+namespaces. IDs are unique only for each host, so address VMs by name.
 
-Note: because of the above changes, minimega now enforces globally unique VM
-names within a namespace. VMs of the same name can exist in different
-namespaces. Users should use VM names rather than IDs to perform actions on VMs
-since multiple hosts can have VMs with the same ID.
+### VLANs
 
-<a id="TOC_2.10."></a>
+Each namespace resolves VLAN aliases separately. For example, `LAN` in
+namespace `foo` is a different VLAN from `LAN` in namespace `bar`. If you set
+`vlans range <min> <max>` in the default namespace, it applies to every
+namespace that does not have its own range. See
+[Host networking](networking.md).
 
-### vlans API
+### `cc`
 
-Setting `vlans range` in the default namespace applies to all namespaces that
-do not have their own range specified.
+Every namespace runs its own `cc` server. The server writes responses under
+`<filepath>/<namespace>/miniccc_responses/`. The default namespace uses
+`<filepath>/miniccc_responses/`. See [Command and control](cc.md).
 
-<a id="TOC_2.11."></a>
+### `host`
 
-### cc API
+If a namespace is active, minimega broadcasts `host` to every host in the
+namespace, and `host` reports one row for each host. In the default namespace
+with no added hosts, `host` reports only the local node. The VM statistics that
+it reports count VMs in every namespace.
 
-minimega starts a separate `cc` server for each namespace. Each server creates
-a separate `miniccc_response` directory in the files directory.
+### `capture`
 
-<a id="TOC_2.12."></a>
-
-### host API
-
-The `host` API broadcasts the `host` command to all hosts in the namespace and
-collects the responses on the issuing host when a namespace is active.
-Otherwise, it only reports information for the issuing node.
-
-<a id="TOC_2.13."></a>
-
-### capture API
-
-The `capture` API is partially namespace-aware. Specifically, the commands to
-capture traffic for a VM work perfect with namespaces -- traffic will be
-captured on the node that runs the VM and can be retrieved with `file get` when
-the capture completes. Capturing traffic on a bridge (PCAP or netflow) is not
-advised -- it may contain traffic from other experiments. See `help capture`
-for more details.
+Capturing traffic for a VM is namespace aware. The capture runs on the host
+where the VM lives. When the capture completes, you can fetch the file with
+`file get`. We recommend that you do not capture a whole bridge in a shared
+cluster, because the bridge can carry traffic from other experiments. See
+[Capture and instrumentation](capture.md).
 
 VM and bridge captures accept options after the file name, such as
 `snaplen=128` or `filter="tcp port 80"`. These options apply to one capture
@@ -446,3 +283,16 @@ sends before the first acknowledgment from that node have no offset
 correction. Thus, keep the clocks of the hosts synchronized with chrony or
 PTP. Every mesh node must run a minimega that supports namespace captures. See
 `help capture pcap namespace`.
+
+## See also
+
+- [Cluster setup](cluster.md)
+- [VM lifecycle](vm-lifecycle.md)
+- [Saving and restoring experiments](save-restore.md)
+- [Running minimega](running.md) for the `-namespace` flag
+- Reference: [`namespace`](../reference/minimega.md#namespace),
+  [`ns`](../reference/minimega.md#ns),
+  [`clear namespace`](../reference/minimega.md#clear-namespace),
+  [`vm config schedule`](../reference/minimega.md#vm-config-schedule),
+  [`vm config coschedule`](../reference/minimega.md#vm-config-coschedule),
+  [`vm config colocate`](../reference/minimega.md#vm-config-colocate)

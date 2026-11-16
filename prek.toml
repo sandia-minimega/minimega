@@ -131,7 +131,7 @@ args = [
 ]
 # Presentations, release notes, and the historical miniclass are frozen records
 # of past work, so their spelling is left as written.
-exclude = '^doc/content/(presentations|releases|training/miniclass)/'
+exclude = '^doc/content/(presentations|releases|legacy/miniclass)/'
 priority = "lint"
 
 

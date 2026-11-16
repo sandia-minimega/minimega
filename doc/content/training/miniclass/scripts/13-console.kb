@@ -1,0 +1,37 @@
+#: 13-console.kb: type "hostname", wait, then type "uptime" on the console
+#: a button-less pointer event with a long delay is how a recording waits
+2000000000:PointerEvent,0,0,0
+50000000:KeyEvent,true,h
+50000000:KeyEvent,false,h
+50000000:KeyEvent,true,o
+50000000:KeyEvent,false,o
+50000000:KeyEvent,true,s
+50000000:KeyEvent,false,s
+50000000:KeyEvent,true,t
+50000000:KeyEvent,false,t
+50000000:KeyEvent,true,n
+50000000:KeyEvent,false,n
+50000000:KeyEvent,true,a
+50000000:KeyEvent,false,a
+50000000:KeyEvent,true,m
+50000000:KeyEvent,false,m
+50000000:KeyEvent,true,e
+50000000:KeyEvent,false,e
+50000000:KeyEvent,true,Return
+50000000:KeyEvent,false,Return
+#: give the shell a second before the next command
+1000000000:PointerEvent,0,0,0
+50000000:KeyEvent,true,u
+50000000:KeyEvent,false,u
+50000000:KeyEvent,true,p
+50000000:KeyEvent,false,p
+50000000:KeyEvent,true,t
+50000000:KeyEvent,false,t
+50000000:KeyEvent,true,i
+50000000:KeyEvent,false,i
+50000000:KeyEvent,true,m
+50000000:KeyEvent,false,m
+50000000:KeyEvent,true,e
+50000000:KeyEvent,false,e
+50000000:KeyEvent,true,Return
+50000000:KeyEvent,false,Return

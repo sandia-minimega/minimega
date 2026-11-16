@@ -18,7 +18,7 @@ behavior:
   testing on macOS or Windows.
 - Read the relevant article in
   [`doc/content/articles/developer/`](doc/content/articles/developer/) before
-  changing locking, namespaces, naming, status updates, or dependencies.
+  changing locking, namespaces, status updates, releases, or dependencies.
 - Read [`.github/CONTRIBUTING.md`](.github/CONTRIBUTING.md) before opening or
   updating a pull request.
 
@@ -35,11 +35,11 @@ behavior change makes it stale.
     `protonuke`, `pyapigen`, `rfbplay`, `rond`, `vmbetter`, `vmconfiger`, and
     `vncdrone`.
   - [`cmd/plumbing/`](cmd/plumbing/) contains support commands excluded from
-    canonical build and test loops.
-- [`internal/`](internal/) contains private packages: `bridge`, `gonetflow`,
-  `iomeshage`, `meshage`, `miniplumber`, `minitunnel`, `nbd`, `nscapture`,
-  `pcapfile`, `present`, `qemu`, `qmp`, `recovery`, `ron`, `version`, `vlans`,
-  `vmconfig`, and `vnc`.
+    the check and test loops. `scripts/build.bash` still builds them.
+- [`internal/`](internal/) contains private packages: `android`, `bridge`,
+  `gonetflow`, `iomeshage`, `meshage`, `miniplumber`, `minitunnel`, `nbd`,
+  `nscapture`, `pcapfile`, `qemu`, `qmp`, `recovery`, `ron`, `version`,
+  `vlans`, `vmconfig`, and `vnc`.
 - [`pkg/`](pkg/) contains reusable packages: `minicli`, `miniclient`, `minilog`,
   `minipager`, and `ranges`.
 - [`tests/`](tests/) contains minitest command files and matching `.want`
@@ -63,7 +63,8 @@ Useful references are the
 [hosted documentation](https://sandia-minimega.github.io/minimega/), the
 [generated API documentation](https://sandia-minimega.github.io/minimega/reference/minimega/),
 [`doc/content/articles/installing.md`](doc/content/articles/installing.md),
-and [`doc/content/articles/usage.md`](doc/content/articles/usage.md).
+[`doc/content/articles/running.md`](doc/content/articles/running.md), and
+[`doc/content/articles/cli.md`](doc/content/articles/cli.md).
 
 ## Development and validation
 
@@ -169,9 +170,10 @@ minirouter, or miniccc behavior.
 
 - Files under [`doc/content/`](doc/content/) use Markdown for documentation
   content.
-- Files under [`doc/content/releases/`](doc/content/releases/) and
-  [`doc/content/presentations/`](doc/content/presentations/) are legacy
-  documentation; do not modify or update them.
+- Files under [`doc/content/releases/`](doc/content/releases/),
+  [`doc/content/presentations/`](doc/content/presentations/), and
+  [`doc/content/legacy/`](doc/content/legacy/) are legacy documentation. Do
+  not modify or update them.
 - Do not run `go mod tidy` or change dependencies unless dependency maintenance
   is the task. Preserve license notices in `LICENSES/` and `packages/`.
   `scripts/licenses.bash` generates `LICENSES/go/` from the Go build; update

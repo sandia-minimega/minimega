@@ -51,7 +51,7 @@ Files are transferred using the get command. When a get command is issued, the
 node will begin searching for a file matching the path and name within the mesh.
 If the file exists, it will be transferred to the requesting node. Which file is
 transferred over the mesh depends on the mode minimega is running in (see the
-"File transfer with minimega" article for details). When a file transfer begins,
+"File management" article for details). When a file transfer begins,
 control will return to minimega while the transfer completes. If the -hashfiles
 flag is disabled (the default), and multiple files with the same name but
 different content exist across the mesh, the "file get" behavior for the file is
