@@ -5,7 +5,6 @@
 package main
 
 import (
-	"strings"
 	"sync"
 
 	"github.com/sandia-minimega/minimega/v2/pkg/miniclient"
@@ -22,6 +21,15 @@ func noOp() chan *miniclient.Response {
 	return out
 }
 
+// drain discards the remaining responses so that miniclient.Conn.Run's
+// goroutine can finish and release the connection lock after an early return.
+func drain(ch chan *miniclient.Response) {
+	go func() {
+		for range ch {
+		}
+	}()
+}
+
 // run minimega commands, automatically redialing if we were disconnected
 func run(c *Command) chan *miniclient.Response {
 	mmMu.Lock()
@@ -36,15 +44,11 @@ func run(c *Command) chan *miniclient.Response {
 		}
 	}
 
-	// check if there's already an error and try to redial
-	if err := mm.Error(); err != nil {
-		s := err.Error()
-		if strings.Contains(s, "broken pipe") || strings.Contains(s, "no such file or directory") {
-			if mm, err = miniclient.Dial(*f_base); err != nil {
-				log.Error("unable to redial: %v", err)
-				return noOp()
-			}
-		} else {
+	// any sticky error means the connection is unusable: close it and redial
+	if mm.Error() != nil {
+		mm.Close()
+		if mm, err = miniclient.Dial(*f_base); err != nil {
+			log.Error("unable to redial: %v", err)
 			return noOp()
 		}
 	}
