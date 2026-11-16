@@ -472,20 +472,34 @@ func wget(u, dst string) error {
 		return err
 	}
 
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
 	resp, err := http.Get(u)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
-	_, err = io.Copy(out, resp.Body)
-	return err
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unable to download %v: %v", u, resp.Status)
+	}
+
+	// download to a temp file so a failed or partial download is never
+	// mistaken for a cached file.
+	out, err := os.CreateTemp(filepath.Dir(dst), ".wget-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(out.Name()) // no-op after a successful rename
+
+	if _, err := io.Copy(out, resp.Body); err != nil {
+		out.Close()
+		return err
+	}
+
+	if err := out.Close(); err != nil {
+		return err
+	}
+
+	return os.Rename(out.Name(), dst)
 }
 
 func writeInt(filename string, value int) error {
