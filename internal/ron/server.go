@@ -470,6 +470,7 @@ func (s *Server) GetProcesses(uuid string) ([]*Process, error) {
 func (s *Server) GetExitCode(id int, client string) (int, error) {
 	var cid string
 
+	s.clientLock.Lock()
 	if _, ok := s.clients[client]; ok {
 		cid = client
 	} else {
@@ -480,6 +481,7 @@ func (s *Server) GetExitCode(id int, client string) (int, error) {
 			}
 		}
 	}
+	s.clientLock.Unlock()
 
 	if cid == "" {
 		return 0, fmt.Errorf("no client %s", client)
@@ -830,6 +832,11 @@ func (s *Server) recvFile(uuid string, f *File) error {
 		return err
 	}
 
+	// the name and uuid come from the guest, keep them inside the response dir
+	if !filepath.IsLocal(f.Name) || !filepath.IsLocal(uuid) {
+		return fmt.Errorf("invalid file name from client %q: %q", uuid, f.Name)
+	}
+
 	fpath := filepath.Join(s.responsePath(&f.ID), uuid, f.Name)
 	return f.Recv(fpath)
 }
@@ -1029,7 +1036,7 @@ func bindClientUUID(m *Message, expectedUUID string) error {
 // client and transport handler for connections.
 func (s *Server) clientHandler(c *client) {
 	defer c.conn.Close()
-	defer s.removeClient(c.UUID)
+	defer s.removeClient(c)
 
 	// Set up minitunnel, dialing the server that should be running on the
 	// client's side. Data is Trunk'd via Messages.
@@ -1080,6 +1087,10 @@ func (s *Server) clientHandler(c *client) {
 					log.Error("file error from %v: %v", c.UUID, m.Error)
 					continue
 				}
+				if m.File == nil {
+					err = fmt.Errorf("file message from %v without a file", c.UUID)
+					break
+				}
 				if m.File.Data == nil && m.File.Offset == 0 {
 					// client requested file
 					err = s.sendFile(c, m.File.Name)
@@ -1088,6 +1099,10 @@ func (s *Server) clientHandler(c *client) {
 					err = s.recvFile(c.UUID, m.File)
 				}
 			case MESSAGE_CLIENT:
+				if m.Client == nil {
+					err = fmt.Errorf("client message from %v without a client", c.UUID)
+					break
+				}
 				if c.mangled {
 					m.Client.UUID = unmangle(m.Client.UUID)
 				}
@@ -1139,31 +1154,38 @@ func (s *Server) addClient(c *client) error {
 	return nil
 }
 
-// removeClient conditionally remove client from the client list, closing
-// connections if possible.
-func (s *Server) removeClient(uuid string) {
-	log.Debug("removeClient: %v", uuid)
+// removeClient removes c from the client list, if it is still the registered
+// client for its UUID, closing connections if possible. A stale handler must
+// not evict a client that has reconnected under the same UUID.
+func (s *Server) removeClient(c *client) {
+	log.Debug("removeClient: %v", c.UUID)
 
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
-	if c, ok := s.clients[uuid]; ok {
-		c.conn.Close()
-
-		// with the client conn closed, close any lingering plumbing
-		c.pipeLock.Lock()
-		defer c.pipeLock.Unlock()
-		for _, p := range c.pipeReaders {
-			p.Close()
-		}
-		for _, p := range c.pipeWriters {
-			close(p)
-		}
-
-		// stop Goroutine sending heartbeats to this client
-		close(c.cancelHeartbeat)
-
-		delete(s.clients, uuid)
+	if s.clients[c.UUID] == c {
+		s.dropClient(c)
 	}
+}
+
+// dropClient closes the client's connection, plumbing and heartbeat and
+// removes it from the client list. The caller must hold clientLock.
+func (s *Server) dropClient(c *client) {
+	c.conn.Close()
+
+	// with the client conn closed, close any lingering plumbing
+	c.pipeLock.Lock()
+	defer c.pipeLock.Unlock()
+	for _, p := range c.pipeReaders {
+		p.Close()
+	}
+	for _, p := range c.pipeWriters {
+		close(p)
+	}
+
+	// stop Goroutine sending heartbeats to this client
+	close(c.cancelHeartbeat)
+
+	delete(s.clients, c.UUID)
 }
 
 // sendCommands send a commands message to the specified UUID. If UUID is not
@@ -1243,6 +1265,11 @@ func (s *Server) NewFilesSendCommand(files []string) (*Command, error) {
 // sendFile reads the file and sends it in multiple chunks to the client.
 func (s *Server) sendFile(c *client, filename string) error {
 	log.Debug("sendFile: %v to %v", filename, c.UUID)
+
+	// the name comes from the guest, keep it inside the files dir
+	if !filepath.IsLocal(filename) {
+		return fmt.Errorf("invalid file request from client %q: %q", c.UUID, filename)
+	}
 
 	// try to send version from subpath first
 	dir := filepath.Join(s.path, s.subpath)
@@ -1527,10 +1554,7 @@ func (s *Server) clientReaper() {
 
 			if !active {
 				log.Debug("client %v expired", k)
-				// the same as removeClient except we already hold clientLock
-				v.conn.Close()
-				close(v.cancelHeartbeat)
-				delete(s.clients, k)
+				s.dropClient(v)
 			}
 
 			if vm, ok := s.vms[k]; ok {
