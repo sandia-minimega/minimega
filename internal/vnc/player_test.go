@@ -207,3 +207,47 @@ func TestSignalRightAfterStart(t *testing.T) {
 		within(t, 5*time.Second, "Stop", func() error { return p.Stop("vm") })
 	}
 }
+
+// PlaybackString must return an error, not crash and not leave its temp file
+// behind, when the playback cannot start (already playing, VNC port refused)
+// or the text cannot be typed (non-ASCII).
+func TestPlaybackStringFailures(t *testing.T) {
+	srv := newFakeServer(t)
+	dir := t.TempDir()
+	writeKbr(t, filepath.Join(dir, "long.kbr"), "30s:KeyEvent,true,z\n")
+
+	// a port nothing listens on
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dead := l.Addr().String()
+	l.Close()
+
+	p := NewPlayer()
+	if err := p.Playback("busy", srv.addr, filepath.Join(dir, "long.kbr")); err != nil {
+		t.Fatal(err)
+	}
+	defer p.Stop("busy")
+
+	cases := []struct{ name, id, host, str string }{
+		{"already playing", "busy", srv.addr, "hi"},
+		{"dial refused", "other", dead, "hi"},
+		{"non-ascii", "other", srv.addr, "hé"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			tmp := t.TempDir()
+			t.Setenv("TMPDIR", tmp)
+
+			if err := p.PlaybackString(c.id, c.host, c.str); err == nil {
+				t.Fatal("expected an error")
+			}
+
+			time.Sleep(100 * time.Millisecond) // let any cleanup goroutine run
+			if left, _ := os.ReadDir(tmp); len(left) != 0 {
+				t.Fatalf("temp file leaked: %v", left[0].Name())
+			}
+		})
+	}
+}
