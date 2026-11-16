@@ -420,7 +420,9 @@ func teardown() {
 	DestroyNamespace(Wildcard)
 
 	// clean-up non-namespace things
+	dnsmasqLock.Lock()
 	dnsmasqKillAll()
+	dnsmasqLock.Unlock()
 	ksmDisable()
 	containerTeardown()
 
