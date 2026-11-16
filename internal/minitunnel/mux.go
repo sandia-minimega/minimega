@@ -39,10 +39,8 @@ func (c *chans) remove(ID int) {
 	c.Lock()
 	defer c.Unlock()
 
-	if ch, ok := c.chans[ID]; ok {
-		close(ch)
-	}
-
+	// don't close the channel: the mux may still hold it and be about to send.
+	// Only the mux closes channels, in dropAll.
 	delete(c.chans, ID)
 }
 
