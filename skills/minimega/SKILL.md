@@ -72,10 +72,14 @@ depth; the essentials are:
   `check` form validates syntax without executing. `read` stops at invalid
   syntax, continues past a command that returns an error, and rejects nested
   `read`. See `examples/minimal-kvm.mm`.
-- **Docker.** `docker/start-minimega.sh` generates flags from `MM_*` container
-  environment variables, then `/etc/default/minimega`, then script defaults.
-  `MM_APPEND` adds raw flags. Docker defaults differ from native defaults
-  (`MM_DEGREE=1`, `MM_LOGLEVEL=info`, `MM_FORCE=true`, a log file).
+- **Docker.** minimega and miniweb are separate images and containers, built
+  from the `minimega` and `miniweb` targets of `docker/Dockerfile`. The miniweb
+  container shares the minimega network namespace, so the minimega container
+  publishes `MINIWEB_PORT`. `docker/start-minimega.sh` generates flags from
+  `MM_*` container environment variables, then `/etc/default/minimega`, then
+  script defaults. `MM_APPEND` adds raw flags. Docker defaults differ from
+  native defaults (`MM_DEGREE=1`, `MM_LOGLEVEL=info`, `MM_FORCE=true`, a log
+  file).
 - **systemd.** `misc/daemon/minimega.service` maps `/etc/minimega/minimega.conf`
   to explicit `ExecStart` flags; `MM_APPEND` is not supported there.
 - **Help.** `minimega -h` for startup flags, `minimega -e help [command]` for

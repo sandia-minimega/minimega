@@ -8,9 +8,9 @@
 #   sudo tests/live/run.sh [image]
 #
 # Steps:
-#   1. pull the image (the one CI published, by default)
+#   1. pull the minimega and miniweb images (the ones CI published, by default)
 #   2. build the KVM guest kernel/initrd with the image's vmbetter (tests/live/image/live.conf)
-#   3. start minimega from the image exactly as docker/README.md documents
+#   3. start minimega and miniweb from the images exactly as docker/README.md documents
 #   4. load tests/live/$LIVE_GROUP/topology.mm with "mm read" (the CLI path)
 #   5. run the Go tests in tests/live/$LIVE_GROUP over the command socket (the phenix path)
 #   6. collect diagnostics, tear the experiment down, and stop the container
@@ -23,8 +23,11 @@
 #                         topology.mm and the group's Go tests (default: core)
 #   LIVE_IMAGE            image to test (default: first argument, then
 #                         ghcr.io/sandia-minimega/minimega:master)
-#   LIVE_PULL=0           use a local image without pulling
-#   LIVE_CONTAINER        container name (default: minimega)
+#   LIVE_MINIWEB_IMAGE    miniweb image to test (default: the minimega image
+#                         with the name miniweb, e.g. ghcr.io/sandia-minimega/miniweb:master)
+#   LIVE_PULL=0           use local images without pulling
+#   LIVE_CONTAINER        container name (default: minimega); the miniweb
+#                         container gets the same name with a "-miniweb" suffix
 #   LIVE_MM_BASE          minimega base dir, same path on host and in the
 #                         container (default: /tmp/minimega)
 #   LIVE_ARTIFACTS        output directory (default: ./live-artifacts)
@@ -46,7 +49,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 IMAGE="${1:-${LIVE_IMAGE:-ghcr.io/sandia-minimega/minimega:master}}"
+MINIWEB_IMAGE="${LIVE_MINIWEB_IMAGE:-$(sed -E 's#(^|/)minimega([:@]|$)#\1miniweb\2#' <<<"${IMAGE}")}"
 CONTAINER="${LIVE_CONTAINER:-minimega}"
+MINIWEB_CONTAINER="${CONTAINER}-miniweb"
 MM_BASE="${LIVE_MM_BASE:-/tmp/minimega}"
 MM_FILES="${MM_BASE}/files"
 STAGE="${MM_FILES}/live"
@@ -61,6 +66,7 @@ mm() { timeout "${MM_TIMEOUT:-0}" docker exec -i "${CONTAINER}" minimega -e "$@"
 # --- preflight ---------------------------------------------------------------
 
 GROUP="${LIVE_GROUP:-core}"
+[[ "${MINIWEB_IMAGE}" != "${IMAGE}" ]] || die "unable to derive the miniweb image from ${IMAGE}; set LIVE_MINIWEB_IMAGE"
 [[ "${GROUP}" =~ ^[A-Za-z0-9_-]+$ ]] || die "LIVE_GROUP must be a plain directory name, got '${GROUP}'"
 [[ -f "${SCRIPT_DIR}/${GROUP}/topology.mm" ]] || die "no test group ${GROUP}: ${SCRIPT_DIR}/${GROUP}/topology.mm not found"
 
@@ -85,9 +91,9 @@ case "${MM_BASE}" in
     ;;
 esac
 
-if docker inspect "${CONTAINER}" >/dev/null 2>&1 || [[ -S "${MM_BASE}/minimega" ]]; then
-    [[ "${LIVE_FORCE:-0}" == "1" ]] || die "container ${CONTAINER} or ${MM_BASE}/minimega exists; set LIVE_FORCE=1 to replace it"
-    docker rm -f "${CONTAINER}" >/dev/null 2>&1
+if docker inspect "${CONTAINER}" >/dev/null 2>&1 || docker inspect "${MINIWEB_CONTAINER}" >/dev/null 2>&1 || [[ -S "${MM_BASE}/minimega" ]]; then
+    [[ "${LIVE_FORCE:-0}" == "1" ]] || die "container ${CONTAINER}, container ${MINIWEB_CONTAINER}, or ${MM_BASE}/minimega exists; set LIVE_FORCE=1 to replace it"
+    docker rm -f "${MINIWEB_CONTAINER}" "${CONTAINER}" >/dev/null 2>&1
 fi
 # a leftover base directory (even without a socket) is only removed on request
 if [[ -n "$(ls -A "${MM_BASE}" 2>/dev/null)" ]]; then
@@ -103,10 +109,15 @@ lsmod | grep -q '^openvswitch' || log "warning: openvswitch module not loaded; O
 # --- image -------------------------------------------------------------------
 
 if [[ "${LIVE_PULL:-1}" == "1" ]]; then
-    log "pulling ${IMAGE}"
-    docker pull -q "${IMAGE}" || die "unable to pull ${IMAGE}"
+    for img in "${IMAGE}" "${MINIWEB_IMAGE}"; do
+        log "pulling ${img}"
+        docker pull -q "${img}" || die "unable to pull ${img}"
+    done
 fi
-docker image inspect "${IMAGE}" --format 'image {{.Id}} created {{.Created}}' | tee "${ARTIFACTS}/image.txt"
+for img in "${IMAGE}" "${MINIWEB_IMAGE}"; do
+    docker image inspect "${img}" --format "${img} {{.Id}} created {{.Created}}" || die "image ${img} not found"
+done > "${ARTIFACTS}/image.txt"
+cat "${ARTIFACTS}/image.txt"
 
 if [[ -n "${LIVE_GUEST_DIR:-}" ]]; then
     log "using guest image from ${LIVE_GUEST_DIR}"
@@ -167,11 +178,12 @@ fi
 
 cleanup() {
     if [[ "${LIVE_KEEP:-0}" == "1" ]]; then
-        log "LIVE_KEEP=1: leaving ${CONTAINER} running"
+        log "LIVE_KEEP=1: leaving ${CONTAINER} and ${MINIWEB_CONTAINER} running"
         return
     fi
+    docker logs "${MINIWEB_CONTAINER}" > "${ARTIFACTS}/logs/miniweb-container.log" 2>&1 || true
     docker logs "${CONTAINER}" > "${ARTIFACTS}/logs/container.log" 2>&1 || true
-    docker rm -f "${CONTAINER}" >/dev/null 2>&1 || true
+    docker rm -f "${MINIWEB_CONTAINER}" "${CONTAINER}" >/dev/null 2>&1 || true
     # this run created MM_BASE and the artifacts are copied out of it; remove
     # it so the stale socket does not block the next run
     rm -rf "${MM_BASE}"
@@ -206,6 +218,16 @@ for _ in $(seq 1 60); do
     sleep 2
 done
 mm version || { docker logs "${CONTAINER}" | tail -50; die "minimega did not start"; }
+
+# miniweb shares the network namespace of the minimega container, which
+# publishes port 9001, and reaches minimega over the socket in MM_BASE.
+log "starting ${MINIWEB_CONTAINER}"
+docker run -d \
+    --name "${MINIWEB_CONTAINER}" \
+    --network "container:${CONTAINER}" \
+    -v "${MM_BASE}:${MM_BASE}" \
+    -e MINIWEB_BASE="${MM_BASE}" \
+    "${MINIWEB_IMAGE}" >/dev/null || die "unable to start miniweb"
 
 # --- load the topology through the CLI ---------------------------------------
 
