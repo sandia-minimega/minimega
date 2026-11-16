@@ -214,6 +214,7 @@ func cliDiskCreate(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 func cliDiskSnapshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	image := getImage(c)
 	dst := c.StringArgs["dst"]
+	tmp := false
 
 	if dst == "" {
 		f, err := os.CreateTemp(*f_iomBase, "snapshot")
@@ -222,14 +223,21 @@ func cliDiskSnapshot(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 		}
 
 		dst = f.Name()
+		f.Close()
 		resp.Response = dst
+		tmp = true
 	} else if !path.IsAbs(dst) {
 		dst = path.Join(*f_iomBase, dst)
 	}
 
 	log.Debug("destination image: %v", dst)
 
-	return diskSnapshot(image, dst)
+	err := diskSnapshot(image, dst)
+	if err != nil && tmp {
+		os.Remove(dst)
+	}
+
+	return err
 }
 
 func cliDiskInfo(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
