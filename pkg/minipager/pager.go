@@ -44,17 +44,24 @@ func (_ defaultPager) Page(output string) {
 
 	fmt.Printf("-- sending %v lines to $PAGER --\n", lines)
 
+	runPager(output)
+}
+
+// runPager pipes output through $PAGER (which may include arguments). If the
+// pager cannot be run, the output is printed so it is not lost.
+func runPager(output string) {
 	pager := os.Getenv("PAGER")
 	if pager == "" {
 		pager = "less"
 	}
 
-	cmd := exec.Command(pager)
+	cmd := exec.Command("sh", "-c", pager)
 	cmd.Stdin = strings.NewReader(output)
 	cmd.Stdout = os.Stdout
 
 	if err := cmd.Run(); err != nil {
 		log.Error("problem paging: %s", err)
+		fmt.Println(output)
 	}
 }
 
