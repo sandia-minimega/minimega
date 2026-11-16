@@ -218,6 +218,14 @@ func cliBackground(c *minicli.Command, respChan chan<- minicli.Responses) {
 		Running:   true,
 		TimeStart: time.Now(),
 	}
+
+	// Start synchronously so cmd.Process is set before the entry is visible
+	// and a failed start never leaves an entry behind.
+	if err := cmd.Start(); err != nil {
+		backgroundProcessesRWLock.Unlock()
+		respChan <- errResp(err)
+		return
+	}
 	backgroundProcessNextID += 1
 	backgroundProcesses[bp.ID] = bp
 
@@ -230,7 +238,7 @@ func cliBackground(c *minicli.Command, respChan chan<- minicli.Responses) {
 	}}
 
 	go func() {
-		err := cmd.Run()
+		err := cmd.Wait()
 
 		backgroundProcessesRWLock.Lock()
 		defer backgroundProcessesRWLock.Unlock()
@@ -369,7 +377,7 @@ func cliBackgroundError(c *minicli.Command, respChan chan<- minicli.Responses) {
 
 func cliClearBackgroundStatus(c *minicli.Command, respChan chan<- minicli.Responses) {
 	backgroundProcessesRWLock.Lock()
-	backgroundProcessesRWLock.Unlock()
+	defer backgroundProcessesRWLock.Unlock()
 
 	var keys []int
 	for key, entry := range backgroundProcesses {
@@ -399,7 +407,7 @@ func cliClearBackgroundStatus(c *minicli.Command, respChan chan<- minicli.Respon
 // flush any statuses over the max length, sorted by ending time
 func flushOldBackgroundStatus() {
 	backgroundProcessesRWLock.Lock()
-	backgroundProcessesRWLock.Unlock()
+	defer backgroundProcessesRWLock.Unlock()
 
 	if len(backgroundProcesses) < backgroundProcessMaxLen {
 		return
