@@ -20,7 +20,7 @@ jobs:
       - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libpcap-dev
+          sudo apt-get install -y build-essential libpcap-dev qemu-utils
 
       - name: Setup Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
@@ -31,6 +31,14 @@ jobs:
         env:
           JUNITFILE: junit.xml
         run: ./scripts/test.bash
+
+      # These tests mount real disk images through nbd, so they run as root.
+      - name: Run disk image tests
+        env:
+          MINIMEGA_TEST_DISK_IMAGES: "1"
+        run: |
+          go test -c -race -o disk-image.test ./cmd/minimega
+          sudo --preserve-env=MINIMEGA_TEST_DISK_IMAGES ./disk-image.test -test.run '^TestDiskImage' -test.v
 
       # annotate_only needs no checks: write, so it also works for fork pull requests.
       - name: Report test results
