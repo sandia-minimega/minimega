@@ -1,6 +1,12 @@
 package main
 
-import "testing"
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
+	"testing"
+)
 
 func testVM(vmType VMType, state VMState) VM {
 	base := &BaseVM{
@@ -107,5 +113,57 @@ func TestVMsCountTypeState(t *testing.T) {
 				t.Fatalf("expected %d, got %d", tt.want, got)
 			}
 		})
+	}
+}
+
+// flushableVMs builds n QUIT android VMs whose instance dirs and namespace
+// aliases exist under a temp *f_base, as a real launch would leave them.
+func flushableVMs(t *testing.T, n int) *VMs {
+	t.Helper()
+
+	old := *f_base
+	*f_base = t.TempDir()
+	t.Cleanup(func() { *f_base = old })
+
+	vms := &VMs{m: map[int]VM{}}
+	for i := 0; i < n; i++ {
+		vm := testVM(ANDROID, VM_QUIT).(*AndroidVM)
+		vm.ID = i
+		vm.Namespace = "ns"
+		vm.UUID = fmt.Sprintf("uuid-%d", i)
+		vm.instancePath = filepath.Join(*f_base, strconv.Itoa(i))
+
+		aliasDir := filepath.Join(*f_base, "namespaces", "ns")
+		if err := os.MkdirAll(aliasDir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(vm.instancePath, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(vm.instancePath, filepath.Join(aliasDir, vm.UUID)); err != nil {
+			t.Fatal(err)
+		}
+		vms.m[i] = vm
+	}
+	return vms
+}
+
+func TestVMsFlushAllRemovesVMs(t *testing.T) {
+	vms := flushableVMs(t, 200)
+	if err := vms.FlushAll(nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(vms.m) != 0 {
+		t.Fatalf("expected no VMs left, got %d", len(vms.m))
+	}
+}
+
+func TestVMsFlushRemovesVMs(t *testing.T) {
+	vms := flushableVMs(t, 200)
+	if err := vms.Flush(Wildcard, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(vms.m) != 0 {
+		t.Fatalf("expected no VMs left, got %d", len(vms.m))
 	}
 }
