@@ -276,7 +276,11 @@ func iomCompleter(last string) []string {
 	}
 
 	fileprefix := strings.TrimPrefix(last, IOM_HELPER_MATCH)
-	matches := iom.Info(fileprefix + "*")
+	matches, err := iom.Info(fileprefix + "*")
+	if err != nil {
+		log.Errorln(err)
+		return nil
+	}
 	log.Debug("got raw matches: %v", matches)
 
 	// we need to clean up matches to collapse directories, unless

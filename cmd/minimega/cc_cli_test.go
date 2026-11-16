@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -186,7 +187,7 @@ func TestFetchCCUpdateFilesUsesMesh(t *testing.T) {
 		got = append(got, file)
 		return nil
 	}
-	list := func(pattern string) []string { return mesh[pattern] }
+	list := func(pattern string) ([]string, error) { return mesh[pattern], nil }
 
 	if err := fetchCCUpdateFiles("ns", list, get); err != nil {
 		t.Fatal(err)
@@ -203,9 +204,14 @@ func TestFetchCCUpdateFilesUsesMesh(t *testing.T) {
 		t.Fatal("fetchCCUpdateFiles ignored a mesh error")
 	}
 
-	none := func(string) []string { return nil }
+	none := func(string) ([]string, error) { return nil, nil }
 	if err := fetchCCUpdateFiles("ns", none, get); err == nil {
 		t.Fatal("fetchCCUpdateFiles did not fail when the mesh has no binaries")
+	}
+
+	timeout := func(string) ([]string, error) { return nil, errors.New("timeout") }
+	if err := fetchCCUpdateFiles("ns", timeout, get); err == nil {
+		t.Fatal("fetchCCUpdateFiles ignored a mesh search error")
 	}
 }
 
@@ -754,5 +760,225 @@ func TestCCCommandPreProcess(t *testing.T) {
 				t.Fatalf("got %+v, want %+v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestCCSendExpand(t *testing.T) {
+	errTimeout := errors.New("timeout")
+
+	cases := []struct {
+		name     string
+		subpath  string
+		pattern  string
+		info     map[string][]string
+		errs     map[string]error
+		noSearch bool
+		want     []ccSendFile
+		wantErr  error
+	}{
+		{
+			name:    "namespace match has namespace-relative send name",
+			subpath: "blue",
+			pattern: "*.txt",
+			info:    map[string][]string{"blue/*.txt": {"blue/one.txt"}},
+			want:    []ccSendFile{{mesh: "blue/one.txt", send: "one.txt"}},
+		},
+		{
+			name:    "global match keeps its directory",
+			subpath: "red",
+			pattern: "blue/*.txt",
+			info:    map[string][]string{"blue/*.txt": {"blue/one.txt"}},
+			want:    []ccSendFile{{mesh: "blue/one.txt", send: "blue/one.txt"}},
+		},
+		{
+			name:    "files below matched directories are not sent",
+			pattern: "*",
+			info: map[string][]string{"*": {
+				"one.txt",
+				"blue/one.txt",
+				"miniccc_responses/1/uuid/stdout",
+			}},
+			want: []ccSendFile{{mesh: "one.txt", send: "one.txt"}},
+		},
+		{
+			name:    "namespace files below matched directories are not sent",
+			subpath: "blue",
+			pattern: "*",
+			info: map[string][]string{"blue/*": {
+				"blue/one.txt",
+				"blue/miniccc_responses/1/uuid/stdout",
+			}},
+			want: []ccSendFile{{mesh: "blue/one.txt", send: "one.txt"}},
+		},
+		{
+			name:    "namespace search error does not fall back",
+			subpath: "blue",
+			pattern: "*.txt",
+			info:    map[string][]string{"*.txt": {"global.txt"}},
+			errs:    map[string]error{"blue/*.txt": errTimeout},
+			wantErr: errTimeout,
+		},
+		{
+			name:    "empty namespace search falls back",
+			subpath: "blue",
+			pattern: "*.txt",
+			info:    map[string][]string{"*.txt": {"global.txt"}},
+			want:    []ccSendFile{{mesh: "global.txt", send: "global.txt"}},
+		},
+		{
+			name:    "files on many nodes are sent once",
+			pattern: "*.txt",
+			info:    map[string][]string{"*.txt": {"two.txt", "one.txt", "two.txt", "one.txt"}},
+			want: []ccSendFile{
+				{mesh: "one.txt", send: "one.txt"},
+				{mesh: "two.txt", send: "two.txt"},
+			},
+		},
+		{
+			name:     "literal names do not search the mesh",
+			subpath:  "blue",
+			pattern:  "one.txt",
+			noSearch: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			info := func(glob string) ([]string, error) {
+				if tc.noSearch {
+					t.Fatalf("unexpected mesh search for %q", glob)
+				}
+
+				return tc.info[glob], tc.errs[glob]
+			}
+
+			got, err := ccSendExpand(tc.subpath, tc.pattern, info)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("error = %v, want %v", err, tc.wantErr)
+			}
+
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("files = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
+// useFileMesh sets the files directory and iom to a new directory on a mesh
+// with one node, and restores them when the test ends. It returns the
+// directory.
+func useFileMesh(t *testing.T) string {
+	t.Helper()
+
+	base := t.TempDir()
+	mesh, err := iomeshage.New(base, &meshage.Node{}, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	oldIOM, oldBase := iom, *f_iomBase
+	iom, *f_iomBase = mesh, base
+	t.Cleanup(func() { iom, *f_iomBase = oldIOM, oldBase })
+
+	return base
+}
+
+// writeTestFiles creates each named file below base with the name as its
+// content.
+func writeTestFiles(t *testing.T, base string, names ...string) {
+	t.Helper()
+
+	for _, name := range names {
+		path := filepath.Join(base, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(name), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// ccFileSend runs cc send in namespace name with the files directory base and
+// returns the names that the new command sends.
+func ccFileSend(t *testing.T, base, name string, files ...string) ([]string, error) {
+	t.Helper()
+
+	subpath := name
+	if name == DefaultNamespace {
+		subpath = ""
+	}
+
+	ccServer, err := ron.NewServer(base, subpath, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(ccServer.Destroy)
+
+	ns := &Namespace{Name: name, ccServer: ccServer}
+	c := &minicli.Command{
+		BoolArgs: map[string]bool{"send": true},
+		ListArgs: map[string][]string{"file": files},
+	}
+
+	resp := &minicli.Response{}
+	if err := cliCCFileSend(ns, c, resp); err != nil {
+		return nil, err
+	}
+
+	return ccServer.GetCommand(resp.Data.(int)).FilesSend, nil
+}
+
+func TestCCFileSendAbsoluteGlobUsesFilesDirectory(t *testing.T) {
+	base := useFileMesh(t)
+	writeTestFiles(t, base, "a.txt", "blue/b.txt")
+
+	got, err := ccFileSend(t, base, "blue", filepath.Join(base, "*.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if want := []string{"a.txt"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("files sent = %v, want %v", got, want)
+	}
+}
+
+func TestCCFileSendGlobMatchesAreLiteral(t *testing.T) {
+	base := useFileMesh(t)
+	writeTestFiles(t, base, "report1.txt", "report[1].txt", "only/x[1].txt", "only/x1.log")
+
+	got, err := ccFileSend(t, base, DefaultNamespace, "*.txt", "only/*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := []string{"report1.txt", "report[1].txt", "only/x[1].txt"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("files sent = %v, want %v", got, want)
+	}
+}
+
+func TestCCSendGlob(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+		ok   bool
+	}{
+		{in: "*.txt", want: "*.txt", ok: true},
+		{in: "file:*.txt", want: "*.txt", ok: true},
+		{in: "file:report?.txt", want: "report?.txt", ok: true},
+		{in: "file:dir/[ab].txt", want: "dir/[ab].txt", ok: true},
+		{in: "/files/*.txt", want: "/files/*.txt", ok: true},
+		{in: "file:one.txt", want: "one.txt"},
+		{in: "one.txt", want: "one.txt"},
+		{in: "file:///files/*.txt"},
+		{in: "http://example.com/a?b=c"},
+	}
+
+	for _, tc := range cases {
+		got, ok := ccSendGlob(tc.in)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("ccSendGlob(%q) = %q, %v; want %q, %v", tc.in, got, ok, tc.want, tc.ok)
+		}
 	}
 }
