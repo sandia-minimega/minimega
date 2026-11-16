@@ -5,7 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/google/gopacket/pcap"
 	"github.com/sandia-minimega/minimega/v2/internal/vlans"
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 )
@@ -13,6 +15,14 @@ import (
 // `tap create ... ip` must report the ip failure to the user even though the
 // tap clean-up succeeds.
 func TestTapCreateIPFailureIsReported(t *testing.T) {
+	// creating the bridge starts a packet capture on it, which needs
+	// CAP_NET_RAW (unprivileged CI runners do not have it)
+	h, err := pcap.OpenLive("lo", 1600, true, time.Second)
+	if err != nil {
+		t.Skipf("cannot capture on lo: %v", err)
+	}
+	h.Close()
+
 	originalVLANs, originalBase := vlans.Default, *f_base
 	defer func() { vlans.Default, *f_base = originalVLANs, originalBase }()
 	vlans.Default = vlans.NewVLANs()
@@ -40,7 +50,7 @@ func TestTapCreateIPFailureIsReported(t *testing.T) {
 	}
 	resp := &minicli.Response{}
 
-	err := cliTapCreate(ns, c, resp)
+	err = cliTapCreate(ns, c, resp)
 	if err == nil || !strings.Contains(err.Error(), "ip error") {
 		t.Fatalf("expected ip error, got %v", err)
 	}
