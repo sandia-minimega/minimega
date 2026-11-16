@@ -195,7 +195,9 @@ func cliOptimizeClear(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 	switch {
 	case c.BoolArgs["filter"]:
 		ns.affinityFilter = nil
-		ns.enableAffinity()
+		if ns.affinityEnabled {
+			return ns.enableAffinity()
+		}
 	case c.BoolArgs["affinity"]:
 		ns.disableAffinity()
 	case c.BoolArgs["hugepages"]:
