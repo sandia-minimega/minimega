@@ -1,7 +1,11 @@
 package miniplumber
 
 import (
+	"strconv"
+	"sync"
+
 	"fmt"
+	"github.com/sandia-minimega/minimega/v2/internal/meshage"
 	"os"
 	"path/filepath"
 	"testing"
@@ -129,4 +133,54 @@ func waitForPipeline(t *testing.T, plumber *Plumber) {
 		case <-time.After(time.Millisecond):
 		}
 	}
+}
+
+// A late QUERY_RESPONSE for an already-unregistered TID must not kill the
+// message loop: later messages still have to be delivered to readers.
+func TestHandleMessagesSurvivesUnknownTID(t *testing.T) {
+	p := New(nil)
+	go p.handleMessages()
+
+	r := p.NewReader("pipe")
+
+	p.Messages <- &meshage.Message{Body: Message{Type: MESSAGE_QUERY_RESPONSE, TID: 12345}}
+	p.Messages <- &meshage.Message{Body: Message{
+		Type: MESSAGE_FORWARD,
+		Pipe: "pipe",
+		Data: map[int64]string{SCHEDULE_ALL: "hello"},
+	}}
+
+	select {
+	case v := <-r.C:
+		if v != "hello\n" {
+			t.Fatalf("got %q", v)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("message loop died after QUERY_RESPONSE for unknown TID")
+	}
+}
+
+// newTID/unregisterTID and Pipes/NewReader are used from many goroutines;
+// run under -race.
+func TestConcurrentTIDsAndPipes(t *testing.T) {
+	p := New(nil)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 200; j++ {
+				p.unregisterTID(p.newTID())
+			}
+		}()
+		go func(i int) {
+			defer wg.Done()
+			for j := 0; j < 200; j++ {
+				p.NewReader("pipe" + strconv.Itoa(i*1000+j)).Close()
+				_ = p.Pipes()
+			}
+		}(i)
+	}
+	wg.Wait()
 }
