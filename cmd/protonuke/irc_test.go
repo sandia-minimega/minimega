@@ -88,6 +88,12 @@ func ircPeer(t *testing.T, addr, nick string, seen *atomic.Int32, done <-chan st
 // concurrently. Run with -race. The client targets ::1, so it only shows up in
 // the channel if it could connect to an IPv6 address.
 func TestIRCClientNoRace(t *testing.T) {
+	if l, err := net.Listen("tcp6", "[::1]:0"); err != nil {
+		t.Skipf("no IPv6 loopback: %v", err)
+	} else {
+		l.Close()
+	}
+
 	addr := "127.0.0.1:" + *f_ircport
 
 	startIRC.Do(func() {
