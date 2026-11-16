@@ -313,7 +313,10 @@ func cliRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 				}
 			} else if c.BoolArgs["local"] || c.BoolArgs["neighbor"] {
 				ip = c.StringArgs["IPv4"]
-				as, _ := strconv.Atoi(c.StringArgs["asnumber"])
+				as, err := strconv.Atoi(c.StringArgs["asnumber"])
+				if err != nil {
+					return fmt.Errorf("invalid AS number: %v", c.StringArgs["asnumber"])
+				}
 				if c.BoolArgs["local"] {
 					islocal = true
 				}
