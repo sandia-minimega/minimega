@@ -409,6 +409,9 @@ func Shutdown(format string, args ...interface{}) {
 		}
 	}
 
+	// stop signal delivery first: sending on a closed channel panics, even
+	// from os/signal's non-blocking send
+	signal.Stop(shutdown)
 	close(shutdown)
 
 	// block forever
