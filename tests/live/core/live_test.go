@@ -80,6 +80,7 @@ func TestLive(t *testing.T) {
 		p("GuestSMP", testGuestSMP, cc),
 		p("GuestNICDrivers", testGuestNICDrivers, cc),
 		p("GuestDualHomed", testGuestDualHomed, network),
+		p("RouterInterfaces", testRouterInterfaces, cc),
 
 		// networking
 		p("PingSameLAN", testPingSameLAN, network),
@@ -733,6 +734,25 @@ func testGuestDualHomed(t *testing.T) {
 	}
 	// the guest reaches both LANs directly
 	harness.CCOK(t, "host-d5", "ping -c 2 -W 2 10.10.3.13 && ping -c 2 -W 2 10.10.4.12")
+}
+
+// testRouterInterfaces checks that "router <vm> interface <n>" lands on the
+// guest's n-th NIC even though the routers load ip_gre, whose fallback devices
+// (gre0, gretap0, erspan0) sort among the NICs (issue #1387).
+func testRouterInterfaces(t *testing.T) {
+	for _, s := range topology {
+		if !s.Router {
+			continue
+		}
+		// guard against the guest image silently dropping ip_gre
+		harness.CCOK(t, s.Name, "test -e /sys/class/net/gretap0")
+		for i, ip := range s.IPs {
+			harness.CCEventually(t, s.Name, fmt.Sprintf("ip -4 -o addr show dev eth%d | grep -q ' %s/'", i, ip), harness.SettleTimeout)
+		}
+		if out := harness.CCOK(t, s.Name, "ip -4 -o addr"); strings.Contains(out, "gre") || strings.Contains(out, "erspan") {
+			t.Errorf("%v put an address on a fallback tunnel device:\n%s", s.Name, out)
+		}
+	}
 }
 
 // --- networking --------------------------------------------------------------

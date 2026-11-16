@@ -2,57 +2,95 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"net"
+	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
-
-	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
+
+// ARPHRD_ETHER, the /sys/class/net/<iface>/type of an Ethernet interface
+const arphrdEther = "1"
 
 var (
-	trim = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+	sysClassNet = "/sys/class/net"
+
+	// fallbackTunnels are created by the kernel in every network namespace
+	// once their module is loaded (for example, by a GRE tunnel on the host),
+	// so they are never interfaces minimega gave the router (issue #1387).
+	fallbackTunnels = map[string]bool{
+		"erspan0":  true,
+		"gre0":     true,
+		"gretap0":  true,
+		"ip6_vti0": true,
+		"ip6gre0":  true,
+		"ip6tnl0":  true,
+		"ip_vti0":  true,
+		"sit0":     true,
+		"tunl0":    true,
+	}
 )
 
-type SortEth []string
-
-func (a SortEth) Len() int      { return len(a) }
-func (a SortEth) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
-func (a SortEth) Less(i, j int) bool {
-	// sort on the integer part of an interface name, which we assume will
-	// be in the form of string+int
-	idxI, err := strconv.Atoi(strings.TrimLeft(a[i], trim))
-	if err != nil {
-		log.Errorln(err)
-		return false
-	}
-	idxJ, err := strconv.Atoi(strings.TrimLeft(a[j], trim))
-	if err != nil {
-		log.Errorln(err)
-		return false
-	}
-	return idxI < idxJ
-}
-
+// findEth returns the name of the router's idx'th network interface.
 func findEth(idx int) (string, error) {
-	var ethNames SortEth
-	dirs, err := ioutil.ReadDir("/sys/class/net")
+	ethNames, err := listEths(sysClassNet)
 	if err != nil {
 		return "", err
-	} else {
-		for _, n := range dirs {
-			if n.Name() == "lo" {
-				continue
-			}
-			ethNames = append(ethNames, n.Name())
-		}
 	}
-	sort.Sort(ethNames)
-	if idx < len(ethNames) {
+	if idx >= 0 && idx < len(ethNames) {
 		return ethNames[idx], nil
 	}
 	return "", fmt.Errorf("no such network")
+}
+
+// listEths returns the Ethernet interfaces in dir (a /sys/class/net), in the
+// order minimega assigned them: by the integer suffix of their names.
+func listEths(dir string) ([]string, error) {
+	dirs, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+
+	var names []string
+	for _, n := range dirs {
+		name := n.Name()
+		if name == "lo" || fallbackTunnels[name] {
+			continue
+		}
+		// skip non-Ethernet devices such as tunnels; keep the interface if
+		// its type cannot be read
+		if t, err := os.ReadFile(filepath.Join(dir, name, "type")); err == nil && strings.TrimSpace(string(t)) != arphrdEther {
+			continue
+		}
+		names = append(names, name)
+	}
+
+	sort.Slice(names, func(i, j int) bool {
+		return ethLess(names[i], names[j])
+	})
+	return names, nil
+}
+
+// ethLess orders interface names by their integer suffix (eth2 before eth10),
+// then by name so the order is deterministic.
+func ethLess(a, b string) bool {
+	idxA, okA := ethIndex(a)
+	idxB, okB := ethIndex(b)
+	switch {
+	case okA && okB && idxA != idxB:
+		return idxA < idxB
+	case okA != okB:
+		return okA
+	}
+	return a < b
+}
+
+// ethIndex returns the integer suffix of an interface name such as eth0.
+func ethIndex(name string) (int, bool) {
+	prefix := strings.TrimRight(name, "0123456789")
+	idx, err := strconv.Atoi(name[len(prefix):])
+	return idx, err == nil
 }
 
 func isIPv4(s string) bool {
