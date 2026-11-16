@@ -34,7 +34,7 @@ func (bf *byteFifo) Write(p []byte) (n int, err error) {
 
 	bf.data = append(bf.data, p...)
 	if len(bf.data) > bf.limit {
-		bf.data = bf.data[len(bf.data)-bf.limit-1:]
+		bf.data = bf.data[len(bf.data)-bf.limit:]
 	}
 	n = len(p)
 	return

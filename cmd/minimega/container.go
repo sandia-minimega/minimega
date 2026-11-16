@@ -889,11 +889,8 @@ func (vm *ContainerVM) launch() error {
 	ioutil.WriteFile(uuidPath, []byte(vm.UUID+"\n"), 0400)
 
 	// create fifos
-	for i := uint64(0); i < vm.Fifos; i++ {
-		p := vm.path(fmt.Sprintf("fifo%v", i))
-		if err = syscall.Mkfifo(p, 0660); err != nil {
-			return vm.setErrorf("fifo: %v", err)
-		}
+	if err = mkfifos(vm.instancePath, vm.Fifos); err != nil {
+		return vm.setErrorf("fifo: %v", err)
 	}
 
 	//	0 :  minimega binary
@@ -997,15 +994,6 @@ func (vm *ContainerVM) launch() error {
 		parentSync2.Close()
 	}
 
-	if err != nil {
-		// Some error occurred.. clean up the process
-		cmd.Process.Kill()
-
-		vm.unlinkNetns()
-
-		return vm.setErrorf("%v", err)
-	}
-
 	// Channel to signal when the process has exited
 	errChan := make(chan error)
 
@@ -1034,7 +1022,7 @@ func (vm *ContainerVM) launch() error {
 
 			// we don't need to check the error for a clean kill,
 			// as there's no way to get here if we killed it.
-			if err != nil {
+			if err != nil && vm.State != VM_ERROR {
 				vm.setErrorf("killed container: %v", err)
 			}
 		case <-vm.kill:
@@ -1104,6 +1092,30 @@ func (vm *ContainerVM) launch() error {
 		}
 	}()
 
+	if err != nil {
+		// Some error occurred.. kill the process. The goroutines above reap
+		// it and release the listeners, taps, netns and cgroups.
+		cmd.Process.Kill()
+		pseudotty.Close()
+
+		return vm.setErrorf("%v", err)
+	}
+
+	return nil
+}
+
+// mkfifos creates fifo0..fifoN-1 in dir, replacing any left over from a
+// previous launch of the same VM.
+func mkfifos(dir string, n uint64) error {
+	for i := uint64(0); i < n; i++ {
+		p := filepath.Join(dir, fmt.Sprintf("fifo%v", i))
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		if err := syscall.Mkfifo(p, 0660); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
