@@ -4,7 +4,14 @@
 
 package main
 
-import "testing"
+import (
+	"encoding/gob"
+	"io"
+	"sync"
+	"testing"
+
+	"github.com/sandia-minimega/minimega/v2/internal/ron"
+)
 
 func TestResolveClientUUIDUsesOverride(t *testing.T) {
 	discovered := false
@@ -26,4 +33,36 @@ func TestResolveClientUUIDDiscoversDefault(t *testing.T) {
 	if got != want {
 		t.Fatalf("unexpected UUID: got %q, want %q", got, want)
 	}
+}
+
+// While the link is down (enc == nil) background senders must get an error,
+// not crash the agent.
+func TestSendMessageWhileDisconnected(t *testing.T) {
+	setEncoder(nil)
+
+	if err := sendMessage(&ron.Message{Type: ron.MESSAGE_PIPE}); err == nil {
+		t.Fatal("sendMessage succeeded with no connection")
+	}
+}
+
+// Reconnect swaps the encoder while senders are active; must not race.
+func TestSendMessageDuringReconnect(t *testing.T) {
+	defer setEncoder(nil)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 200; j++ {
+				sendMessage(&ron.Message{Type: ron.MESSAGE_PIPE})
+			}
+		}()
+	}
+
+	for j := 0; j < 200; j++ {
+		setEncoder(gob.NewEncoder(io.Discard))
+		setEncoder(nil)
+	}
+	wg.Wait()
 }

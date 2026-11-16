@@ -136,7 +136,7 @@ func resetClient() {
 	if client.conn != nil {
 		client.conn.Close()
 
-		client.enc = nil
+		setEncoder(nil)
 		client.dec = nil
 		client.conn = nil
 	}
