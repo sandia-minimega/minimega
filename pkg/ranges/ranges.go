@@ -61,7 +61,7 @@ func (r *Range) SplitRange(s string) ([]string, error) {
 	pad := -1
 	for _, part := range parts {
 		if strings.Contains(part, "-") {
-			tmp, err := subrange(part)
+			tmp, err := subrange(part, r.Min, r.Max)
 			if err != nil {
 				return nil, err
 			}
@@ -206,33 +206,40 @@ func (r *Range) UnsplitRange(names []string) (string, error) {
 // unsplitInts takes ints as a slice (e.g. [1,2,3,5]) and turns them into a
 // string (e.g. [1-3,5]).
 func unsplitInts(nums []int) string {
+	return unsplitPadded(nums, 0)
+}
+
+// unsplitPadded is like unsplitInts but zero-pads each number to width pad.
+func unsplitPadded(nums []int, pad int) string {
+	itoa := func(n int) string { return fmt.Sprintf("%0*d", pad, n) }
+
 	if len(nums) == 0 {
 		return ""
 	}
 	if len(nums) == 1 {
-		return strconv.Itoa(nums[0])
+		return itoa(nums[0])
 	}
 
 	// Sort the numbers
 	sort.Ints(nums)
 
 	// "count along" to find stretches like 1-5
-	result := "[" + strconv.Itoa(nums[0])
+	result := "[" + itoa(nums[0])
 	start := nums[0]
 	prev := nums[0]
 	for i := 1; i < len(nums); i++ {
 		if nums[i]-prev != 1 {
 			if start != prev {
-				result = result + "-" + strconv.Itoa(prev) + "," + strconv.Itoa(nums[i])
+				result = result + "-" + itoa(prev) + "," + itoa(nums[i])
 			} else {
-				result = result + "," + strconv.Itoa(nums[i])
+				result = result + "," + itoa(nums[i])
 			}
 			start = nums[i]
 		} else if i == len(nums)-1 {
 			if nums[i]-prev == 1 {
-				result = result + "-" + strconv.Itoa(nums[i])
+				result = result + "-" + itoa(nums[i])
 			} else {
-				result = result + "," + strconv.Itoa(nums[i])
+				result = result + "," + itoa(nums[i])
 			}
 		}
 		prev = nums[i]
@@ -242,7 +249,10 @@ func unsplitInts(nums []int) string {
 	return result
 }
 
-func subrange(s string) ([]string, error) {
+// maxSubrange caps how many names a single subrange may expand to.
+const maxSubrange = 1 << 20
+
+func subrange(s string, min, max int) ([]string, error) {
 	limits := strings.Split(s, "-")
 	if len(limits) != 2 {
 		return nil, fmt.Errorf("invalid subrange %v", s)
@@ -261,6 +271,16 @@ func subrange(s string) ([]string, error) {
 	end, err := strconv.Atoi(limits[1])
 	if err != nil {
 		return nil, err
+	}
+
+	if start > end {
+		return nil, fmt.Errorf("invalid subrange %v: start > end", s)
+	}
+	if start < min || end > max {
+		return nil, fmt.Errorf("value of out range: %v", s)
+	}
+	if end-start >= maxSubrange {
+		return nil, fmt.Errorf("subrange %v too large (max %d values)", s, maxSubrange)
 	}
 
 	var nodes []string

@@ -94,14 +94,14 @@ func (t *trieNode) Flatten() []string {
 	children := t.sortedChildren()
 
 	// children that are numbers and their descendants that are non-numbers
-	nums := map[int]*trieNode{}
+	// keyed by the digit string so that "01" and "1" stay distinct
+	nums := map[string]*trieNode{}
 
 	for _, k := range children {
 		// record numeric children for later
 		if unicode.IsNumber(k) {
 			for i, child := range t.Children[k].flattenNums(k) {
-				v, _ := strconv.Atoi(i)
-				nums[v] = child
+				nums[i] = child
 			}
 
 			continue
@@ -113,8 +113,8 @@ func (t *trieNode) Flatten() []string {
 		}
 	}
 
-	// suffixes and the ints that they correspond to
-	vals := map[string][]int{}
+	// suffixes and the digit strings that they correspond to
+	vals := map[string][]string{}
 
 	for i, descendant := range nums {
 		for _, suffix := range descendant.Flatten() {
@@ -131,9 +131,18 @@ func (t *trieNode) Flatten() []string {
 
 	sort.Strings(suffixes)
 
-	// combine each group with the same suffix
+	// combine each group with the same suffix and padding
 	for _, suffix := range suffixes {
-		res = append(res, unsplitInts(vals[suffix])+suffix)
+		groups, literals := groupPadded(vals[suffix])
+
+		for _, pad := range sortedInts(groups) {
+			res = append(res, unsplitPadded(groups[pad], pad)+suffix)
+		}
+
+		sort.Strings(literals)
+		for _, l := range literals {
+			res = append(res, l+suffix)
+		}
 	}
 
 	return res
@@ -174,6 +183,68 @@ func (t *trieNode) flattenNums(r rune) map[string]*trieNode {
 
 	if len(res) == 0 {
 		res[string(r)] = t
+		return res
+	}
+
+	// t is itself a number ("1" in "h1" and "h12"): keep it along with its
+	// non-numeric suffixes, which the digit children above do not cover.
+	if own := t.withoutNumbers(); own.Terminal || len(own.Children) > 0 {
+		res[string(r)] = own
+	}
+
+	return res
+}
+
+// groupPadded groups digit strings by zero-padding width (0 for unpadded).
+// A number with a leading zero fixes the width for its length; numbers of the
+// same length without leading zeros join that group. Digit strings that do not
+// fit in an int are returned as literals so they are never merged.
+func groupPadded(digits []string) (map[int][]int, []string) {
+	widths := map[int]bool{}
+	for _, d := range digits {
+		if len(d) > 1 && d[0] == '0' {
+			widths[len(d)] = true
+		}
+	}
+
+	groups := map[int][]int{}
+	var literals []string
+
+	for _, d := range digits {
+		n, err := strconv.Atoi(d)
+		if err != nil {
+			literals = append(literals, d)
+			continue
+		}
+
+		pad := 0
+		if widths[len(d)] {
+			pad = len(d)
+		}
+		groups[pad] = append(groups[pad], n)
+	}
+
+	return groups, literals
+}
+
+func sortedInts(m map[int][]int) []int {
+	var res []int
+	for k := range m {
+		res = append(res, k)
+	}
+	sort.Ints(res)
+	return res
+}
+
+// withoutNumbers returns a copy of t that only keeps non-numeric children.
+func (t *trieNode) withoutNumbers() *trieNode {
+	res := newTrie()
+	res.Terminal = t.Terminal
+
+	for k, child := range t.Children {
+		if !unicode.IsNumber(k) {
+			res.Children[k] = child
+		}
 	}
 
 	return res

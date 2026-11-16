@@ -7,6 +7,9 @@ package ranges
 import (
 	"fmt"
 	"math/rand"
+	"runtime"
+	"sort"
+	"strings"
 	"testing"
 )
 
@@ -227,5 +230,80 @@ func TestUnsplitListSkip(t *testing.T) {
 
 	if want != got {
 		t.Errorf("got: `%s`, want `%s`", got, want)
+	}
+}
+
+// An out of bounds range must be rejected without first expanding it.
+func TestSplitRangeOutOfBoundsNoExpand(t *testing.T) {
+	r, _ := NewRange("h", 0, 10)
+
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	_, err := r.SplitRange("h[1-5000000]")
+	runtime.ReadMemStats(&after)
+
+	if err == nil {
+		t.Fatal("expected out of range error")
+	}
+	if n := after.TotalAlloc - before.TotalAlloc; n > 1<<20 {
+		t.Errorf("allocated %d bytes rejecting an out of range subrange", n)
+	}
+
+	if _, err := SplitList("h[1-5000000]"); err == nil {
+		t.Error("expected SplitList to reject an oversized range")
+	}
+}
+
+func TestSplitRangeReversed(t *testing.T) {
+	if _, err := SplitList("h[3-1]"); err == nil {
+		t.Error("expected error for reversed range")
+	}
+}
+
+func TestUnsplitListZeroPadding(t *testing.T) {
+	var many []string
+	for i := 1; i <= 10; i++ {
+		many = append(many, fmt.Sprintf("node%02d", i))
+	}
+
+	tests := [][]string{
+		{"h01", "h02", "h03"},
+		{"h01", "h1"},
+		{"h08", "h09", "h10", "h11"},
+		{"h1", "h2", "h03", "h04", "h12"},
+		{"h99999999999999999999", "h0"},
+		many,
+	}
+
+	for _, in := range tests {
+		got := UnsplitList(in)
+
+		// what a user pasting the output back would get
+		out, err := SplitList(got)
+		if err != nil {
+			t.Errorf("%v -> `%s`: %v", in, got, err)
+			continue
+		}
+
+		a, b := append([]string{}, in...), out
+		sort.Strings(a)
+		sort.Strings(b)
+		if strings.Join(a, ",") != strings.Join(b, ",") {
+			t.Errorf("%v -> `%s` -> %v", in, got, out)
+		}
+	}
+
+	if got, want := UnsplitList(many), "node[01-10]"; got != want {
+		t.Errorf("got `%s`, want `%s`", got, want)
+	}
+}
+
+func TestUnsplitListPrefixNumbers(t *testing.T) {
+	in := []string{"h1", "h12", "h2"}
+	out, err := SplitList(UnsplitList(in))
+	sort.Strings(out)
+	want := []string{"h1", "h12", "h2"}
+	if err != nil || strings.Join(out, ",") != strings.Join(want, ",") {
+		t.Errorf("got %v (%v), want %v", out, err, want)
 	}
 }
