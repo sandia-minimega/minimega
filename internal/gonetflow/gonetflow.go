@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 
@@ -37,6 +38,7 @@ const (
 type Netflow struct {
 	port          int
 	conn          *net.UDPConn
+	mu            sync.Mutex // guards writers; held while sending so a channel is never closed mid-send
 	writers       map[string]chan *Packet
 	statFlows     uint64
 	statBytes     uint64
@@ -140,9 +142,11 @@ func (nf *Netflow) GetPort() int {
 // stop and exit the reader goroutine for this object
 func (nf *Netflow) Stop() {
 	log.Debugln("Stop")
-	for k, _ := range nf.writers {
+	nf.mu.Lock()
+	for k := range nf.writers {
 		nf.unregisterWriter(k)
 	}
+	nf.mu.Unlock()
 	nf.conn.Close()
 }
 
@@ -170,7 +174,7 @@ func (nf *Netflow) GetStats() string {
 
 func (nf *Netflow) NewSocketWriter(network string, server string, mode Mode) error {
 	log.Debugln("NewSocketWriter")
-	if _, ok := nf.writers[server]; ok {
+	if nf.hasWriter(server) {
 		return fmt.Errorf("netflow writer %v already exists", server)
 	}
 
@@ -202,7 +206,7 @@ func (nf *Netflow) NewSocketWriter(network string, server string, mode Mode) err
 
 func (nf *Netflow) NewFileWriter(filename string, mode Mode, compress bool) error {
 	log.Debugln("NewFileWriter")
-	if _, ok := nf.writers[filename]; ok {
+	if nf.hasWriter(filename) {
 		return fmt.Errorf("netflow writer %v already exists", filename)
 	}
 
@@ -249,6 +253,8 @@ func (nf *Netflow) NewFileWriter(filename string, mode Mode, compress bool) erro
 
 func (nf *Netflow) RemoveWriter(path string) error {
 	log.Debug("RemoveWriter %v", path)
+	nf.mu.Lock()
+	defer nf.mu.Unlock()
 	if _, ok := nf.writers[path]; !ok {
 		return fmt.Errorf("netflow writer %v does not exist", path)
 	}
@@ -258,9 +264,19 @@ func (nf *Netflow) RemoveWriter(path string) error {
 
 // HasWriter returns true if we have any writers
 func (nf *Netflow) HasWriter() bool {
+	nf.mu.Lock()
+	defer nf.mu.Unlock()
 	return len(nf.writers) > 0
 }
 
+func (nf *Netflow) hasWriter(path string) bool {
+	nf.mu.Lock()
+	defer nf.mu.Unlock()
+	_, ok := nf.writers[path]
+	return ok
+}
+
+// unregisterWriter requires nf.mu held.
 func (nf *Netflow) unregisterWriter(path string) {
 	log.Debug("unregisterWriter %v", path)
 	close(nf.writers[path])
@@ -269,6 +285,8 @@ func (nf *Netflow) unregisterWriter(path string) {
 
 func (nf *Netflow) registerWriter(path string, c chan *Packet) {
 	log.Debug("registerWriter %v", path)
+	nf.mu.Lock()
+	defer nf.mu.Unlock()
 	nf.writers[path] = c
 }
 
@@ -288,9 +306,11 @@ func (nf *Netflow) reader() {
 			log.Errorln(err)
 			continue
 		}
+		nf.mu.Lock()
 		for _, v := range nf.writers {
 			v <- p
 		}
+		nf.mu.Unlock()
 	}
 }
 
@@ -305,7 +325,7 @@ func (nf *Netflow) process(n int, b []byte) (*Packet, error) {
 
 	p := &Packet{
 		Header: DecodeHeader(b),
-		Raw:    b[:n],
+		Raw:    append([]byte(nil), b[:n]...), // reader reuses b
 	}
 
 	for i := 0; i < numRecords; i++ {
