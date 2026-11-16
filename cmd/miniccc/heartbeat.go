@@ -21,8 +21,6 @@ func periodic(done chan struct{}) {
 
 		select {
 		case <-t.C:
-			log.Debug("periodic")
-
 			now := time.Now()
 			if now.Sub(client.lastHeartbeat) > HeartbeatRate {
 				// issue a heartbeat

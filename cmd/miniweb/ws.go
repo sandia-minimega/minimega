@@ -37,12 +37,12 @@ func connectWsHandler(vmType, host string, port int) func(*websocket.Conn) {
 		}
 		defer remote.Close()
 
-		log.Info("ws client connected to %v", rhost)
+		log.Debug("ws client connected to %v", rhost)
 
 		go io.Copy(ws, remote)
 		io.Copy(remote, ws)
 
-		log.Info("ws client disconnected from %v", rhost)
+		log.Debug("ws client disconnected from %v", rhost)
 	}
 }
 

@@ -224,12 +224,12 @@ func runCommand(c *ron.Command) (string, string, int) {
 
 		go func() {
 			cmd.Wait()
-			log.Info("command exited: %v", c.Command)
+			log.Debug("command exited: %v", c.Command)
 			if bufout.Len() > 0 {
-				log.Info("%s", bufout.String())
+				log.Debug("%s", bufout.String())
 			}
 			if buferr.Len() > 0 {
-				log.Info("%s", buferr.String())
+				log.Debug("%s", buferr.String())
 			}
 
 			client.Lock()

@@ -72,13 +72,13 @@ func mux(done chan struct{}) {
 			// ACK of the handshake
 			if client.UUID == "" && m.Client != nil && m.Client.UUID != "" {
 				client.UUID = m.Client.UUID
-				log.Info("adopted serial-bound UUID: %v", client.UUID)
+				log.Debug("adopted serial-bound UUID: %v", client.UUID)
 			}
 			if !tunnelStarted {
 				go ron.Trunk(remote, client.UUID, sendMessage)
 				tunnelStarted = true
 			}
-			log.Info("handshake complete")
+			log.Debug("handshake complete")
 
 			go periodic(done)
 			go commandHandler(done)
@@ -127,7 +127,7 @@ func commandHandler(done chan struct{}) {
 				processCommand(commands[id])
 			}
 		case <-done:
-			log.Info("command handler exit")
+			log.Debug("command handler exit")
 			return
 		}
 	}

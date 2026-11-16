@@ -1,7 +1,9 @@
 package minitunnel
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sync"
 
@@ -74,7 +76,7 @@ func (c *chans) dropAll() []chan *tunnelMessage {
 func (t *Tunnel) mux() {
 	var err error
 
-	log.Info("starting minitunnel mux")
+	log.Debug("starting minitunnel mux")
 
 	for {
 		var m tunnelMessage
@@ -105,7 +107,13 @@ func (t *Tunnel) mux() {
 		close(ch)
 	}
 
-	log.Info("mux exit: %v", err)
+	// a clean EOF is the normal end of every cc client connection, so only
+	// unexpected decode errors are logged above debug level
+	if errors.Is(err, io.EOF) {
+		log.Debug("mux exit: %v", err)
+	} else {
+		log.Info("mux exit: %v", err)
+	}
 }
 
 func (t *Tunnel) handleRemote(m *tunnelMessage) {

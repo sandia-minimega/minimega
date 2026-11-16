@@ -759,7 +759,7 @@ func cliClearVMNetBond(ns *Namespace, c *minicli.Command, resp *minicli.Response
 			}
 		}
 
-		log.Info("vm bonds: %v", vm.GetBonds())
+		log.Debug("vm bonds: %v", vm.GetBonds())
 
 		if err := writeVMConfig(vm); err != nil {
 			// don't propagate this error
@@ -1122,7 +1122,7 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 				return true, err
 			}
 
-			log.Info("vm networks: %v", vm.GetNetworks())
+			log.Debug("vm networks: %v", vm.GetNetworks())
 
 			if err := writeVMConfig(vm); err != nil {
 				// don't propagate this error
@@ -1149,7 +1149,7 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 				return true, err
 			}
 
-			log.Info("vm networks: %v", vm.GetNetworks())
+			log.Debug("vm networks: %v", vm.GetNetworks())
 
 			if err := writeVMConfig(vm); err != nil {
 				// don't propagate this error
@@ -1169,7 +1169,7 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 				return true, err
 			}
 
-			log.Info("vm networks: %v", vm.GetNetworks())
+			log.Debug("vm networks: %v", vm.GetNetworks())
 
 			if err := writeVMConfig(vm); err != nil {
 				// don't propagate this error
@@ -1179,7 +1179,7 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 			return true, nil
 		}
 	} else if c.BoolArgs["bond"] {
-		log.Info("adding bond for VM %s", target)
+		log.Debug("adding bond for VM %s", target)
 
 		var (
 			name       = c.StringArgs["name"]
@@ -1249,7 +1249,7 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 				return true, err
 			}
 
-			log.Info("vm bonds: %v", vm.GetBonds())
+			log.Debug("vm bonds: %v", vm.GetBonds())
 
 			if err := writeVMConfig(vm); err != nil {
 				// don't propagate this error
