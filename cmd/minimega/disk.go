@@ -87,7 +87,7 @@ func diskChainInfo(image string) ([]DiskInfo, error) {
 		if err != nil {
 			return infos, fmt.Errorf("[image %s] %v", image, err)
 		}
-		info.InUse, err = checkDiskInUse(image)
+		info.InUse, err = checkDiskInUse(info.Name)
 		if err != nil {
 			return infos, fmt.Errorf("could not check if image in use: %w", err)
 		}
@@ -459,10 +459,8 @@ func parseFiles(files interface{}, delete bool) (map[string]string, []string, er
 	switch v := files.(type) {
 	case []string:
 		if delete {
-			if sliceContainsString(v, ",") {
-				paths = strings.Split(v[0], ",")
-			} else {
-				paths = []string{v[0]} // single file
+			for _, p := range v {
+				paths = append(paths, strings.Split(p, ",")...)
 			}
 		} else {
 			pairs, err = parseInjectPairs(v)
