@@ -216,7 +216,7 @@ func (p *Plumber) handleMessages() {
 
 			if !ok {
 				log.Errorln("dropping message for invalid TID: ", m.TID)
-				return
+				continue
 			}
 
 			select {
@@ -274,11 +274,9 @@ func (p *Plumber) unregisterTID(t *tid) {
 	t.Close()
 
 	p.tidLock.Lock()
-	p.tidLock.Unlock()
+	defer p.tidLock.Unlock()
 
-	if _, ok := p.tids[t.TID]; ok {
-		delete(p.tids, t.TID)
-	}
+	delete(p.tids, t.TID)
 }
 
 func (p *Plumber) sendReaders(m *Message) {
@@ -491,7 +489,7 @@ func (p *Plumber) PipeDeleteAll() error {
 
 func (p *Plumber) Pipes() []*Pipe {
 	p.lock.Lock()
-	p.lock.Unlock()
+	defer p.lock.Unlock()
 
 	var keys []string
 	var ret []*Pipe
