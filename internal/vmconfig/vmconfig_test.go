@@ -227,3 +227,24 @@ overlay = "/path4"
 		t.Fatalf("invalid config: %#v\nexpected: %#v", config, expected)
 	}
 }
+
+// A typo'd top-level config path must be an error, not an empty config.
+func TestReadConfigMissingFile(t *testing.T) {
+	if _, err := ReadConfig(filepath.Join(t.TempDir(), "typo.conf")); err == nil {
+		t.Fatal("expected error for missing config file, got nil")
+	}
+}
+
+// A top-level config that cannot be opened for a non-ENOENT reason must error.
+func TestReadConfigUnreadable(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores file permissions")
+	}
+	p := filepath.Join(t.TempDir(), "a.conf")
+	if err := os.WriteFile(p, []byte(""), 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadConfig(p); err == nil {
+		t.Fatal("expected error for unreadable config file, got nil")
+	}
+}

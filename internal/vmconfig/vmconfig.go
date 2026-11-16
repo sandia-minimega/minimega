@@ -79,6 +79,8 @@ func read(path, prev string, c *Config) error {
 
 			log.Warn("could not find %v, but found %v, using that instead", path, path2)
 			path = path2
+		} else {
+			return err
 		}
 	}
 	defer f.Close()
