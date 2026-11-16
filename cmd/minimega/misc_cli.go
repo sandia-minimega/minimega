@@ -317,6 +317,10 @@ func cliStatusUpdates(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 func cliDebug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	dst := c.StringArgs["file"]
 
+	if c.BoolArgs["cpu"] && c.BoolArgs["start"] && cpuProfileOut != nil {
+		return errors.New("CPU profile still running")
+	}
+
 	var f *os.File
 	if dst != "" {
 		// make sure path is relative to files if not absolute
@@ -341,13 +345,13 @@ func cliDebug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 
 		return pprof.Lookup("goroutine").WriteTo(f, 2)
 	} else if c.BoolArgs["cpu"] && c.BoolArgs["start"] {
-		if cpuProfileOut != nil {
-			return errors.New("CPU profile still running")
+		if err := pprof.StartCPUProfile(f); err != nil {
+			f.Close()
+			return err
 		}
 
 		cpuProfileOut = f
-
-		return pprof.StartCPUProfile(cpuProfileOut)
+		return nil
 	} else if c.BoolArgs["cpu"] && c.BoolArgs["stop"] {
 		if cpuProfileOut == nil {
 			return errors.New("CPU profile not running")

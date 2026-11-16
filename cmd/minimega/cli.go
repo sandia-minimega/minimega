@@ -536,6 +536,10 @@ func cliPreprocess(v string) (string, error) {
 
 				// Try to download the file, save to files
 				dst := filepath.Join(*f_iomBase, u.Path)
+				if rel, err := filepath.Rel(*f_iomBase, dst); err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
+					return "", fmt.Errorf("path %v is outside %v", u.Path, *f_iomBase)
+				}
+
 				if err := wget(v, dst); err != nil {
 					return "", err
 				}
