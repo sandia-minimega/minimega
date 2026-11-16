@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
@@ -37,6 +38,10 @@ type dnsmasqServer struct {
 var (
 	dnsmasqServers map[int]*dnsmasqServer
 	dnsmasqID      = NewCounter()
+
+	// dnsmasqLock guards dnsmasqServers: held by the CLI handlers and by the
+	// waiter goroutines that remove exited servers.
+	dnsmasqLock sync.Mutex
 )
 
 var dnsmasqCLIHandlers = []minicli.Handler{
@@ -286,6 +291,9 @@ func (d *dnsmasqServer) writeDHCPopts() {
 }
 
 func cliDnsmasqConfigure(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	dnsmasqLock.Lock()
+	defer dnsmasqLock.Unlock()
+
 	argID := c.StringArgs["ID"]
 	id, err := strconv.Atoi(argID)
 	if argID != Wildcard && err != nil {
@@ -382,6 +390,9 @@ func cliDnsmasqConfigure(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 }
 
 func cliDnsmasq(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	dnsmasqLock.Lock()
+	defer dnsmasqLock.Unlock()
+
 	if c.StringArgs["id"] == Wildcard {
 		// Must be "kill all"
 		return dnsmasqKillAll()
@@ -535,7 +546,9 @@ func dnsmasqStart(ip, min, max, config string) error {
 			}
 		}
 		// remove it from the list of dnsmasq servers
+		dnsmasqLock.Lock()
 		delete(dnsmasqServers, id)
+		dnsmasqLock.Unlock()
 
 		// and clean up the directory
 		if err := os.RemoveAll(d.Path); err != nil {
