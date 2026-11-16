@@ -88,8 +88,9 @@ func (ns *Namespace) disableAffinity() error {
 
 	for cpu, pids := range ns.affinityCPUSets {
 		for _, pid := range pids {
+			// the VM may have exited; don't let that block disabling
 			if err := clearAffinity(pid); err != nil {
-				return err
+				log.Warn("unable to clear affinity for %v: %v", pid, err)
 			}
 		}
 
@@ -105,7 +106,7 @@ func (ns *Namespace) disableAffinity() error {
 func setAffinity(cpu string, pid int) error {
 	log.Debug("set affinity to %v for %v", cpu, pid)
 
-	out, err := processWrapper("taskset", "-a", "-p", cpu, strconv.Itoa(pid))
+	out, err := processWrapper("taskset", "-a", "-c", "-p", cpu, strconv.Itoa(pid))
 	if err != nil {
 		return fmt.Errorf("%v: %v", err, out)
 	}
