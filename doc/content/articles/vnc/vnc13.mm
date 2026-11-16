@@ -1,2 +1,2 @@
-# type the string `hello world` on vm bar
-vnc type bar hello world
+# type the string `hello world` on vm desktop
+vnc type desktop hello world

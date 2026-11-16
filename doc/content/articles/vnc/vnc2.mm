@@ -1,2 +1,2 @@
-# stop fb recording on vm bar
-vnc stop fb bar
+# stop fb recording on vm desktop
+vnc stop fb desktop
