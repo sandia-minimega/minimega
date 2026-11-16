@@ -5,6 +5,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -696,5 +698,75 @@ func TestReserveAndroidPortGeneric(t *testing.T) {
 
 	if port3%2 != 0 {
 		t.Fatalf("step=2 from even start should yield even port, got %d", port3)
+	}
+}
+
+// A launch that fails before the snapshot step (missing emulator) leaves the VM
+// in VM_ERROR. Relaunching after the host is fixed must still snapshot the
+// disks instead of booting the base image directly.
+func TestAndroidRelaunchAfterEarlyErrorSnapshotsDisks(t *testing.T) {
+	origBase := *f_base
+	*f_base = t.TempDir()
+	defer func() { *f_base = origBase }()
+
+	bin := t.TempDir()
+	script := func(name, body string) string {
+		p := filepath.Join(bin, name)
+		if err := os.WriteFile(p, []byte("#!/bin/sh\n"+body), 0755); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	// fake qemu-img: "info" reports a raw image, "create" makes the last arg
+	script("qemu-img", `if [ "$1" = info ]; then
+echo '{"filename":"base","format":"qcow2","virtual-size":1,"actual-size":1}'
+else
+for a; do last=$a; done; : > "$last"
+fi
+`)
+	script("lsmod", "echo kvm\n")
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	base := filepath.Join(t.TempDir(), "base.qcow2")
+	if err := os.WriteFile(base, nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := testAndroidConfig()
+	cfg.Snapshot = true
+	cfg.Disks = DiskConfigs{{Path: base}}
+	cfg.EmulatorPath = filepath.Join(bin, "emulator")
+	cfg.ADBPath = filepath.Join(bin, "adb")
+
+	v, err := NewVM("phone0", DefaultNamespace, ANDROID, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vm := v.(*AndroidVM)
+	defer vm.lock.Unlock()
+
+	if err := vm.launch(); err == nil {
+		t.Fatal("expected first launch to fail: emulator missing")
+	}
+	if vm.State != VM_ERROR {
+		t.Fatalf("state = %v, want ERROR", vm.State)
+	}
+
+	// user installs the tools and runs vm start
+	// not executable, so launch stops right after the snapshot step
+	if err := os.WriteFile(cfg.EmulatorPath, nil, 0644); err != nil {
+		t.Fatal(err)
+	}
+	script("adb", "exit 0\n")
+	vm.kill = make(chan bool)
+	vm.launch() // later failure (emulator cannot exec) is expected and irrelevant
+
+	if vm.Disks[0].SnapshotPath == "" {
+		t.Fatal("relaunch skipped the disk snapshot")
+	}
+	for _, a := range vm.androidQEMUArgs() {
+		if strings.Contains(a, base) {
+			t.Fatalf("qemu args reference base image %q: %v", base, a)
+		}
 	}
 }

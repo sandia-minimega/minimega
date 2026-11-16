@@ -389,18 +389,22 @@ func (vm *AndroidVM) launch() error {
 		return vm.setErrorf("android adb not found: %v", err)
 	}
 
-	if vm.State == VM_BUILDING {
-		// Android reuses KVMConfig/qemuArgs for backend QEMU arguments, so apply
-		// the same disk snapshot behavior as KVM VMs.
-		if vm.Snapshot {
-			for i, d := range vm.Disks {
-				dst := vm.path(fmt.Sprintf("disk-%v.qcow2", i))
-				if err := diskSnapshot(d.Path, dst); err != nil {
-					return vm.setErrorf("unable to snapshot %v: %v", d, err)
-				}
-
-				vm.Disks[i].SnapshotPath = dst
+	// Android reuses KVMConfig/qemuArgs for backend QEMU arguments, so apply
+	// the same disk snapshot behavior as KVM VMs. Not gated on VM_BUILDING: an
+	// earlier launch may have failed before this point and left the VM in
+	// VM_ERROR with no snapshots.
+	if vm.Snapshot {
+		for i, d := range vm.Disks {
+			if d.SnapshotPath != "" {
+				continue
 			}
+
+			dst := vm.path(fmt.Sprintf("disk-%v.qcow2", i))
+			if err := diskSnapshot(d.Path, dst); err != nil {
+				return vm.setErrorf("unable to snapshot %v: %v", d, err)
+			}
+
+			vm.Disks[i].SnapshotPath = dst
 		}
 	}
 
