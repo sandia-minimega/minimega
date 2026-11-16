@@ -120,11 +120,13 @@ func SendWhois(client *Client, nicknames []string) {
 		subscriptions = make([]string, 0)
 		roomsM.RLock()
 		for _, room = range rooms {
+			room.RLock()
 			for subscriber = range room.members {
 				if *subscriber.nickname == nickname {
 					subscriptions = append(subscriptions, *room.name)
 				}
 			}
+			room.RUnlock()
 		}
 		roomsM.RUnlock()
 		sort.Strings(subscriptions)
@@ -152,11 +154,14 @@ func SendList(client *Client, cols []string) {
 	for _, r = range rs {
 		roomsM.RLock()
 		if room, found = rooms[r]; found {
+			room.RLock()
+			members, topic := len(room.members), *room.topic
+			room.RUnlock()
 			client.ReplyNicknamed(
 				"322",
 				r,
-				fmt.Sprintf("%d", len(room.members)),
-				*room.topic,
+				fmt.Sprintf("%d", members),
+				topic,
 			)
 		}
 		roomsM.RUnlock()
@@ -346,7 +351,10 @@ func Processor(events chan ClientEvent, finished chan struct{}) {
 			clientsM.RUnlock()
 			roomsM.Lock()
 			for rn, r := range rooms {
-				if *statedir == "" && len(r.members) == 0 {
+				r.RLock()
+				empty := len(r.members) == 0
+				r.RUnlock()
+				if *statedir == "" && empty {
 					log.Debugln(rn, "emptied room")
 					delete(rooms, rn)
 					close(roomSinks[r])

@@ -16,7 +16,8 @@ import (
 )
 
 const (
-	addr  = ":53"
+	port  = "53"
+	addr  = ":" + port
 	ttl   = 59
 	proto = "udp"
 )
@@ -50,7 +51,7 @@ func dnsClient() {
 
 		m.SetQuestion(dns.Fqdn(d), t)
 		log.Debug("dns client: question=%v", m.Question)
-		in, err := dns.Exchange(m, h+addr)
+		in, err := dns.Exchange(m, net.JoinHostPort(h, port))
 		if err != nil {
 			log.Debug("%v", err.Error())
 		} else {
