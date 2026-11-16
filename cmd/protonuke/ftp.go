@@ -60,7 +60,7 @@ func ftpClient() {
 		if !connected {
 			h, o := randomHost()
 			log.Debug("ftp host %v from %v", h, o)
-			host := h + ":" + strconv.Itoa(COMMAND_PORT)
+			host := net.JoinHostPort(h, strconv.Itoa(COMMAND_PORT))
 
 			if ftp, err = goftp.Connect(host); err != nil {
 				log.Errorln(err)

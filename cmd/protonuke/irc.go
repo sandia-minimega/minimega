@@ -34,6 +34,7 @@ var (
 
 	usersLock   sync.Mutex
 	channelLock sync.Mutex
+	pairLock    sync.Mutex
 )
 
 type Conversation struct {
@@ -98,6 +99,16 @@ func ircClient() {
 	channelUsers := make(map[string]string)
 	pair := Conversation{"", "", false, false, 0}
 
+	// joinedChannels is guarded by channelLock, pair by pairLock
+	randomJoinedChannel := func() (string, bool) {
+		channelLock.Lock()
+		defer channelLock.Unlock()
+		if len(joinedChannels) == 0 {
+			return "", false
+		}
+		return randomFromSlice(joinedChannels), true
+	}
+
 	// create callbacks
 	// 001: RPL_WELCOME "Welcome to the Internet Relay Network <nick>!<user>@<host>"
 	client.AddCallback("001", func(event *irc.Event) {
@@ -115,11 +126,14 @@ func ircClient() {
 				// use markov chain
 				for {
 					t.Tick()
-					if len(joinedChannels) == 0 {
+					channel, ok := randomJoinedChannel()
+					if !ok {
 						// wait until nick is in a channel
 						continue
 					}
 
+					pairLock.Lock()
+					idle := false
 					if pair.isWaiting {
 						pair.counter++
 						if pair.counter > pairQuitTime {
@@ -131,6 +145,11 @@ func ircClient() {
 							pair.counter = 0
 						}
 					} else if !pair.isPaired {
+						idle = true
+					}
+					pairLock.Unlock()
+
+					if idle {
 						// idle for a bit before starting a new conversation
 						wait := rand.Intn(convoWaitTimeMax-convoWaitTimeMin) + convoWaitTimeMin
 						for i := 0; i < wait; i++ {
@@ -138,34 +157,39 @@ func ircClient() {
 						}
 
 						// get random channel and user
-						channel := randomFromSlice(joinedChannels)
+						channel, _ = randomJoinedChannel()
+
+						usersLock.Lock()
+						users := channelUsers[channel]
+						usersLock.Unlock()
 
 						// check if channel is empty
-						if len(channelUsers[channel]) > 0 {
-							nick := randomFromSlice(strings.Split(channelUsers[channel], " "))
+						if len(users) > 0 {
+							nick := randomFromSlice(strings.Split(users, " "))
 
 							// set conversation flags
+							pairLock.Lock()
 							pair.isWaiting = true
 							pair.nick = nick
 							pair.channel = channel
+							pairLock.Unlock()
 
 							// ping user
 							log.Debug("[nick %v] Sending PRIVMSG to %v: %v", client.GetNick(), channel, nick)
 							client.Privmsg(channel, nick)
 						}
-
 					}
 				}
 			} else {
 				// random
 				for {
 					t.Tick()
-					if len(joinedChannels) == 0 {
+					to, ok := randomJoinedChannel()
+					if !ok {
 						// wait until nick is in a channel
 						continue
 					}
 
-					to := randomFromSlice(joinedChannels)
 					message := randomMessage()
 					log.Debug("[nick %v] Sending PRIVMSG to %v: %v", client.GetNick(), to, message)
 					client.Privmsg(to, message)
@@ -184,9 +208,9 @@ func ircClient() {
 			nicks := strings.Split(event.Message(), " ")
 			channel := event.Arguments[2]
 
-			nick = client.GetNick()
+			me := client.GetNick()
 			for i, n := range nicks {
-				if n == nick {
+				if n == me {
 					nicks = append(nicks[:i], nicks[i+1:]...)
 					break
 				}
@@ -237,6 +261,9 @@ func ircClient() {
 	client.AddCallback("PRIVMSG", func(event *irc.Event) {
 		if strings.HasPrefix(event.Arguments[0], "#") {
 			// channel message
+			pairLock.Lock()
+			defer pairLock.Unlock()
+
 			channel := event.Arguments[0]
 			message := event.Message()
 			log.Debug("[nick %v] Received PRIVMSG in channel %v from %v: %v", client.GetNick(), channel, event.Nick, message)
@@ -355,12 +382,12 @@ func ircClient() {
 	// connect
 	log.Debug("[nick %v] connecting to irc host %v from %v", client.GetNick(), host, original)
 	for {
-		err := client.Connect(host + ":" + port)
+		err := client.Connect(net.JoinHostPort(host, port))
 		if err == nil {
 			break
-		} else {
-			log.Error("%v", err)
 		}
+		log.Error("%v", err)
+		time.Sleep(time.Second)
 	}
 	client.Loop()
 }
