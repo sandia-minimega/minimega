@@ -377,6 +377,9 @@ func (v *VLANs) PrintVLAN(namespace string, vlan int) string {
 }
 
 func (v *VLANs) Tabular(namespace string) [][]string {
+	v.Lock()
+	defer v.Unlock()
+
 	res := [][]string{}
 
 	for alias, vlan := range v.byAlias {
