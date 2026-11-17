@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"syscall"
 	"testing"
 
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
@@ -142,5 +143,30 @@ func TestWget(t *testing.T) {
 	}
 	if m, _ := filepath.Glob(filepath.Join(dir, ".wget-*")); len(m) != 0 {
 		t.Errorf("temp files left: %v", m)
+	}
+}
+
+// wget must create downloads with the same permissions os.Create would
+// (0666 filtered by the umask), not CreateTemp's 0600.
+func TestWgetHonorsUmask(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("data"))
+	}))
+	defer srv.Close()
+
+	old := syscall.Umask(0027)
+	defer syscall.Umask(old)
+
+	dst := filepath.Join(t.TempDir(), "file")
+	if err := wget(srv.URL, dst); err != nil {
+		t.Fatal(err)
+	}
+
+	fi, err := os.Stat(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fi.Mode().Perm(); got != 0640 {
+		t.Errorf("mode = %v, want 0640", got)
 	}
 }

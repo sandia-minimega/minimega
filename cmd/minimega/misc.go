@@ -482,8 +482,10 @@ func wget(u, dst string) error {
 	}
 
 	// download to a temp file so a failed or partial download is never
-	// mistaken for a cached file.
-	out, err := os.CreateTemp(filepath.Dir(dst), ".wget-*")
+	// mistaken for a cached file. Not os.CreateTemp: its 0600 would survive
+	// the rename, where os.Create gives 0666 minus the umask.
+	tmp := filepath.Join(filepath.Dir(dst), fmt.Sprintf(".wget-%x", rand.Uint64()))
+	out, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
 	if err != nil {
 		return err
 	}
