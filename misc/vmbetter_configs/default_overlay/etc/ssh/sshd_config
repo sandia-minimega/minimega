@@ -4,6 +4,10 @@ PermitRootLogin yes
 PermitEmptyPasswords yes
 UsePAM yes
 
+# PAM keyboard-interactive fails logins with a password when PermitEmptyPasswords is on
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+
 # Printed by PAM instead
 PrintMotd no
 

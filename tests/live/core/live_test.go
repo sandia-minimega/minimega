@@ -13,6 +13,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -105,6 +106,9 @@ func TestLive(t *testing.T) {
 		p("Hotplug", testHotplug, cc),
 		p("Save", testSave, cc),
 		p("KillFlushRelaunch", testKillFlushRelaunch, cc),
+
+		// tools shipped in the image
+		p("Passwordify", testPasswordify, cc),
 
 		// teardown
 		p("ClearNamespace", testClearNamespace, version),
@@ -1110,6 +1114,85 @@ func testKillFlushRelaunch(t *testing.T) {
 	}
 	if r["uuid"] == harness.VMInfo(t)["host-a4"]["uuid"] {
 		t.Errorf("clone kept the source UUID")
+	}
+}
+
+// --- tools -------------------------------------------------------------------
+
+// testPasswordify boots a VM from a passwordified copy of the guest initrd and
+// checks that root's new password authenticates in the guest (issue #1213).
+func testPasswordify(t *testing.T) {
+	const password = "live-passw0rd"
+	const authKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEtc2QDYSXnUzZkRBTh7gjLWuGmQYDPfAxV+CbH7LJ6v live-test"
+
+	// passwordify chroots into the guest image, so it needs the guest's architecture
+	hostArch, err := harness.InContainer(t, "uname", "-m")
+	if err != nil {
+		t.Fatalf("uname: %v: %s", err, hostArch)
+	}
+	if guestArch := harness.CCOK(t, "host-a4", "uname -m"); strings.TrimSpace(guestArch) != strings.TrimSpace(hostArch) {
+		t.Skipf("container is %v but the guest is %v; passwordify cannot run guest binaries", strings.TrimSpace(hostArch), strings.TrimSpace(guestArch))
+	}
+
+	dir := filepath.Join(harness.MMFiles, "live")
+	keys := filepath.Join(dir, "passwordify.keys")
+	if err := os.WriteFile(keys, []byte(authKey+"\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// The guest has no sshd, so add the legacy config that broke ssh logins (#1213),
+	// quoted as sshd allows, then run passwordify with relative paths, the
+	// password on stdin, and both key options.
+	script := fmt.Sprintf(`set -e
+cd %v
+rm -rf pwroot && mkdir pwroot && cd pwroot
+zcat ../live.initrd | cpio -id --quiet
+mkdir -p etc/ssh && printf 'PasswordAuthentication yes\nPermitEmptyPasswords "yes"\n' > etc/ssh/sshd_config
+find . | cpio -o -H newc --quiet | gzip > ../live-ssh.initrd
+cd .. && rm -rf pwroot
+echo %v | passwordify -keys passwordify.keys live-ssh.initrd live-pw.initrd`, dir, password)
+	if out, err := harness.InContainer(t, "sh", "-c", script); err != nil {
+		t.Fatalf("passwordify: %v\n%s", err, out)
+	}
+
+	harness.MustRun(t, "vm config clone host-a4")
+	harness.MustRun(t, "vm config initrd live/live-pw.initrd")
+	harness.MustRun(t, "vm config append live.role=host live.hostname=host-pw")
+	harness.MustRun(t, "vm launch kvm host-pw")
+	harness.MustRun(t, "vm launch")
+	harness.MustRun(t, "clear vm config")
+	t.Cleanup(func() {
+		harness.Run("vm kill host-pw")
+		harness.Run("vm flush")
+	})
+	harness.MustRun(t, "vm start host-pw")
+	harness.CCEventually(t, "host-pw", "true", 3*time.Minute)
+
+	// su reads the password from stdin when it is not a terminal; as root it would not ask
+	su := func(vm, pw string) harness.CCResult {
+		return harness.CCExec(t, vm, fmt.Sprintf("echo %v | su nobody -s /bin/sh -c 'su -c true root'", pw))
+	}
+	if r := su("host-pw", password); r.ExitCode != 0 {
+		t.Errorf("root password rejected on host-pw: exit %d: %s%s", r.ExitCode, r.Stdout, r.Stderr)
+	}
+	if r := su("host-pw", "wrong-"+password); r.ExitCode == 0 {
+		t.Errorf("wrong root password accepted on host-pw")
+	}
+	// the stock image has no root password, so the change came from passwordify
+	if r := su("host-a4", password); r.ExitCode == 0 {
+		t.Errorf("root password accepted on host-a4, which runs the stock initrd")
+	}
+
+	ak := harness.CCOK(t, "host-pw", "cat /root/.ssh/authorized_keys")
+	pub := harness.CCOK(t, "host-pw", "cat /root/.ssh/id_rsa.pub")
+	if !strings.Contains(ak, authKey) || !strings.Contains(ak, strings.TrimSpace(pub)) || !strings.HasPrefix(pub, "ssh-rsa ") {
+		t.Errorf("authorized_keys lacks the -keys key or the generated id_rsa.pub:\n%s\nid_rsa.pub: %s", ak, pub)
+	}
+	if cfg := harness.CCOK(t, "host-pw", "cat /etc/ssh/sshd_config"); !strings.Contains(cfg, "PermitEmptyPasswords no") || strings.Contains(cfg, "yes\"") {
+		t.Errorf("sshd_config still allows empty passwords:\n%s", cfg)
+	}
+	if mode := strings.TrimSpace(harness.CCOK(t, "host-pw", "stat -c %a /")); mode != "755" {
+		t.Errorf("/ has mode %v, want 755", mode)
 	}
 }
 

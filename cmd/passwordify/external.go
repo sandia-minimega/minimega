@@ -5,6 +5,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os/exec"
 
@@ -23,16 +24,20 @@ var externalProcesses = map[string]string{
 
 // check for the presence of each of the external processes we may call,
 // and error if any aren't in our path
-func externalCheck() {
-	for _, i := range externalProcesses {
+func externalCheck(passwordless bool) error {
+	var errs []error
+	for k, i := range externalProcesses {
+		if k == "ssh-keygen" && !passwordless {
+			continue
+		}
 		path, err := exec.LookPath(i)
 		if err != nil {
-			e := fmt.Sprintf("%v not found", i)
-			log.Errorln(e)
+			errs = append(errs, fmt.Errorf("%v not found", i))
 		} else {
 			log.Info("%v found at: %v", i, path)
 		}
 	}
+	return errors.Join(errs...)
 }
 
 func process(p string) string {

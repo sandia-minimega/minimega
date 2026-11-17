@@ -49,6 +49,11 @@ passwordify installs a root password or SSH keys into a ramdisk image. It can
 also configure images for passwordless access between nodes booted from the
 same image.
 
+It prompts for the password on a terminal, or reads it from the first line of
+standard input otherwise (`echo pw | passwordify in.initrd out.initrd`). If the
+image's sshd allows empty passwords, passwordify turns that off, because sshd
+then fails keyboard-interactive logins that use a password.
+
 ## rond
 
 rond is a standalone command-and-control server for physical machines running
