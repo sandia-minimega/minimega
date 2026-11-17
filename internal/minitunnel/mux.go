@@ -10,11 +10,16 @@ import (
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
+var errTooManyStreams = errors.New("too many open tunnel streams")
+
 type chans struct {
 	sync.Mutex // embed
 
 	// maps of transaction id/incoming channel pairs for routing multiple tunnels
 	chans map[int]chan *tunnelMessage
+
+	// max is the maximum number of entries in chans, zero for no limit
+	max int
 }
 
 func makeChans() chans {
@@ -23,18 +28,22 @@ func makeChans() chans {
 	}
 }
 
-func (c *chans) add(ID int) chan *tunnelMessage {
+func (c *chans) add(ID int) (chan *tunnelMessage, error) {
 	c.Lock()
 	defer c.Unlock()
 
 	if _, ok := c.chans[ID]; ok {
-		log.Fatal("ID %v already exists!", ID)
+		return nil, fmt.Errorf("tunnel ID %v already exists", ID)
+	}
+
+	if c.max > 0 && len(c.chans) >= c.max {
+		return nil, errTooManyStreams
 	}
 
 	ch := make(chan *tunnelMessage, 1024)
 	c.chans[ID] = ch
 
-	return ch
+	return ch, nil
 }
 
 func (c *chans) remove(ID int) {
@@ -79,23 +88,13 @@ func (t *Tunnel) mux() {
 	log.Debug("starting minitunnel mux")
 
 	for {
-		var m tunnelMessage
-		if err = t.dec.Decode(&m); err != nil {
+		m := new(tunnelMessage)
+		if err = t.decode(m); err != nil {
 			break
 		}
 
-		log.Debug("new message: %v", m.Type)
-
-		// create new session if necessary
-		if m.Type == CONNECT {
-			t.handleRemote(&m)
-		} else if m.Type == FORWARD {
-			t.handleReverse(&m)
-		} else if c := t.chans.get(m.TID); c != nil {
-			// route the message to the handler by TID
-			c <- &m
-		} else {
-			log.Info("invalid TID: %v", m.TID)
+		if err = t.dispatch(m); err != nil {
+			break
 		}
 	}
 
@@ -116,20 +115,59 @@ func (t *Tunnel) mux() {
 	}
 }
 
+// dispatch handles one message from the remote end. A panic ends the tunnel
+// instead of the process.
+func (t *Tunnel) dispatch(m *tunnelMessage) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("minitunnel message handler panic: %v", r)
+		}
+	}()
+
+	log.Debug("new message: %v", m.Type)
+
+	// create new session if necessary
+	if m.Type == CONNECT {
+		t.handleRemote(m)
+	} else if m.Type == FORWARD {
+		t.handleReverse(m)
+	} else if c := t.chans.get(m.TID); c != nil {
+		// route the message to the handler by TID
+		c <- m
+	} else {
+		log.Info("invalid TID: %v", m.TID)
+	}
+
+	return nil
+}
+
 func (t *Tunnel) handleRemote(m *tunnelMessage) {
 	host := m.Host
 	port := m.Port
 	TID := m.TID
 
-	// attempt to connect to the host/port
-	conn, err := net.Dial("tcp", fmt.Sprintf("%v:%v", host, port))
-	if err == nil {
-		in := t.chans.add(TID)
-		go t.transfer(in, conn, TID)
-		return
-	}
+	var err error
 
-	log.Errorln(err)
+	if t.policy.AllowConnect != nil && !t.policy.AllowConnect(host, port) {
+		err = fmt.Errorf("connect to %v:%v refused by policy", host, port)
+		t.refused(err.Error())
+	} else {
+		var in chan *tunnelMessage
+		if in, err = t.chans.add(TID); err == nil {
+			// attempt to connect to the host/port
+			var conn net.Conn
+			conn, err = net.Dial("tcp", fmt.Sprintf("%v:%v", host, port))
+			if err == nil {
+				go t.transfer(in, conn, TID)
+				return
+			}
+
+			t.chans.remove(TID)
+			log.Errorln(err)
+		} else {
+			t.refused(fmt.Sprintf("connect to %v:%v: %v", host, port, err))
+		}
+	}
 
 	resp := &tunnelMessage{
 		Type:  CLOSED,
@@ -149,7 +187,11 @@ func (t *Tunnel) handleReverse(m *tunnelMessage) {
 		TID:  m.TID,
 		Ack:  true,
 	}
-	if err := t.Forward(m.Source, m.Host, m.Port); err != nil {
+
+	if t.policy.DenyForward {
+		resp.Error = fmt.Sprintf("forward of port %v to %v:%v refused by policy", m.Source, m.Host, m.Port)
+		t.refused(resp.Error)
+	} else if err := t.Forward(m.Source, m.Host, m.Port); err != nil {
 		resp.Error = err.Error()
 	}
 
