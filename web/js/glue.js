@@ -33,7 +33,7 @@ var ssDataTable;
 // Initialize the `vm info` DataTable and set up an automatic reload
 function initVMInfoDataTable() {
     var path = window.location.pathname;
-    path = path.substr(0, path.indexOf("/vms"));
+    path = path.substr(0, path.lastIndexOf("/vms"));
 
     var vmDataTable = $('#vms-dataTable').DataTable({
         "ajax": function( data, callback, settings) {
@@ -145,7 +145,10 @@ function initVMInfoDataTable() {
         $.ajax({
             type: "POST",
             url: p,
-            success: function() {
+            error: function(jqxhr) {
+                alert("Cannot " + action + " " + name + ": " + (jqxhr.responseText || jqxhr.statusText));
+            },
+            complete: function() {
                 vmDataTable.ajax.reload(null, false);
             },
         })
@@ -163,7 +166,7 @@ function initVMInfoDataTable() {
 // Initialize the `vm top` DataTable and set up an automatic reload
 function initVMTopDataTable() {
     var path = window.location.pathname;
-    path = path.substr(0, path.indexOf("/vms"));
+    path = path.substr(0, path.lastIndexOf("/vms"));
 
     var vmDataTable = $('#vms-dataTable').DataTable({
         "ajax": function(data, callback, settings) {
@@ -355,7 +358,7 @@ function initVLANsDataTable() {
     console.log("initVLANsDataTable");
 
     var path = window.location.pathname;
-    path = path.substr(0, path.indexOf("/vlans"));
+    path = path.substr(0, path.lastIndexOf("/vlans"));
 
     var table = $('#vlans-dataTable').DataTable({
         "ajax": {
@@ -481,7 +484,7 @@ function initFilesDataTable() {
 // Initialize the Screenshot DataTable and set up an automatic reload
 function initScreenshotDataTable() {
     var path = window.location.pathname;
-    path = path.substr(0, path.indexOf("/tilevnc"));
+    path = path.substr(0, path.lastIndexOf("/tilevnc"));
 
     updateJSON(path+"/vms/info.json", updateScreenshotTable);
 
