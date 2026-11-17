@@ -76,6 +76,10 @@ type Namespace struct {
 	// QueuedVMs toggles whether we should queue VMs or not when launching
 	QueueVMs bool
 
+	// index of the names and UUIDs in queue, nil until a Queue needs it
+	queuedNames map[string]bool
+	queuedUUIDs map[string]bool
+
 	vmConfig      VMConfig
 	savedVMConfig map[string]VMConfig
 
@@ -293,55 +297,45 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 		return errors.New("cannot launch multiple VMs with a pre-configured UUID")
 	}
 
-	// look for name and UUID conflicts across the namespace
-	takenName := map[string]bool{}
-	takenUUID := map[string]bool{}
-
-	for _, vm := range globalVMs(n) {
-		takenName[vm.GetName()] = true
-		takenUUID[vm.GetUUID()] = true
-	}
-
 	for _, name := range names {
-		if takenName[name] {
-			return fmt.Errorf("vm already exists with name `%s`", name)
-		}
-
 		if name != "" && !validName.MatchString(name) {
 			return fmt.Errorf("%v: `%v`", validNameErr, name)
 		}
 	}
 
-	if takenUUID[vmConfig.UUID] && vmConfig.UUID != "" {
-		return fmt.Errorf("vm already exists with UUID `%s`", vmConfig.UUID)
-	}
-
-	// add in all the queued VM names and then recheck
-	for _, q := range n.queued() {
-		for _, name := range q.Names {
-			takenName[name] = true
+	// Look for name and UUID conflicts across the namespace. With queueing,
+	// Schedule does this one time for all the queued VMs, because a `vm info`
+	// on each host for each queued VM is slow with many VMs.
+	if !n.QueueVMs {
+		q := &QueuedVMs{VMConfig: vmConfig, Names: names}
+		if err := vmConflicts(globalVMs(n), []*QueuedVMs{q}); err != nil {
+			return err
 		}
-		takenUUID[q.VMConfig.UUID] = true
-	}
-
-	for _, name := range names {
-		if takenName[name] && name != "" {
-			return fmt.Errorf("vm already queued with name `%s`", name)
-		}
-	}
-
-	if takenUUID[vmConfig.UUID] && vmConfig.UUID != "" {
-		return fmt.Errorf("vm already queued with UUID `%s`", vmConfig.UUID)
 	}
 
 	n.configLock.Lock()
 	defer n.configLock.Unlock()
 
-	n.queue = append(n.queue, &QueuedVMs{
+	// look for conflicts with the queued VMs
+	n.indexQueue()
+
+	for _, name := range names {
+		if n.queuedNames[name] && name != "" {
+			return fmt.Errorf("vm already queued with name `%s`", name)
+		}
+	}
+
+	if n.queuedUUIDs[vmConfig.UUID] && vmConfig.UUID != "" {
+		return fmt.Errorf("vm already queued with UUID `%s`", vmConfig.UUID)
+	}
+
+	q := &QueuedVMs{
 		VMConfig: vmConfig,
 		VMType:   vmType,
 		Names:    names,
-	})
+	}
+	n.queue = append(n.queue, q)
+	n.addToQueueIndex(q)
 
 	return nil
 }
@@ -387,6 +381,67 @@ func (n *Namespace) copyVMConfig(name string) (config VMConfig, done func(), err
 	n.addLaunching(pending)
 
 	return config, func() { n.endLaunch(pending) }, nil
+}
+
+// vmConflicts returns an error when a queued VM has the name or UUID of one of
+// the VMs in vms.
+func vmConflicts(vms []VM, queue []*QueuedVMs) error {
+	takenName := map[string]bool{}
+	takenUUID := map[string]bool{}
+
+	for _, vm := range vms {
+		takenName[vm.GetName()] = true
+		takenUUID[vm.GetUUID()] = true
+	}
+
+	for _, q := range queue {
+		for _, name := range q.Names {
+			if takenName[name] && name != "" {
+				return fmt.Errorf("vm already exists with name `%s`", name)
+			}
+		}
+
+		if takenUUID[q.VMConfig.UUID] && q.VMConfig.UUID != "" {
+			return fmt.Errorf("vm already exists with UUID `%s`", q.VMConfig.UUID)
+		}
+	}
+
+	return nil
+}
+
+// clearQueue removes all the queued VMs and the index of their names and
+// UUIDs. The caller must hold configLock.
+func (n *Namespace) clearQueue() {
+	n.queue = nil
+	n.queuedNames, n.queuedUUIDs = nil, nil
+}
+
+// indexQueue makes the index of the names and UUIDs in the queue, if it does
+// not exist. The caller must hold configLock.
+func (n *Namespace) indexQueue() {
+	if n.queuedNames != nil {
+		return
+	}
+
+	n.queuedNames = map[string]bool{}
+	n.queuedUUIDs = map[string]bool{}
+
+	for _, q := range n.queue {
+		n.addToQueueIndex(q)
+	}
+}
+
+// addToQueueIndex adds the names and UUID of q to the index of the queue, if
+// the index exists. The caller must hold configLock.
+func (n *Namespace) addToQueueIndex(q *QueuedVMs) {
+	if n.queuedNames == nil {
+		return
+	}
+
+	for _, name := range q.Names {
+		n.queuedNames[name] = true
+	}
+	n.queuedUUIDs[q.VMConfig.UUID] = true
 }
 
 // hostStats returns stats from hosts in the namespace.
@@ -453,8 +508,16 @@ func (n *Namespace) Schedule(dryRun bool) error {
 		}
 	}
 
+	vms := globalVMs(n)
+
+	// The queued VMs were not checked against the VMs in the namespace when
+	// queueing was enabled.
+	if err := vmConflicts(vms, queue); err != nil {
+		return err
+	}
+
 	// resolve any "colocated" VMs for VMs that are already launched
-	for _, vm := range globalVMs(n) {
+	for _, vm := range vms {
 		for _, q := range queue {
 			if q.Colocate == vm.GetName() {
 				q.Schedule = vm.GetHost()
@@ -643,6 +706,7 @@ func (n *Namespace) startLaunch(qs, dequeue []*QueuedVMs) {
 		n.queue = slices.DeleteFunc(slices.Clone(n.queue), func(q *QueuedVMs) bool {
 			return slices.Contains(dequeue, q)
 		})
+		n.queuedNames, n.queuedUUIDs = nil, nil
 	}
 
 	n.addLaunching(qs)
