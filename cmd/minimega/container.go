@@ -1273,19 +1273,51 @@ func (vm *ContainerVM) NetworkDisconnect(pos int) error {
 	return nil
 }
 
+// containerNetnsDir holds the links to the network namespaces of containers,
+// where the ip command finds them. Tests replace it.
+var containerNetnsDir = "/var/run/netns"
+
+// symlinkNetns links the network namespace of the container into
+// containerNetnsDir. It replaces a link that has no target, which a container
+// that exited without cleanup leaves. It keeps a link with a target, which is
+// the namespace of a container that still runs, and returns an error.
 func (vm *ContainerVM) symlinkNetns() error {
-	err := os.MkdirAll("/var/run/netns", 0755)
+	err := os.MkdirAll(containerNetnsDir, 0755)
 	if err != nil {
 		return err
 	}
+
+	name := fmt.Sprintf("meganet_%v", vm.ID)
 	src := fmt.Sprintf("/proc/%v/ns/net", vm.Pid)
-	dst := fmt.Sprintf("/var/run/netns/meganet_%v", vm.ID)
-	vm.netns = fmt.Sprintf("meganet_%v", vm.ID)
-	return os.Symlink(src, dst)
+	dst := filepath.Join(containerNetnsDir, name)
+
+	if _, err := os.Lstat(dst); err == nil {
+		if _, err := os.Stat(dst); !os.IsNotExist(err) {
+			return fmt.Errorf("%v is the network namespace of a container with VM ID %v of another minimega, or of one that crashed, the nuke command removes it", dst, vm.ID)
+		}
+
+		if err := os.Remove(dst); err != nil {
+			return err
+		}
+	}
+
+	if err := os.Symlink(src, dst); err != nil {
+		return err
+	}
+	vm.netns = name
+
+	return nil
 }
 
+// unlinkNetns removes the link that symlinkNetns made, if any.
 func (vm *ContainerVM) unlinkNetns() error {
-	dst := fmt.Sprintf("/var/run/netns/%v", vm.netns)
+	if vm.netns == "" {
+		return nil
+	}
+
+	dst := filepath.Join(containerNetnsDir, vm.netns)
+	vm.netns = ""
+
 	return os.Remove(dst)
 }
 
