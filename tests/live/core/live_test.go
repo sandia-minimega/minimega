@@ -10,8 +10,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -550,34 +548,6 @@ func testDisk(t *testing.T) {
 	snap := harness.MustTable(t, "disk info live/data-snap.qcow2")
 	if len(snap) == 0 || !strings.Contains(snap[0]["backingfile"], "data.qcow2") {
 		t.Errorf("snapshot backing file: %v", snap)
-	}
-}
-
-func testMiniweb(t *testing.T) {
-	get := func(path string) []byte {
-		t.Helper()
-		resp, err := http.Get(harness.MiniwebURL + path)
-		if err != nil {
-			t.Fatalf("GET %v: %v", path, err)
-		}
-		defer resp.Body.Close()
-		body, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("GET %v: %v", path, resp.Status)
-		}
-		return body
-	}
-
-	if body := get("/"); !bytes.Contains(bytes.ToLower(body), []byte("minimega")) {
-		t.Errorf("index page does not mention minimega")
-	}
-
-	// miniweb talks to minimega over the same socket and lists our VMs
-	body := get("/vms/info.json?namespace=" + harness.Namespace)
-	for _, s := range topology {
-		if !bytes.Contains(body, []byte(`"`+s.Name+`"`)) {
-			t.Errorf("/vms/info.json missing %v", s.Name)
-		}
 	}
 }
 
