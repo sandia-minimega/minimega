@@ -28,7 +28,16 @@ type VMs struct {
 	// stopVNC, if set, stops the VNC recordings, playback, and pastes of the
 	// named VM. A KVM VM calls it when QEMU exits.
 	stopVNC func(name string)
+
+	// pending holds the VMs that Launch has reserved and is launching, keyed
+	// by ID. Each one moves to m when its Launch returns.
+	pending     map[int]VM
+	pendingNICs int
+	launched    *sync.Cond // broadcast when a VM leaves pending
 }
+
+// newVM creates the VMs that Launch launches. Tests replace it.
+var newVM = NewVM
 
 // vmApplyFunc is passed into VMs.apply
 type vmApplyFunc func(VM, bool) (bool, error)
@@ -79,12 +88,12 @@ func (q QueuedVMs) GetFiles(updatee string) error {
 	return nil
 }
 
-// Count of launched VMs.
+// Count of launched VMs, including the VMs that are launching.
 func (vms *VMs) Count() int {
 	vms.mu.Lock()
 	defer vms.mu.Unlock()
 
-	return len(vms.m)
+	return len(vms.m) + len(vms.pending)
 }
 
 func (vms *VMs) CountTypeState(t VMType, mask VMState) int {
@@ -99,6 +108,15 @@ func (vms *VMs) CountTypeState(t VMType, mask VMState) int {
 		}
 	}
 
+	// A launching VM holds its lock, so do not call GetState on it.
+	if mask&VM_BUILDING != 0 {
+		for _, vm := range vms.pending {
+			if vm.GetType() == t {
+				count++
+			}
+		}
+	}
+
 	return count
 }
 
@@ -110,13 +128,20 @@ func (vms *VMs) Limit() int {
 	// assume unlimited
 	limit := -1
 
-	for _, vm := range vms.m {
+	update := func(vm VM) {
 		// update if limit is unlimited or we're not unlimited and we're less
 		// than the previous limit
 		v := vm.GetCoschedule()
 		if limit == -1 || (v != -1 && v < limit) {
 			limit = v
 		}
+	}
+
+	for _, vm := range vms.m {
+		update(vm)
+	}
+	for _, vm := range vms.pending {
+		update(vm)
 	}
 
 	return limit
@@ -129,12 +154,17 @@ func (vms *VMs) Commit() (uint64, uint64, int) {
 
 	cpu := uint64(0)
 	mem := uint64(0)
-	net := 0
+	net := vms.pendingNICs
 
 	for _, vm := range vms.m {
 		cpu += vm.GetCPUs()
 		mem += vm.GetMem()
 		net += len(vm.GetNetworks())
+	}
+
+	for _, vm := range vms.pending {
+		cpu += vm.GetCPUs()
+		mem += vm.GetMem()
 	}
 
 	return cpu, mem, net
@@ -279,42 +309,53 @@ func (vms *VMs) Launch(requestor, namespace string, q *QueuedVMs) <-chan error {
 			return
 		}
 
-		vms.mu.Lock()
-		defer vms.mu.Unlock()
-
-		var wg sync.WaitGroup
-
 		log.Info("launching %v %v vms", len(q.Names), q.VMType)
 		start := time.Now()
 
+		nics := len(q.Networks)
+
+		// Hold vms.mu only to create the VMs and to reserve their names and
+		// IDs. The launches run without it.
+		var reserved []VM
+		var failed []error
+
+		vms.mu.Lock()
 		for _, name := range q.Names {
 			// Create new VM and test it for conflicts against other VMs.
-			vm, err := NewVM(name, namespace, q.VMType, q.VMConfig)
+			vm, err := newVM(name, namespace, q.VMType, q.VMConfig)
 			if err == nil {
-				for _, vm2 := range vms.m {
-					if err = vm2.Conflicts(vm); err != nil {
-						break
-					}
-				}
+				err = vms.conflicts(vm)
 			}
 
 			if err != nil {
-				errs <- err
+				failed = append(failed, err)
 				continue
 			}
 
-			// Add the newly created VM to the map so that it gets included in
-			// future conflict tests.
-			vms.m[vm.GetID()] = vm
+			// Reserve the VM so that it gets included in future conflict tests.
+			if vms.pending == nil {
+				vms.pending = map[int]VM{}
+			}
+			vms.pending[vm.GetID()] = vm
+			vms.pendingNICs += nics
 			vms.hookExit(vm)
 
-			// The actual launching can happen in parallel while we keep checking
-			// for conflicts.
-			wg.Add(1)
-			go func(name string) {
-				defer wg.Done()
+			reserved = append(reserved, vm)
+		}
+		vms.mu.Unlock()
 
-				// Note: the VM is already in the VMs map
+		for _, err := range failed {
+			errs <- err
+		}
+
+		var wg sync.WaitGroup
+
+		for _, vm := range reserved {
+			wg.Add(1)
+			go func(vm VM) {
+				defer wg.Done()
+				defer vms.finishLaunch(vm, nics)
+
 				if err := vm.Launch(); err != nil {
 					errs <- err
 					return
@@ -324,7 +365,7 @@ func (vms *VMs) Launch(requestor, namespace string, q *QueuedVMs) <-chan error {
 					errs <- err
 					return
 				}
-			}(name)
+			}(vm)
 		}
 
 		wg.Wait()
@@ -334,6 +375,64 @@ func (vms *VMs) Launch(requestor, namespace string, q *QueuedVMs) <-chan error {
 	}()
 
 	return errs
+}
+
+// conflicts tests vm for conflicts against the launched and the launching
+// VMs. Assumes vms.mu is held.
+func (vms *VMs) conflicts(vm VM) error {
+	for _, vm2 := range vms.m {
+		if err := vm2.Conflicts(vm); err != nil {
+			return err
+		}
+	}
+
+	// The launch of a pending VM holds its lock, and the launch does not
+	// change the fields that the conflict test reads.
+	for _, vm2 := range vms.pending {
+		if err := vm2.conflictsNoLock(vm); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// finishLaunch moves vm from pending to the launched VMs, whether or not its
+// Launch succeeded.
+func (vms *VMs) finishLaunch(vm VM, nics int) {
+	vms.mu.Lock()
+	defer vms.mu.Unlock()
+
+	delete(vms.pending, vm.GetID())
+	vms.pendingNICs -= nics
+	vms.m[vm.GetID()] = vm
+
+	vms.launchedCond().Broadcast()
+}
+
+// launchedCond returns the condition that finishLaunch broadcasts. Assumes
+// vms.mu is held.
+func (vms *VMs) launchedCond() *sync.Cond {
+	if vms.launched == nil {
+		vms.launched = sync.NewCond(&vms.mu)
+	}
+
+	return vms.launched
+}
+
+// waitLaunches waits until no VM is launching. Assumes vms.mu is held.
+func (vms *VMs) waitLaunches() {
+	for len(vms.pending) > 0 {
+		vms.launchedCond().Wait()
+	}
+}
+
+// WaitLaunches waits until the VMs that are launching are in the VMs map.
+func (vms *VMs) WaitLaunches() {
+	vms.mu.Lock()
+	defer vms.mu.Unlock()
+
+	vms.waitLaunches()
 }
 
 // Stop VMs matching target.
@@ -429,10 +528,13 @@ func (vms *VMs) Flush(target string, cc *ron.Server) error {
 }
 
 // FlushAll deletes VMs that are in the QUIT or ERROR state, disconnecting them
-// from the provided ron.Server first.
+// from the provided ron.Server first. It waits for running launches first, so
+// that it also deletes the VMs whose launch failed.
 func (vms *VMs) FlushAll(cc *ron.Server) error {
 	vms.mu.Lock()
 	defer vms.mu.Unlock()
+
+	vms.waitLaunches()
 
 	var wg sync.WaitGroup
 	var mapLock sync.Mutex

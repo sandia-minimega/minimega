@@ -562,22 +562,26 @@ func (vm *KvmVM) Info(field string) (string, error) {
 }
 
 func (vm *KvmVM) Conflicts(vm2 VM) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	return vm.conflictsNoLock(vm2)
+}
+
+func (vm *KvmVM) conflictsNoLock(vm2 VM) error {
 	switch vm2 := vm2.(type) {
 	case *KvmVM:
-		return vm.ConflictsKVM(vm2)
+		return vm.conflictsKVM(vm2)
 	case *ContainerVM:
 		return vm.BaseVM.conflicts(vm2.BaseVM)
 	case *AndroidVM:
-		return vm.ConflictsAndroid(vm2)
+		return vm.conflictsAndroid(vm2)
 	}
 
 	return errors.New("unknown VM type")
 }
 
-func (vm *KvmVM) ConflictsAndroid(vm2 *AndroidVM) error {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
-
+func (vm *KvmVM) conflictsAndroid(vm2 *AndroidVM) error {
 	for _, d := range vm.Disks {
 		for _, d2 := range vm2.Disks {
 			if d.Path == d2.Path && (!vm.Snapshot || !vm2.Snapshot) {
@@ -589,13 +593,10 @@ func (vm *KvmVM) ConflictsAndroid(vm2 *AndroidVM) error {
 	return vm.BaseVM.conflicts(vm2.BaseVM)
 }
 
-// ConflictsKVM tests whether vm and vm2 share a disk and returns an
+// conflictsKVM tests whether vm and vm2 share a disk and returns an
 // error if one of them is not running in snapshot mode. Also checks
 // whether the BaseVMs conflict.
-func (vm *KvmVM) ConflictsKVM(vm2 *KvmVM) error {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
-
+func (vm *KvmVM) conflictsKVM(vm2 *KvmVM) error {
 	for _, d := range vm.Disks {
 		for _, d2 := range vm2.Disks {
 			if d.Path == d2.Path && (!vm.Snapshot || !vm2.Snapshot) {

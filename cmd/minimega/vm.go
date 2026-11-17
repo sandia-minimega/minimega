@@ -78,6 +78,10 @@ type VM interface {
 	// when we create a VM but before adding it to the list of VMs.
 	Conflicts(VM) error
 
+	// conflictsNoLock is Conflicts without the lock of the VM. Use it only for
+	// a VM that is launching: the launch holds the lock.
+	conflictsNoLock(VM) error
+
 	SetCCActive(bool)
 	HasCC() bool
 	Connect(*ron.Server, bool) error
