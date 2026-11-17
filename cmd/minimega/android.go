@@ -777,6 +777,11 @@ func (vm *AndroidVM) addTap(name, bridge, mac string, vlan int, qinq bool) (stri
 
 	if qinq {
 		if err := br.SetTapQinQ(tap, vlan); err != nil {
+			// the caller has not recorded the tap yet, so nothing else
+			// would destroy it
+			if err := br.DestroyTap(tap); err != nil {
+				log.Error("unable to destroy tap %v: %v", tap, err)
+			}
 			return tap, err
 		}
 	}

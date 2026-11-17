@@ -141,6 +141,10 @@ func TestSaveMultiDiskNames(t *testing.T) {
 }
 
 func TestAddNICBadBridgeLeavesNoNIC(t *testing.T) {
+	// with no ovs-vsctl on PATH the bridge cannot be created, so the test
+	// neither needs nor touches host networking
+	t.Setenv("PATH", t.TempDir())
+
 	vm, f := newTestKVM(t, func(map[string]interface{}) interface{} {
 		return ret("")
 	})
@@ -171,6 +175,26 @@ func hmpLines(f *fakeQMP) []string {
 		res = append(res, c["arguments"].(map[string]interface{})["command-line"].(string))
 	}
 	return res
+}
+
+// A netdev whose NIC device cannot be added must be deleted again, or QEMU
+// keeps it and its tap open with no NIC record to clean it up.
+func TestQMPAddNICDeviceAddFailsDeletesNetdev(t *testing.T) {
+	vm, f := newTestKVM(t, hmpHandler(func(line string) string {
+		if strings.HasPrefix(line, "device_add") {
+			return "Bus 'pci.0' does not support hotplugging"
+		}
+		return ""
+	}))
+
+	if err := vm.qmpAddNIC(NetConfig{Tap: "mega_tap7", Driver: "e1000", MAC: "00:11:22:33:44:55"}); err == nil {
+		t.Fatal("qmpAddNIC reported success when device_add failed")
+	}
+	lines := hmpLines(f)
+	if len(lines) != 3 || !strings.HasPrefix(lines[0], "netdev_add") ||
+		!strings.HasPrefix(lines[1], "device_add") || lines[2] != "netdev_del mega_tap7" {
+		t.Errorf("HMP commands = %q, want netdev_add, device_add, netdev_del mega_tap7", lines)
+	}
 }
 
 func TestHotplugDriveAddFails(t *testing.T) {

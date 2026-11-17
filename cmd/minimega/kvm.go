@@ -931,6 +931,11 @@ func (vm *KvmVM) addTap(name, bridge, mac string, vlan int, qinq bool) (string, 
 
 	if qinq {
 		if err := br.SetTapQinQ(tap, vlan); err != nil {
+			// the caller has not recorded the tap yet, so nothing else
+			// would destroy it
+			if err := br.DestroyTap(tap); err != nil {
+				log.Error("unable to destroy tap %v: %v", tap, err)
+			}
 			return tap, err
 		}
 	}
@@ -1236,17 +1241,30 @@ func (vm *KvmVM) AddNIC(nic NetConfig) error {
 		return vm.setErrorf("unable to write taps: %v", err)
 	}
 
+	if err := vm.qmpAddNIC(nic); err != nil {
+		rollback()
+		return err
+	}
+
+	return nil
+}
+
+// qmpAddNIC adds the QEMU netdev and NIC device for nic. If the device cannot
+// be added, the netdev is deleted again so that QEMU does not keep the tap
+// open.
+func (vm *KvmVM) qmpAddNIC(nic NetConfig) error {
 	// TODO: figure out a better naming convention for these
 	r, err := vm.q.NetDevAdd("tap", nic.Tap, nic.Tap)
 	if err = hmpResult(r, err); err != nil {
-		rollback()
 		return err
 	}
 	log.Debugln("qmp netdev_add response:", r)
 
 	r, err = vm.q.NicAdd(nic.Tap, nic.Tap, "pci.0", nic.Driver, nic.MAC)
 	if err = hmpResult(r, err); err != nil {
-		rollback()
+		if err := hmpResult(vm.q.HumanMonitorCommand("netdev_del " + nic.Tap)); err != nil {
+			log.Error("unable to delete netdev %v: %v", nic.Tap, err)
+		}
 		return err
 	}
 	log.Debugln("qmp device_add response:", r)
