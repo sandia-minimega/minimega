@@ -38,7 +38,7 @@ const (
 type Netflow struct {
 	port          int
 	conn          *net.UDPConn
-	mu            sync.Mutex // guards writers; held while sending so a channel is never closed mid-send
+	mu            sync.Mutex // guards writers; held while sending (non-blocking) so a channel is never closed mid-send
 	writers       map[string]chan *Packet
 	statFlows     uint64
 	statBytes     uint64
@@ -306,9 +306,15 @@ func (nf *Netflow) reader() {
 			log.Errorln(err)
 			continue
 		}
+		// never block while holding mu: a writer stalled on a collector that
+		// stopped reading would hang RemoveWriter and Stop. Netflow arrives
+		// over UDP and is already lossy, so drop the packet for a full queue.
 		nf.mu.Lock()
 		for _, v := range nf.writers {
-			v <- p
+			select {
+			case v <- p:
+			default:
+			}
 		}
 		nf.mu.Unlock()
 	}

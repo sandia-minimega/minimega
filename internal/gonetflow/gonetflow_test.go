@@ -92,3 +92,35 @@ func TestRawPacketsNotAliased(t *testing.T) {
 		}
 	}
 }
+
+// A writer that stops draining its queue must not block RemoveWriter.
+func TestStalledWriterDoesNotBlockRemove(t *testing.T) {
+	nf, port, err := NewNetflow()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer nf.Stop()
+
+	nf.registerWriter("stalled", make(chan *Packet)) // never read
+
+	c, err := net.Dial("udp", fmt.Sprintf("127.0.0.1:%d", port))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	for i := 0; i < 3; i++ {
+		c.Write(testPacket(1))
+	}
+	time.Sleep(100 * time.Millisecond) // let the reader pick them up
+
+	done := make(chan error)
+	go func() { done <- nf.RemoveWriter("stalled") }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("RemoveWriter blocked by a stalled writer")
+	}
+}
