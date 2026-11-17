@@ -6,6 +6,7 @@ package main
 
 type Counter struct {
 	vals chan int
+	skip chan int
 	done chan bool
 }
 
@@ -15,15 +16,21 @@ type Counter struct {
 func NewCounter() *Counter {
 	res := Counter{
 		vals: make(chan int),
+		skip: make(chan int),
 		done: make(chan bool),
 	}
 
 	go func() {
 		defer close(res.vals)
 
-		for i := 0; ; i++ {
+		for i := 0; ; {
 			select {
 			case res.vals <- i:
+				i++
+			case n := <-res.skip:
+				if n >= i {
+					i = n + 1
+				}
 			case <-res.done:
 				return
 			}
@@ -37,6 +44,16 @@ func NewCounter() *Counter {
 // cause this to return the zero value.
 func (c *Counter) Next() int {
 	return <-c.vals
+}
+
+// SkipPast makes sure that later calls to Next return values greater than n.
+// It does not change the counter when the next value is already greater than
+// n. Calling SkipPast after Stop has no effect.
+func (c *Counter) SkipPast(n int) {
+	select {
+	case c.skip <- n:
+	case <-c.done:
+	}
 }
 
 // Stop terminates a counter. Should only be called once otherwise it will

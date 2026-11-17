@@ -73,6 +73,12 @@ Display or modify the active namespace.
 Note: namespace save records Android VM configuration so Android VMs can be
 relaunched, but it does not capture Android Emulator runtime state, AVD data
 changes, guest IP addresses, guest policy routing, or guest firewall state.
+
+Note: namespace save uses "vm save" to save each running or paused Firecracker
+VM with its state. The saved launch script uses "vm config firecracker-snapshot"
+to restore these VMs. For all other Firecracker VMs, namespace save records only
+the configuration. The script launches these VMs again from their configuration.
+The memory and disk changes of their guests are not saved.
 `,
 		Patterns: []string{
 			"ns <hosts,>",

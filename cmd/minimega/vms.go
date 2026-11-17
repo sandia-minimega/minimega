@@ -66,6 +66,19 @@ type QueuedVMs struct {
 // fields that take a file. If updatee is provided, it will periodically be sent
 // status update messages about file transfer status.
 func (q QueuedVMs) GetFiles(updatee string) error {
+	for _, f := range q.files() {
+		if strings.HasPrefix(f, *f_iomBase) {
+			if _, err := iomHelper(f, updatee); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// files returns the paths of the files that the VMs in q use.
+func (q QueuedVMs) files() []string {
 	files := []string{
 		q.ContainerConfig.Preinit,
 		q.KVMConfig.CdromPath,
@@ -76,16 +89,15 @@ func (q QueuedVMs) GetFiles(updatee string) error {
 	for _, f := range q.KVMConfig.Disks {
 		files = append(files, f.Path)
 	}
-
-	for _, f := range files {
-		if strings.HasPrefix(f, *f_iomBase) {
-			if _, err := iomHelper(f, updatee); err != nil {
-				return err
-			}
+	if p := q.FirecrackerConfig.FirecrackerSnapshotPath; p != "" && q.VMType == FIRECRACKER {
+		p = fcSnapshotPrefix(p)
+		files = append(files, p+".json", p+".state", p+".mem")
+		if size, _ := fcParseSize(q.FirecrackerConfig.FirecrackerScratch); size > 0 {
+			files = append(files, p+fcSaveSuffix(0, true))
 		}
 	}
 
-	return nil
+	return files
 }
 
 // Count of launched VMs, including the VMs that are launching.
@@ -349,6 +361,7 @@ func (vms *VMs) Launch(requestor, namespace string, q *QueuedVMs) <-chan error {
 		}
 
 		var wg sync.WaitGroup
+		var fcBatch fcLaunchBatch
 
 		for _, vm := range reserved {
 			wg.Add(1)
@@ -365,10 +378,18 @@ func (vms *VMs) Launch(requestor, namespace string, q *QueuedVMs) <-chan error {
 					errs <- err
 					return
 				}
+
+				if vm.GetType() == FIRECRACKER {
+					fcBatch.add(vm)
+				}
 			}(vm)
 		}
 
 		wg.Wait()
+
+		if fcBatch.len() > 0 {
+			log.Info("%v", fcBatch.message(time.Since(start)))
+		}
 
 		stop := time.Now()
 		log.Info("launched %v %v vms in %v", len(q.Names), q.VMType, stop.Sub(start))

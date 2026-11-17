@@ -38,12 +38,12 @@ func TestLaunchedCount(t *testing.T) {
 // launches in progress, that the hosts launch at the same time, and that the
 // stats count VMs.
 func TestScheduleParallel(t *testing.T) {
-	oldParallel, oldLaunch := scheduleHostParallel, scheduleLaunch
+	oldParallel, oldLaunch := *f_firecrackerLaunchParallel, scheduleLaunch
 	t.Cleanup(func() {
-		scheduleHostParallel = oldParallel
+		*f_firecrackerLaunchParallel = oldParallel
 		scheduleLaunch = oldLaunch
 	})
-	scheduleHostParallel = func() int { return 3 }
+	*f_firecrackerLaunchParallel = 3
 
 	var mu sync.Mutex
 	running, most := map[string]int{}, map[string]int{}

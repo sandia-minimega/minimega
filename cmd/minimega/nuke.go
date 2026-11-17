@@ -25,6 +25,11 @@ After a crash, the VM state on the machine can be difficult to recover from.
 nuke attempts to kill all instances of QEMU, remove all taps and bridges, and
 removes the temporary minimega state on the harddisk.
 
+nuke also kills the Firecracker VMM and jailer processes of this minimega
+instance. It removes their jails, instance directories, network namespaces,
+device-mapper targets, loop devices, and cgroups. It keeps the image cache in
+the Firecracker directory.
+
 Should be run with caution.`,
 		Patterns: []string{
 			"nuke",
@@ -47,6 +52,8 @@ func cliNuke(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 
 	// nuke any container related items
 	containerNuke()
+
+	fcNuke()
 
 	// walk the minimega root tree and do certain actions such as
 	// kill qemu pids, remove taps, and remove the bridge
