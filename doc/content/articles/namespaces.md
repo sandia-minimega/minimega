@@ -189,8 +189,8 @@ namespace and starts them. Once the queue is flushed, the VMs become visible in
 `vm info`.
 
 Each node gets the VMs of one `vm launch` command in one launch. A node runs up
-to one launch for each CPU at the same time. In `ns schedule status`,
-`launched` and `failures` are numbers of VMs.
+to the `-firecracker-launch-parallel` number of launches at the same time. In
+`ns schedule status`, `launched` and `failures` are numbers of VMs.
 
 <a id="TOC_2.5."></a>
 

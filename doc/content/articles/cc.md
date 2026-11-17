@@ -9,7 +9,7 @@ Command and control with minimega
 
 - First class feature in minimega via the `cc` API
 - Works on Windows, Linux, FreeBSD guests
-- TCP or virtio-serial connection
+- TCP, virtio-serial, or vsock connection
 - Scales
 - File I/O
 - Process control

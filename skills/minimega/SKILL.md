@@ -6,8 +6,8 @@ license: GPL-3.0-only
 
 # minimega operations and integration
 
-minimega manages KVM virtual machines, Android emulators, and Linux containers
-on one host or across a mesh-connected cluster. This skill focuses on using
+minimega manages KVM virtual machines, Firecracker microVMs, Android emulators,
+and Linux containers on one host or across a mesh-connected cluster. This skill focuses on using
 minimega and preserving its operational contracts.
 
 File paths in this skill are relative to the minimega repository root. The skill
@@ -77,7 +77,8 @@ depth; the essentials are:
   `MM_APPEND` adds raw flags. Docker defaults differ from native defaults
   (`MM_DEGREE=1`, `MM_LOGLEVEL=info`, `MM_FORCE=true`, a log file).
 - **systemd.** `misc/daemon/minimega.service` maps `/etc/minimega/minimega.conf`
-  to explicit `ExecStart` flags; `MM_APPEND` is not supported there.
+  to explicit `ExecStart` flags; `MM_APPEND` is not supported there. minimega
+  reads the `MM_FIRECRACKER_*` variables of that file from its environment.
 - **Help.** `minimega -h` for startup flags, `minimega -e help [command]` for
   runtime commands, `minimega -cli` for the runtime CLI as JSON. Pass the
   correct `-base=<path>` before `-e` when the daemon uses a non-default base.
@@ -119,7 +120,7 @@ hosts already present in the mesh.
 
 ### VM configuration and lifecycle
 
-minimega supports `kvm`, `container`, and `android` VM types. `vm config` is
+minimega supports `kvm`, `container`, `android`, and `firecracker` VM types. `vm config` is
 mutable namespace-local state copied into every subsequently launched VM; it
 does not retroactively change existing VMs.
 
@@ -149,6 +150,14 @@ Containers require a filesystem containing their init executable. Android VMs
 require an AVD name, KVM, and discoverable `emulator` and `adb` tools;
 `android-sdk` and `android-avd-dir` are optional overrides. Disk snapshot mode
 defaults to `true`, so writes normally do not modify the source image.
+
+Firecracker VMs run a Linux guest in a jailed Firecracker microVM. They need an
+x86_64 host with `/dev/kvm`, static `firecracker` and `jailer` binaries of the
+same version (v1.17.0 or later), and `vm config kernel`. `vm launch` configures
+the VMM, and `vm start` boots the guest. A guest reboot stops the VMM, and the
+VM goes to `QUIT`. `vm start` then boots it again. cc uses vsock: run
+`miniccc -family vsock -port 9002` in the guest. Read
+`doc/content/articles/firecracker.md` before you change Firecracker behavior.
 
 When `ns queueing true` is active, `vm launch <type> <name>` queues VMs.
 Run `vm launch` with no additional arguments to flush the queue and invoke the
@@ -243,6 +252,18 @@ Consult command help before mutating state; subcommand requirements evolve.
   as expected inside minimega or its container.
 - **Android capacity is finite.** Emulator console/ADB port allocation currently
   limits each host to 64 active Android VMs, or fewer when ports are occupied.
+- **Firecracker VMs have at most 17 devices** (31 with
+  `vm config firecracker-pci true`). Each disk, the scratch disk, and each NIC
+  use one device. The vsock device (`backchannel true`) and the entropy device
+  (`firecracker-entropy true`) also use one each, and both are on by default.
+- **Firecracker VMs are not recovered** after a minimega restart, and they
+  have no VNC, screenshots, CD-ROM, hotplug, `vm net add`, or bonds.
+- **Startup removes old Firecracker VMs.** minimega kills the VMMs that an
+  earlier process with the same `-base` and `-firecracker-dir` left, and
+  removes their host objects. It keeps the image cache.
+- **`-firecracker-dir` must be one filesystem** that is not `nodev` or
+  `noexec`. Only the owner can write to it and to its parent directories.
+  Run `check` and read the log for the Firecracker results.
 - **Namespace deletion is destructive.** It kills VMs and removes namespace
   captures, VLAN aliases, and taps.
 - **Remove one blacklisted VLAN with `clear vlans blacklist <vlan>`.** Do not
@@ -312,6 +333,8 @@ Repository paths, relative to the minimega repository root:
   operation, and logging.
 - `doc/content/articles/namespaces.md`: namespace scheduling.
 - `doc/content/articles/vmtypes.md`: KVM and container behavior.
+- `doc/content/articles/firecracker.md`: Firecracker host requirements,
+  lifecycle, limits, cc over vsock, save and restore, and scale notes.
 - `doc/content/articles/vnc.md`: VNC recording, playback, typing, and copy and
   paste.
 - `docker/README.md`: container operation and configuration.
