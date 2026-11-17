@@ -58,6 +58,11 @@ func cliNuke(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// allow udev to sync
 	time.Sleep(time.Second * 1)
 
+	// remove mirrors and capture ports that a crashed minimega left
+	if err := bridge.CleanStaleMirrors(); err != nil {
+		log.Error("unable to remove stale capture mirrors: %v", err)
+	}
+
 	// remove bridges that have preExist == false
 	nukeBridges()
 

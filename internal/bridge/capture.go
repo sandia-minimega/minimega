@@ -34,7 +34,7 @@ func disableIPv6(tap string) error {
 
 // createCaptureTap adds a host tap with no VLAN tag that only receives mirrored
 // frames. Assumes bridgeLock is held.
-func (b *Bridge) createCaptureTap(tap string) error {
+func (b *Bridge) createCaptureTap(tap string, tags MirrorTags) error {
 	log.Info("creating capture tap on bridge: %v %v", b.Name, tap)
 
 	b.reapTaps()
@@ -47,7 +47,10 @@ func (b *Bridge) createCaptureTap(tap string) error {
 		return err
 	}
 
-	err := disableIPv6(tap)
+	err := tagCapturePort(tap, tags)
+	if err == nil {
+		err = disableIPv6(tap)
+	}
 	if err == nil {
 		err = upInterface(tap, true)
 	}
@@ -86,7 +89,7 @@ func (b *Bridge) startCapture(tap, mirrorSrc string, mirror bool, fname string, 
 	}
 
 	if mirror {
-		if err := b.createMirror(mirrorSrc, tap); err != nil {
+		if err := b.createMirror(mirrorSrc, tap, MirrorTags{Namespace: c.Namespace, Kind: MirrorKindBridge}); err != nil {
 			src.Close()
 			sink.close()
 			return 0, err
@@ -192,7 +195,7 @@ func (b *Bridge) Capture(fname string, config ...CaptureConfig) (int, error) {
 	c.Direction = DirectionIn
 
 	tap := <-b.tapChan
-	if err := b.createCaptureTap(tap); err != nil {
+	if err := b.createCaptureTap(tap, MirrorTags{Namespace: c.Namespace, Kind: MirrorKindBridge}); err != nil {
 		return 0, err
 	}
 

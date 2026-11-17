@@ -13,15 +13,15 @@ import (
 
 // CreateMirror mirrors traffic. src is the tap to mirror, an empty src implies
 // mirroring the entire bridge. dst is the tap to mirror to, which must already
-// exist.
-func (b *Bridge) CreateMirror(src, dst string) error {
+// exist. namespace owns the mirror.
+func (b *Bridge) CreateMirror(src, dst, namespace string) error {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
-	return b.createMirror(src, dst)
+	return b.createMirror(src, dst, MirrorTags{Namespace: namespace, Kind: MirrorKindTap})
 }
 
-func (b *Bridge) createMirror(src, dst string) error {
+func (b *Bridge) createMirror(src, dst string, tags MirrorTags) error {
 	log.Info("adding mirror on bridge: %v:%v to %v", b.Name, src, dst)
 	if src == dst {
 		return errors.New("cannot mirror tap to itself")
@@ -42,7 +42,11 @@ func (b *Bridge) createMirror(src, dst string) error {
 		return errors.New("destination tap is already a mirror")
 	}
 
-	if err := ovsAddMirror(b.Name, src, dst); err != nil {
+	if err := checkMirrorBudget(b.Name); err != nil {
+		return err
+	}
+
+	if err := ovsAddMirror(b.Name, src, dst, tags); err != nil {
 		return err
 	}
 

@@ -309,6 +309,7 @@ func cliCaptureVM(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	if err != nil {
 		return err
 	}
+	config.Namespace = ns.Name
 
 	_, err = captureVM(&ns.captures, vm, num, capturePath(fname), config)
 	return err
@@ -351,6 +352,7 @@ func cliCapturePcap(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 	if err != nil {
 		return err
 	}
+	config.Namespace = ns.Name
 
 	_, err = captureBridge(&ns.captures, b, capturePath(fname), config)
 	return err
