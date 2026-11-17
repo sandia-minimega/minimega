@@ -71,6 +71,10 @@ var (
 	// channel to shutdown minimega
 	shutdown   = make(chan os.Signal, 1)
 	shutdownMu sync.Mutex
+
+	// teardownSignals catches (and drops) SIGINT/SIGTERM once Shutdown has
+	// closed shutdown, so a signal cannot kill minimega mid-teardown
+	teardownSignals = make(chan os.Signal, 1)
 )
 
 const poeticDeath = `Willst du immer weiterschweifen?
@@ -410,7 +414,10 @@ func Shutdown(format string, args ...interface{}) {
 	}
 
 	// stop signal delivery first: sending on a closed channel panics, even
-	// from os/signal's non-blocking send
+	// from os/signal's non-blocking send. Register teardownSignals before
+	// that: signal.Stop on the last subscriber restores the default action,
+	// which would kill minimega mid-teardown.
+	signal.Notify(teardownSignals, os.Interrupt, syscall.SIGTERM)
 	signal.Stop(shutdown)
 	close(shutdown)
 

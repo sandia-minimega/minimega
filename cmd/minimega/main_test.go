@@ -33,18 +33,19 @@ func TestSuggestHostnameWithoutMesh(t *testing.T) {
 	}
 }
 
-// A SIGINT during teardown (after Shutdown closed the channel) must not crash
-// the process with a send on a closed channel.
+// A SIGINT during teardown (after Shutdown closed the channel) must neither
+// crash the process with a send on a closed channel nor kill it with the
+// default action before teardown finishes. No other subscriber is registered:
+// if the signal is unhandled, the test binary dies.
 func TestSignalAfterShutdownDoesNotPanic(t *testing.T) {
 	origShutdown := shutdown
 	shutdown = make(chan os.Signal, 1)
-	defer func() { shutdown = origShutdown; shutdownMu = sync.Mutex{} }()
-
-	// keep SIGINT handled so the test process survives once main's channel
-	// is unregistered
-	other := make(chan os.Signal, 1)
-	signal.Notify(other, os.Interrupt)
-	defer signal.Stop(other)
+	defer func() {
+		signal.Stop(shutdown)
+		signal.Stop(teardownSignals)
+		shutdown = origShutdown
+		shutdownMu = sync.Mutex{}
+	}()
 
 	signal.Notify(shutdown, os.Interrupt, syscall.SIGTERM)
 
@@ -58,9 +59,8 @@ func TestSignalAfterShutdownDoesNotPanic(t *testing.T) {
 	}
 
 	select {
-	case <-other:
+	case <-teardownSignals:
 	case <-time.After(2 * time.Second):
-		t.Fatal("SIGINT not delivered")
+		t.Fatal("SIGINT not caught during teardown")
 	}
-	time.Sleep(100 * time.Millisecond)
 }
