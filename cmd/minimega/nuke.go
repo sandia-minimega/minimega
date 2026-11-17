@@ -45,6 +45,9 @@ func cliNuke(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	// nuke any state we have
 	DestroyNamespace(Wildcard)
 
+	// destroy the defunct taps that remain on the managed bridges
+	reapTaps()
+
 	// nuke any container related items
 	containerNuke()
 
