@@ -25,7 +25,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			return
 		}
-		fmt.Fprintf(os.Stdout, string(out))
+		os.Stdout.Write(out)
 	}
 	if err := scanner.Err(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

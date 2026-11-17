@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sandia-minimega/minimega/v2/internal/ron"
@@ -81,6 +82,7 @@ func lookPath(file string, env []string) (string, error) {
 
 func runCommand(c *ron.Command) (string, string, int) {
 	done := make(chan struct{})
+	var wg sync.WaitGroup // output forwarders
 	var bufout, buferr bytes.Buffer
 
 	cmd := &exec.Cmd{
@@ -150,7 +152,9 @@ func runCommand(c *ron.Command) (string, string, int) {
 			return "", "", -1
 		}
 
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			defer close(cStdout)
 			scanner := bufio.NewScanner(pStdout)
 			for scanner.Scan() {
@@ -184,7 +188,9 @@ func runCommand(c *ron.Command) (string, string, int) {
 			return "", "", -1
 		}
 
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			defer close(cStderr)
 			scanner := bufio.NewScanner(pStderr)
 			for scanner.Scan() {
@@ -209,6 +215,7 @@ func runCommand(c *ron.Command) (string, string, int) {
 		log.Debug("starting in background")
 		if err := cmd.Start(); err != nil {
 			log.Errorln(err)
+			close(done)
 			return "", buferr.String(), -1
 		}
 
@@ -224,6 +231,9 @@ func runCommand(c *ron.Command) (string, string, int) {
 
 		go func() {
 			cmd.Wait()
+			// let the forwarders drain, then release the stdin reader
+			wg.Wait()
+			close(done)
 			log.Debug("command exited: %v", c.Command)
 			if bufout.Len() > 0 {
 				log.Debug("%s", bufout.String())
@@ -253,6 +263,9 @@ func runCommand(c *ron.Command) (string, string, int) {
 			exitCode = exitErr.ExitCode()
 		}
 	}
+
+	wg.Wait()
+	close(done)
 
 	return bufout.String(), buferr.String(), exitCode
 }

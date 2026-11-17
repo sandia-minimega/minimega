@@ -178,11 +178,17 @@ func (b *Bridge) DestroyTap(tap string) error {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
+	var mirrorErr error
 	if b.mirrors[tap] {
-		return b.destroyMirror(tap)
+		mirrorErr = b.destroyMirror(tap)
 	}
 
-	return b.destroyTap(tap)
+	// always destroy the tap, even if removing the mirror failed
+	if err := b.destroyTap(tap); err != nil {
+		return err
+	}
+
+	return mirrorErr
 }
 
 // destroyTap cleans up the underlying device, ReapTaps will actually remove

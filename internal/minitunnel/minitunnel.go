@@ -246,16 +246,32 @@ func (t *Tunnel) createTunnel(conn net.Conn, host string, dest int) {
 func (t *Tunnel) transfer(in chan *tunnelMessage, conn net.Conn, TID int) {
 	defer t.chans.remove(TID)
 
+	// stops the writer when we return, remove() does not close in
+	done := make(chan struct{})
+	defer close(done)
+
 	// begin forwarding until an error occurs
 	go func() {
 		defer conn.Close()
 
-		for m := range in {
+		for {
+			var m *tunnelMessage
+			var ok bool
+			select {
+			case m, ok = <-in:
+			case <-done:
+				return
+			}
+			if !ok {
+				return
+			}
+
 			if m.Type == CLOSED {
+				// the peer is done, with or without an error
 				if m.Error != "" {
 					log.Errorln(m.Error)
-					break
 				}
+				break
 			}
 
 			if _, err := conn.Write(m.Data); err != nil {
@@ -294,19 +310,21 @@ func (t *Tunnel) transfer(in chan *tunnelMessage, conn net.Conn, TID int) {
 		}
 	}
 
+	// tell the peer we are done; a clean EOF has no error
+	m := &tunnelMessage{
+		Type: CLOSED,
+		TID:  TID,
+	}
+
 	if err != io.EOF {
 		if !strings.Contains(err.Error(), "use of closed network connection") {
 			log.Errorln(err)
 		}
 
-		m := &tunnelMessage{
-			Type:  CLOSED,
-			TID:   TID,
-			Error: err.Error(),
-		}
+		m.Error = err.Error()
+	}
 
-		if err := t.sendMessage(m); err != nil {
-			log.Errorln(err)
-		}
+	if err := t.sendMessage(m); err != nil {
+		log.Errorln(err)
 	}
 }

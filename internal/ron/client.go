@@ -93,15 +93,18 @@ type client struct {
 	// Namespace for the VM, set during handshake
 	Namespace string
 
-	// pipe readers and writers
+	// pipe readers and writers; pipesClosed is set once the client is
+	// dropped so late pipe messages are ignored
 	pipeLock    sync.Mutex
 	pipeReaders map[string]*miniplumber.Reader
 	pipeWriters map[string]chan<- string
+	pipesClosed bool
 
 	ufsListener net.Listener
 	ufsConn     net.Conn
 
-	// used to stop the server --> client heartbeat Goroutine
+	// used to stop the server --> client heartbeat Goroutine, and to cancel
+	// a pipe write blocked in pipeHandler, when the client is dropped
 	cancelHeartbeat chan struct{}
 
 	// updating is true while the server holds commands for the client during
@@ -213,9 +216,30 @@ func (c *Client) matchesMAC(f *Filter) bool {
 	return false
 }
 
+// closePipes closes the client's plumbing and ignores later pipe messages.
+func (c *client) closePipes() {
+	c.pipeLock.Lock()
+	defer c.pipeLock.Unlock()
+
+	c.pipesClosed = true
+
+	// the reader goroutines delete their own entries
+	for _, p := range c.pipeReaders {
+		p.Close()
+	}
+	for k, p := range c.pipeWriters {
+		close(p)
+		delete(c.pipeWriters, k)
+	}
+}
+
 func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 	c.pipeLock.Lock()
 	defer c.pipeLock.Unlock()
+
+	if c.pipesClosed {
+		return
+	}
 
 	pipe := m.Pipe
 	if c.Namespace != "" {
@@ -230,11 +254,6 @@ func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 			p := plumber.NewReader(pipe)
 			c.pipeReaders[pipe] = p
 			go func() {
-				defer func() {
-					c.pipeLock.Lock()
-					defer c.pipeLock.Unlock()
-					delete(c.pipeReaders, pipe)
-				}()
 				for {
 					select {
 					case v := <-p.C:
@@ -245,12 +264,25 @@ func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 							PipeData: v,
 						})
 					case <-p.Done:
-						// signal the close downstream
-						c.sendMessage(&Message{
-							Type:     MESSAGE_PIPE,
-							Pipe:     m.Pipe, // use the non-namespace pipe name for downstream
-							PipeMode: PIPE_CLOSE_READER,
-						})
+						// If p is still registered, miniplumber closed it
+						// on its own: drop it and signal the close
+						// downstream. Otherwise the guest closed it and
+						// may already have opened a new reader on this
+						// pipe, which a close signal would kill.
+						c.pipeLock.Lock()
+						mine := c.pipeReaders[pipe] == p
+						if mine {
+							delete(c.pipeReaders, pipe)
+						}
+						c.pipeLock.Unlock()
+
+						if mine {
+							c.sendMessage(&Message{
+								Type:     MESSAGE_PIPE,
+								Pipe:     m.Pipe, // use the non-namespace pipe name for downstream
+								PipeMode: PIPE_CLOSE_READER,
+							})
+						}
 						return
 					}
 				}
@@ -263,10 +295,10 @@ func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 		}
 	case PIPE_CLOSE_READER:
 		if p, ok := c.pipeReaders[pipe]; ok {
-			// the reader goroutine will delete the reader from the
-			// map. We do this because miniplumber can close the
-			// reader for us asynchronously, and we want to clean
-			// up accordingly.
+			// unregister now so that a PIPE_NEW_READER right behind
+			// this gets a fresh reader. The reader goroutine cleans
+			// up readers that miniplumber closes on its own.
+			delete(c.pipeReaders, pipe)
 			p.Close()
 		}
 	case PIPE_CLOSE_WRITER:
@@ -278,7 +310,11 @@ func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 		// incoming data to the server is a write. The corresponding
 		// data message in the miniccc client is a read.
 		if p, ok := c.pipeWriters[pipe]; ok {
-			p <- m.PipeData
+			// a consumer that never reads must not hold pipeLock forever
+			select {
+			case p <- m.PipeData:
+			case <-c.cancelHeartbeat:
+			}
 		} else {
 			log.Error("no such pipe: %v", pipe)
 		}

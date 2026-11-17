@@ -118,6 +118,11 @@ func TestParseBondConfig(t *testing.T) {
 		"1,3,balance-tcp,active,no-lacp-fallback,qinq",
 		"1,3,balance-tcp,active,no-lacp-fallback,foo-bond",
 		"1,3,balance-tcp,active,no-lacp-fallback,qinq,foo-bond",
+		"0,1,2,balance-slb",
+		"0,1,2,balance-slb,foo-bond",
+		"0,1,2,balance-slb,passive",
+		"0,1,2,balance-slb,passive,foo-bond",
+		"0,1,2,3,balance-tcp,active,no-lacp-fallback,qinq,foo-bond",
 	}
 
 	for _, s := range examples {
@@ -129,6 +134,34 @@ func TestParseBondConfig(t *testing.T) {
 		got := r.String()
 		if got != s {
 			t.Fatalf("unequal: `%v` != `%v`", s, got)
+		}
+	}
+}
+
+func TestParseBondConfigDetails(t *testing.T) {
+	r, err := ParseBondConfig("0,1,2,Balance-SLB")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Name != "" || r.Mode != "balance-slb" || len(r.Interfaces) != 3 {
+		t.Fatalf("misparsed: %+v", r)
+	}
+
+	r, err = ParseBondConfig("0,1,2,balance-tcp,ACTIVE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.LACP != "active" {
+		t.Fatalf("lacp mode not lowercased: %+v", r)
+	}
+
+	for _, s := range []string{
+		"0,1,active-backup,active,no-lacp-fallback,qinq,foo,extra",
+		"0,1,2,active-backup,active,qinq,foo,extra",
+		"0,1,active-backup,foo,bar",
+	} {
+		if _, err := ParseBondConfig(s); err == nil {
+			t.Errorf("expected error for `%v`", s)
 		}
 	}
 }

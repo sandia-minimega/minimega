@@ -79,7 +79,7 @@ func dial() error {
 		})
 
 		if err == nil {
-			client.enc = gob.NewEncoder(client.conn)
+			setEncoder(gob.NewEncoder(client.conn))
 			client.dec = gob.NewDecoder(client.conn)
 			return nil
 		}

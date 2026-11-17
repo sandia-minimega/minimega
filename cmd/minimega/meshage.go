@@ -133,7 +133,12 @@ func meshageMux() {
 			meshageStatusLock.RLock()
 
 			for _, c := range meshageStatusChans {
-				c <- fmt.Sprintf("[%s]: %s", msg.From, msg.Status)
+				// never block while holding the lock; drop if the consumer is
+				// behind or gone
+				select {
+				case c <- fmt.Sprintf("[%s]: %s", msg.From, msg.Status):
+				default:
+				}
 			}
 
 			meshageStatusLock.RUnlock()
@@ -228,6 +233,17 @@ func meshageSend(c *minicli.Command, hosts string) (<-chan minicli.Responses, er
 	return out, nil
 }
 
+// meshageLaunchResponse wraps a remote launch response up into a
+// minicli.Response. Response is the number of VMs launched, as for local
+// launches.
+func meshageLaunchResponse(host string, queued *QueuedVMs, body meshageVMResponse) *minicli.Response {
+	return &minicli.Response{
+		Host:     host,
+		Response: strconv.Itoa(len(queued.Names)),
+		Error:    strings.Join(body.Errors, "\n"),
+	}
+}
+
 // meshageLaunch sends a command to a launch VMs on the specified hosts,
 // returning a channel for the responses. This is non-blocking -- the channel
 // is created and then returned after a couple of sanity checks.
@@ -261,12 +277,7 @@ func meshageLaunch(host, namespace string, queued *QueuedVMs) <-chan minicli.Res
 					// put it back for another goroutine to pick up...
 					meshageVMResponseChan <- resp
 				} else {
-					// wrap response up into a minicli.Response
-					resp := &minicli.Response{
-						Host:     host,
-						Response: strconv.Itoa(len(body.Errors)),
-						Error:    strings.Join(body.Errors, "\n"),
-					}
+					resp := meshageLaunchResponse(host, queued, body)
 
 					out <- minicli.Responses{resp}
 					return

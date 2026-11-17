@@ -417,8 +417,7 @@ func (r *Router) writeConfig(w io.Writer) error {
 		}
 	}
 
-	r.setRouterID()
-	fmt.Fprintf(w, "bird routerid %v\n", r.routerID)
+	fmt.Fprintf(w, "bird routerid %v\n", r.setRouterID())
 	fmt.Fprintf(w, "bird commit\n")
 
 	// ***** firewall stuff ***** //
@@ -575,7 +574,7 @@ func (r *Router) InterfaceAdd(n int, i string, loopback bool) error {
 		r.updateIPs = true
 		return nil
 	}
-	if n >= len(r.IPs) {
+	if n < 0 || n >= len(r.IPs) {
 		return fmt.Errorf("no such network index: %v", n)
 	}
 	if !routerIsValidIP(i) {
@@ -621,10 +620,11 @@ func (r *Router) InterfaceDel(n string, i string, lo bool) error {
 			return nil
 		}
 		delete(r.Loopbacks, network)
+		r.updateIPs = true
 		return nil
 	}
 
-	if network >= len(r.IPs) {
+	if network < -1 || network >= len(r.IPs) {
 		return fmt.Errorf("no such network index: %v", network)
 	}
 
@@ -681,31 +681,34 @@ func (r *Router) routerIPExistance(n int, i string, loopback bool) bool {
 	return false
 }
 
-// Generates router ID based on established rules
+// Returns the router ID based on established rules
 // Manually configure has highest preference -> Highest loopback -> Highest interface
-func (r *Router) setRouterID() {
+// The result is not stored, so it follows later address changes.
+func (r *Router) setRouterID() string {
 	if strings.Compare(r.routerID, "0.0.0.0") != 0 {
-		return
+		return r.routerID
 	}
+	id := r.routerID
 	if len(r.Loopbacks) > 0 {
 		for _, ip := range r.Loopbacks {
-			log.Debug("compare loopback ip %v with current router id %v", ip, r.routerID)
-			if bytes.Compare(net.ParseIP(strings.Split(ip, "/")[0]), net.ParseIP(r.routerID)) == 1 {
+			log.Debug("compare loopback ip %v with current router id %v", ip, id)
+			if bytes.Compare(net.ParseIP(strings.Split(ip, "/")[0]), net.ParseIP(id)) == 1 {
 				log.Debug("found new router id %v", ip)
-				r.routerID = strings.Split(ip, "/")[0]
+				id = strings.Split(ip, "/")[0]
 			}
 		}
-		return
+		return id
 	}
 	for _, iplist := range r.IPs {
 		for _, ip := range iplist {
-			log.Debug("compare int ip %v with current router id %v", ip, r.routerID)
-			if bytes.Compare(net.ParseIP(strings.Split(ip, "/")[0]), net.ParseIP(r.routerID)) == 1 {
+			log.Debug("compare int ip %v with current router id %v", ip, id)
+			if bytes.Compare(net.ParseIP(strings.Split(ip, "/")[0]), net.ParseIP(id)) == 1 {
 				log.Debug("found new router id %v", ip)
-				r.routerID = strings.Split(ip, "/")[0]
+				id = strings.Split(ip, "/")[0]
 			}
 		}
 	}
+	return id
 }
 
 // Sets DHCP Range
@@ -944,7 +947,7 @@ func (o *ospf) String() string {
 // Adds interface,network and/or filter information for OSPF
 func (r *Router) RouteOSPFAdd(area, iface, filter string) {
 	o := r.ospfFindOrCreate(area)
-	if iface != "" {
+	if _, ok := o.interfaces[iface]; iface != "" && !ok {
 		o.interfaces[iface] = make(map[string]string)
 	}
 	if filter != "" {
@@ -958,7 +961,7 @@ func (r *Router) RouteOSPFAdd(area, iface, filter string) {
 
 func (r *Router) RouteOSPFOption(area, iface, option, value string) {
 	o := r.ospfFindOrCreate(area)
-	if iface != "" {
+	if _, ok := o.interfaces[iface]; !ok {
 		o.interfaces[iface] = make(map[string]string)
 	}
 
@@ -1097,7 +1100,7 @@ func (r *Router) FirewallDefault(d string) error {
 func (r *Router) FirewallAdd(n int, in bool, src, dst, proto, action string) error {
 	log.Debug("RouterFirewallAdd: %d, %v, %s, %s, %s, %s", n, in, src, dst, proto, action)
 
-	if n >= len(r.fw.rules) {
+	if n < 0 || n >= len(r.fw.rules) {
 		return fmt.Errorf("no such network index: %v", n)
 	}
 
@@ -1142,7 +1145,7 @@ func (r *Router) FirewallChainApply(n int, in bool, chain string) error {
 		return fmt.Errorf("unknown chain %s", chain)
 	}
 
-	if n >= len(r.fw.rules) {
+	if n < 0 || n >= len(r.fw.rules) {
 		return fmt.Errorf("no such network index: %v", n)
 	}
 

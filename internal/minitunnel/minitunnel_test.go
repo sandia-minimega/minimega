@@ -5,7 +5,9 @@
 package minitunnel_test
 
 import (
+	"encoding/gob"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"reflect"
@@ -401,5 +403,170 @@ func TestListReverses(t *testing.T) {
 			t.Fatalf("ListReverses after close = %v, want none", tun.ListReverses())
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// freePort returns a TCP port that nothing listens on.
+func freePort(t *testing.T) int {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	return ln.Addr().(*net.TCPAddr).Port
+}
+
+// forwardTo sets up a tunnel and a forward to a target on a fresh port and
+// returns the forwarded port and the target's listener.
+func forwardTo(t *testing.T) (int, net.Listener) {
+	g, h := pipe(t)
+	goListenAndServe(g)
+
+	tun, err := Dial(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	target, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { target.Close() })
+
+	src := freePort(t)
+	if err := tun.Forward(src, "127.0.0.1", target.Addr().(*net.TCPAddr).Port); err != nil {
+		t.Fatal(err)
+	}
+
+	return src, target
+}
+
+// A target that replies and closes must look closed to the forwarded client.
+func TestRemoteCloseReachesClient(t *testing.T) {
+	src, target := forwardTo(t)
+
+	go func() {
+		c, err := target.Accept()
+		if err != nil {
+			return
+		}
+		c.Write([]byte("hi"))
+		c.Close()
+	}()
+
+	c, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	c.SetReadDeadline(time.Now().Add(2 * time.Second))
+
+	buf := make([]byte, 10)
+	n, err := c.Read(buf)
+	if err != nil || string(buf[:n]) != "hi" {
+		t.Fatalf("first read = %q, %v", buf[:n], err)
+	}
+	if _, err := c.Read(buf); err != io.EOF {
+		t.Fatalf("second read error = %v, want EOF", err)
+	}
+}
+
+// A client that closes must make the tunnel close the connection to the target.
+func TestClientCloseReachesTarget(t *testing.T) {
+	src, target := forwardTo(t)
+
+	got := make(chan error, 1)
+	go func() {
+		c, err := target.Accept()
+		if err != nil {
+			got <- err
+			return
+		}
+		defer c.Close()
+		c.SetReadDeadline(time.Now().Add(2 * time.Second))
+		buf := make([]byte, 10)
+		for {
+			if _, err := c.Read(buf); err != nil {
+				got <- err
+				return
+			}
+		}
+	}()
+
+	c, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Write([]byte("x"))
+	c.Close()
+
+	if err := <-got; err != io.EOF {
+		t.Fatalf("target read error = %v, want EOF", err)
+	}
+}
+
+// wireMessage mirrors the unexported tunnelMessage so a test can play the
+// remote end of the transport by hand.
+type wireMessage struct {
+	Type   int
+	Ack    bool
+	TID    int
+	Source int
+	Host   string
+	Port   int
+	Error  string
+	Data   []byte
+}
+
+// A remote end that keeps streaming while the local client closes must not
+// crash the process (send on closed channel in the mux).
+func TestClientCloseWhileRemoteStreams(t *testing.T) {
+	g, h := pipe(t)
+
+	// the hand-written remote end
+	enc, dec := gob.NewEncoder(g), gob.NewDecoder(g)
+	go func() {
+		var hs wireMessage
+		if dec.Decode(&hs) != nil {
+			return
+		}
+		if enc.Encode(&wireMessage{Type: HANDSHAKE, Ack: true}) != nil {
+			return
+		}
+
+		for {
+			var m wireMessage
+			if dec.Decode(&m) != nil {
+				return
+			}
+			if m.Type != CONNECT {
+				continue
+			}
+			// stream until the transport goes away
+			go func(tid int) {
+				for enc.Encode(&wireMessage{Type: DATA, TID: tid, Data: []byte("x")}) == nil {
+				}
+			}(m.TID)
+		}
+	}()
+
+	tun, err := Dial(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	src := freePort(t)
+	if err := tun.Forward(src, "127.0.0.1", 1); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 300; i++ {
+		c, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", src))
+		if err != nil {
+			t.Fatal(err)
+		}
+		c.Read(make([]byte, 1))
+		c.Close()
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+
+	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 )
 
 func TestGenerateConfig(t *testing.T) {
@@ -249,3 +251,133 @@ BGP Export Networks or Routes:
 Firewall Rules:
   Default Action: accept
 `
+
+// A negative network index (from the CLI, e.g. "router foo fw accept in -1 ...")
+// must return an error rather than panic minimega.
+func TestNegativeNetworkIndex(t *testing.T) {
+	r := NewRouter(2)
+	r.FirewallChainAdd("c", "any", "any", "tcp", "accept")
+
+	calls := map[string]func() error{
+		"InterfaceAdd":       func() error { return r.InterfaceAdd(-1, "10.0.0.1/24", false) },
+		"InterfaceDel":       func() error { return r.InterfaceDel("-2", "all", false) },
+		"FirewallAdd":        func() error { return r.FirewallAdd(-1, true, "10.0.0.1", "any", "tcp", "accept") },
+		"FirewallChainApply": func() error { return r.FirewallChainApply(-1, true, "c") },
+	}
+	for name, f := range calls {
+		func() {
+			defer func() {
+				if p := recover(); p != nil {
+					t.Errorf("%s panicked: %v", name, p)
+				}
+			}()
+			if err := f(); err == nil {
+				t.Errorf("%s: expected error for negative index", name)
+			}
+		}()
+	}
+}
+
+// "route ospf <area> <net> <option> <value>" calls RouteOSPFAdd then
+// RouteOSPFOption; later commands must not discard earlier options.
+func TestRouteOSPFOptionsAccumulate(t *testing.T) {
+	r := NewRouter(2)
+	for _, kv := range [][2]string{{"cost", "10"}, {"hello", "5"}} {
+		r.RouteOSPFAdd("0", "1", "")
+		r.RouteOSPFOption("0", "1", kv[0], kv[1])
+	}
+	r.RouteOSPFAdd("0", "1", "") // re-adding the interface keeps options
+
+	got := r.ospfRoutes["0"].interfaces["1"]
+	if got["cost"] != "10" || got["hello"] != "5" {
+		t.Errorf("options lost, got %v", got)
+	}
+}
+
+// Clearing a single loopback after a commit must make the next config
+// flush the IPs, otherwise the old loopback stays on the running router.
+func TestInterfaceDelLoopbackFlushesIPs(t *testing.T) {
+	r := NewRouter(3)
+	if err := r.InterfaceAdd(2, "11.0.0.1/32", true); err != nil {
+		t.Fatal(err)
+	}
+	r.updateIPs = false // simulate a commit
+
+	if err := r.InterfaceDel("2", "", true); err != nil {
+		t.Fatal(err)
+	}
+
+	var b bytes.Buffer
+	r.writeConfig(&b)
+	if !strings.Contains(b.String(), "ip flush") {
+		t.Errorf("config does not flush IPs after loopback removal:\n%s", b.String())
+	}
+}
+
+// An auto-selected router ID must follow later address changes; only a
+// manually configured ID is sticky.
+func TestRouterIDRecomputed(t *testing.T) {
+	r := NewRouter(2)
+	rid := func() string {
+		var b bytes.Buffer
+		r.writeConfig(&b)
+		for _, l := range strings.Split(b.String(), "\n") {
+			if strings.HasPrefix(l, "bird routerid ") {
+				return strings.TrimPrefix(l, "bird routerid ")
+			}
+		}
+		return ""
+	}
+
+	r.InterfaceAdd(0, "10.0.0.1/24", false)
+	if got := rid(); got != "10.0.0.1" {
+		t.Fatalf("first commit: got %q", got)
+	}
+
+	r.InterfaceDel("0", "all", false)
+	r.InterfaceAdd(0, "172.16.0.1/24", false)
+	if got := rid(); got != "172.16.0.1" {
+		t.Errorf("after address change: got %q, want 172.16.0.1", got)
+	}
+
+	r.InterfaceAdd(1, "1.1.1.1/32", true)
+	if got := rid(); got != "1.1.1.1" {
+		t.Errorf("after adding loopback: got %q, want 1.1.1.1", got)
+	}
+
+	r.routerID = "9.9.9.9" // manual
+	if got := rid(); got != "9.9.9.9" {
+		t.Errorf("manual id: got %q", got)
+	}
+}
+
+// "router vm route bgp p local <ip> <asnumber>" with a non-numeric AS must
+// return an error and leave the BGP process untouched.
+func TestCLIRouterBGPInvalidAS(t *testing.T) {
+	vm := &KvmVM{BaseVM: &BaseVM{Name: "vm0"}}
+	ns := &Namespace{VMs: VMs{m: map[int]VM{0: vm}}, routers: map[int]*Router{}}
+	r := NewRouter(1)
+	r.vm = vm
+	ns.routers[vm.GetID()] = r
+
+	run := func(as string) error {
+		c := &minicli.Command{
+			StringArgs: map[string]string{"vm": "vm0", "processname": "bar", "IPv4": "10.0.0.1", "asnumber": as},
+			BoolArgs:   map[string]bool{"route": true, "bgp": true, "local": true},
+		}
+		return cliRouter(ns, c, &minicli.Response{})
+	}
+
+	if err := run("AS100"); err == nil {
+		t.Error("expected error for non-numeric AS number")
+	}
+	if b := r.bgpRoutes["bar"]; b != nil {
+		t.Errorf("invalid AS created bgp process: %v", b)
+	}
+	if err := run("100"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.bgpRoutes["bar"].localAS; got != 100 {
+		t.Errorf("localAS = %v, want 100", got)
+	}
+}

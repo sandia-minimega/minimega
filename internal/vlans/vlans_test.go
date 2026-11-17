@@ -205,3 +205,36 @@ func TestParallel(t *testing.T) {
 
 	wg.Wait()
 }
+
+// Tabular (the "vlans" command) must be safe while VMs allocate/delete aliases.
+func TestTabularConcurrent(t *testing.T) {
+	v := NewVLANs()
+	for i := 0; i < 50; i++ {
+		if _, _, err := v.Allocate("ns", "seed"+strconv.Itoa(i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	done := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for i := 0; ; i++ {
+			select {
+			case <-done:
+				return
+			default:
+			}
+			name := "x" + strconv.Itoa(i%20)
+			v.Allocate("ns", name)
+			v.Delete("ns", name)
+		}
+	}()
+
+	for i := 0; i < 2000; i++ {
+		v.Tabular("ns")
+	}
+	close(done)
+	wg.Wait()
+}

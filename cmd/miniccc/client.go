@@ -6,6 +6,7 @@ package main
 
 import (
 	"encoding/gob"
+	"errors"
 	"io"
 	"net"
 	"os"
@@ -18,6 +19,8 @@ import (
 	"github.com/sandia-minimega/minimega/v2/internal/version"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
+
+var errNotConnected = errors.New("not connected to server")
 
 var client struct {
 	ron.Client // embed
@@ -63,9 +66,21 @@ func resolveClientUUID(configured string, discover func() string) string {
 	return discover()
 }
 
+// setEncoder swaps the encoder used by sendMessage. nil means disconnected.
+func setEncoder(enc *gob.Encoder) {
+	client.writeMu.Lock()
+	defer client.writeMu.Unlock()
+
+	client.enc = enc
+}
+
 func sendMessage(m *ron.Message) error {
 	client.writeMu.Lock()
 	defer client.writeMu.Unlock()
+
+	if client.enc == nil {
+		return errNotConnected
+	}
 
 	return client.enc.Encode(m)
 }

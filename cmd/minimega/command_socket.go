@@ -6,11 +6,13 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 	"github.com/sandia-minimega/minimega/v2/pkg/miniclient"
@@ -48,9 +50,37 @@ func commandSocketRemove() {
 func commandSocketHandle(c net.Conn) {
 	defer c.Close()
 
+	// mu guards enc and inflight. The status goroutine checks inflight and
+	// encodes under one hold, and the handler clears inflight and sends the
+	// final response under one hold, so a status can never land after the
+	// final response.
+	var mu sync.Mutex
+	var inflight bool
 	enc := json.NewEncoder(c)
 	dec := json.NewDecoder(c)
 	done := make(chan struct{})
+
+	// One status channel per connection, forwarded only while a command is
+	// running so that stale updates don't corrupt the response stream.
+	name := fmt.Sprintf("cmdsocket-%p", c)
+	status := make(chan string, 16)
+	addStatusMessageChannel(name, status)
+	defer delStatusMessageChannel(name)
+
+	go func() {
+		for {
+			select {
+			case <-done:
+				return
+			case s := <-status:
+				mu.Lock()
+				if inflight {
+					sendLocalStatus(enc, s)
+				}
+				mu.Unlock()
+			}
+		}
+	}()
 
 	var err error
 
@@ -145,21 +175,9 @@ func commandSocketHandle(c net.Conn) {
 			cmd.SetRecord(false)
 		}
 
-		go func() {
-			for {
-				status := make(chan string)
-
-				addStatusMessageChannel("cmdsocket", status)
-
-				select {
-				case <-done:
-					delStatusMessageChannel("cmdsocket")
-					return
-				case s := <-status:
-					sendLocalStatus(enc, s)
-				}
-			}
-		}()
+		mu.Lock()
+		inflight = true
+		mu.Unlock()
 
 		// HAX: Work around so that we can add the more boolean.
 		var prev minicli.Responses
@@ -168,7 +186,9 @@ func commandSocketHandle(c net.Conn) {
 		// channel to ensure that we release any locks acquired by cmd.
 		for resp := range runCommands(cmd) {
 			if prev != nil && err == nil {
+				mu.Lock()
 				err = sendLocalResp(enc, prev, true, r.TTY)
+				mu.Unlock()
 			} else if err != nil && len(resp) > 0 {
 				log.Info("dropping resp from %v", resp[0].Host)
 			}
@@ -176,9 +196,12 @@ func commandSocketHandle(c net.Conn) {
 			prev = resp
 		}
 
+		mu.Lock()
+		inflight = false
 		if err == nil {
 			err = sendLocalResp(enc, prev, false, r.TTY)
 		}
+		mu.Unlock()
 	}
 
 	close(done)
