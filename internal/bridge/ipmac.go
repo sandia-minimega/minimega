@@ -9,29 +9,75 @@ import (
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
+	"github.com/gopacket/gopacket"
+	"github.com/gopacket/gopacket/layers"
+	"github.com/gopacket/gopacket/pcap"
 )
 
+// snoopParser decodes the ARP and Neighbor Solicitation frames that the
+// bridge snooper reads.
+type snoopParser struct {
+	dot1q layers.Dot1Q
+	eth   layers.Ethernet
+	ip4   layers.IPv4
+	ip6   layers.IPv6
+	arp   layers.ARP
+
+	parser  *gopacket.DecodingLayerParser
+	decoded []gopacket.LayerType
+}
+
+func newSnoopParser() *snoopParser {
+	p := &snoopParser{}
+	p.parser = gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet,
+		&p.dot1q,
+		&p.eth,
+		&p.ip4,
+		&p.ip6,
+		&p.arp,
+	)
+
+	return p
+}
+
+// parse returns the source MAC and IP address in a snooped frame, or a nil IP
+// when the frame has none.
+func (p *snoopParser) parse(data []byte) (string, net.IP) {
+	if err := p.parser.DecodeLayers(data, &p.decoded); err != nil {
+		if err2, ok := err.(gopacket.UnsupportedLayerType); ok {
+			switch gopacket.LayerType(err2) {
+			case layers.LayerTypeICMPv6, gopacket.LayerTypePayload:
+				// ignore
+				err = nil
+			default:
+				return "", nil
+			}
+		}
+
+		if err != nil {
+			log.Error("error parsing packet: %v", err)
+			return "", nil
+		}
+	}
+
+	// ICMPv6 has no decoder here, so a Neighbor Solicitation ends at IPv6.
+	// Duplicate Address Detection sends it from the unspecified address.
+	for _, layerType := range p.decoded {
+		switch layerType {
+		case layers.LayerTypeIPv6:
+			if p.ip6.NextHeader == layers.IPProtocolICMPv6 && !p.ip6.SrcIP.IsUnspecified() {
+				return p.eth.SrcMAC.String(), p.ip6.SrcIP
+			}
+		case layers.LayerTypeARP:
+			return p.eth.SrcMAC.String(), net.IP(p.arp.SourceProtAddress)
+		}
+	}
+
+	return "", nil
+}
+
 func (b *Bridge) snooper() {
-	var (
-		dot1q layers.Dot1Q
-		eth   layers.Ethernet
-		ip4   layers.IPv4
-		ip6   layers.IPv6
-		arp   layers.ARP
-	)
-
-	parser := gopacket.NewDecodingLayerParser(layers.LayerTypeEthernet,
-		&dot1q,
-		&eth,
-		&ip4,
-		&ip6,
-		&arp,
-	)
-
-	decodedLayers := []gopacket.LayerType{}
+	parser := newSnoopParser()
 
 	for !b.destroyed() {
 		data, _, err := b.handle.ReadPacketData()
@@ -45,30 +91,8 @@ func (b *Bridge) snooper() {
 			break
 		}
 
-		if err := parser.DecodeLayers(data, &decodedLayers); err != nil {
-			if err2, ok := err.(gopacket.UnsupportedLayerType); ok {
-				switch gopacket.LayerType(err2) {
-				case layers.LayerTypeICMPv6, gopacket.LayerTypePayload:
-					// ignore
-					err = nil
-				default:
-					continue
-				}
-			}
-
-			if err != nil {
-				log.Error("error parsing packet: %v", err)
-				continue
-			}
-		}
-
-		for _, layerType := range decodedLayers {
-			switch layerType {
-			case layers.LayerTypeICMPv6:
-				b.updateIP(eth.SrcMAC.String(), ip6.SrcIP)
-			case layers.LayerTypeARP:
-				b.updateIP(eth.SrcMAC.String(), net.IP(arp.SourceProtAddress))
-			}
+		if mac, ip := parser.parse(data); ip != nil {
+			b.updateIP(mac, ip)
 		}
 	}
 

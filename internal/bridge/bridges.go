@@ -14,7 +14,7 @@ import (
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 
-	"github.com/google/gopacket/pcap"
+	"github.com/gopacket/gopacket/pcap"
 )
 
 // Bridges manages a collection of `Bridge` structs.
