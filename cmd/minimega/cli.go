@@ -53,6 +53,7 @@ func cliSetup() {
 	registerHandlers("host", hostCLIHandlers)
 	registerHandlers("io", ioCLIHandlers)
 	registerHandlers("log", logCLIHandlers)
+	registerHandlers("memdump", memdumpCLIHandlers)
 	registerHandlers("meshage", meshageCLIHandlers)
 	registerHandlers("misc", miscCLIHandlers)
 	registerHandlers("namespace", namespaceCLIHandlers)
