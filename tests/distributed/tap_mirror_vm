@@ -2,23 +2,23 @@
 vm config filesystem /root/uminicccfs
 vm config net LAN
 vm config schedule mm1
-vm launch container a
+vm launch container vm-a
 vm config schedule mm1
-vm launch container b
+vm launch container vm-b
 vm config schedule mm2
-vm launch container c
+vm launch container vm-c
 vm start all
 
 .annotate true .column name vm info
 
 # should not work
-tap mirror a 0 c 0
+tap mirror vm-a 0 vm-c 0
 
 # should work
-tap mirror a 0 b 0
+tap mirror vm-a 0 vm-b 0
 
 # clear by destination
-clear tap mirror b 0
+clear tap mirror vm-b 0
 
 # already cleared, should have error
-clear tap mirror b 0
+clear tap mirror vm-b 0

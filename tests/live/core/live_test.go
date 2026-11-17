@@ -112,6 +112,7 @@ func TestLive(t *testing.T) {
 		p("NetDisconnectConnect", testNetDisconnectConnect, network),
 		p("Hotplug", testHotplug, cc),
 		p("Save", testSave, cc),
+		p("VMNameRules", testVMNameRules, inv),
 		p("KillFlushRelaunch", testKillFlushRelaunch, cc),
 
 		// tools shipped in the image
@@ -1198,6 +1199,119 @@ func testSave(t *testing.T) {
 		harness.MustRun(t, "vm start host-c2")
 	}
 	harness.CCEventually(t, "host-c2", "true", time.Minute)
+}
+
+// testVMNameRules checks which names "vm launch" refuses, and which names it
+// launches with a warning. The VMs come from the saved configuration, which
+// has no NICs, so they get no taps.
+func testVMNameRules(t *testing.T) {
+	harness.MustRun(t, "vm config restore live-base")
+	t.Cleanup(func() { logRun(t, "clear vm config") })
+
+	label63 := strings.Repeat("a", 63)
+	cases := []struct {
+		desc   string
+		names  string // "vm launch kvm" argument, a list of names
+		result string // "error", "warn", or "ok"
+	}{
+		// earlier releases also refused these names
+		{"Slash", "web/1", "error"},
+		{"Backslash", `web\\1`, "error"}, // minimega reads `\\` as one backslash
+		{"NonASCII", "w\u00e9b", "error"},
+		{"ListWithSlash", "ok,web/1", "error"},
+		// minimega 4.0.0 will refuse these names
+		{"Underscore", "web_1", "warn"},
+		{"OneCharacter", "a", "warn"},
+		{"LeadingHyphen", "-web", "warn"},
+		{"TrailingHyphen", "web-", "warn"},
+		{"LeadingDot", ".web", "warn"},
+		{"TrailingDot", "web.", "warn"},
+		{"EmptyLabel", "web..lan", "warn"},
+		{"Label64", label63 + "a", "warn"},
+		{"ListWithBadName", "ok,bad_name", "warn"},
+		{"LetterCase", "web1,WEB1", "warn"},
+		// valid host names
+		{"TwoCharacters", "ab", "ok"},
+		{"OneCharacterLabels", "a.b", "ok"},
+		{"Dotted", "Name-Rules.live.test", "ok"},
+		{"Label63", label63, "ok"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			// a failed case must not leave queued VMs for the next case
+			t.Cleanup(func() { logRun(t, "ns flush") })
+
+			out, err := harness.Text("vm launch kvm " + tc.names)
+			if tc.result == "error" {
+				if err == nil || !strings.Contains(err.Error(), "valid host name") {
+					t.Errorf("err = %v, want a host name error", err)
+				}
+				if q := strings.TrimSpace(harness.MustText(t, "ns queue")); q != "" {
+					t.Errorf("rejected name was queued: %q", q)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("name rejected: %v", err)
+			}
+
+			out = strings.TrimSpace(out)
+			if tc.result == "ok" && out != "" {
+				t.Errorf("valid name gave a warning: %q", out)
+			}
+			if tc.result == "warn" && !strings.Contains(out, "minimega 4.0.0 will reject this name") {
+				t.Errorf("response = %q, want a warning", out)
+			}
+
+			names := strings.Split(tc.names, ",")
+			for _, name := range names {
+				removeVM(t, name)
+			}
+			harness.MustRun(t, "vm launch")
+			info := harness.VMInfo(t)
+			for _, name := range names {
+				if s := info[name]["state"]; s != "BUILDING" {
+					t.Errorf("%v state = %q, want BUILDING", name, s)
+				}
+			}
+		})
+	}
+}
+
+// removeVM kills and flushes vm when the test ends, also when the test fails
+// first, and flushes no other VM.
+func removeVM(t *testing.T, vm string) {
+	t.Cleanup(func() {
+		info, ok := harness.VMInfo(t)[vm]
+		if !ok {
+			return
+		}
+		// vm flush takes QUIT and ERROR, and vm kill takes neither
+		flushable := func(s string) bool { return s == "QUIT" || s == "ERROR" }
+		if !flushable(info["state"]) {
+			logRun(t, "vm kill "+vm)
+			harness.Eventually(t, 30*time.Second, 2*time.Second, func() error {
+				if s := harness.VMInfo(t)[vm]["state"]; !flushable(s) {
+					return fmt.Errorf("%v state = %v", vm, s)
+				}
+				return nil
+			})
+		}
+		logRun(t, "vm flush "+vm)
+		if _, ok := harness.VMInfo(t)[vm]; ok {
+			t.Errorf("%v still present after vm flush", vm)
+		}
+	})
+}
+
+// logRun runs a cleanup command and logs its error instead of failing.
+func logRun(t *testing.T, cmd string) {
+	t.Helper()
+	if _, err := harness.Run(cmd); err != nil {
+		t.Log(err)
+	}
 }
 
 func testKillFlushRelaunch(t *testing.T) {

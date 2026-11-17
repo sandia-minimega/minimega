@@ -1,24 +1,24 @@
 # both schedule and colocate
 vm config schedule mm1
-vm config colocate a
+vm config colocate vm-a
 clear vm config
 
 # both colocate and schedule
-vm config colocate a
+vm config colocate vm-a
 vm config schedule mm1
 clear vm config
 
 # schedule with non-existent VM with queueing enabled
 ns queueing false
 vm config colocate foo
-vm launch kvm a
+vm launch kvm vm-a
 ns flush
 clear vm config
 
 # schedule with non-existent VM with queueing disabled
 ns queueing true
 vm config colocate foo
-vm launch kvm a
+vm launch kvm vm-a
 vm launch
 ns flush
 clear vm config

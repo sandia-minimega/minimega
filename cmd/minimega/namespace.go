@@ -278,59 +278,76 @@ func (n *Namespace) Destroy() error {
 }
 
 // Queue handles storing the current VM config to the namespace's queued VMs so
-// that we can launch it in the future.
-func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
+// that we can launch it in the future. It returns a warning for each VM name
+// that minimega 4.0.0 will reject, and logs each warning.
+func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) ([]string, error) {
 	// invalidate assignment
 	n.assignment = nil
 
-	names, err := expandLaunchNames(arg)
+	names, warnings, err := expandLaunchNames(arg)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(names) > 1 && vmConfig.UUID != "" {
-		return errors.New("cannot launch multiple VMs with a pre-configured UUID")
+		return nil, errors.New("cannot launch multiple VMs with a pre-configured UUID")
 	}
 
-	// look for name and UUID conflicts across the namespace
-	takenName := map[string]bool{}
+	// look for name and UUID conflicts across the namespace. takenName maps
+	// vmNameKey of each name to the names with that key.
+	takenName := map[string][]string{}
 	takenUUID := map[string]bool{}
 
 	for _, vm := range globalVMs(n) {
-		takenName[vm.GetName()] = true
+		key := vmNameKey(vm.GetName())
+		takenName[key] = append(takenName[key], vm.GetName())
 		takenUUID[vm.GetUUID()] = true
 	}
 
 	for _, name := range names {
-		if takenName[name] {
-			return fmt.Errorf("vm already exists with name `%s`", name)
+		warning, err := nameTaken(takenName, name, "exists")
+		if err != nil {
+			return nil, err
 		}
+		warnings = appendWarning(warnings, warning)
 
-		if name != "" && !validName.MatchString(name) {
-			return fmt.Errorf("%v: `%v`", validNameErr, name)
+		if name != "" {
+			warning, err := checkVMName(name)
+			if err != nil {
+				return nil, err
+			}
+			warnings = appendWarning(warnings, warning)
 		}
 	}
 
 	if takenUUID[vmConfig.UUID] && vmConfig.UUID != "" {
-		return fmt.Errorf("vm already exists with UUID `%s`", vmConfig.UUID)
+		return nil, fmt.Errorf("vm already exists with UUID `%s`", vmConfig.UUID)
 	}
 
-	// add in all the queued VM names and then recheck
+	// check the queued VM names only, so that an existing VM gives no second
+	// warning
+	takenName = map[string][]string{}
+
 	for _, q := range n.queued() {
 		for _, name := range q.Names {
-			takenName[name] = true
+			if name != "" {
+				key := vmNameKey(name)
+				takenName[key] = append(takenName[key], name)
+			}
 		}
 		takenUUID[q.VMConfig.UUID] = true
 	}
 
 	for _, name := range names {
-		if takenName[name] && name != "" {
-			return fmt.Errorf("vm already queued with name `%s`", name)
+		warning, err := nameTaken(takenName, name, "queued")
+		if err != nil {
+			return nil, err
 		}
+		warnings = appendWarning(warnings, warning)
 	}
 
 	if takenUUID[vmConfig.UUID] && vmConfig.UUID != "" {
-		return fmt.Errorf("vm already queued with UUID `%s`", vmConfig.UUID)
+		return nil, fmt.Errorf("vm already queued with UUID `%s`", vmConfig.UUID)
 	}
 
 	n.configLock.Lock()
@@ -342,7 +359,48 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 		Names:    names,
 	})
 
-	return nil
+	for _, warning := range warnings {
+		log.Warn("%v", warning)
+	}
+
+	return warnings, nil
+}
+
+// appendWarning appends warning to warnings unless warning is empty.
+func appendWarning(warnings []string, warning string) []string {
+	if warning == "" {
+		return warnings
+	}
+
+	return append(warnings, warning)
+}
+
+// nameTaken returns an error when taken, from Queue, has a VM name that is
+// equal to name. It returns a warning when taken has a VM name that differs
+// from name only in letter case. state is "exists" or "queued".
+func nameTaken(taken map[string][]string, name, state string) (string, error) {
+	if name == "" {
+		return "", nil
+	}
+
+	others := taken[vmNameKey(name)]
+	if len(others) == 0 {
+		return "", nil
+	}
+
+	if slices.Contains(others, name) {
+		if state == "exists" {
+			return "", fmt.Errorf("vm already exists with name `%s`", name)
+		}
+
+		return "", fmt.Errorf("vm already queued with name `%s`", name)
+	}
+
+	if state == "exists" {
+		return caseConflictWarning(fmt.Sprintf("vm name `%s` conflicts with existing vm `%s`", name, others[0])), nil
+	}
+
+	return caseConflictWarning(fmt.Sprintf("vm name `%s` conflicts with queued vm `%s`", name, others[0])), nil
 }
 
 // queued returns a copy of queue.

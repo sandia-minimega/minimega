@@ -222,8 +222,8 @@ In this case, we wish to mirror either A's or B's tap to monitor's tap:
 ```text
 minimega$ .columns name,tap vm info
 name    | tap
-A       | [mega_tap0]
-B       | [mega_tap1]
+vm-A    | [mega_tap0]
+vm-B    | [mega_tap1]
 monitor | [mega_tap2]
 ```
 

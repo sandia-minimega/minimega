@@ -124,6 +124,20 @@ naming scheme:
 
 Note: VM names cannot be integers or reserved words (e.g. "all").
 
+A VM name usually becomes the host name of the guest. Use a valid host name
+(RFC 1123): one or more labels separated by dots, where each label
+has 1 to 63 letters, digits and hyphens and does not start or end with a
+hyphen. The full name has 2 to 253 characters. For example, "web-1", "a.b" and
+"web1.example.com" are valid, and "a", "web_1", "-web" and "web." are not.
+minimega rejects a name with characters other than letters, digits, hyphens,
+underscores and dots. For another name that is not a valid host name, minimega
+launches the VM with a warning. minimega 4.0.0 will reject these names.
+Namespace names are not host names, so this rule does not apply to them.
+
+Host names are not case-sensitive (RFC 4343). Thus, minimega warns about a new
+VM name that differs only in letter case from another VM name in the
+namespace, such as "WEB1" and "web1". minimega 4.0.0 will reject such a name.
+
 Users may specify a saved config explicitly rather than use the current one, for
 example:
 
@@ -791,8 +805,10 @@ func cliVMLaunch(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 			return err
 		}
 
-		err = ns.Queue(c.StringArgs["name"], vmType, vmConfig)
+		warnings, err := ns.Queue(c.StringArgs["name"], vmType, vmConfig)
 		done()
+
+		resp.Response = strings.Join(warnings, "\n")
 
 		if err == nil && !ns.QueueVMs {
 			// no error queueing and user has disabled queueing -- launch now!

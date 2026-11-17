@@ -976,6 +976,10 @@ func (vm *BaseVM) conflicts(vm2 *BaseVM) error {
 		return fmt.Errorf("duplicate VM name: %s", vm.Name)
 	}
 
+	if vmNameKey(vm.Name) == vmNameKey(vm2.Name) {
+		log.Warn("%v", caseConflictWarning(fmt.Sprintf("vm name %s conflicts with %s", vm2.Name, vm.Name)))
+	}
+
 	if vm.UUID == vm2.UUID {
 		return fmt.Errorf("duplicate VM UUID: %s", vm.UUID)
 	}
