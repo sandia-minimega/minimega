@@ -5,7 +5,9 @@
 package bridge
 
 import (
+	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -70,6 +72,59 @@ type Bridge struct {
 
 	// set to non-zero value by Bridge.destroy
 	isdestroyed uint64
+
+	// set when Bridge.destroy deleted the OVS bridge
+	ovsDeleted bool
+
+	// reaper removes the OVS ports and devices of defunct taps
+	reaper tapReaper
+}
+
+// tapReaper removes the OVS ports and the devices of defunct taps for
+// Bridge.reapTaps.
+type tapReaper interface {
+	// delPorts removes the ports from the bridge in one transaction.
+	delPorts(bridge string, ports []string) error
+
+	// delLinks destroys the devices and returns the names of the devices
+	// that no longer exist.
+	delLinks(names []string) ([]string, error)
+
+	// delBridge deletes the OVS bridge and all of its ports.
+	delBridge(bridge string) error
+}
+
+// systemReaper is the tapReaper that runs `ovs-vsctl` and uses netlink.
+type systemReaper struct{}
+
+func (systemReaper) delPorts(bridge string, ports []string) error {
+	args := delPortArgs(bridge, ports)
+
+	log.Debug("reapTaps args: %v", strings.Join(args, " "))
+
+	_, err := ovsCmdWrapper(args)
+	return err
+}
+
+// delPortArgs returns the ovs-vsctl arguments that remove the ports from the
+// bridge in one transaction. --if-exists lets a retry succeed when some of the
+// ports are already gone.
+func delPortArgs(bridge string, ports []string) []string {
+	var args []string
+
+	for _, port := range ports {
+		args = append(args, "--", "--if-exists", "del-port", bridge, port)
+	}
+
+	return args
+}
+
+func (systemReaper) delLinks(names []string) ([]string, error) {
+	return destroyTaps(names)
+}
+
+func (systemReaper) delBridge(bridge string) error {
+	return ovsDelBridge(bridge)
 }
 
 // BridgeInfo is a summary of fields from a Bridge.
@@ -97,6 +152,9 @@ type Tap struct {
 	Namespace string // Namespace that owns the tap, if known
 	Owner     string // VM that owns the tap, empty for host taps
 
+	portReaped bool // Set when reapTaps removed the OVS port
+	deleteLink bool // Set when reapTaps must destroy the device
+
 	IP4 string // Snooped IPv4 address
 	IP6 string // Snooped IPv6 address
 
@@ -116,8 +174,8 @@ func (b *Bridge) destroy() error {
 	log.Info("destroying bridge: %v", b.Name)
 
 	if b.destroyed() {
-		// bridge has already been destroyed
-		return nil
+		// a destroy that failed can leave taps and the OVS bridge to clean up
+		return b.finishDestroy()
 	}
 
 	b.setDestroyed()
@@ -148,34 +206,70 @@ func (b *Bridge) destroy() error {
 		}
 	}
 
+	return b.finishDestroy()
+}
+
+// finishDestroy removes the trunks, tunnels, and netflow, reaps the taps, and
+// deletes the OVS bridge. It returns nil when nothing is left to clean up, so
+// it can be called again after a failure.
+func (b *Bridge) finishDestroy() error {
+	var errs []error
+
 	for v := range b.trunks {
-		if err := b.removeTrunk(v); err != nil {
-			return err
+		if err := b.removeTrunk(v); errors.Is(err, errNoSuchPort) {
+			delete(b.trunks, v)
+		} else if err != nil {
+			errs = append(errs, err)
 		}
 	}
 	for v := range b.tunnels {
-		if err := b.removeTunnel(v); err != nil {
-			return err
+		if err := b.removeTunnel(v); errors.Is(err, errNoSuchPort) {
+			delete(b.tunnels, v)
+		} else if err != nil {
+			errs = append(errs, err)
 		}
 	}
 
 	if b.nf != nil {
 		if err := b.destroyNetflow(); err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
 
-	// make sure we actually reap the taps before we return
+	// del-br still removes the ports if the reap fails
 	if err := b.reapTaps(); err != nil {
-		return err
+		errs = append(errs, err)
 	}
 
 	// don't destroy the bridge if it existed before we started
 	if b.preExist {
+		return errors.Join(errs...)
+	}
+
+	if !b.ovsDeleted {
+		if err := b.reaper.delBridge(b.Name); err != nil {
+			return errors.Join(append(errs, err)...)
+		}
+
+		b.ovsDeleted = true
+
+		// del-br removed every port and the netflow of the bridge
+		clear(b.trunks)
+		clear(b.tunnels)
+		b.nf = nil
+
+		for _, tap := range b.taps {
+			tap.portReaped = true
+		}
+
+		b.forgetReapedTaps()
+	}
+
+	if len(b.taps) == 0 {
 		return nil
 	}
 
-	return ovsDelBridge(b.Name)
+	return errors.Join(errs...)
 }
 
 // ReapTap should be called periodically to remove defunct taps.
@@ -200,36 +294,72 @@ func (b *Bridge) ReapTaps() error {
 // needing removal in a single pass of the reaper, then we have other problems.
 //
 // You can check yourself with `getconf ARG_MAX` or `xargs --show-limits`
+//
+// After the del-port command, reapTaps destroys the devices of the defunct
+// taps in one netlink operation (see destroyTaps). A tap stays on the bridge
+// until both its port and its device are removed.
 func (b *Bridge) reapTaps() error {
 	log.Debug("reaping taps on bridge: %v", b.Name)
 
-	var args []string
+	var ports, links []string
 
 	for _, tap := range b.taps {
-		// build up the arg string directly for defunct taps
-		if tap.Defunct && tap.Bond == "" {
-			args = append(args, "--", "del-port", b.Name, tap.Name)
+		if !tap.Defunct {
+			continue
+		}
+
+		if tap.Bond == "" && !tap.portReaped {
+			ports = append(ports, tap.Name)
+		}
+		if tap.deleteLink {
+			links = append(links, tap.Name)
 		}
 	}
 
-	if len(args) == 0 {
+	if len(ports) == 0 && len(links) == 0 {
 		return nil
 	}
 
-	log.Debug("reapTaps args: %v", strings.Join(args, " "))
+	sort.Strings(ports)
+	sort.Strings(links)
 
-	if _, err := ovsCmdWrapper(args); err != nil {
-		return fmt.Errorf("reap taps failed: %v", err)
-	}
+	var errs []error
 
-	// clean up state
-	for _, tap := range b.taps {
-		if tap.Defunct {
-			delete(b.taps, tap.Name)
+	if len(ports) > 0 {
+		if err := b.reaper.delPorts(b.Name, ports); err != nil {
+			errs = append(errs, fmt.Errorf("reap taps failed: %v", err))
+		} else {
+			for _, name := range ports {
+				b.taps[name].portReaped = true
+			}
 		}
 	}
 
-	return nil
+	if len(links) > 0 {
+		gone, err := b.reaper.delLinks(links)
+		for _, name := range gone {
+			if tap, ok := b.taps[name]; ok {
+				tap.deleteLink = false
+			}
+		}
+
+		if err != nil {
+			errs = append(errs, fmt.Errorf("reap tap devices failed: %w", err))
+		}
+	}
+
+	b.forgetReapedTaps()
+
+	return errors.Join(errs...)
+}
+
+// forgetReapedTaps removes the defunct taps whose port and device are gone.
+func (b *Bridge) forgetReapedTaps() {
+	for name, tap := range b.taps {
+		if tap.Defunct && (tap.Bond != "" || tap.portReaped) && !tap.deleteLink {
+			delete(b.taps, name)
+		}
+	}
 }
 
 func (b *Bridge) setDestroyed() {

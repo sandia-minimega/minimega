@@ -105,6 +105,7 @@ func (b Bridges) newBridge(name string) error {
 
 	br := &Bridge{
 		Name:         name,
+		reaper:       systemReaper{},
 		taps:         make(map[string]*Tap),
 		trunks:       make(map[string]bool),
 		tunnels:      make(map[string]bool),
@@ -199,7 +200,9 @@ func (b Bridges) Lookup(name string) (*Bridge, bool) {
 	return br, ok
 }
 
-// Get a bridge by name. If one doesn't exist, it will be created.
+// Get a bridge by name. If one doesn't exist, it will be created. Get does not
+// return a bridge that a failed destroy left. It finishes that destroy and
+// creates a new bridge, or it returns an error when the cleanup fails again.
 func (b Bridges) Get(name string) (*Bridge, error) {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
@@ -210,7 +213,16 @@ func (b Bridges) Get(name string) (*Bridge, error) {
 
 	// Test if the bridge already exists
 	if v, ok := b.bridges[name]; ok {
-		return v, nil
+		if !v.destroyed() {
+			return v, nil
+		}
+
+		// a failed destroy left the bridge: finish it before we create a new one
+		if err := v.finishDestroy(); err != nil {
+			return nil, fmt.Errorf("bridge %v is not destroyed yet: %w", name, err)
+		}
+
+		delete(b.bridges, name)
 	}
 
 	// Doesn't exist, create it
@@ -342,18 +354,32 @@ func (b Bridges) DestroyBridge(name string) error {
 	return nil
 }
 
-// ReapTaps calls `Bridge.ReapTaps` on each bridge, returning the first error.
+// ReapTaps calls `Bridge.ReapTaps` on each bridge, returning the joined errors.
+// It also finishes bridges that a failed destroy left and forgets them when
+// nothing is left to clean up.
 func (b Bridges) ReapTaps() error {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
 
-	for _, br := range b.bridges {
+	var errs []error
+
+	for name, br := range b.bridges {
+		if br.destroyed() {
+			if err := br.finishDestroy(); err != nil {
+				errs = append(errs, err)
+			} else {
+				delete(b.bridges, name)
+			}
+
+			continue
+		}
+
 		if err := br.reapTaps(); err != nil {
-			return err
+			errs = append(errs, err)
 		}
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
 
 // FindTap finds a non-defunct Tap with the specified name. This is
