@@ -126,7 +126,7 @@ phases (screenshots, QMP, serial, ...) still run.
 
 | Area | Checks |
 |---|---|
-| Control plane | `version`, `check`, `host`, `namespace`, `ns hosts/queue/queueing`, `vm info`, `vm info summary`, `vlans`, `bridge` + OVS port/VLAN tags, `file list`, `-hashfiles` (no hash mid-copy, bounded CPU while copying, appends, renames, new directories), `disk info/snapshot`, miniweb (`/`, `/vms/info.json`) |
+| Control plane | `version`, `check`, `host`, `namespace`, `ns hosts/queue/queueing`, `vm info`, `vm info summary`, `vlans`, `bridge` + OVS port/VLAN tags, `file list`, `-hashfiles` (no hash mid-copy, bounded CPU while copying, appends, renames, new directories), `disk info/snapshot`, miniweb (`/`, `/vms/info.json`, `/<namespace>/` paths, `/namespaces.json`, cleared namespaces stay cleared) |
 | Boot | all 22 VMs `RUNNING`, 21 miniccc clients, every expected address learned from tap snooping |
 | Command and control | `cc exec` (one, all, tag and column filters), `cc exitcode`, `cc send`/`recv`, `cc background`, `cc process list/kill`, `cc responses`, `cc delete` |
 | Guest view of config | SMBIOS serial from `qemu-append`, VM UUID, disk sizes per interface, snapshot isolation, Q35 vs i440FX, xHCI, SMP, NIC driver and MAC, dual-homed addressing |
@@ -134,7 +134,7 @@ phases (screenshots, QMP, serial, ...) still run.
 | VM operations | `vm screenshot` (std and cirrus), `vm serial`, `vm qmp`, `vm tag` + tag filter, `vm top`, `vm stop/start`, `vm net disconnect/connect`, `vm hotplug add/remove`, `vm save`, `vm kill` + `vm flush` + `vm config clone` + queued relaunch |
 | Tools | `passwordify` on the guest initrd: a VM booted from it accepts the new root password and has the installed keys |
 | VNC | the RFB handshake and a frame through miniweb and the VNC shim, `vnc record fb` decoded, keys typed on the `host-d3` console with QEMU extended key events, `vnc record kb` + `vnc play`, paste as keys, `vnc type`, `vnc inject` (key and `LoadFile`, with and without a playback), `vm kill` while recording and playing (entries stop, files close) |
-| Teardown | `clear namespace` removes VMs, QEMU processes, and OVS ports |
+| Teardown | `clear namespace` removes VMs, QEMU processes, and OVS ports; miniweb does not recreate the cleared namespace; the default namespace stays listed after `clear namespace minimega` |
 
 Out of scope: containers, Android, bare-metal VMs, and multi-node meshes.
 

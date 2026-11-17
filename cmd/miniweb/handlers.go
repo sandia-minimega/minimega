@@ -48,6 +48,12 @@ func respondJSON(w http.ResponseWriter, data interface{}) {
 // indexHandler handles all unmatched URLs, redirects / to /vms
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
+		// stay in the namespace when redirecting from /<namespace>/
+		if ns := r.URL.Query().Get("namespace"); ns != "" && *f_namespace == "" {
+			http.Redirect(w, r, "/"+url.PathEscape(ns)+"/vms", http.StatusFound)
+			return
+		}
+
 		http.Redirect(w, r, "/vms", 302)
 		return
 	}
@@ -61,13 +67,25 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	// potentially prefixed with a namespace
 	log.Debug("URL: %v", r.URL)
 
-	// split URL into <namespace>/<rest of URL>
-	path := strings.TrimPrefix(r.URL.Path, "/")
+	// split URL into <namespace>/<rest of URL>; split the escaped path so
+	// that an escaped "/" stays in the namespace
+	path := strings.TrimPrefix(r.URL.EscapedPath(), "/")
 	fields := strings.SplitN(path, "/", 2)
 
 	// only have a possible namespace -- redirect
 	if len(fields) == 1 {
-		http.Redirect(w, r, path+"/", 302)
+		http.Redirect(w, r, "/"+path+"/", 302)
+		return
+	}
+
+	ns, err := url.PathUnescape(fields[0])
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	rest, err := url.PathUnescape(fields[1])
+	if err != nil {
+		http.NotFound(w, r)
 		return
 	}
 
@@ -78,11 +96,12 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	v.Set("namespace", fields[0])
+	v.Set("namespace", ns)
 
 	// patch up query and hand back to the mux
 	r.URL.RawQuery = v.Encode()
-	r.URL.Path = "/" + fields[1]
+	r.URL.Path = "/" + rest
+	r.URL.RawPath = ""
 
 	log.Debug("new URL: %v", r.URL)
 
