@@ -77,6 +77,9 @@ func (r *Range) SplitRange(s string) ([]string, error) {
 				}
 				dedup[t] = t
 			}
+			if len(dedup) > maxExpand {
+				return nil, fmt.Errorf("range expands to more than %d values", maxExpand)
+			}
 		} else {
 			if pad == -1 {
 				pad = len(part)
@@ -91,6 +94,9 @@ func (r *Range) SplitRange(s string) ([]string, error) {
 				return nil, fmt.Errorf("value of out range: %v", t)
 			}
 			dedup[t] = t
+			if len(dedup) > maxExpand {
+				return nil, fmt.Errorf("range expands to more than %d values", maxExpand)
+			}
 		}
 	}
 
@@ -163,6 +169,9 @@ func SplitList(in string) ([]string, error) {
 			return nil, err
 		}
 		res = append(res, ret...)
+		if len(res) > maxExpand {
+			return nil, fmt.Errorf("list expands to more than %d values", maxExpand)
+		}
 	}
 
 	return res, nil
@@ -249,8 +258,9 @@ func unsplitPadded(nums []int, pad int) string {
 	return result
 }
 
-// maxSubrange caps how many names a single subrange may expand to.
-const maxSubrange = 1 << 20
+// maxExpand caps how many names a subrange, or one SplitRange or SplitList
+// call in total, may expand to. A var so tests can lower it.
+var maxExpand = 1 << 20
 
 func subrange(s string, min, max int) ([]string, error) {
 	limits := strings.Split(s, "-")
@@ -279,8 +289,8 @@ func subrange(s string, min, max int) ([]string, error) {
 	if start < min || end > max {
 		return nil, fmt.Errorf("value of out range: %v", s)
 	}
-	if end-start >= maxSubrange {
-		return nil, fmt.Errorf("subrange %v too large (max %d values)", s, maxSubrange)
+	if end-start >= maxExpand {
+		return nil, fmt.Errorf("subrange %v too large (max %d values)", s, maxExpand)
 	}
 
 	var nodes []string

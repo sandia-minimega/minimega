@@ -6,6 +6,7 @@ package ranges
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"runtime"
 	"sort"
@@ -305,5 +306,29 @@ func TestUnsplitListPrefixNumbers(t *testing.T) {
 	want := []string{"h1", "h12", "h2"}
 	if err != nil || strings.Join(out, ",") != strings.Join(want, ",") {
 		t.Errorf("got %v (%v), want %v", out, err, want)
+	}
+}
+
+// Many allowed subranges in one request must not add up to an unbounded
+// expansion, whether in one bracket group or across several.
+func TestSplitAggregateLimit(t *testing.T) {
+	old := maxExpand
+	maxExpand = 10
+	defer func() { maxExpand = old }()
+
+	big := fmt.Sprintf("0-%d", maxExpand-1)
+
+	if _, err := SplitList("h[" + big + "]"); err != nil {
+		t.Errorf("single maximal subrange rejected: %v", err)
+	}
+
+	r, _ := NewRange("h", 0, math.MaxInt32)
+	two := fmt.Sprintf("h[%s,%d-%d]", big, maxExpand, 2*maxExpand-1)
+	if _, err := r.SplitRange(two); err == nil {
+		t.Error("SplitRange: expected error for aggregate expansion over the limit")
+	}
+
+	if _, err := SplitList("a[" + big + "],b[" + big + "]"); err == nil {
+		t.Error("SplitList: expected error for aggregate expansion over the limit")
 	}
 }
