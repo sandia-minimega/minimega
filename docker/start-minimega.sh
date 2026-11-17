@@ -28,6 +28,7 @@ fi
 : "${MINIWEB_ROOT:=/opt/minimega/web}"
 : "${MINIWEB_HOST:=0.0.0.0}"
 : "${MINIWEB_PORT:=9001}"
+: "${MINIWEB_ENABLED:=true}"
 
 : "${MM_BASE:=/tmp/minimega}"
 : "${MM_FILEPATH:=/tmp/minimega/files}"
@@ -43,9 +44,18 @@ fi
 : "${MM_CGROUP:=/sys/fs/cgroup}"
 : "${MM_ABSSNAPSHOT:=false}"
 : "${MM_APPEND:=}"
+: "${MM_OOM_SCORE_ADJ:=}"
 
 : "${OVS_APPEND:=}"
 : "${OVS_HOST_IFACE:=}"
+
+case "${MINIWEB_ENABLED}" in
+  true | false) ;;
+  *)
+    echo "MINIWEB_ENABLED must be true or false, not '${MINIWEB_ENABLED}'" >&2
+    exit 1
+    ;;
+esac
 
 MM_SOCKET="${MM_BASE}/minimega"
 MM_PIDFILE="${MM_BASE}/minimega.pid"
@@ -84,6 +94,21 @@ shutdown() {
   cleanup_stale_minimega_state
 }
 
+log() {
+  echo "$*" | tee -a "${MM_LOGFILE}"
+}
+
+# Keep the OOM killer away from the Open vSwitch daemons.
+protect_ovs() {
+  local f pid
+
+  for f in /var/run/openvswitch/ovsdb-server.pid /var/run/openvswitch/ovs-vswitchd.pid; do
+    [[ -f "${f}" ]] || continue
+    pid="$(<"${f}")"
+    echo -1000 > "/proc/${pid}/oom_score_adj" 2>/dev/null || log "unable to set oom_score_adj of ${f}"
+  done
+}
+
 trap shutdown EXIT
 trap 'exit 143' TERM INT
 
@@ -118,6 +143,8 @@ while true; do
   fi
 done
 
+protect_ovs
+
 # Check if there are bridge:port values to add
 if [[ -v "OVS_HOST_IFACE" ]]; then
   IFS=: read -r -a iface <<< "${OVS_HOST_IFACE}"
@@ -139,12 +166,21 @@ if [[ -v "OVS_HOST_IFACE" ]]; then
   fi
 fi
 
-echo "[$(date --rfc-3339=seconds)] starting miniweb..." | tee -a ${MM_LOGFILE}
-/opt/minimega/bin/miniweb -root=${MINIWEB_ROOT} -addr=${MINIWEB_HOST}:${MINIWEB_PORT} &
-MINIWEB_PID=$!
-echo "[$(date --rfc-3339=seconds)] miniweb started on ${MINIWEB_HOST}:${MINIWEB_PORT}" | tee -a ${MM_LOGFILE}
+if [[ "${MINIWEB_ENABLED}" == "true" ]]; then
+  echo "[$(date --rfc-3339=seconds)] starting miniweb..." | tee -a ${MM_LOGFILE}
+  /opt/minimega/bin/miniweb -root=${MINIWEB_ROOT} -addr=${MINIWEB_HOST}:${MINIWEB_PORT} &
+  MINIWEB_PID=$!
+  echo "[$(date --rfc-3339=seconds)] miniweb started on ${MINIWEB_HOST}:${MINIWEB_PORT}" | tee -a ${MM_LOGFILE}
+else
+  log "[$(date --rfc-3339=seconds)] miniweb is disabled (MINIWEB_ENABLED=false)"
+fi
 
 echo "[$(date --rfc-3339=seconds)] starting minimega..." | tee -a ${MM_LOGFILE}
+# The VMs that minimega starts inherit its oom_score_adj, so it is opt-in.
+if [[ -n "${MM_OOM_SCORE_ADJ}" ]]; then
+  echo "${MM_OOM_SCORE_ADJ}" > /proc/self/oom_score_adj 2>/dev/null \
+    || log "unable to set the oom_score_adj of minimega to ${MM_OOM_SCORE_ADJ}"
+fi
 /opt/minimega/bin/minimega \
   -nostdin \
   -force=${MM_FORCE} \
