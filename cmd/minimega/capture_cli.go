@@ -88,13 +88,13 @@ override the namespace settings for one capture:
 	                    as a comma-separated list of aliases or IDs
 	vms=<vms>           bridge captures with ports=edge only: limit the mirror
 	                    to the taps of these VMs, as a comma-separated list
+	direction=<dir>     VM captures only: in, out or both (the default). in
+	                    captures the frames that the host receives on the tap,
+	                    which are the frames that the VM sends.
 
 With ports=edge, a bridge capture records each frame once, where it enters the
 bridge. It does not record frames from trunks, tunnels or other ports that
 minimega did not make.
-	direction=<dir>     VM captures only: in, out or both (the default). in
-	                    captures the frames that the host receives on the tap,
-	                    which are the frames that the VM sends.
 
 Put a filter that contains spaces in quotes, for example filter="tcp port 80".
 
@@ -118,8 +118,10 @@ Examples:
 
 When run without arguments, capture prints all captures. Each capture has an
 ID and a state. The states are running, failed and full. A failed capture shows
-its error, for example when its VM is flushed. minimega closes the file of a
-failed or full capture, and keeps the capture in the list until you delete it.
+its error, for example when its VM is flushed. A capture of a VM that is killed
+stays running, with no new packets, until the VM starts again or you flush it.
+minimega closes the file of a failed or full capture, and keeps the capture in
+the list until you delete it.
 The list also shows the format, snaplen, filter, packets, bytes, kernel drops
 (kdrops), file size and start time of each PCAP capture. The path is always
 the last column. To stop a capture, use the delete commands:
@@ -177,6 +179,65 @@ minimega instance:
 			return nil
 		}),
 	},
+	{ // namespace capture
+		HelpShort: "capture the traffic of a namespace on all its hosts",
+		HelpLong: `
+Capture the frames that enter the bridges of the active namespace from its VM,
+container and host taps, on every host of the namespace. Each host mirrors its
+edge ports and sends the frames to this node over the mesh. This node merges
+the frames in timestamp order into one file.
+
+Start a capture with a file name and options. minimega returns the capture ID:
+
+	capture pcap namespace exp1/files/exp1.pcap
+	capture pcap namespace exp1/files/web.pcapng format=pcapng vlans=EXP_1 filter="tcp port 80"
+
+A relative file name is relative to the -filepath directory. Give the options
+as key=value items after the file name:
+
+	ports=edge              only edge ports (the default)
+	vlans=<vlan>[,...]      only these VLANs, as aliases or IDs
+	bridges=<bridge>[,...]  only these bridges
+	vms=<vm>[,...]          only the taps of these VMs
+	filter=<bpf>            BPF filter on each host, in printable ASCII
+	                        without quotes or backslashes
+	snaplen=<size>          bytes kept for each frame, 14 to 65535
+	format=<format>         pcap (classic pcap with nanosecond timestamps) or
+	                        pcapng. The default is "capture pcap format".
+	attribute=<mode>        pcapng only: port (the default) gives each frame the
+	                        interface of its source VM port, from the source MAC.
+	                        stream gives one interface for each host and bridge.
+	names=<bool>            pcapng only: write the VM addresses (default true)
+	window=<duration>       reorder window, 100ms to 10s (default 1s)
+	maxsize=<size>          stop the capture as full at this file size
+
+To list the captures, use "capture pcap namespace". The list shows one summary
+row for each capture, with an empty member and bridge, then one row for each
+member host and bridge. The member column is the host of the stream; the host
+column in front of it is the node that answered. The states are starting,
+running, stalled, stopping, stopped, failed, orphaned and full. kdrops are kernel drops, pdrops are an estimate of
+the drops before the kernel, qdrops are drops in the queue of a host, lost are
+frames that did not arrive, and late are frames that arrived after the reorder
+window. Late frames are in the file, out of order. skew is the estimated clock
+offset of a host; keep the clocks of all hosts synchronized with chrony or PTP.
+
+To stop a capture, give its ID, its file name, or all. minimega returns the
+final rows:
+
+	capture pcap delete namespace 3
+	capture pcap delete namespace all
+
+Frames from hardware behind trunks are not captured. Every mesh node, relays
+included, must run minimega 3.4.0 or later: minimega refuses the start
+otherwise. Each capture uses one Open vSwitch mirror on each host and bridge.
+A bridge has at most 32 mirrors. See "bridge mirrors".`,
+		Patterns: []string{
+			"capture <pcap,> namespace",
+			"capture <pcap,> namespace <filename> [option]...",
+			"capture <pcap,> <delete,> namespace <id or filename or all>",
+		},
+		Call: wrapSimpleCLI(cliNSCapture),
+	},
 	{ // clear capture
 		HelpShort: "reset capture state",
 		HelpLong: `
@@ -185,7 +246,7 @@ only the captures of that type. See "help capture" for more information.`,
 		Patterns: []string{
 			"clear capture [netflow,pcap]",
 		},
-		Call: wrapBroadcastCLI(cliCaptureClear),
+		Call: wrapClearCapture(wrapBroadcastCLI(cliCaptureClear)),
 	},
 }
 
@@ -326,7 +387,23 @@ func cliCaptureVM(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	return err
 }
 
+// wrapClearCapture stops the namespace captures that this node is the head
+// of before clear capture fans out. The head is often not a namespace host.
+func wrapClearCapture(fn minicli.CLIFunc) minicli.CLIFunc {
+	return func(c *minicli.Command, respChan chan<- minicli.Responses) {
+		if c.Source == "" && !c.BoolArgs["netflow"] {
+			nsCaptureStopHead(resolveNamespace(c).Name, Wildcard, nsCaptureStopWait)
+		}
+
+		fn(c, respChan)
+	}
+}
+
 func cliCaptureClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if !c.BoolArgs["netflow"] {
+		nsCaptureStopMembers(ns.Name)
+	}
+
 	switch {
 	case c.BoolArgs["pcap"]:
 		return ns.captures.StopType("pcap")

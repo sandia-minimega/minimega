@@ -10,8 +10,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
+	"github.com/sandia-minimega/minimega/v2/internal/pcapfile"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
@@ -69,6 +71,14 @@ func (b *Bridge) createCaptureTap(tap string, tags MirrorTags) error {
 // is set, it creates the mirror after it opens tap so that the first frames
 // are not lost. Assumes bridgeLock is held.
 func (b *Bridge) startCapture(tap string, mirror func() error, fname string, c CaptureConfig) (int, error) {
+	return b.startCaptureSink(tap, mirror, c, func() (*fileSink, error) {
+		return createFileSink(fname, tap, c)
+	})
+}
+
+// startCaptureSink is startCapture with a sink from newSink. Assumes
+// bridgeLock is held.
+func (b *Bridge) startCaptureSink(tap string, mirror func() error, c CaptureConfig, newSink func() (*fileSink, error)) (int, error) {
 	if err := c.Validate(); err != nil {
 		return 0, err
 	}
@@ -82,7 +92,7 @@ func (b *Bridge) startCapture(tap string, mirror func() error, fname string, c C
 		return 0, err
 	}
 
-	sink, err := createFileSink(fname, tap, c)
+	sink, err := newSink()
 	if err != nil {
 		src.Close()
 		return 0, err
@@ -116,7 +126,7 @@ func (b *Bridge) startCapture(tap string, mirror func() error, fname string, c C
 
 	b.captures[id] = ca
 
-	log.Info("capture %v on %v to %v", id, tap, fname)
+	log.Info("capture %v on %v to %v", id, tap, sink.path)
 
 	e.start()
 
@@ -314,4 +324,66 @@ func (b *Bridge) failTapCaptures(tap string) {
 			c.engine.fail(fmt.Sprintf("tap %v removed", tap))
 		}
 	}
+}
+
+// StartEdgeStream mirrors the edge ports that sel selects to a new capture tap
+// and writes the frames to w, which must already have its interface. It
+// returns the capture ID, or an error when the bridge has no edge port for
+// sel. Stop the stream with StopCapture.
+func (b *Bridge) StartEdgeStream(sel EdgeSelector, c CaptureConfig, w pcapfile.Writer, tags MirrorTags) (int, error) {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	if len(b.edgePorts(sel)) == 0 {
+		return 0, ErrNoEdgePorts
+	}
+
+	c.Direction = DirectionIn
+	c.Format = w.Format()
+
+	tap := <-b.tapChan
+	if err := b.createCaptureTap(tap, tags); err != nil {
+		return 0, err
+	}
+
+	mirror := func() error {
+		return b.createEdgeMirror(tap, sel, tags)
+	}
+
+	id, err := b.startCaptureSink(tap, mirror, c, func() (*fileSink, error) {
+		return &fileSink{w: w, path: "mesh:" + tags.Capture}, nil
+	})
+	if err != nil {
+		if err := b.destroyTap(tap); err != nil {
+			log.Error("zombie tap -- %v %v", tap, err)
+		}
+		b.reapTaps()
+
+		return 0, err
+	}
+
+	return id, nil
+}
+
+// ErrNoEdgePorts is returned by StartEdgeStream for a bridge without edge
+// ports.
+var ErrNoEdgePorts = errors.New("no edge ports")
+
+// MirrorApplied reports whether Open vSwitch applies the mirror of the
+// capture with the given ID: an ignored mirror has no statistics.
+func (b *Bridge) MirrorApplied(id int) (bool, error) {
+	bridgeLock.Lock()
+	c, ok := b.captures[id]
+	bridgeLock.Unlock()
+
+	if !ok || !c.mirror {
+		return false, fmt.Errorf("unknown capture ID: %v", id)
+	}
+
+	out, err := ovsCmdWrapper([]string{"get", "Mirror", "mirror-" + c.tap, "statistics"})
+	if err != nil {
+		return false, err
+	}
+
+	return strings.TrimSpace(out) != "{}", nil
 }

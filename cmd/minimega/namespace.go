@@ -204,7 +204,8 @@ func (n *Namespace) Destroy() error {
 	// unmount
 	n.clearCCMount("")
 
-	// Stop all captures
+	// Stop all captures: namespace captures first, with OpStop only
+	nsCaptureDestroy(n.Name)
 	n.captures.StopAll()
 	n.counter.Stop()
 
