@@ -31,6 +31,7 @@ type Message struct {
 	Hash     string
 	Glob     []string
 	Part     int64
+	Size     int64 // file size in bytes, 0 if unknown
 	TID      int64
 	ACK      bool
 	Data     []byte
