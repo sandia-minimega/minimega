@@ -14,12 +14,19 @@ type chans struct {
 	sync.Mutex // embed
 
 	// maps of transaction id/incoming channel pairs for routing multiple tunnels
-	chans map[int]chan *tunnelMessage
+	chans map[int]*registration
+}
+
+// registration is one TID's incoming channel. done is closed by remove so a
+// mux send blocked on a full, abandoned channel gives up.
+type registration struct {
+	c    chan *tunnelMessage
+	done chan struct{}
 }
 
 func makeChans() chans {
 	return chans{
-		chans: make(map[int]chan *tunnelMessage),
+		chans: make(map[int]*registration),
 	}
 }
 
@@ -31,10 +38,13 @@ func (c *chans) add(ID int) chan *tunnelMessage {
 		log.Fatal("ID %v already exists!", ID)
 	}
 
-	ch := make(chan *tunnelMessage, 1024)
-	c.chans[ID] = ch
+	r := &registration{
+		c:    make(chan *tunnelMessage, 1024),
+		done: make(chan struct{}),
+	}
+	c.chans[ID] = r
 
-	return ch
+	return r.c
 }
 
 func (c *chans) remove(ID int) {
@@ -42,15 +52,31 @@ func (c *chans) remove(ID int) {
 	defer c.Unlock()
 
 	// don't close the channel: the mux may still hold it and be about to send.
-	// Only the mux closes channels, in dropAll.
-	delete(c.chans, ID)
+	// Only the mux closes channels, in dropAll. Closing done releases a send
+	// that is blocked on it.
+	if r, ok := c.chans[ID]; ok {
+		close(r.done)
+		delete(c.chans, ID)
+	}
 }
 
-func (c *chans) get(ID int) chan *tunnelMessage {
+// send routes m to ID's channel, giving up if ID is removed while the
+// channel is full. Returns false if ID is not registered.
+func (c *chans) send(ID int, m *tunnelMessage) bool {
 	c.Lock()
-	defer c.Unlock()
+	r := c.chans[ID]
+	c.Unlock()
 
-	return c.chans[ID]
+	if r == nil {
+		return false
+	}
+
+	select {
+	case r.c <- m:
+	case <-r.done:
+	}
+
+	return true
 }
 
 func (c *chans) dropAll() []chan *tunnelMessage {
@@ -59,8 +85,8 @@ func (c *chans) dropAll() []chan *tunnelMessage {
 
 	res := []chan *tunnelMessage{}
 
-	for k, ch := range c.chans {
-		res = append(res, ch)
+	for k, r := range c.chans {
+		res = append(res, r.c)
 		delete(c.chans, k)
 	}
 
@@ -89,10 +115,8 @@ func (t *Tunnel) mux() {
 			t.handleRemote(&m)
 		} else if m.Type == FORWARD {
 			t.handleReverse(&m)
-		} else if c := t.chans.get(m.TID); c != nil {
+		} else if !t.chans.send(m.TID, &m) {
 			// route the message to the handler by TID
-			c <- &m
-		} else {
 			log.Info("invalid TID: %v", m.TID)
 		}
 	}
