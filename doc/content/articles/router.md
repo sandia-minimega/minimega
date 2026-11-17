@@ -183,6 +183,29 @@ the record:
 minimega$ router foo dns 1.2.3.4 foo.com
 ```
 
+### Custom dnsmasq options
+
+For dnsmasq options that the other subcommands do not cover, append raw lines
+to the generated `dnsmasq.conf` with `router <vm> dnsmasq`. Lines are written
+in the order they were added, after the generated config, and take effect on
+the next `router <vm> commit`. Quote a line that contains a `#`.
+
+```text
+minimega$ router foo dnsmasq address=/test.com/1.0.0.1
+minimega$ router foo dnsmasq server=/test2.com/3.0.0.1
+minimega$ router foo dnsmasq cname=www.test.com,test.com
+```
+
+The router VM needs a `minirouter` built with this feature; older builds stop
+applying the config at the first custom line.
+
+Remove one line, or all of them:
+
+```text
+minimega$ clear router foo dnsmasq cname=www.test.com,test.com
+minimega$ clear router foo dnsmasq
+```
+
 <a id="TOC_6."></a>
 
 ## Routing

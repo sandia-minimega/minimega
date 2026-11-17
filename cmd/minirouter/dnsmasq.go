@@ -18,6 +18,7 @@ type Dnsmasq struct {
 	DNS      map[string][]string
 	RAD      map[string]bool
 	Upstream string
+	Custom   []string
 }
 
 type Dhcp struct {
@@ -46,6 +47,7 @@ func init() {
 			"dnsmasq <dns,> <ip> <host>",
 			"dnsmasq <upstream,> <ip>",
 			"dnsmasq <ra,> <subnet>",
+			"dnsmasq <custom,> <line>",
 		},
 		Call: handleDnsmasq,
 	})
@@ -107,6 +109,8 @@ func handleDnsmasq(c *minicli.Command, r chan<- minicli.Responses) {
 	} else if c.BoolArgs["ra"] {
 		subnet := c.StringArgs["subnet"]
 		dnsmasqData.RAD[subnet] = true
+	} else if c.BoolArgs["custom"] {
+		dnsmasqData.Custom = append(dnsmasqData.Custom, c.StringArgs["line"])
 	}
 }
 
@@ -201,5 +205,11 @@ host-record={{ $host }}{{ range $v := $ips }},{{ $v }}{{ end }}
 {{ end }}
 {{ range $rad, $option := .RAD }}
 dhcp-range={{ $rad }},ra-names
+{{ end }}
+{{ if .Custom }}
+# custom
+{{ range $line := .Custom }}
+{{ $line }}
+{{ end }}
 {{ end }}
 `

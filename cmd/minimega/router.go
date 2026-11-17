@@ -5,7 +5,9 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -29,6 +31,7 @@ type Router struct {
 	dhcp         map[string]*dhcp
 	dns          map[string][]string
 	upstream     string
+	dnsmasq      []string // raw dnsmasq config lines, in the order they were added
 	gw           string
 	rad          map[string]bool // using a bool placeholder here for later RAD options
 	staticRoutes map[string]string
@@ -216,6 +219,14 @@ func (r *Router) String() string {
 		fmt.Fprintf(&o, "Upstream DNS: %v\n", r.upstream)
 	}
 
+	if len(r.dnsmasq) > 0 {
+		fmt.Fprintf(&o, "Custom dnsmasq config:\n")
+		for _, line := range r.dnsmasq {
+			fmt.Fprintf(&o, "%v\n", line)
+		}
+		fmt.Fprintln(&o)
+	}
+
 	if r.gw != "" {
 		fmt.Fprintf(&o, "Default Gateway: %v\n", r.gw)
 	}
@@ -377,6 +388,9 @@ func (r *Router) writeConfig(w io.Writer) error {
 	}
 	for subnet := range r.rad {
 		fmt.Fprintf(w, "dnsmasq ra %v\n", subnet)
+	}
+	for _, line := range r.dnsmasq {
+		fmt.Fprint(w, dnsmasqCustomCmd(line))
 	}
 	fmt.Fprintf(w, "dnsmasq commit\n")
 
@@ -812,6 +826,64 @@ func (r *Router) UpstreamDel() error {
 	r.upstream = ""
 
 	return nil
+}
+
+// DnsmasqAdd appends a raw line to the router's dnsmasq config, ignoring
+// exact duplicates.
+func (r *Router) DnsmasqAdd(line string) error {
+	if strings.ContainsAny(line, "\r\n\x00") {
+		return errors.New("dnsmasq config line must be a single line")
+	}
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return errors.New("empty dnsmasq config line")
+	}
+	// minirouter reads commands with a bufio.Scanner, which drops longer lines
+	if n := len(dnsmasqCustomCmd(line)); n >= bufio.MaxScanTokenSize {
+		return fmt.Errorf("dnsmasq config line too long: %v bytes encoded, limit is %v", n, bufio.MaxScanTokenSize-1)
+	}
+
+	for _, v := range r.dnsmasq {
+		if v == line {
+			return nil
+		}
+	}
+
+	r.dnsmasq = append(r.dnsmasq, line)
+	return nil
+}
+
+// DnsmasqDel removes a raw dnsmasq config line, or all of them if line is
+// empty.
+func (r *Router) DnsmasqDel(line string) error {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		r.dnsmasq = nil
+		return nil
+	}
+
+	for i, v := range r.dnsmasq {
+		if v == line {
+			r.dnsmasq = append(r.dnsmasq[:i], r.dnsmasq[i+1:]...)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("no such dnsmasq config line: %v", line)
+}
+
+// dnsmasqCustomCmd returns the minirouter command, with its newline, that adds
+// line to the guest's dnsmasq config.
+func dnsmasqCustomCmd(line string) string {
+	return "dnsmasq custom " + quoteMinicli(line) + "\n"
+}
+
+// quoteMinicli double-quotes s so minirouter's minicli parses it back as a
+// single argument, including spaces, quotes, and comment leaders.
+func quoteMinicli(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	return `"` + s + `"`
 }
 
 func (r *Router) Gateway(gw string) {
