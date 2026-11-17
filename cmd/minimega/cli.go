@@ -55,6 +55,7 @@ func cliSetup() {
 	registerHandlers("log", logCLIHandlers)
 	registerHandlers("memdump", memdumpCLIHandlers)
 	registerHandlers("meshage", meshageCLIHandlers)
+	registerHandlers("minifire", minifireCLIHandlers)
 	registerHandlers("misc", miscCLIHandlers)
 	registerHandlers("namespace", namespaceCLIHandlers)
 	registerHandlers("nuke", nukeCLIHandlers)
