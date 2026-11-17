@@ -969,7 +969,9 @@ func (vm *ContainerVM) launch() error {
 	childLog.Close()
 	log.LogAll(parentLog, log.DEBUG, "containerShim")
 
-	go vm.console(pseudotty)
+	// console only sets up listeners, so run it inline: teardown below must
+	// see the listeners it creates.
+	vm.console(pseudotty)
 
 	// network creation for containers happens /after/ the container is
 	// started, as we need the PID in order to attach a veth to the container
@@ -994,6 +996,55 @@ func (vm *ContainerVM) launch() error {
 		parentSync2.Close()
 	}
 
+	cgroupFreezer := vm.cgroup("freezer")
+	cgroupMemory := vm.cgroup("memory")
+	cgroupDevices := vm.cgroup("devices")
+	cgroupCPU := vm.cgroup("cpu")
+	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
+
+	// teardown releases the listeners, netns, taps and cgroups of this launch.
+	// The caller must hold vm.lock.
+	teardown := func() {
+		if vm.ptyUnixListener != nil {
+			vm.ptyUnixListener.Close()
+		}
+		if vm.ptyTCPListener != nil {
+			vm.ptyTCPListener.Close()
+		}
+
+		vm.unlinkNetns()
+
+		for _, net := range vm.Networks {
+			br, err := getBridge(net.Bridge)
+			if err != nil {
+				log.Error("get bridge: %v", err)
+			} else {
+				br.DestroyTap(net.Tap)
+			}
+		}
+
+		// clean up the cgroup directory
+		for _, cgroup := range cgroups {
+			if err := os.Remove(cgroup); err != nil {
+				log.Errorln(err)
+			}
+		}
+	}
+
+	if err != nil {
+		// Some error occurred. Reap the process and tear down before
+		// returning, while vm.lock is still held, so that a relaunch or flush
+		// cannot run until the cleanup is done.
+		cmd.Process.Kill()
+		pseudotty.Close()
+		vm.thaw() // a frozen process cannot exit
+		cmd.Wait()
+
+		teardown()
+
+		return vm.setErrorf("%v", err)
+	}
+
 	// Channel to signal when the process has exited
 	errChan := make(chan error)
 
@@ -1006,12 +1057,6 @@ func (vm *ContainerVM) launch() error {
 
 	go func() {
 		defer vm.cond.Signal()
-
-		cgroupFreezer := vm.cgroup("freezer")
-		cgroupMemory := vm.cgroup("memory")
-		cgroupDevices := vm.cgroup("devices")
-		cgroupCPU := vm.cgroup("cpu")
-		cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
 
 		select {
 		case err := <-errChan:
@@ -1061,45 +1106,13 @@ func (vm *ContainerVM) launch() error {
 			}
 		}
 
-		if vm.ptyUnixListener != nil {
-			vm.ptyUnixListener.Close()
-		}
-		if vm.ptyTCPListener != nil {
-			vm.ptyTCPListener.Close()
-		}
-
-		vm.unlinkNetns()
-
-		for _, net := range vm.Networks {
-			br, err := getBridge(net.Bridge)
-			if err != nil {
-				log.Error("get bridge: %v", err)
-			} else {
-				br.DestroyTap(net.Tap)
-			}
-		}
-
-		// clean up the cgroup directory
-		for _, cgroup := range cgroups {
-			if err := os.Remove(cgroup); err != nil {
-				log.Errorln(err)
-			}
-		}
+		teardown()
 
 		if vm.State != VM_ERROR {
 			// Set to QUIT unless we've already been put into the error state
 			vm.setState(VM_QUIT)
 		}
 	}()
-
-	if err != nil {
-		// Some error occurred.. kill the process. The goroutines above reap
-		// it and release the listeners, taps, netns and cgroups.
-		cmd.Process.Kill()
-		pseudotty.Close()
-
-		return vm.setErrorf("%v", err)
-	}
 
 	return nil
 }
