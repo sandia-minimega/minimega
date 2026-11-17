@@ -6,10 +6,11 @@ package main
 
 import (
 	"os/exec"
-	"runtime"
 	"strconv"
 	"strings"
 	"testing"
+
+	"golang.org/x/sys/unix"
 )
 
 type pidVM struct {
@@ -39,12 +40,23 @@ func pidCPUs(t *testing.T, pid int) string {
 	return strings.TrimSpace(string(out)[strings.LastIndex(string(out), ":")+1:])
 }
 
-// Filter values are CPU numbers: CPU "1" must pin to CPU 1, and CPU "0" must work.
+// Filter values are CPU numbers: each must pin to that CPU, including CPU 0.
 func TestAddAffinityPinsToCPUNumber(t *testing.T) {
-	if runtime.NumCPU() < 2 {
+	// use CPUs this process may run on; the runner may not own CPUs 0 and 1
+	var set unix.CPUSet
+	if err := unix.SchedGetaffinity(0, &set); err != nil {
+		t.Fatal(err)
+	}
+	var cpus []string
+	for i := 0; i < 1024 && len(cpus) < 2; i++ { // 1024 = CPU_SETSIZE
+		if set.IsSet(i) {
+			cpus = append(cpus, strconv.Itoa(i))
+		}
+	}
+	if len(cpus) < 2 {
 		t.Skip("need 2 CPUs")
 	}
-	for _, cpu := range []string{"0", "1"} {
+	for _, cpu := range cpus {
 		pid := sleeper(t)
 		ns := &Namespace{}
 		ns.affinityCPUSets = map[string][]int{cpu: {}}
