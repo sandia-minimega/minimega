@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -403,6 +404,9 @@ func containerTeardown() {
 //	10+: source:target volumes, `--` signifies end
 //	11+ :  init program and args (relative to filesystem path)
 func containerShim() {
+	// capabilities are per thread, so init must exec on the thread that drops them
+	runtime.LockOSThread()
+
 	args := flag.Args()
 	if flag.NArg() < 11 { // 11 because init args can be nil
 		os.Exit(1)
@@ -1429,7 +1433,8 @@ func (vm *ContainerVM) WriteConfig(w io.Writer) error {
 func containerSetCapabilities() error {
 	c := new(cap)
 	c.header.version = CAPV3
-	c.header.pid = os.Getpid()
+	// pid 0 is the calling thread, which containerShim keeps until exec
+	c.header.pid = 0
 
 	caps := DEFAULT_CAPS
 
