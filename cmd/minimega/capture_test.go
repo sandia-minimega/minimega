@@ -167,21 +167,22 @@ func TestCaptureRows(t *testing.T) {
 func TestParseCaptureOptions(t *testing.T) {
 	base := bridge.CaptureConfig{Filter: "udp", SnapLen: 200}
 
-	c, err := parseCaptureOptions(captureKindVM, base, []string{"snaplen=128", "filter=tcp port 80", "maxsize=10240M", "direction=in", "format=pcapng"})
+	c, err := parseCaptureOptions(captureKindVM, "", base, []string{"snaplen=128", "filter=tcp port 80", "maxsize=10240M", "direction=in", "format=pcapng"})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	want := bridge.CaptureConfig{Filter: "tcp port 80", SnapLen: 128, MaxSize: 10240 << 20, Direction: "in", Format: "pcapng"}
+	c.Namespace = ""
 	if !reflect.DeepEqual(c, want) {
 		t.Errorf("got %+v, want %+v", c, want)
 	}
 
-	if c, err := parseCaptureOptions(captureKindBridge, base, nil); err != nil || !reflect.DeepEqual(c, base) {
+	if c, err := parseCaptureOptions(captureKindBridge, "", base, nil); err != nil || !reflect.DeepEqual(c, base) {
 		t.Errorf("no options: %+v %v", c, err)
 	}
 
-	if c, err := parseCaptureOptions(captureKindVM, base, []string{"filter="}); err != nil || c.Filter != "" {
+	if c, err := parseCaptureOptions(captureKindVM, "", base, []string{"filter="}); err != nil || c.Filter != "" {
 		t.Errorf("empty filter: %+v %v", c, err)
 	}
 
@@ -197,13 +198,30 @@ func TestParseCaptureOptions(t *testing.T) {
 		{"novalue"},
 		{"snaplen=100", "snaplen=200"},
 	} {
-		if _, err := parseCaptureOptions(captureKindVM, base, opts); err == nil {
+		if _, err := parseCaptureOptions(captureKindVM, "", base, opts); err == nil {
 			t.Errorf("options %q did not fail", opts)
 		}
 	}
 
-	if _, err := parseCaptureOptions(captureKindBridge, base, []string{"direction=in"}); err == nil {
+	if _, err := parseCaptureOptions(captureKindBridge, "", base, []string{"direction=in"}); err == nil {
 		t.Error("direction on a bridge capture did not fail")
+	}
+
+	c, err = parseCaptureOptions(captureKindBridge, "exp", base, []string{"ports=edge", "vlans=101,102", "vms=a,b"})
+	if err != nil || c.Ports != "edge" || !reflect.DeepEqual(c.VLANs, []int{101, 102}) || !reflect.DeepEqual(c.VMs, []string{"a", "b"}) || c.Namespace != "exp" {
+		t.Errorf("edge options: %+v %v", c, err)
+	}
+
+	for _, opts := range [][]string{
+		{"ports=trunk"},
+		{"vlans=0"},
+		{"vlans=4096"},
+		{"vlans=NOPE"},
+		{"vms=a"},
+	} {
+		if _, err := parseCaptureOptions(captureKindBridge, "exp", base, opts); err == nil {
+			t.Errorf("bridge options %q did not fail", opts)
+		}
 	}
 
 	if err := checkCaptureFilename("snaplen=100"); err != errFilenameOption {

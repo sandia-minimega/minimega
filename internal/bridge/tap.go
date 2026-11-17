@@ -150,6 +150,8 @@ func (b *Bridge) addTap(tap, mac string, lan int, host bool) error {
 		return err
 	}
 
+	b.forgetEdgePort(tap)
+
 	b.taps[tap] = &Tap{
 		Name:   tap,
 		Bridge: b.Name,

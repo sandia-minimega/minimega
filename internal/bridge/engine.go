@@ -81,6 +81,13 @@ type CaptureConfig struct {
 	// Namespace owns the capture and its mirror.
 	Namespace string
 
+	// Ports selects the ports of a bridge capture: all (the default) or
+	// edge, the edge ports of Namespace. VLANs limits the mirror to these
+	// VLANs, and VMs limits edge ports to the taps of these VMs.
+	Ports string
+	VLANs []int
+	VMs   []string
+
 	// Description, Comment and Names are written to a pcapng file: the
 	// interface description, the section comment and the known addresses.
 	Description string
@@ -126,6 +133,20 @@ func (c CaptureConfig) Validate() error {
 
 	if c.MaxSize < 0 {
 		return errors.New("maxsize must not be negative")
+	}
+
+	switch c.Ports {
+	case "", PortsAll, PortsEdge:
+	default:
+		return fmt.Errorf("invalid ports %q: use all or edge", c.Ports)
+	}
+
+	if len(c.VMs) > 0 && c.Ports != PortsEdge {
+		return errors.New("vms= needs ports=edge")
+	}
+
+	if c.Ports == PortsEdge && c.Namespace == "" {
+		return errors.New("ports=edge needs a namespace")
 	}
 
 	return ValidateFormat(c.Format)

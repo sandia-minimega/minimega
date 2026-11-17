@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
@@ -132,7 +133,7 @@ func ovsSetPortQinQ(tap string, outer int) error {
 
 // ovsAddMirror creates a mirror on bridge from src to dst. If src is empty,
 // mirrors the entire bridge. tags say who owns the mirror.
-func ovsAddMirror(bridge, src, dst string, tags MirrorTags) error {
+func ovsAddMirror(bridge, src, dst string, vlans []int, tags MirrorTags) error {
 	findPort := func(name, tap string) []string {
 		return []string{
 			"--",
@@ -169,6 +170,14 @@ func ovsAddMirror(bridge, src, dst string, tags MirrorTags) error {
 		args = append(args,
 			"select-all=true",
 		)
+	}
+
+	if len(vlans) > 0 {
+		var vs []string
+		for _, v := range vlans {
+			vs = append(vs, strconv.Itoa(v))
+		}
+		args = append(args, "select-vlan="+strings.Join(vs, ","))
 	}
 
 	args = append(args, tags.args()...)

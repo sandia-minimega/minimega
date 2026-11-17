@@ -751,6 +751,8 @@ func (vm *BaseVM) networkConnect(pos, vlan int, bridge string) error {
 		return err
 	}
 
+	dst.SetTapOwner(nic.Tap, vm.Namespace, vm.Name)
+
 	// Record updates to the VM config
 	nic.Alias = ""
 	if alias, err := vlans.GetAlias(vlan); err == nil {

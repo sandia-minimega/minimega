@@ -1157,6 +1157,8 @@ func (vm *ContainerVM) launchNetwork() error {
 			return fmt.Errorf("create tap: %v", err)
 		}
 
+		br.SetTapOwner(nic.Tap, vm.Namespace, vm.Name)
+
 		if nic.QinQ {
 			if err := br.SetTapQinQ(nic.Tap, nic.VLAN); err != nil {
 				return err

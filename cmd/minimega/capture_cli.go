@@ -80,6 +80,18 @@ override the namespace settings for one capture:
 	maxsize=<size>      stop the capture as full when the file reaches this
 	                    size, in bytes, or with a K, M or G suffix
 	format=<format>     file format: pcap or pcapng
+	ports=<ports>       bridge captures only: all (the default) mirrors all
+	                    frames on the bridge. edge mirrors only the frames that
+	                    the bridge receives from the VM, container and host taps
+	                    of the active namespace, also taps that start later.
+	vlans=<vlans>       bridge captures only: limit the mirror to these VLANs,
+	                    as a comma-separated list of aliases or IDs
+	vms=<vms>           bridge captures with ports=edge only: limit the mirror
+	                    to the taps of these VMs, as a comma-separated list
+
+With ports=edge, a bridge capture records each frame once, where it enters the
+bridge. It does not record frames from trunks, tunnels or other ports that
+minimega did not make.
 	direction=<dir>     VM captures only: in, out or both (the default). in
 	                    captures the frames that the host receives on the tap,
 	                    which are the frames that the VM sends.
@@ -305,11 +317,10 @@ func cliCaptureVM(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return err
 	}
 
-	config, err := parseCaptureOptions(captureKindVM, ns.captures.CaptureConfig, c.ListArgs["option"])
+	config, err := parseCaptureOptions(captureKindVM, ns.Name, ns.captures.CaptureConfig, c.ListArgs["option"])
 	if err != nil {
 		return err
 	}
-	config.Namespace = ns.Name
 
 	_, err = captureVM(&ns.captures, vm, num, capturePath(fname), config)
 	return err
@@ -348,11 +359,10 @@ func cliCapturePcap(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 		return err
 	}
 
-	config, err := parseCaptureOptions(captureKindBridge, ns.captures.CaptureConfig, c.ListArgs["option"])
+	config, err := parseCaptureOptions(captureKindBridge, ns.Name, ns.captures.CaptureConfig, c.ListArgs["option"])
 	if err != nil {
 		return err
 	}
-	config.Namespace = ns.Name
 
 	_, err = captureBridge(&ns.captures, b, capturePath(fname), config)
 	return err

@@ -96,6 +96,7 @@ func recover() error {
 					}
 
 					br.RecoverTap(c.Tap, c.MAC, c.VLAN, false)
+					br.SetTapOwner(c.Tap, namespace, name)
 				}
 			}
 

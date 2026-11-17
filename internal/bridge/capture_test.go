@@ -80,15 +80,16 @@ func (s *fakeSource) isClosed() bool {
 
 func testBridge() *Bridge {
 	return &Bridge{
-		Name:      "test_bridge",
-		taps:      map[string]*Tap{"tap0": {Name: "tap0", Bridge: "test_bridge"}},
-		trunks:    map[string]bool{},
-		tunnels:   map[string]bool{},
-		mirrors:   map[string]bool{},
-		bonds:     map[string]map[string]int{},
-		captures:  map[int]*capture{},
-		captureID: new(int),
-		config:    map[string]string{},
+		Name:         "test_bridge",
+		taps:         map[string]*Tap{"tap0": {Name: "tap0", Bridge: "test_bridge"}},
+		trunks:       map[string]bool{},
+		tunnels:      map[string]bool{},
+		mirrors:      map[string]bool{},
+		bonds:        map[string]map[string]int{},
+		captures:     map[int]*capture{},
+		edgeCaptures: map[string]*edgeCapture{},
+		captureID:    new(int),
+		config:       map[string]string{},
 	}
 }
 
