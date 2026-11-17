@@ -21,6 +21,9 @@ import (
 type Bridges struct {
 	Default string // Default bridge name when one isn't specified
 
+	// NoSnoop disables learning tap IPs from ARP and NDP on new bridges
+	NoSnoop bool
+
 	tapChan  chan string
 	bondChan chan string
 
@@ -137,15 +140,17 @@ func (b Bridges) newBridge(name string) error {
 		}
 	}
 
-	if br.handle, err = pcap.OpenLive(br.Name, 1600, true, time.Second); err != nil {
-		goto cleanup
-	}
+	if !b.NoSnoop {
+		if br.handle, err = pcap.OpenLive(br.Name, 1600, true, time.Second); err != nil {
+			goto cleanup
+		}
 
-	if err = br.handle.SetBPFFilter(snoopBPF); err != nil {
-		goto cleanup
-	}
+		if err = br.handle.SetBPFFilter(snoopBPF); err != nil {
+			goto cleanup
+		}
 
-	go br.snooper()
+		go br.snooper()
+	}
 
 	// No errors... bridge ready for use
 	b.bridges[br.Name] = br

@@ -57,11 +57,25 @@ func TestHostTapRecoveryKeepsNamespace(t *testing.T) {
 // TestMirrorDeleteAllContinues checks that deleting all the mirrors of a
 // namespace tries each mirror after an error.
 func TestMirrorDeleteAllContinues(t *testing.T) {
-	ns := &Namespace{Mirrors: map[string]bool{"mm_test_gone1": true, "mm_test_gone2": true}}
+	fakeHostTaps(t)
+	ns := testTapNamespace()
+
+	// taps that are not mirrors, so that the delete of each one fails
+	var taps []string
+	for range 2 {
+		tap, err := tapCreate(ns, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ns.Mirrors[tap] = true
+		taps = append(taps, tap)
+	}
 
 	err := mirrorDelete(ns, Wildcard)
-	if err == nil || !strings.Contains(err.Error(), "mm_test_gone1") || !strings.Contains(err.Error(), "mm_test_gone2") {
-		t.Errorf("mirrorDelete(all) = %v, want an error for each mirror", err)
+	for _, tap := range taps {
+		if err == nil || !strings.Contains(err.Error(), tap) {
+			t.Errorf("mirrorDelete(all) = %v, want an error for %v", err, tap)
+		}
 	}
 }
 
