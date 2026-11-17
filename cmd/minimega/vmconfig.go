@@ -414,9 +414,9 @@ func validColocate(vmConfig VMConfig, s string) error {
 }
 
 // parseMapConfig parses a "vm config <field> <key> [value]" line written by a
-// map field's WriteConfig. Key and value are Go-quoted when written; unquoted
-// input from older versions is also accepted (value is the rest of the line,
-// possibly empty).
+// map field's WriteConfig. Key and value are Go-quoted when written. Lines from
+// older versions have an unquoted key; their value is the rest of the line
+// verbatim (possibly empty), even if it contains quotes.
 func parseMapConfig(line string) (key, value string) {
 	rest := line
 	for i := 0; i < 3; i++ { // skip "vm", "config", "<field>"
@@ -428,29 +428,21 @@ func parseMapConfig(line string) (key, value string) {
 		}
 	}
 
-	// unquote consumes a leading quoted string, if there is one
-	unquote := func() (string, bool) {
-		rest = strings.TrimSpace(rest)
-		if q, err := strconv.QuotedPrefix(rest); err == nil {
-			if s, err := strconv.Unquote(q); err == nil {
-				rest = strings.TrimSpace(rest[len(q):])
-				return s, true
+	rest = strings.TrimSpace(rest)
+	if q, err := strconv.QuotedPrefix(rest); err == nil {
+		if key, err = strconv.Unquote(q); err == nil {
+			rest = strings.TrimSpace(rest[len(q):])
+			if value, err = strconv.Unquote(rest); err != nil {
+				value = rest
 			}
+			return key, value
 		}
-		return "", false
 	}
 
-	var ok bool
-	if key, ok = unquote(); !ok {
-		j := strings.IndexFunc(rest, unicode.IsSpace)
-		if j < 0 {
-			j = len(rest)
-		}
-		key, rest = rest[:j], strings.TrimSpace(rest[j:])
+	// legacy: unquoted key, value is the rest of the line
+	j := strings.IndexFunc(rest, unicode.IsSpace)
+	if j < 0 {
+		j = len(rest)
 	}
-	if value, ok = unquote(); !ok {
-		value = rest
-	}
-
-	return key, value
+	return rest[:j], strings.TrimSpace(rest[j:])
 }

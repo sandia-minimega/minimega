@@ -37,11 +37,12 @@ func TestBaseConfigTagsRoundTrip(t *testing.T) {
 // Configs written by older versions used unquoted values.
 func TestBaseConfigTagsReadLegacy(t *testing.T) {
 	dst := &BaseConfig{Tags: map[string]string{}}
-	in := "vm config tags a b\nvm config tags c\n"
+	in := "vm config tags a b\nvm config tags c\nvm config tags note \"yes\"\nvm config tags n \"a\" b\n"
 	if err := dst.ReadConfig(strings.NewReader(in), "test-tags-legacy", nil); err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]string{"a": "b", "c": ""}
+	// legacy values are kept verbatim, quotes included
+	want := map[string]string{"a": "b", "c": "", "note": `"yes"`, "n": `"a" b`}
 	if !reflect.DeepEqual(dst.Tags, want) {
 		t.Errorf("got %q, want %q", dst.Tags, want)
 	}
