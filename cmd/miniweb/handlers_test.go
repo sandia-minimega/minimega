@@ -145,3 +145,18 @@ func TestConsoleReapedWhenWebsocketNeverConnects(t *testing.T) {
 	}
 	t.Fatalf("console %v still registered or process alive after timeout", pid)
 }
+
+// A request for a console that is gone (e.g. reaped) must not leave ptyMu
+// locked, or every later console request and reaper blocks.
+func TestConsoleMissingPtyReleasesLock(t *testing.T) {
+	w := httptest.NewRecorder()
+	consoleHandler(w, httptest.NewRequest(http.MethodGet, "/console/999999/size?rows=24&cols=80", nil))
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status = %d, want 404", w.Code)
+	}
+
+	if !ptyMu.TryLock() {
+		t.Fatal("ptyMu still locked after missing-pty 404")
+	}
+	ptyMu.Unlock()
+}

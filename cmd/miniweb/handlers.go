@@ -589,11 +589,11 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 
 	ptyMu.Lock()
 	tty, ok := ptys[pid]
+	ptyMu.Unlock()
 	if !ok {
 		http.Error(w, "pty not found", http.StatusNotFound)
 		return
 	}
-	ptyMu.Unlock()
 
 	switch path[3] {
 	case "size":
