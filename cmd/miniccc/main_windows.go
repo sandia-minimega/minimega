@@ -125,29 +125,24 @@ func main() {
 	<-sig
 }
 
-var done chan struct{}
-
-// called by mux if loss of server is detected
+// resetClient connects to the server and returns after it sends the
+// handshake.
 func resetClient() {
-	// On Windows, trying to redial the virtual serial ports always results in an
-	// `Access denied` error from Windows. Instead, just exit and let Windows
-	// restart the failed service. If running interactively, then the user will
-	// have to restart manually.
-	if done != nil {
-		close(done)
-		log.Fatal("reset called after initialization - aborting")
-	}
-
 	if err := dial(); err != nil {
 		log.Fatal("unable to connect: %v", err)
 	}
 
 	refreshUpdateInfo()
 
-	done = make(chan struct{})
+	wait := serve()
 
-	go mux(done)
-	heartbeat() // handshake is first heartbeat
+	// On Windows, trying to redial the virtual serial ports always results in an
+	// `Access denied` error from Windows. Instead, just exit and let Windows
+	// restart the failed service. If running interactively, then the user will
+	// have to restart manually.
+	go func() {
+		log.Fatal("cc connection lost: %v; aborting", wait())
+	}()
 }
 
 const (

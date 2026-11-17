@@ -40,17 +40,29 @@ func readLinuxUUID(readFile func(string) ([]byte, error)) (string, error) {
 	return "", fmt.Errorf("no usable VM UUID source (%s)", strings.Join(errors, "; "))
 }
 
+// hostBoundChannel reports whether the host binds the connection to one VM
+// and sets the UUID of that VM in the handshake.
+func hostBoundChannel() bool {
+	return *f_serial != "" || *f_family == "vsock"
+}
+
+// getUUID returns the UUID that miniccc claims when -uuid is not set.
 func getUUID() string {
-	uuid, err := readLinuxUUID(ioutil.ReadFile)
-	if err != nil {
-		if *f_serial == "" {
-			log.Fatal("unable to get UUID: %v", err)
-		}
-		// Serial MiniCCC connections are already bound to a specific VM by the
-		// host. Leave the UUID empty so that the server can return that trusted
-		// identity during the handshake.
-		log.Warn("unable to get UUID locally; requesting serial-bound identity: %v", err)
+	return guestUUID(ioutil.ReadFile)
+}
+
+// guestUUID returns the DMI UUID of the guest, or an empty UUID on a
+// host-bound channel. A UUID in guest memory stays the same when a snapshot
+// is restored into another VM, but the host sets the UUID of the restored VM.
+func guestUUID(readFile func(string) ([]byte, error)) string {
+	if hostBoundChannel() {
+		log.Debug("requesting host-bound identity")
 		return ""
+	}
+
+	uuid, err := readLinuxUUID(readFile)
+	if err != nil {
+		log.Fatal("unable to get UUID: %v", err)
 	}
 
 	log.Debug("got UUID: %v", uuid)
