@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -49,5 +50,17 @@ func TestReadConfigBadLoglevel(t *testing.T) {
 	c, err := readConfig(writeConf(t, "loglevel verbos\nnode n1 pdu1 3\n"))
 	if err == nil && len(c.nodes) == 0 {
 		t.Error("bad loglevel silently dropped the rest of the config with nil error")
+	}
+}
+
+// A malformed node line must not echo its IPMI password into the error,
+// which main passes to log.Fatal (stderr/syslog).
+func TestReadConfigErrorHidesPassword(t *testing.T) {
+	_, err := readConfig(writeConf(t, "node n1 pdu1 3 10.0.0.5 admin s3cret extra\n"))
+	if err == nil {
+		t.Fatal("expected a config error for an 8-field node line")
+	}
+	if strings.Contains(err.Error(), "s3cret") {
+		t.Errorf("error leaks the password: %v", err)
 	}
 }
