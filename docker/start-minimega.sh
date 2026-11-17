@@ -84,10 +84,77 @@ shutdown() {
   cleanup_stale_minimega_state
 }
 
+# Let minimega create cgroups for containers on a cgroup v2 host, below the
+# cgroup of this Docker container, so that they stop with it. That cgroup is the
+# root of the container's cgroup namespace, or a cgroup below the root of the
+# host with --cgroupns host. cgroup v2 only gives the CPU and memory controllers
+# to the children of a cgroup that holds no processes. Move every process to a
+# child cgroup, enable the controllers, and point minimega at the cgroup.
+# `docker exec` then puts its processes in that child cgroup too.
+setup_cgroup2() {
+  # Nothing to do on cgroup v1.
+  if [[ ! -f "${MM_CGROUP}/cgroup.controllers" ]]; then
+    return 0
+  fi
+
+  local cgroup pid path root
+
+  MM_CGROUP="${MM_CGROUP%/}"
+  # the path of this process in the cgroup v2 hierarchy, "/" in a cgroup namespace
+  path="$(sed -n 's/^0:://p' /proc/self/cgroup)"
+  # the cgroup at MM_CGROUP, "/" unless the mount is of a cgroup below the root
+  root="$(awk -v m="${MM_CGROUP}" '$5 == m { r = $4 } END { print r }' /proc/self/mountinfo)"
+  if [[ -n "${root}" && "${root}" != "/" ]]; then
+    case "${path}" in
+    "${root}") path="/" ;;
+    "${root}"/*) path="${path#"${root}"}" ;;
+    *)
+      echo "this process is in cgroup ${path}, which is not below ${MM_CGROUP} (${root})" >&2
+      return 1
+      ;;
+    esac
+  fi
+  cgroup="${MM_CGROUP}${path}"
+  cgroup="${cgroup%/}"
+  if [[ ! -d "${cgroup}" ]]; then
+    echo "cgroup ${cgroup} of this process does not exist" >&2
+    return 1
+  fi
+  # Nothing to do in the root cgroup of the host, which has no cgroup.type.
+  if [[ ! -f "${cgroup}/cgroup.type" ]]; then
+    return 0
+  fi
+
+  # Set it first: if the setup fails, minimega must not use the host root.
+  MM_CGROUP="${cgroup}"
+
+  mkdir -p "${cgroup}/init" || return 1
+  # A process that starts here during the move, such as a `docker exec`, makes
+  # the kernel refuse the controllers, so try a few times.
+  for _ in 1 2 3; do
+    # Read the whole list first, because it changes as the processes move.
+    for pid in $(<"${cgroup}/cgroup.procs"); do
+      # A process may exit before it is moved.
+      echo "${pid}" > "${cgroup}/init/cgroup.procs" 2>/dev/null || true
+    done
+
+    if echo "+cpu +memory" 2>/dev/null > "${cgroup}/cgroup.subtree_control"; then
+      return 0
+    fi
+  done
+
+  # once more, to report the error
+  echo "+cpu +memory" > "${cgroup}/cgroup.subtree_control"
+}
+
 trap shutdown EXIT
 trap 'exit 143' TERM INT
 
 cleanup_stale_minimega_state
+
+if ! setup_cgroup2; then
+  echo "unable to set up cgroup v2 in ${MM_CGROUP}, minimega will not launch containers" | tee -a ${MM_LOGFILE}
+fi
 
 # Start Open vSwitch
 /usr/share/openvswitch/scripts/ovs-ctl start ${OVS_APPEND} |& tee -a ${MM_LOGFILE}

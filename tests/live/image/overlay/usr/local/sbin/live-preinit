@@ -1,0 +1,6 @@
+#!/bin/sh
+# "vm config preinit" for the container router of the minimega live tests.
+# minimega runs it on the host, as root, in the network namespace of the
+# container, before /proc/sys becomes read-only for the container.
+echo 1 > /proc/sys/net/ipv4/ip_forward
+echo 1 > /proc/sys/net/ipv6/conf/all/forwarding

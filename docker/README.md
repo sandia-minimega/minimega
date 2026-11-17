@@ -219,6 +219,21 @@ Additional values can be appended to the minimega command by using the
 MM_APPEND="-hashfiles -headnode=foo1"
 ```
 
+## Linux containers
+
+minimega can launch `container` type VMs in the Docker container, on a host
+with cgroup v1 or cgroup v2. On a cgroup v2 host, `start-minimega.sh` moves the
+processes of the Docker container to a child cgroup (`init`) and enables the
+`cpu` and `memory` controllers, because cgroup v2 only gives controllers to the
+children of a cgroup that holds no processes. It then sets `MM_CGROUP` to the
+cgroup of the Docker container, also with `--cgroupns host`, so the cgroups of
+the containers are below it and stop with the Docker container. This needs the
+writable cgroup filesystem that `--privileged` provides, and the `cpu` and
+`memory` controllers in `cgroup.controllers` of the cgroup of the Docker
+container. Without them, `start-minimega.sh` logs an error and minimega does
+not launch containers. To add them, enable them in the `cgroup.subtree_control`
+file of each cgroup above the cgroup of the Docker container.
+
 ## Open vSwitch configuration
 
 The docker container `start-minimega.sh` script takes care of starting

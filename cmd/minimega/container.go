@@ -309,19 +309,32 @@ var (
 	containerInitLock    sync.Mutex
 	containerInitOnce    bool
 	containerInitSuccess bool
+	containerInitErr     error
 )
 
-func containerInit() error {
+func containerInit() (err error) {
 	containerInitLock.Lock()
 	defer containerInitLock.Unlock()
 
 	if containerInitOnce {
-		return nil
+		return containerInitErr
 	}
 	containerInitOnce = true
 
+	// later launches report why the first one failed
+	defer func() { containerInitErr = err }()
+
 	// create minimega freezer and memory cgroups
 	log.Debug("cgroup init: %v", *f_cgroup)
+
+	if cgroupUnified() {
+		if err := cgroupInitUnified(); err != nil {
+			return err
+		}
+
+		containerInitSuccess = true
+		return nil
+	}
 
 	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega")
 	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega")
@@ -352,13 +365,7 @@ func containerInit() error {
 }
 
 func containerTeardown() {
-	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega")
-	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega")
-	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega")
-	cgroupCPU := filepath.Join(*f_cgroup, "cpu", "minimega")
-	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
-
-	for _, cgroup := range cgroups {
+	for _, cgroup := range cgroupDirs() {
 		if err := os.Remove(cgroup); err != nil {
 			if containerInitSuccess {
 				log.Errorln(err)
@@ -576,14 +583,17 @@ func containerShim() {
 	}
 
 	// in order to synchronize freezing the container before we call init,
-	// we close fd(4) to signal the parent that we're ready to freeze. We
-	// then read fd(5) in order to block for the parent. The parent will
-	// freeze the child and close the other end of fd(5). Upon unfreezing,
-	// the read will fail and we can move on to exec.
+	// we write a byte to fd(4) and close it to signal the parent that we're
+	// ready to freeze. We then read fd(5) in order to block for the parent.
+	// The parent will freeze the child and close the other end of fd(5).
+	// Upon unfreezing, the read will fail and we can move on to exec.
 
 	sync1 := os.NewFile(uintptr(4), "")
 	sync2 := os.NewFile(uintptr(5), "")
 	log.Debug("vm %v waiting for parent to freeze", vmID)
+	if _, err := sync1.Write([]byte{1}); err != nil {
+		log.Fatal("sync: %v", err)
+	}
 	sync1.Close()
 	var buf = make([]byte, 1)
 	sync2.Read(buf)
@@ -842,11 +852,6 @@ func (vm *ContainerConfig) String() string {
 func (vm *ContainerVM) launch() error {
 	log.Info("launching vm: %v", vm.ID)
 
-	err := containerInit()
-	if err != nil || !containerInitSuccess {
-		return vm.setErrorf("cgroups are not initialized, cannot continue: %v", err)
-	}
-
 	// If this is the first time launching the VM, do the final configuration
 	// check, create a directory for it, and setup the FS.
 	if vm.State == VM_BUILDING {
@@ -865,6 +870,12 @@ func (vm *ContainerVM) launch() error {
 		if err := vm.createInstancePathAlias(); err != nil {
 			return vm.setErrorf("createInstancePathAlias: %v", err)
 		}
+	}
+
+	// after the VM has its directory and alias, so that vm flush can remove it
+	err := containerInit()
+	if err != nil || !containerInitSuccess {
+		return vm.setErrorf("cgroups are not initialized, cannot continue: %v", err)
 	}
 
 	mustWrite(vm.path("name"), vm.Name)
@@ -923,6 +934,8 @@ func (vm *ContainerVM) launch() error {
 		os.Args[0],
 		"-base",
 		*f_base,
+		"-cgroup",
+		cgroupBase(),
 		CONTAINER_MAGIC,
 		vm.instancePath,
 		fmt.Sprintf("%v", vm.ID),
@@ -966,7 +979,7 @@ func (vm *ContainerVM) launch() error {
 	pseudotty, err := pty.Start(cmd)
 	if err != nil {
 		vm.overlayUnmount()
-		return vm.setErrorf("start container: %v", err)
+		return vm.setErrorf("start container: %w", err)
 	}
 
 	vm.Pid = cmd.Process.Pid
@@ -976,7 +989,8 @@ func (vm *ContainerVM) launch() error {
 	childLog.Close()
 	log.LogAll(parentLog, log.DEBUG, "containerShim")
 
-	go vm.console(pseudotty)
+	// not in a goroutine: a failed launch closes the listeners that this makes
+	vm.console(pseudotty)
 
 	// network creation for containers happens /after/ the container is
 	// started, as we need the PID in order to attach a veth to the container
@@ -990,10 +1004,9 @@ func (vm *ContainerVM) launch() error {
 	childSync1.Close()
 	if err == nil {
 		// wait for the freezer notification
-		var buf = make([]byte, 1)
-		parentSync1.Read(buf)
-
-		err = vm.freeze()
+		if err = containerShimReady(parentSync1); err == nil {
+			err = vm.freeze()
+		}
 
 		parentSync2.Close()
 	} else {
@@ -1002,10 +1015,18 @@ func (vm *ContainerVM) launch() error {
 	}
 
 	if err != nil {
-		// Some error occurred.. clean up the process
+		// Some error occurred.. clean up the process. The shim is not frozen,
+		// so it exits. A cgroup with processes stays: it belongs to another minimega.
 		cmd.Process.Kill()
+		cmd.Wait()
 
-		vm.unlinkNetns()
+		vm.launchCleanup()
+
+		for _, cgroup := range cgroupDirs(strconv.Itoa(vm.ID)) {
+			if err := cgroupRemove(cgroup); err != nil && !os.IsNotExist(err) {
+				log.Debug("keep cgroup %v: %v", cgroup, err)
+			}
+		}
 
 		return vm.setErrorf("%v", err)
 	}
@@ -1024,10 +1045,7 @@ func (vm *ContainerVM) launch() error {
 		defer vm.cond.Signal()
 
 		cgroupFreezer := vm.cgroup("freezer")
-		cgroupMemory := vm.cgroup("memory")
-		cgroupDevices := vm.cgroup("devices")
-		cgroupCPU := vm.cgroup("cpu")
-		cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
+		cgroups := cgroupDirs(strconv.Itoa(vm.ID))
 
 		select {
 		case err := <-errChan:
@@ -1057,7 +1075,7 @@ func (vm *ContainerVM) launch() error {
 			// wait for the taskset to actually exit (from uninterruptible
 			// sleep state).
 			for {
-				t, err := ioutil.ReadFile(filepath.Join(cgroupFreezer, "tasks"))
+				t, err := ioutil.ReadFile(filepath.Join(cgroupFreezer, "cgroup.procs"))
 				if err != nil {
 					vm.setErrorf("unable to read tasks: %v", err)
 					break
@@ -1077,27 +1095,11 @@ func (vm *ContainerVM) launch() error {
 			}
 		}
 
-		if vm.ptyUnixListener != nil {
-			vm.ptyUnixListener.Close()
-		}
-		if vm.ptyTCPListener != nil {
-			vm.ptyTCPListener.Close()
-		}
-
-		vm.unlinkNetns()
-
-		for _, net := range vm.Networks {
-			br, err := getBridge(net.Bridge)
-			if err != nil {
-				log.Error("get bridge: %v", err)
-			} else {
-				br.DestroyTap(net.Tap)
-			}
-		}
+		vm.launchCleanup()
 
 		// clean up the cgroup directory
 		for _, cgroup := range cgroups {
-			if err := os.Remove(cgroup); err != nil {
+			if err := cgroupRemoveAll(cgroup); err != nil {
 				log.Errorln(err)
 			}
 		}
@@ -1107,6 +1109,39 @@ func (vm *ContainerVM) launch() error {
 			vm.setState(VM_QUIT)
 		}
 	}()
+
+	return nil
+}
+
+// launchCleanup closes the console listeners and removes the network namespace
+// link and the taps of a launch, after the container exits or fails to start.
+func (vm *ContainerVM) launchCleanup() {
+	if vm.ptyUnixListener != nil {
+		vm.ptyUnixListener.Close()
+	}
+	if vm.ptyTCPListener != nil {
+		vm.ptyTCPListener.Close()
+	}
+
+	vm.unlinkNetns()
+
+	for _, net := range vm.Networks {
+		br, err := getBridge(net.Bridge)
+		if err != nil {
+			log.Error("get bridge: %v", err)
+		} else {
+			br.DestroyTap(net.Tap)
+		}
+	}
+}
+
+// containerShimReady waits for the container shim to finish its setup. The shim
+// writes a byte when it is ready. It exits without one when its setup fails,
+// for example when another process holds the cgroup of the VM.
+func containerShimReady(r io.Reader) error {
+	if _, err := io.ReadFull(r, make([]byte, 1)); err != nil {
+		return fmt.Errorf("container shim exited during setup, the debug log has the reason: %v", err)
+	}
 
 	return nil
 }
@@ -1374,8 +1409,7 @@ func (vm *ContainerVM) console(pseudotty *os.File) {
 }
 
 func (vm *ContainerVM) freeze() error {
-	freezer := filepath.Join(vm.cgroup("freezer"), "freezer.state")
-	if err := ioutil.WriteFile(freezer, []byte("FROZEN"), 0644); err != nil {
+	if err := cgroupFreeze(strconv.Itoa(vm.ID), true); err != nil {
 		return fmt.Errorf("freezer: %v", err)
 	}
 
@@ -1383,8 +1417,7 @@ func (vm *ContainerVM) freeze() error {
 }
 
 func (vm *ContainerVM) thaw() error {
-	freezer := filepath.Join(vm.cgroup("freezer"), "freezer.state")
-	if err := ioutil.WriteFile(freezer, []byte("THAWED"), 0644); err != nil {
+	if err := cgroupFreeze(strconv.Itoa(vm.ID), false); err != nil {
 		return fmt.Errorf("freezer: %v", err)
 	}
 
@@ -1392,7 +1425,7 @@ func (vm *ContainerVM) thaw() error {
 }
 
 func (vm *ContainerVM) cgroup(s string) string {
-	return filepath.Join(*f_cgroup, s, "minimega", strconv.Itoa(vm.ID))
+	return cgroupDir(s, strconv.Itoa(vm.ID))
 }
 
 func (vm *ContainerVM) ProcStats() (map[int]*ProcStats, error) {
@@ -1519,6 +1552,10 @@ func containerChroot(fsPath string) error {
 }
 
 func containerPopulateCgroups(vmID, vcpus, memory int) error {
+	if cgroupUnified() {
+		return cgroupPopulateUnified(vmID, vcpus, memory)
+	}
+
 	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega", strconv.Itoa(vmID))
 	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega", strconv.Itoa(vmID))
 	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega", strconv.Itoa(vmID))
@@ -1736,14 +1773,7 @@ func containerMountVolumes(fsPath string, volumes []string) error {
 // aggressively cleanup container cruff, called by the nuke api
 func containerNuke() {
 	// walk minimega cgroups for tasks, killing each one
-	cgroupFreezer := filepath.Join(*f_cgroup, "freezer", "minimega")
-	cgroupMemory := filepath.Join(*f_cgroup, "memory", "minimega")
-	cgroupDevices := filepath.Join(*f_cgroup, "devices", "minimega")
-	cgroupCPU := filepath.Join(*f_cgroup, "cpu", "minimega")
-
-	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
-
-	for _, cgroup := range cgroups {
+	for _, cgroup := range cgroupDirs() {
 		if _, err := os.Stat(cgroup); err == nil {
 			err := filepath.Walk(cgroup, containerNukeWalker)
 			if err != nil {
@@ -1799,7 +1829,7 @@ func containerNukeWalker(path string, info os.FileInfo, err error) error {
 	log.Debug("walking file: %v", path)
 
 	switch info.Name() {
-	case "tasks":
+	case "cgroup.procs":
 		d, err := ioutil.ReadFile(path)
 		if err != nil {
 			return nil
@@ -1813,8 +1843,7 @@ func containerNukeWalker(path string, info os.FileInfo, err error) error {
 			pathFields := strings.Split(path, string(os.PathSeparator))
 			vmID := pathFields[len(pathFields)-2]
 
-			freezer := filepath.Join(*f_cgroup, "freezer", "minimega", vmID, "freezer.state")
-			if err := ioutil.WriteFile(freezer, []byte("THAWED"), 0644); err != nil {
+			if err := cgroupFreeze(vmID, false); err != nil {
 				log.Debugln(err)
 			}
 
@@ -1834,45 +1863,8 @@ func containerNukeWalker(path string, info os.FileInfo, err error) error {
 
 // remove state across cgroup mounts
 func containerCleanCgroupDirs() {
-	paths := []string{
-		filepath.Join(*f_cgroup, "freezer", "minimega"),
-		filepath.Join(*f_cgroup, "memory", "minimega"),
-		filepath.Join(*f_cgroup, "devices", "minimega"),
-		filepath.Join(*f_cgroup, "cpu", "minimega"),
-	}
-	for _, d := range paths {
-		_, err := os.Stat(d)
-		if err != nil {
-			continue
-		}
-
-		err = filepath.Walk(d, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return nil
-			}
-
-			if path == d {
-				return nil
-			}
-
-			log.Debug("walking file: %v", path)
-
-			if info.IsDir() {
-				err = os.Remove(path)
-				if err != nil {
-					log.Errorln(err)
-					return err
-				}
-			}
-
-			return nil
-		})
-		if err != nil {
-			continue
-		}
-
-		err = os.Remove(d)
-		if err != nil {
+	for _, d := range cgroupDirs() {
+		if err := cgroupRemoveAll(d); err != nil && !os.IsNotExist(err) {
 			log.Errorln(err)
 		}
 	}

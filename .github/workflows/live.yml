@@ -4,6 +4,11 @@ name: Live Tests
 # boot a 22-VM KVM topology (tests/live/core/topology.mm), and exercise it over the
 # command socket. See tests/live/README.md.
 #
+# One job runs per test group: core, and containers
+# (tests/live/containers/topology.mm), which runs containers next to a KVM VM.
+# The containers job also checks with tests/live/stop.sh that the containers
+# stop with minimega in Docker; the DEB Build workflow checks it for systemd.
+#
 # Called by the Docker workflow: on master with the image it just pushed, on
 # pull requests with no image, so this job builds the checked-out code from
 # docker/Dockerfile and tests it in the same job. Run by hand (Actions > Live
@@ -33,10 +38,16 @@ permissions:
 
 jobs:
   live:
-    name: Live tests (KVM)
+    name: Live tests (${{ matrix.group }})
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        # one job per test group, a directory under tests/live
+        group: [core, containers]
     env:
+      LIVE_GROUP: ${{ matrix.group }}
       IMAGE: ${{ inputs.image || 'minimega:live' }}
       BUILD: ${{ inputs.image == '' }}
     steps:
@@ -95,14 +106,21 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build test binary
-        run: go test -c -tags live -o "${{ runner.temp }}/live.test" ./tests/live/core
+        run: go test -c -tags live -o "${{ runner.temp }}/live.test" "./tests/live/${LIVE_GROUP}"
 
       - name: Run live tests
         run: |
-          sudo --preserve-env=GITHUB_STEP_SUMMARY,LIVE_PULL \
+          sudo --preserve-env=GITHUB_STEP_SUMMARY,LIVE_PULL,LIVE_GROUP \
             LIVE_TEST_BIN="${{ runner.temp }}/live.test" \
             LIVE_ARTIFACTS="${{ github.workspace }}/live-artifacts" \
             tests/live/run.sh "$IMAGE"
+
+      - name: Check that containers stop with minimega
+        if: matrix.group == 'containers'
+        run: |
+          for mode in docker docker-host-cgroupns; do
+            sudo LIVE_ARTIFACTS="${{ github.workspace }}/live-artifacts" tests/live/stop.sh "$mode" "$IMAGE"
+          done
 
       - name: Fix artifact permissions
         if: always()
@@ -112,7 +130,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: live-test-artifacts
+          name: live-test-artifacts-${{ matrix.group }}
           path: live-artifacts
           retention-days: 14
           if-no-files-found: warn
