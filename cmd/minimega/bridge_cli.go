@@ -183,6 +183,10 @@ func cliTap(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 }
 
 func cliTapCreate(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	// Use the VLAN until the bridge stores the tap, see vlanUseLock
+	done := vlanUseLock.Use()
+	defer done()
+
 	b := c.StringArgs["bridge"]
 
 	vlan, err := lookupVLAN(ns.Name, c.StringArgs["vlan"])
@@ -194,6 +198,9 @@ func cliTapCreate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	if err != nil {
 		return err
 	}
+
+	// The bridge lists the tap in HostTaps now, so do not wait for dhclient
+	done()
 
 	if c.BoolArgs["dhcp"] {
 		log.Debug("obtaining dhcp on tap %v", tap)
