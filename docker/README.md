@@ -78,6 +78,68 @@ docker compose up -d
 docker compose logs -f  # CTRL+C to stop following logs
 ```
 
+# Firecracker VMs
+
+The image includes Firecracker and the jailer v1.17.0, and the tools that
+Firecracker VMs need at run time (`acl`, `dmsetup`, `iproute2`, and
+`qemu-utils`). The build needs network access to `github.com` to get
+Firecracker. It checks the SHA-256 of the release tarball against the
+`FIRECRACKER_SHA256` build argument, or against the `.sha256.txt` file of the
+release when `FIRECRACKER_SHA256` is empty.
+
+To install a different version, set `FIRECRACKER_VERSION`, and set
+`FIRECRACKER_SHA256` to its SHA-256 or to an empty value. To build the image
+without Firecracker, set `FIRECRACKER_VERSION` to an empty value:
+
+```bash
+docker build --build-arg FIRECRACKER_VERSION= -t minimega -f docker/Dockerfile .
+```
+
+## Start the container for many Firecracker VMs
+
+```bash
+docker run -d \
+  --name minimega \
+  --hostname minimega \
+  --privileged \
+  --cap-add ALL \
+  --network host \
+  --ulimit nofile=1048576:1048576 \
+  -v /dev:/dev \
+  -v /lib/modules:/lib/modules:ro \
+  -v /var/log/minimega:/var/log/minimega \
+  -v /tmp/minimega:/tmp/minimega \
+  -v /var/lib/minimega:/var/lib/minimega \
+  -e MM_FILEPATH=/var/lib/minimega/files \
+  --health-cmd "mm version" \
+  minimega
+```
+
+- Use one bind mount for the images (`MM_FILEPATH`) and for the Firecracker
+  directory (`MM_FIRECRACKER_DIR`, default `/var/lib/minimega/firecracker`).
+  minimega puts hard links to the disk images into each jail. A hard link
+  cannot go across two mounts. The bind mount also keeps the VM disk writes
+  out of the overlay2 storage driver.
+- Set the open file limit. minimega uses several file descriptors for each
+  Firecracker VM, so 10,000 VMs need more than 50,000. Docker Engine 29 sets
+  a limit of 1024 in containers. `start-minimega.sh` sets the soft limit to
+  the hard limit and shows a warning when the result is less than 100000.
+- Do not use `--pids-limit`. Each VM adds processes and threads.
+- Do not use a `--memory` value that is less than the total memory of all the
+  VMs.
+
+The `docker-compose.yml` file sets the open file limit and the bind mount for
+`/var/lib/minimega/firecracker`. It does not use host networking.
+
+## cgroup v2
+
+On cgroup v2, a cgroup that holds processes cannot enable controllers for its
+child cgroups. Before minimega starts, `start-minimega.sh` moves all the
+container processes into the child cgroup `/sys/fs/cgroup/init`. Then it
+enables the `cpu`, `memory`, and `pids` controllers in
+`/sys/fs/cgroup/cgroup.subtree_control`. The parent cgroup of the jails can
+then use these controllers. The script does not change the host root cgroup.
+
 ## OOM killer
 
 `start-minimega.sh` sets `oom_score_adj` to -1000 for the Open vSwitch
@@ -86,6 +148,53 @@ daemons. Set `MM_OOM_SCORE_ADJ=-1000` to also protect minimega.
 > [!CAUTION]
 > The VMs that minimega starts get the `oom_score_adj` value of minimega. With
 > -1000, the OOM killer cannot stop the VMs either.
+
+## Docker daemon
+
+1. Add `"live-restore": true` to `/etc/docker/daemon.json`. The containers
+   then continue to run when the Docker daemon restarts.
+
+   ```json
+   {
+     "live-restore": true
+   }
+   ```
+
+2. Reload the Docker daemon: `sudo systemctl reload docker`.
+3. Stop automatic upgrades of the Docker packages. An upgrade can restart the
+   Docker daemon and containerd at a time that you do not control. Upgrade
+   the packages manually instead.
+
+   ```bash
+   sudo apt-mark hold docker-ce docker-ce-cli containerd.io  # Docker packages
+   sudo apt-mark hold docker.io containerd                   # Ubuntu packages
+   ```
+
+## Host settings
+
+minimega shows a `firecracker host tuning` warning at startup for each of these
+settings that is not correct.
+
+- Mount cgroup v2 with `favordynmods`. Without it, each cgroup change of the
+  jailer is slow when many VMs run. Do this again after each boot:
+  `sudo mount -o remount,favordynmods /sys/fs/cgroup`
+- Set transparent hugepages to `madvise`:
+  `echo madvise | sudo tee /sys/kernel/mm/transparent_hugepage/enabled`
+- Stop KSM: `echo 0 | sudo tee /sys/kernel/mm/ksm/run`
+- Stop systemd-udevd from setting a MAC address on each new minimega
+  interface. Write this to `/etc/systemd/network/10-minimega.link`, then run
+  `sudo udevadm control --reload`:
+
+  ```ini
+  [Match]
+  OriginalName=mega_tap*
+
+  [Link]
+  MACAddressPolicy=none
+  ```
+
+- When Open vSwitch runs on the host, set `OOMScoreAdjust=-1000` in a
+  systemd drop-in file for `ovs-vswitchd.service` and `ovsdb-server.service`.
 
 # Extras
 
@@ -193,6 +302,10 @@ MM_FORCE=true
 MM_RECOVER=false
 MM_CGROUP=/sys/fs/cgroup
 MM_ABSSNAPSHOT=false
+MM_FIRECRACKER_DIR=/var/lib/minimega/firecracker
+MM_FIRECRACKER_UID_BASE=2000000000
+MM_FIRECRACKER_LAUNCH_PARALLEL=0
+MM_FIRECRACKER_START_PARALLEL=0
 MM_OOM_SCORE_ADJ=
 ```
 

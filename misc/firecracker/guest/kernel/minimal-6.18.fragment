@@ -1,0 +1,50 @@
+# Kconfig fragment for the minimal Firecracker guest kernel.
+#
+# build-kernel.sh merges it onto Firecracker's
+# resources/guest_configs/microvm-kernel-ci-x86_64-6.18.config with
+# scripts/kconfig/merge_config.sh and then runs "make olddefconfig".
+
+# Features that the guest does not use.
+# CONFIG_MODULES is not set
+# CONFIG_IPV6 is not set
+# CONFIG_NETFILTER is not set
+# CONFIG_BPF_SYSCALL is not set
+# CONFIG_AUDIT is not set
+CONFIG_DEBUG_INFO_NONE=y
+# CONFIG_DEBUG_INFO_DWARF_TOOLCHAIN_DEFAULT is not set
+# CONFIG_DEBUG_INFO_DWARF4 is not set
+# CONFIG_DEBUG_INFO_DWARF5 is not set
+# CONFIG_MEMORY_HOTPLUG is not set
+
+# Devices.
+CONFIG_VIRTIO_MMIO=y
+CONFIG_VIRTIO_NET=y
+CONFIG_VIRTIO_BLK=y
+CONFIG_VSOCKETS=y
+CONFIG_VIRTIO_VSOCKETS=y
+CONFIG_VIRTIO_BALLOON=y
+CONFIG_VMGENID=y
+CONFIG_HW_RANDOM=y
+CONFIG_HW_RANDOM_VIRTIO=y
+CONFIG_SERIAL_8250=y
+CONFIG_SERIAL_8250_CONSOLE=y
+
+# vm shutdown sends Ctrl-Alt-Del through the i8042 keyboard controller.
+CONFIG_INPUT_KEYBOARD=y
+CONFIG_SERIO=y
+CONFIG_SERIO_I8042=y
+CONFIG_KEYBOARD_ATKBD=y
+
+# File systems.
+CONFIG_SQUASHFS=y
+CONFIG_SQUASHFS_XZ=y
+CONFIG_SQUASHFS_ZSTD=y
+CONFIG_EXT4_FS=y
+CONFIG_OVERLAY_FS=y
+CONFIG_TMPFS=y
+CONFIG_DEVTMPFS=y
+CONFIG_DEVTMPFS_MOUNT=y
+
+# Network configuration from the kernel ip= parameter.
+CONFIG_INET=y
+CONFIG_IP_PNP=y

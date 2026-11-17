@@ -1,0 +1,28 @@
+#!/bin/sh
+# udhcpc event script for the minimal Firecracker guest. udhcpc sets
+# interface, ip, mask, router, and dns in the environment.
+# shellcheck disable=SC2154
+
+case "$1" in
+deconfig)
+    ip -4 addr flush dev "$interface"
+    ip link set "$interface" up
+    ;;
+bound | renew)
+    ip -4 addr flush dev "$interface"
+    ip addr add "$ip/${mask:-24}" dev "$interface"
+    if [ -n "$router" ]; then
+        ip route del default 2>/dev/null
+        set -- $router
+        ip route add default via "$1" dev "$interface"
+    fi
+    if [ -n "$dns" ]; then
+        : > /run/resolv.conf
+        for d in $dns; do
+            echo "nameserver $d" >> /run/resolv.conf
+        done
+    fi
+    ;;
+esac
+
+exit 0
