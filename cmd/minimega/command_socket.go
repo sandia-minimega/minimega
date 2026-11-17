@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 	"github.com/sandia-minimega/minimega/v2/pkg/miniclient"
@@ -51,9 +50,13 @@ func commandSocketRemove() {
 func commandSocketHandle(c net.Conn) {
 	defer c.Close()
 
-	// enc is shared with the status goroutine, so serialize writes.
-	var inflight atomic.Bool
-	enc := json.NewEncoder(&lockedWriter{w: c})
+	// mu guards enc and inflight. The status goroutine checks inflight and
+	// encodes under one hold, and the handler clears inflight and sends the
+	// final response under one hold, so a status can never land after the
+	// final response.
+	var mu sync.Mutex
+	var inflight bool
+	enc := json.NewEncoder(c)
 	dec := json.NewDecoder(c)
 	done := make(chan struct{})
 
@@ -70,9 +73,11 @@ func commandSocketHandle(c net.Conn) {
 			case <-done:
 				return
 			case s := <-status:
-				if inflight.Load() {
+				mu.Lock()
+				if inflight {
 					sendLocalStatus(enc, s)
 				}
+				mu.Unlock()
 			}
 		}
 	}()
@@ -170,7 +175,9 @@ func commandSocketHandle(c net.Conn) {
 			cmd.SetRecord(false)
 		}
 
-		inflight.Store(true)
+		mu.Lock()
+		inflight = true
+		mu.Unlock()
 
 		// HAX: Work around so that we can add the more boolean.
 		var prev minicli.Responses
@@ -179,7 +186,9 @@ func commandSocketHandle(c net.Conn) {
 		// channel to ensure that we release any locks acquired by cmd.
 		for resp := range runCommands(cmd) {
 			if prev != nil && err == nil {
+				mu.Lock()
 				err = sendLocalResp(enc, prev, true, r.TTY)
+				mu.Unlock()
 			} else if err != nil && len(resp) > 0 {
 				log.Info("dropping resp from %v", resp[0].Host)
 			}
@@ -187,11 +196,12 @@ func commandSocketHandle(c net.Conn) {
 			prev = resp
 		}
 
-		inflight.Store(false)
-
+		mu.Lock()
+		inflight = false
 		if err == nil {
 			err = sendLocalResp(enc, prev, false, r.TTY)
 		}
+		mu.Unlock()
 	}
 
 	close(done)
@@ -204,18 +214,6 @@ func commandSocketHandle(c net.Conn) {
 	} else if err != nil {
 		log.Errorln(err)
 	}
-}
-
-// lockedWriter serializes Write calls (json.Encoder issues one per Encode).
-type lockedWriter struct {
-	mu sync.Mutex
-	w  io.Writer
-}
-
-func (l *lockedWriter) Write(p []byte) (int, error) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.w.Write(p)
 }
 
 func readLocalRequest(dec *json.Decoder) (*miniclient.Request, error) {
