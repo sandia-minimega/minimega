@@ -233,9 +233,13 @@ func (n *Node) messageHandler() {
 			}
 			m.Recipients = newRecipients
 
-			go n.Send(m)
+			// queue instead of spawning a goroutine per message so that
+			// messages keep the order they arrived in
+			if len(newRecipients) > 0 {
+				n.relay(m)
+			}
 			if runLocal {
-				go n.handleMessage(m)
+				n.local.push(m)
 			} else {
 				if n.Snoop != nil {
 					go n.Snoop(m)
@@ -276,4 +280,46 @@ floodLoop:
 
 func (n *Node) handleMessage(m *Message) {
 	n.receive <- m
+}
+
+// relay forwards m to its remaining recipients. Messages are queued per source
+// and next hop, so they keep their order without waiting on other links.
+func (n *Node) relay(m *Message) {
+	// force updating the network if needed, as Send does
+	n.checkUpdateNetwork()
+
+	routes, err := n.getRoutes(m)
+	if err != nil {
+		log.Error("relay from %v: %v", m.Source, err)
+		return
+	}
+
+	for hop, recipients := range routes {
+		mOne := &Message{
+			Recipients:   recipients,
+			Source:       m.Source,
+			Instance:     m.Instance,
+			CurrentRoute: m.CurrentRoute,
+			Command:      m.Command,
+			Body:         m.Body,
+		}
+
+		key := relayKey{source: m.Source, hop: hop}
+
+		n.relayLock.Lock()
+		q, ok := n.relays[key]
+		if !ok {
+			hop := hop
+			q = newQueue(func(m *Message) {
+				// is hop still a client? (see flood)
+				if err := n.clientSend(hop, m); err != nil && n.hasClient(hop) {
+					log.Error("relay to client %v: %v", hop, err)
+				}
+			})
+			n.relays[key] = q
+		}
+		n.relayLock.Unlock()
+
+		q.push(mOne)
+	}
 }
