@@ -9,10 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
+	"runtime/debug"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -45,6 +48,20 @@ type Server struct {
 	// listenersLock synchronizes access to listeners
 	listenersLock sync.Mutex
 
+	// accepted stores the open connections accepted on each listener
+	accepted   map[string]map[net.Conn]struct{}
+	acceptLock sync.Mutex
+	// acceptWG counts the goroutines that serve accepted connections
+	acceptWG sync.WaitGroup
+
+	// uploads counts the bytes that each client wrote in the current hour
+	uploads    map[string]*uploadWindow
+	uploadLock sync.Mutex
+
+	// onMessage, when set, is called with each message from a client before
+	// it is handled. Used by tests.
+	onMessage func(*Message)
+
 	// commands stores commands that are still active and will be pushed to
 	// matching clients.
 	commands map[int]*Command // map of active commands
@@ -75,7 +92,13 @@ type Server struct {
 
 	lastBroadcast time.Time // watchdog time of last command list broadcast
 
-	responses chan *Client // queue of incoming responses, consumed by the response processor
+	responses chan queuedClient // queue of incoming responses, consumed by the response processor
+
+	// queued is the encoded size of the client updates in responses, at most
+	// MaxQueuedResponses
+	queued    int64
+	queueLock sync.Mutex
+	queueCond *sync.Cond
 
 	handlerDone chan struct{} // closed when responseHandler returns
 
@@ -83,6 +106,8 @@ type Server struct {
 
 	reaperRate   time.Duration // how often clientReaper checks for expired clients
 	clientExpiry time.Duration // how long a client can go without a check-in
+
+	reconnectRate time.Duration // how long DialSerial waits before it dials again
 
 	plumber *miniplumber.Plumber
 
@@ -103,19 +128,23 @@ func newServer(path, subpath string, plumber *miniplumber.Plumber, reaperRate, c
 		UseVMs:        true,
 		conns:         make(map[string]net.Conn),
 		listeners:     make(map[string]net.Listener),
+		accepted:      make(map[string]map[net.Conn]struct{}),
+		uploads:       make(map[string]*uploadWindow),
 		commands:      make(map[int]*Command),
 		clients:       make(map[string]*client),
 		vms:           make(map[string]VM),
 		path:          path,
 		subpath:       subpath,
 		lastBroadcast: time.Now(),
-		responses:     make(chan *Client, 1024),
+		responses:     make(chan queuedClient, 1024),
 		handlerDone:   make(chan struct{}),
 		stopReaper:    make(chan struct{}),
 		reaperRate:    reaperRate,
 		clientExpiry:  clientExpiry,
+		reconnectRate: CLIENT_RECONNECT_RATE * time.Second,
 		plumber:       plumber,
 	}
+	s.queueCond = sync.NewCond(&s.queueLock)
 
 	// the response folder is created when the first response or file arrives
 	if err := os.MkdirAll(s.path, 0775); err != nil {
@@ -183,6 +212,11 @@ func (s *Server) Destroy() {
 		listeners = len(s.listeners)
 		s.listenersLock.Unlock()
 	}
+
+	// close the accepted connections and wait for their handlers, so that no
+	// handshake can add a client after the wait below
+	s.closeAccepted("")
+	s.acceptWG.Wait()
 
 	// close channel for responses, killing responseHandler. Have to wait until
 	// all the clients disconnect, otherwise we could try to send on a closed
@@ -269,7 +303,7 @@ func (s *Server) Listen(port int) error {
 	}
 
 	s.listeners[addr] = ln
-	go s.serve(addr, ln)
+	go s.serve(addr, ln, "")
 
 	return nil
 }
@@ -299,7 +333,51 @@ func (s *Server) ListenUnix(path string) error {
 	}
 
 	s.listeners[path] = ln
-	go s.serve(path, ln)
+	go s.serve(path, ln, "")
+
+	return nil
+}
+
+// ListenUnixBound creates a unix domain socket at path for the VM with the
+// given UUID, and accepts connections on it in a goroutine. Every connection
+// is bound to uuid: a client that sends an empty UUID gets uuid, and a client
+// that claims another UUID is refused. The socket is owned by uid and the
+// group uid, with mode 0600, so only uid and root can connect to it. A
+// negative uid keeps the owner and the group. Close the socket with
+// CloseUnix. The VM must be registered with RegisterVM before its client can
+// complete the handshake.
+func (s *Server) ListenUnixBound(path, uuid string, uid int) error {
+	if uuid == "" {
+		return errors.New("bound listener needs a VM UUID")
+	}
+
+	log.Info("listening on `%v` for VM %v", path, uuid)
+
+	s.listenersLock.Lock()
+	defer s.listenersLock.Unlock()
+
+	if _, ok := s.listeners[path]; ok {
+		return fmt.Errorf("already listening on %v", path)
+	}
+
+	ln, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		return err
+	}
+
+	if uid >= 0 {
+		err = os.Chown(path, uid, uid)
+	}
+	if err == nil {
+		err = os.Chmod(path, 0600)
+	}
+	if err != nil {
+		ln.Close()
+		return err
+	}
+
+	s.listeners[path] = ln
+	go s.serve(path, ln, uuid)
 
 	return nil
 }
@@ -364,7 +442,8 @@ func (s *Server) DialSerial(path, uuid string) error {
 				}
 
 				log.Debug("handshake failed (due to %v) - retrying", err)
-				time.Sleep(CLIENT_RECONNECT_RATE * time.Second)
+				conn.Close()
+				time.Sleep(s.reconnectRate)
 
 				continue
 			}
@@ -379,25 +458,92 @@ func (s *Server) DialSerial(path, uuid string) error {
 	return nil
 }
 
-// CloseUnix closes a unix domain socket created via ListenUnix.
+// CloseUnix closes a unix domain socket created via ListenUnix or
+// ListenUnixBound, and closes the client connections accepted on it.
 func (s *Server) CloseUnix(path string) error {
 	log.Info("close UNIX: %v", path)
 
 	s.listenersLock.Lock()
-	defer s.listenersLock.Unlock()
-
 	l, ok := s.listeners[path]
+	if ok {
+		delete(s.listeners, path)
+	}
+	s.listenersLock.Unlock()
+
+	var err error
+	if ok {
+		err = l.Close()
+	}
+
+	// serve closes a connection that it accepted before the close above, but
+	// tracks after this call
+	s.closeAccepted(path)
+
 	if !ok {
 		log.Info("tried to close unknown path: %v", path)
-		return nil
 	}
 
-	if err := l.Close(); err != nil {
-		return err
+	return err
+}
+
+// listening reports whether ln is still the listener on addr.
+func (s *Server) listening(addr string, ln net.Listener) bool {
+	s.listenersLock.Lock()
+	defer s.listenersLock.Unlock()
+
+	return s.listeners[addr] == ln
+}
+
+// track records conn as accepted on addr. It returns false, and does not
+// record conn, when max is positive and addr already has max connections.
+func (s *Server) track(addr string, conn net.Conn, max int) bool {
+	s.acceptLock.Lock()
+	defer s.acceptLock.Unlock()
+
+	if s.accepted == nil {
+		s.accepted = make(map[string]map[net.Conn]struct{})
 	}
 
-	delete(s.listeners, path)
-	return nil
+	conns := s.accepted[addr]
+	if conns == nil {
+		conns = make(map[net.Conn]struct{})
+		s.accepted[addr] = conns
+	}
+
+	if max > 0 && len(conns) >= max {
+		return false
+	}
+
+	conns[conn] = struct{}{}
+	return true
+}
+
+func (s *Server) untrack(addr string, conn net.Conn) {
+	s.acceptLock.Lock()
+	defer s.acceptLock.Unlock()
+
+	if conns := s.accepted[addr]; conns != nil {
+		delete(conns, conn)
+		if len(conns) == 0 {
+			delete(s.accepted, addr)
+		}
+	}
+}
+
+// closeAccepted closes the connections accepted on addr, or on every
+// listener when addr is empty.
+func (s *Server) closeAccepted(addr string) {
+	s.acceptLock.Lock()
+	defer s.acceptLock.Unlock()
+
+	for a, conns := range s.accepted {
+		if addr != "" && a != addr {
+			continue
+		}
+		for conn := range conns {
+			conn.Close()
+		}
+	}
 }
 
 // NewCommand posts a new command to the active command list. The command ID is
@@ -470,6 +616,7 @@ func (s *Server) GetProcesses(uuid string) ([]*Process, error) {
 func (s *Server) GetExitCode(id int, client string) (int, error) {
 	var cid string
 
+	s.clientLock.Lock()
 	if _, ok := s.clients[client]; ok {
 		cid = client
 	} else {
@@ -480,6 +627,7 @@ func (s *Server) GetExitCode(id int, client string) (int, error) {
 			}
 		}
 	}
+	s.clientLock.Unlock()
 
 	if cid == "" {
 		return 0, fmt.Errorf("no client %s", client)
@@ -670,8 +818,8 @@ func (s *Server) Clients() int {
 	return len(s.clients)
 }
 
-// DeleteCommand removes a command from the active command list. Any in-flight
-// messages held by any clients may still return a response to the deleted
+// DeleteCommand removes a command from the active command list. The server
+// drops the responses and the files that clients send later for the deleted
 // command.
 func (s *Server) DeleteCommand(id int) error {
 	log.Debug("delete command: %v", id)
@@ -711,7 +859,8 @@ func (s *Server) DeleteCommands(prefix string) error {
 }
 
 // ClearCommands deletes all commands and sets the command ID counter back to
-// zero. As with DeleteCommand, any in-flight responses may still be returned.
+// zero. As with DeleteCommand, the server drops later responses to the
+// deleted commands, except for an ID that a new command uses again.
 func (s *Server) ClearCommands() {
 	log.Debug("clearing commands")
 
@@ -802,6 +951,10 @@ func (s *Server) UnregisterVM(vm VM) {
 	defer s.clientLock.Unlock()
 
 	delete(s.vms, vm.GetUUID())
+
+	s.uploadLock.Lock()
+	delete(s.uploads, vm.GetUUID())
+	s.uploadLock.Unlock()
 }
 
 func (s *Server) destroyed() bool {
@@ -824,25 +977,25 @@ func (s *Server) makeResponseDir() error {
 	return os.MkdirAll(s.responsePath(nil), 0775)
 }
 
-// recvFile writes part of a file that a client sent to the response folder.
-func (s *Server) recvFile(uuid string, f *File) error {
-	if err := s.makeResponseDir(); err != nil {
-		return err
-	}
-
-	fpath := filepath.Join(s.responsePath(&f.ID), uuid, f.Name)
-	return f.Recv(fpath)
-}
-
-// serve
-func (s *Server) serve(addr string, ln net.Listener) {
+// serve accepts connections on ln and serves each one in its own goroutine.
+// A non-empty expectedUUID binds every connection to that VM.
+func (s *Server) serve(addr string, ln net.Listener, expectedUUID string) {
 	defer func() {
 		s.listenersLock.Lock()
 		defer s.listenersLock.Unlock()
 
-		delete(s.listeners, addr)
+		// CloseUnix removes the listener itself, and a new listener may
+		// already use addr
+		if s.listeners[addr] == ln {
+			delete(s.listeners, addr)
+		}
 		log.Info("closed listener: %v", addr)
 	}()
+
+	max := 0
+	if expectedUUID != "" {
+		max = MaxBoundConns
+	}
 
 	for {
 		conn, err := ln.Accept()
@@ -857,29 +1010,67 @@ func (s *Server) serve(addr string, ln net.Listener) {
 			return
 		}
 
-		remote := conn.RemoteAddr()
-
-		log.Debug("client connected: %v -> %v", remote, addr)
-		c, err := s.handshake(conn, "")
-		if err != nil {
-			if err != io.EOF {
-				// suppress these, VM was probably never started
-				log.Error("handshake failed: %v", err)
-			}
+		if !s.track(addr, conn, max) {
+			warnLimited(addr+":conns", "refused connection on %v: more than %d open connections", addr, max)
 			conn.Close()
 			continue
 		}
 
-		go func() {
-			s.clientHandler(c)
-			log.Debug("client disconnected: %v -> %v", remote, addr)
-		}()
+		if !s.listening(addr, ln) {
+			// CloseUnix closed ln, and may not see conn
+			s.untrack(addr, conn)
+			conn.Close()
+			return
+		}
+
+		log.Debug("client connected: %v -> %v", conn.RemoteAddr(), addr)
+
+		s.acceptWG.Add(1)
+		go s.serveConn(addr, conn, expectedUUID)
 	}
+}
+
+// serveConn runs the handshake and the client handler for one accepted
+// connection.
+func (s *Server) serveConn(addr string, conn net.Conn, expectedUUID string) {
+	defer s.acceptWG.Done()
+	defer s.untrack(addr, conn)
+	defer conn.Close()
+	defer recoverConn("cc connection on "+addr, conn)
+
+	conn.SetReadDeadline(time.Now().Add(HandshakeTimeout))
+
+	c, err := s.handshake(conn, expectedUUID)
+	if err != nil {
+		if err != io.EOF && refusals.allow(addr+":handshake") {
+			// suppress EOF, VM was probably never started
+			log.Error("handshake failed on %v: %v", addr, err)
+		} else {
+			log.Debug("handshake failed on %v: %v", addr, err)
+		}
+		return
+	}
+
+	conn.SetReadDeadline(time.Time{})
+
+	if expectedUUID != "" {
+		log.Debug("cc client %v connected on %v", c.uuid, addr)
+	}
+
+	s.clientHandler(c)
+	log.Debug("client disconnected: %v", addr)
 }
 
 // handshake performs a handshake with the client, returning the new client if
 // there were no errors.
-func (s *Server) handshake(conn net.Conn, expectedUUID string) (*client, error) {
+func (s *Server) handshake(conn net.Conn, expectedUUID string) (res *client, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error("handshake: recovered from panic: %v\n%s", r, debug.Stack())
+			res, err = nil, fmt.Errorf("handshake failed: %v", r)
+		}
+	}()
+
 	// read until we see the magic bytes
 	var buf [3]byte
 	for string(buf[:]) != "RON" {
@@ -898,99 +1089,139 @@ func (s *Server) handshake(conn net.Conn, expectedUUID string) (*client, error) 
 		return nil, err
 	}
 
+	limit := &limitReader{r: conn, limit: MaxHandshakeSize}
 	c := &client{
 		conn:            conn,
 		enc:             gob.NewEncoder(conn),
-		dec:             gob.NewDecoder(conn),
+		dec:             gob.NewDecoder(limit),
+		limit:           limit,
 		pipeReaders:     make(map[string]*miniplumber.Reader),
 		pipeWriters:     make(map[string]chan<- string),
 		cancelHeartbeat: make(chan struct{}),
+		pipesDone:       make(chan struct{}),
+		policy:          CCPolicyLegacy,
 	}
 
 	// get the first client struct as a handshake
 	var m Message
-	if err := c.dec.Decode(&m); err != nil {
+	if err := c.decode(&m); err != nil {
 		return nil, err
 	}
 
-	// A serial connection is created for one specific VM, so its expected UUID
-	// is host-controlled. Guests without DMI can leave their UUID empty and
-	// adopt this trusted identity from the handshake response. Unbound clients
-	// must provide an identity of their own.
+	if m.Type != MESSAGE_CLIENT {
+		return nil, invalidf("handshake message type %v", m.Type)
+	}
+
+	// A serial or bound connection is created for one specific VM, so its
+	// expected UUID is host-controlled. Guests without DMI can leave their
+	// UUID empty and adopt this trusted identity from the handshake response.
+	// Unbound clients must provide an identity of their own.
 	if err := bindClientUUID(&m, expectedUUID); err != nil {
 		return nil, err
 	}
 
+	if err := validateClient(m.Client); err != nil {
+		return nil, err
+	}
+
+	if !s.UseVMs && !validToken(m.Client.UUID) {
+		return nil, invalidf("client UUID %q", truncate(m.Client.UUID, maxErrorLog))
+	}
+
+	if majorVersion(m.Version) == 0 {
+		// Only send heartbeats to clients that send a message version: older
+		// clients fail on a message type that they do not recognize.
+		return nil, fmt.Errorf("client %s: %w", m.Client.UUID, errClientTooOld)
+	}
+
+	if m.Client.Version != version.Revision {
+		log.Warn("mismatched miniccc version on %v: %v", m.Client.Hostname, m.Client.Version)
+	}
+
 	update := s.updateFileFor(m.Client)
 
+	if err := s.addClient(c, &m, update); err != nil {
+		return nil, err
+	}
+
+	// addClient holds writeMu, so that the reply is the first message.
+	// Send a copy, because route can change the fields of c.Client.
+	ack, cl := m, *m.Client
+	ack.Client = &cl
+	err = c.encode(&ack)
+	c.writeMu.Unlock()
+	if err != nil {
+		// client disconnected before it read the full handshake
+		s.removeClient(c)
+		if err != io.EOF {
+			log.Errorln(err)
+		}
+		return nil, err
+	}
+
+	log.Debug("starting heartbeat to client %s", c.uuid)
+
+	go func() {
+		t := time.NewTicker(HEARTBEAT_RATE * time.Second)
+
+		for {
+			select {
+			case <-c.cancelHeartbeat:
+				log.Debug("stopping heartbeats to client %s", c.uuid)
+				t.Stop()
+				return
+			case <-t.C:
+				log.Debug("sending HEARTBEAT to client %s", c.uuid)
+				m := Message{Type: MESSAGE_HEARTBEAT, Version: "v1"}
+				c.sendMessage(&m) // a loss of connection is detected elsewhere.
+			}
+		}
+	}()
+
+	c.limit.limit = MaxMessageSize
+	c.limit.small = LargeMessageSize
+	c.limit.slots = largeMessages
+	c.limit.done = c.cancelHeartbeat
+
+	return c, nil
+}
+
+// addClient adds c, with the handshake message m, to the client list, and
+// starts the auto-update of the client when update is the path of a binary. On
+// success, it returns with c.writeMu held, so that the update starts after the
+// reply to the handshake.
+func (s *Server) addClient(c *client, m *Message, update string) error {
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
 
 	if _, ok := s.clients[m.Client.UUID]; ok {
-		return nil, fmt.Errorf("client %v already exists!", m.Client.UUID)
+		return fmt.Errorf("client %v already exists!", m.Client.UUID)
 	}
 
 	var namespace string
 
 	if s.UseVMs {
 		vm, ok := s.vms[m.Client.UUID]
-		if !ok {
+		if !ok && uuidRE.MatchString(m.Client.UUID) {
 			// try again after unmangling the uuid, which qemu does in certain
 			// versions
 			vm, ok = s.vms[unmangle(m.Client.UUID)]
 			c.mangled = true
 		}
 		if !ok {
-			return nil, fmt.Errorf("unregistered client %v", m.Client.UUID)
+			return fmt.Errorf("unregistered client %v", truncate(m.Client.UUID, maxErrorLog))
+		}
+		if c.mangled {
+			if _, ok := s.clients[unmangle(m.Client.UUID)]; ok {
+				return fmt.Errorf("client %v already exists!", unmangle(m.Client.UUID))
+			}
 		}
 
 		namespace = vm.GetNamespace()
+		c.policy = vmPolicy(vm)
 	}
 
 	c.Namespace = namespace
-
-	if m.Client.Version != version.Revision {
-		log.Warn("mismatched miniccc version on %v: %v", m.Client.Hostname, m.Client.Version)
-	}
-
-	if majorVersion(m.Version) > 0 {
-		log.Debug("starting heartbeat to client %s", m.Client.UUID)
-
-		// Only send heartbeats to client if message version is present to prevent
-		// older clients from failing against this version of the server (sending a
-		// message to a client that doesn't recognize the message type will cause
-		// the client to fail).
-		go func() {
-			t := time.NewTicker(HEARTBEAT_RATE * time.Second)
-
-			for {
-				select {
-				case <-c.cancelHeartbeat:
-					log.Debug("stopping heartbeats to client %s", m.Client.UUID)
-					t.Stop()
-					return
-				case <-t.C:
-					log.Debug("sending HEARTBEAT to client %s", m.Client.UUID)
-					m := Message{Type: MESSAGE_HEARTBEAT, Version: "v1"}
-					c.sendMessage(&m) // a loss of connection is detected elsewhere.
-				}
-			}
-		}()
-	} else {
-		return nil, fmt.Errorf("client %s: %w", m.Client.UUID, errClientTooOld)
-	}
-
-	// set write deadline to prevent ron from hanging
-	conn.SetWriteDeadline(time.Now().Add(HEARTBEAT_RATE * time.Second))
-	if err := c.sendMessage(&m); err != nil {
-		// client disconnected before it read the full handshake
-		close(c.cancelHeartbeat)
-		if err != io.EOF {
-			log.Errorln(err)
-		}
-		return nil, err
-	}
-	conn.SetWriteDeadline(time.Time{})
 
 	c.Client = m.Client
 	if c.mangled {
@@ -999,37 +1230,62 @@ func (s *Server) handshake(conn net.Conn, expectedUUID string) (*client, error) 
 	log.Debug("new client: %v", m.Client)
 
 	c.checkin = time.Now()
+	c.uuid = c.UUID
 
+	c.writeMu.Lock()
 	s.clients[c.UUID] = c
 
 	if update != "" {
 		s.startUpdate(c, update)
 	}
 
-	return c, nil
+	return nil
 }
 
+var errUUIDMismatch = errors.New("client UUID does not match the channel")
+
+// bindClientUUID applies the UUID that the host bound to the channel, if any,
+// to the handshake message m. A client on a bound channel can send an empty
+// UUID, the bound UUID, or its mangled form. Any other UUID is refused.
 func bindClientUUID(m *Message, expectedUUID string) error {
 	if m.Client == nil {
 		return fmt.Errorf("client handshake missing client metadata")
 	}
-	if m.Client.UUID != "" {
+
+	claimed := m.Client.UUID
+	if claimed != "" {
+		if expectedUUID == "" {
+			return nil
+		}
+
+		if !uuidMatches(claimed, expectedUUID) {
+			warnLimited(expectedUUID+":uuid", "client on channel bound to VM %v claimed UUID %q -- closing connection", expectedUUID, truncate(claimed, maxErrorLog))
+			return fmt.Errorf("%w: bound to %v, claimed %q", errUUIDMismatch, expectedUUID, truncate(claimed, maxErrorLog))
+		}
+
+		if strings.EqualFold(claimed, expectedUUID) {
+			m.Client.UUID = expectedUUID
+			m.UUID = expectedUUID
+		}
+
 		return nil
 	}
+
 	if expectedUUID == "" {
 		return fmt.Errorf("client handshake missing UUID without serial binding")
 	}
 
 	m.Client.UUID = expectedUUID
 	m.UUID = expectedUUID
-	log.Info("bound serial client to VM UUID %s", expectedUUID)
+	log.Info("bound client to VM UUID %s", expectedUUID)
 	return nil
 }
 
 // client and transport handler for connections.
 func (s *Server) clientHandler(c *client) {
+	defer recoverConn("cc client "+c.uuid, c.conn)
 	defer c.conn.Close()
-	defer s.removeClient(c.UUID)
+	defer s.removeClient(c)
 
 	// Set up minitunnel, dialing the server that should be running on the
 	// client's side. Data is Trunk'd via Messages.
@@ -1037,10 +1293,10 @@ func (s *Server) clientHandler(c *client) {
 	defer local.Close()
 	defer remote.Close()
 
-	go Trunk(remote, c.UUID, c.sendMessage)
+	go Trunk(remote, c.uuid, c.sendMessage)
 
 	go func() {
-		tunnel, err := minitunnel.Dial(local)
+		tunnel, err := minitunnel.DialWithPolicy(local, s.tunnelPolicy(c))
 		if err != nil {
 			log.Error("dial: %v", err)
 			return
@@ -1049,12 +1305,12 @@ func (s *Server) clientHandler(c *client) {
 		s.clientLock.Lock()
 		defer s.clientLock.Unlock()
 
-		log.Debug("minitunnel created for %v", c.UUID)
+		log.Debug("minitunnel created for %v", c.uuid)
 		c.tunnel = tunnel
 	}()
 
 	// send the commands to our new client
-	go s.sendCommands(c.UUID)
+	go s.sendCommands(c.uuid)
 
 	var err error
 
@@ -1064,48 +1320,18 @@ func (s *Server) clientHandler(c *client) {
 		}
 
 		var m Message
-		if err = c.dec.Decode(&m); err == nil {
-			log.Debug("new message: %v", m.Type)
-
-			// unmangle the client uuid if necessary
-			if c.mangled {
-				m.UUID = unmangle(m.UUID)
-			}
-
-			switch m.Type {
-			case MESSAGE_TUNNEL:
-				_, err = remote.Write(m.Tunnel)
-			case MESSAGE_FILE:
-				if m.Error != "" {
-					log.Error("file error from %v: %v", c.UUID, m.Error)
-					continue
-				}
-				if m.File.Data == nil && m.File.Offset == 0 {
-					// client requested file
-					err = s.sendFile(c, m.File.Name)
-				} else {
-					// client sent file
-					err = s.recvFile(c.UUID, m.File)
-				}
-			case MESSAGE_CLIENT:
-				if c.mangled {
-					m.Client.UUID = unmangle(m.Client.UUID)
-				}
-				s.responses <- m.Client
-			case MESSAGE_COMMAND:
-				// this shouldn't be sent via the client...
-			case MESSAGE_PIPE:
-				c.pipeHandler(s.plumber, &m)
-			case MESSAGE_UFS:
-				c.ufsMessage(&m)
-			default:
-				err = fmt.Errorf("unknown message type: %v", m.Type)
-			}
+		if err = c.decode(&m); err == nil {
+			err = s.handleMessage(c, &m, remote)
 		}
 	}
 
 	// This is an OK error - likely just means the TCP connection was closed.
 	if err == io.EOF {
+		return
+	}
+
+	if errors.Is(err, errInvalidMessage) || errors.Is(err, errMessageTooLarge) {
+		warnLimited(c.uuid+":invalid", "closing cc client %v: %v", c.uuid, err)
 		return
 	}
 
@@ -1124,46 +1350,74 @@ func (s *Server) clientHandler(c *client) {
 	log.Errorln(err)
 }
 
-// addClient adds a client to the list of active clients
-func (s *Server) addClient(c *client) error {
-	log.Debug("addClient: %v", c.UUID)
+// handleMessage handles one message from client c. Messages are bound to the
+// connection: the UUID inside a message is ignored. An error closes the
+// connection.
+func (s *Server) handleMessage(c *client, m *Message, remote net.Conn) error {
+	log.Debug("new message: %v", m.Type)
 
-	s.clientLock.Lock()
-	defer s.clientLock.Unlock()
+	m.UUID = c.uuid
 
-	if _, ok := s.clients[c.UUID]; ok {
-		return fmt.Errorf("client %v already exists!", c.UUID)
+	if s.onMessage != nil {
+		s.onMessage(m)
 	}
-	s.clients[c.UUID] = c
+
+	switch m.Type {
+	case MESSAGE_TUNNEL:
+		_, err := remote.Write(m.Tunnel)
+		return err
+	case MESSAGE_FILE:
+		if m.File == nil {
+			return invalidf("file message without a file")
+		}
+		if m.Error != "" {
+			warnLimited(c.uuid+":fileerror", "file error from %v: %v", c.uuid, truncate(m.Error, maxErrorLog))
+			return nil
+		}
+		if m.File.Data == nil && m.File.Offset == 0 {
+			// client requested file
+			return s.sendFile(c, m.File.Name)
+		}
+		// client sent file
+		return s.recvFile(c, m.File)
+	case MESSAGE_CLIENT:
+		if err := validateClient(m.Client); err != nil {
+			return err
+		}
+		m.Client.UUID = c.uuid
+
+		var n int64
+		if c.limit != nil {
+			n = c.limit.size()
+		}
+		s.queueWait(n)
+		s.responses <- queuedClient{m.Client, n}
+	case MESSAGE_COMMAND:
+		// this shouldn't be sent via the client...
+	case MESSAGE_PIPE:
+		return c.pipeHandler(s.plumber, m)
+	case MESSAGE_UFS:
+		c.ufsMessage(m)
+	default:
+		return invalidf("unknown message type: %v", m.Type)
+	}
 
 	return nil
 }
 
-// removeClient conditionally remove client from the client list, closing
-// connections if possible.
-func (s *Server) removeClient(uuid string) {
-	log.Debug("removeClient: %v", uuid)
+// removeClient removes c from the client list, if it is still there, and
+// closes its connection and plumbing.
+func (s *Server) removeClient(c *client) {
+	log.Debug("removeClient: %v", c.uuid)
 
 	s.clientLock.Lock()
 	defer s.clientLock.Unlock()
-	if c, ok := s.clients[uuid]; ok {
-		c.conn.Close()
 
-		// with the client conn closed, close any lingering plumbing
-		c.pipeLock.Lock()
-		defer c.pipeLock.Unlock()
-		for _, p := range c.pipeReaders {
-			p.Close()
-		}
-		for _, p := range c.pipeWriters {
-			close(p)
-		}
-
-		// stop Goroutine sending heartbeats to this client
-		close(c.cancelHeartbeat)
-
-		delete(s.clients, uuid)
+	if s.clients[c.uuid] == c {
+		delete(s.clients, c.uuid)
 	}
+
+	c.shutdown()
 }
 
 // sendCommands send a commands message to the specified UUID. If UUID is not
@@ -1240,34 +1494,113 @@ func (s *Server) NewFilesSendCommand(files []string) (*Command, error) {
 	return cmd, nil
 }
 
-// sendFile reads the file and sends it in multiple chunks to the client.
+// sendFile reads the file and sends it in multiple chunks to the client. The
+// file must be inside the files directory, or inside its subpath.
 func (s *Server) sendFile(c *client, filename string) error {
-	log.Debug("sendFile: %v to %v", filename, c.UUID)
+	log.Debug("sendFile: %v to %v", truncate(filename, maxErrorLog), c.uuid)
 
-	// try to send version from subpath first
-	dir := filepath.Join(s.path, s.subpath)
-	fpath := filepath.Join(dir, filename)
-	if _, err := os.Stat(fpath); err == nil {
-		// found file in subpath
-		return SendFile(dir, fpath, 0, PART_SIZE, c.sendMessage)
+	if !validFileName(filename) {
+		warnLimited(c.uuid+":file", "cc client %v: refused request for file %q outside the files directory", c.uuid, truncate(filename, maxErrorLog))
+		return sendFileError(0, filename, errors.New("invalid file name"), c.sendMessage)
 	}
 
-	dir = s.path
-	fpath = filepath.Join(dir, filename)
-	return SendFile(dir, fpath, 0, PART_SIZE, c.sendMessage)
+	// try to send version from subpath first
+	var f *os.File
+	var err error
+	for _, dir := range []string{filepath.Join(s.path, s.subpath), s.path} {
+		f, err = openInRoot(dir, filename)
+		if err == nil || !errors.Is(err, fs.ErrNotExist) {
+			break
+		}
+	}
+
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			warnLimited(c.uuid+":nofile", "cannot open file %v: %v", truncate(filename, maxErrorLog), err)
+		} else {
+			warnLimited(c.uuid+":file", "cc client %v: refused request for file %q: %v", c.uuid, truncate(filename, maxErrorLog), err)
+		}
+		return sendFileError(0, filename, err, c.sendMessage)
+	}
+	defer f.Close()
+
+	return sendOpenFile(f, filename, 0, PART_SIZE, c.sendMessage)
+}
+
+// recvFile writes one part of a file that the client sent. The file must stay
+// inside the response directory of its command and client.
+func (s *Server) recvFile(c *client, f *File) error {
+	if !validFileName(f.Name) {
+		warnLimited(c.uuid+":file", "cc client %v: refused file %q outside the responses directory", c.uuid, truncate(f.Name, maxErrorLog))
+		return invalidf("file name %q", truncate(f.Name, maxErrorLog))
+	}
+
+	if f.ID < 0 || f.Offset < 0 || len(f.Data) > MaxFileChunk || f.Offset > MaxUploadFileSize-int64(len(f.Data)) {
+		return invalidf("file %q: command %v, offset %v, %v bytes", truncate(f.Name, maxErrorLog), f.ID, f.Offset, len(f.Data))
+	}
+
+	if !s.liveCommand(f.ID) {
+		warnLimited(c.uuid+":file", "cc client %v: dropped file %q: no command %v", c.uuid, truncate(f.Name, maxErrorLog), f.ID)
+		return nil
+	}
+
+	if f.Offset == 0 {
+		entries := 1 + int64(strings.Count(filepath.ToSlash(filepath.Clean(f.Name)), "/"))
+		if !s.chargeEntries(c.uuid, entries) {
+			warnLimited(c.uuid+":upload", "cc client %v: refused file %q: more than %d files and directories in one hour", c.uuid, truncate(f.Name, maxErrorLog), MaxUploadEntriesPerHour)
+			return invalidf("upload limit")
+		}
+	}
+
+	if !s.chargeUpload(c.uuid, int64(len(f.Data))) {
+		warnLimited(c.uuid+":upload", "cc client %v: refused file %q: more than %d bytes in one hour", c.uuid, truncate(f.Name, maxErrorLog), int64(MaxUploadPerHour))
+		return invalidf("upload limit")
+	}
+
+	if err := s.makeResponseDir(); err != nil {
+		return err
+	}
+
+	dir := filepath.Join(s.responsePath(&f.ID), c.uuid)
+	if err := os.MkdirAll(dir, os.FileMode(0770)); err != nil {
+		return err
+	}
+
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+
+	err = f.recvInRoot(root, dir)
+	if f.Offset > 0 && errors.Is(err, fs.ErrNotExist) {
+		warnLimited(c.uuid+":file", "cc client %v: dropped part of file %q: the file did not start at offset 0", c.uuid, truncate(f.Name, maxErrorLog))
+		return nil
+	}
+
+	return err
 }
 
 // route an outgoing message to one or all clients, according to UUID
 func (s *Server) route(m *Message) {
 	var maxCommandID int
-	var issuedLock sync.Mutex
 	for i := range m.Commands {
 		if i > maxCommandID {
 			maxCommandID = i
 		}
 	}
 
-	handleUUID := func(uuid string) {
+	type delivery struct {
+		c *client
+		m *Message
+	}
+
+	var deliveryLock, issuedLock sync.Mutex
+	var deliveries []delivery
+
+	// prepare finds the message for one client. The caller must hold
+	// clientLock.
+	prepare := func(uuid string) {
 		// create locally scoped pointer to message
 		m := m
 
@@ -1332,42 +1665,55 @@ func (s *Server) route(m *Message) {
 			m = &m2
 		}
 
-		if err := c.sendMessage(m); err != nil {
-			if strings.Contains(err.Error(), "broken pipe") {
-				log.Debug("client disconnected: %v", uuid)
-			} else {
-				log.Info("unable to send message to %v: %v", uuid, err)
-			}
-		} else if m.Type == MESSAGE_COMMAND {
-			issuedLock.Lock()
-			defer issuedLock.Unlock()
-			for id := range m.Commands {
-				s.commands[id].Issued++
-				delete(s.commands[id].heldFor, uuid)
-			}
-		}
+		deliveryLock.Lock()
+		defer deliveryLock.Unlock()
+		deliveries = append(deliveries, delivery{c, m})
 	}
 
-	// handleUUID doesn't modify the clients map so we can allow parallel reads
+	// prepare doesn't modify the clients map so we can allow parallel reads
 	s.clientLock.Lock()
-	defer s.clientLock.Unlock()
-
 	if m.UUID != "" {
-		handleUUID(m.UUID)
-		return
-	}
+		prepare(m.UUID)
+	} else {
+		var wg sync.WaitGroup
+		for uuid := range s.clients {
+			wg.Add(1)
 
+			go func(uuid string) {
+				defer wg.Done()
+
+				prepare(uuid)
+			}(uuid)
+		}
+		wg.Wait()
+	}
+	s.clientLock.Unlock()
+
+	// send without clientLock, in parallel, so that a client that does not
+	// read cannot block the others
 	var wg sync.WaitGroup
 
-	// send commands to all clients, in parallel
-	for uuid := range s.clients {
+	for _, d := range deliveries {
 		wg.Add(1)
 
-		go func(uuid string) {
+		go func(d delivery) {
 			defer wg.Done()
 
-			handleUUID(uuid)
-		}(uuid)
+			if err := d.c.sendMessage(d.m); err != nil {
+				if strings.Contains(err.Error(), "broken pipe") {
+					log.Debug("client disconnected: %v", d.c.uuid)
+				} else {
+					log.Info("unable to send message to %v: %v", d.c.uuid, err)
+				}
+			} else if d.m.Type == MESSAGE_COMMAND {
+				issuedLock.Lock()
+				defer issuedLock.Unlock()
+				for id := range d.m.Commands {
+					s.commands[id].Issued++
+					delete(s.commands[id].heldFor, d.c.uuid)
+				}
+			}
+		}(d)
 	}
 
 	wg.Wait()
@@ -1404,20 +1750,70 @@ func (s *Server) loadVMTags(uuid string, c *client, filters []*Filter) bool {
 func (s *Server) responseHandler() {
 	defer close(s.handlerDone)
 
-	for cin := range s.responses {
-		log.Debug("responseHandler: %v", cin.UUID)
+	for q := range s.responses {
+		s.handleResponses(q.cl)
+		s.queueDone(q.size)
+	}
+}
 
-		// update all the client fields
-		s.updateClient(cin)
+// queuedClient is a client update in the responses queue, with its encoded
+// size.
+type queuedClient struct {
+	cl   *Client
+	size int64
+}
 
-		// ingest responses from this client
-		for _, v := range cin.Responses {
-			log.Debug("got response %v : %v", cin.UUID, v.ID)
-			s.writeResponse(cin.UUID, v)
-			// count the response only once its files can be read, since cc
-			// users poll the count and then read the files
-			s.commandCheckIn(v.ID, cin.UUID)
+// queueWait waits until the responses queue has room for n bytes, and
+// reserves them. A queue that is empty accepts any size.
+func (s *Server) queueWait(n int64) {
+	s.queueLock.Lock()
+	defer s.queueLock.Unlock()
+
+	for s.queued > 0 && s.queued+n > MaxQueuedResponses {
+		s.queueCond.Wait()
+	}
+	s.queued += n
+}
+
+func (s *Server) queueDone(n int64) {
+	s.queueLock.Lock()
+	defer s.queueLock.Unlock()
+
+	s.queued -= n
+	s.queueCond.Broadcast()
+}
+
+// handleResponses processes one client update. A panic is logged and skips
+// the update, so that the response handler keeps running.
+func (s *Server) handleResponses(cin *Client) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Error("responseHandler: recovered from panic: %v\n%s", r, debug.Stack())
 		}
+	}()
+
+	log.Debug("responseHandler: %v", cin.UUID)
+
+	// update all the client fields
+	s.updateClient(cin)
+
+	// ingest responses from this client
+	for _, v := range cin.Responses {
+		log.Debug("got response %v : %v", cin.UUID, v.ID)
+		if !s.liveCommand(v.ID) {
+			warnLimited(cin.UUID+":response", "cc client %v: dropped response %v: no such command", cin.UUID, v.ID)
+			continue
+		}
+
+		if s.chargeUpload(cin.UUID, int64(len(v.Stdout)+len(v.Stderr))) {
+			s.writeResponse(cin.UUID, v)
+		} else {
+			warnLimited(cin.UUID+":upload", "cc client %v: dropped response %v: more than %d bytes in one hour", cin.UUID, v.ID, int64(MaxUploadPerHour))
+		}
+
+		// count the response only once its files can be read, since cc
+		// users poll the count and then read the files
+		s.commandCheckIn(v.ID, cin.UUID)
 	}
 }
 
@@ -1488,23 +1884,65 @@ func (s *Server) updateClient(cin *Client) {
 		return
 	}
 
-	for k, v := range cin.Tags {
+	if len(cin.Tags) == 0 {
+		return
+	}
+
+	tags := vm.GetTags()
+	size := 0
+	for k, v := range tags {
+		size += len(k) + len(v)
+	}
+
+	keys := make([]string, 0, len(cin.Tags))
+	for k := range cin.Tags {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		v := cin.Tags[k]
+		old, exists := tags[k]
+
+		n := size + len(k) + len(v)
+		if exists {
+			n -= len(k) + len(old)
+		}
+
+		if (!exists && len(tags) >= MaxVMTags) || n > MaxVMTagBytes {
+			warnLimited(cin.UUID+":tags", "cc client %v: dropped tag %q: more than %d tags or %d bytes of tags", cin.UUID, truncate(k, maxErrorLog), MaxVMTags, MaxVMTagBytes)
+			continue
+		}
+
 		vm.SetTag(k, v)
+		tags[k] = v
+		size = n
 	}
 }
 
-// mark which commands have been responded to by which client
-func (s *Server) commandCheckIn(id int, uuid string) {
+// commandCheckIn marks that the client uuid responded to command id. It
+// returns false when there is no such command.
+func (s *Server) commandCheckIn(id int, uuid string) bool {
 	log.Debug("commandCheckIn %v %v", id, uuid)
 
 	s.commandLock.Lock()
 	defer s.commandLock.Unlock()
 
-	if c, ok := s.commands[id]; ok {
+	c, ok := s.commands[id]
+	if ok && !slices.Contains(c.CheckedIn, uuid) {
 		c.CheckedIn = append(c.CheckedIn, uuid)
-	} else {
-		log.Error("command checkin: command %v does not exist", id)
 	}
+
+	return ok
+}
+
+// liveCommand reports whether command id is in the active command list.
+func (s *Server) liveCommand(id int) bool {
+	s.commandLock.Lock()
+	defer s.commandLock.Unlock()
+
+	_, ok := s.commands[id]
+	return ok
 }
 
 // clientReaper periodically flushes old entries from the client list
@@ -1528,9 +1966,8 @@ func (s *Server) clientReaper() {
 			if !active {
 				log.Debug("client %v expired", k)
 				// the same as removeClient except we already hold clientLock
-				v.conn.Close()
-				close(v.cancelHeartbeat)
 				delete(s.clients, k)
+				v.shutdown()
 			}
 
 			if vm, ok := s.vms[k]; ok {

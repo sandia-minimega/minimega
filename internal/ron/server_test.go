@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,14 +30,35 @@ func TestBindClientUUIDUsesSerialIdentity(t *testing.T) {
 	}
 }
 
-func TestBindClientUUIDPreservesGuestIdentity(t *testing.T) {
+func TestBindClientUUIDPreservesUnboundGuestIdentity(t *testing.T) {
 	want := "a5ba6920-5bcf-4022-b8cf-015425f7b05c"
 	m := &Message{Client: &Client{UUID: want}}
-	if err := bindClientUUID(m, "different-host-identity"); err != nil {
+	if err := bindClientUUID(m, ""); err != nil {
 		t.Fatal(err)
 	}
 	if m.Client.UUID != want {
 		t.Fatalf("guest identity changed: %q", m.Client.UUID)
+	}
+}
+
+func TestBindClientUUIDRejectsOtherIdentity(t *testing.T) {
+	m := &Message{Client: &Client{UUID: "a5ba6920-5bcf-4022-b8cf-015425f7b05c"}}
+	if err := bindClientUUID(m, "3b440429-067f-5b75-a0c3-f436519f8ccb"); err == nil {
+		t.Fatal("expected a UUID mismatch error")
+	}
+}
+
+func TestBindClientUUIDAcceptsBoundIdentity(t *testing.T) {
+	want := "3b440429-067f-5b75-a0c3-f436519f8ccb"
+	for _, claimed := range []string{
+		want,
+		strings.ToUpper(want),
+		"2904443b-7f06-755b-a0c3-f436519f8ccb", // mangled form
+	} {
+		m := &Message{Client: &Client{UUID: claimed}}
+		if err := bindClientUUID(m, want); err != nil {
+			t.Fatalf("%v: %v", claimed, err)
+		}
 	}
 }
 
@@ -111,7 +133,7 @@ func TestSendCommandsTracksIssuedCommands(t *testing.T) {
 func TestDestroyStopsServerGoroutines(t *testing.T) {
 	ignore := goleak.IgnoreCurrent()
 
-	s := newTestServer(t, t.TempDir(), "ns")
+	s := newResponseDirServer(t, t.TempDir(), "ns")
 	// let clientReaper reach its wait, so that Destroy must interrupt it
 	time.Sleep(10 * time.Millisecond)
 	s.Destroy()
@@ -189,9 +211,10 @@ func TestResponseCountedOnlyAfterFilesWritten(t *testing.T) {
 		path:        t.TempDir(),
 		commands:    map[int]*Command{1: {ID: 1}},
 		clients:     map[string]*client{},
-		responses:   make(chan *Client, 1),
+		responses:   make(chan queuedClient, 1),
 		handlerDone: make(chan struct{}),
 	}
+	s.queueCond = sync.NewCond(&s.queueLock)
 	go s.responseHandler()
 	defer func() {
 		close(s.responses)
@@ -199,10 +222,10 @@ func TestResponseCountedOnlyAfterFilesWritten(t *testing.T) {
 	}()
 
 	stdout := strings.Repeat("x", 64<<20)
-	s.responses <- &Client{
+	s.responses <- queuedClient{cl: &Client{
 		UUID:      "client",
 		Responses: []*Response{{ID: 1, Stdout: stdout, Stderr: "oops", ExitCode: 3, RecordExitCode: true}},
-	}
+	}}
 
 	// spin rather than sleep so the check runs as soon as the count moves
 	deadline := time.Now().Add(10 * time.Second)

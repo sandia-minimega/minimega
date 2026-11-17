@@ -7,8 +7,10 @@ package ron
 import (
 	"errors"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
@@ -71,6 +73,101 @@ func (f *File) Write(fpath string) error {
 	return err
 }
 
+// recvInRoot is like Recv, but writes f.Name inside root, which is opened at
+// dir. It refuses names that leave root. Uploaded modes lose the setuid,
+// setgid, and sticky bits and all write bits except the owner's.
+func (f *File) recvInRoot(root *os.Root, dir string) error {
+	name := filepath.Clean(f.Name)
+
+	// only the first part of a file can create it and its directories
+	if f.Offset == 0 {
+		if err := mkdirAllInRoot(root, filepath.Dir(name)); err != nil {
+			return err
+		}
+	}
+
+	part := name
+	if !f.EOF || f.Offset > 0 {
+		part += ".partial"
+	}
+
+	flag := os.O_RDWR
+	if f.Offset == 0 {
+		flag |= os.O_CREATE
+	}
+
+	file, err := root.OpenFile(part, flag, uploadMode(f.Perm))
+	if err != nil {
+		return err
+	}
+
+	n, err := file.WriteAt(f.Data, f.Offset)
+	if n < len(f.Data) {
+		log.Error("partial write of file %v, check disk", f.Name)
+	}
+	if cerr := file.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return err
+	}
+
+	if f.EOF && f.Offset > 0 {
+		// os.Root has no Rename before Go 1.25. root already resolved the
+		// parent of part, and name has the same parent.
+		return os.Rename(filepath.Join(dir, part), filepath.Join(dir, name))
+	}
+
+	return nil
+}
+
+func mkdirAllInRoot(root *os.Root, dir string) error {
+	if dir == "." {
+		return nil
+	}
+
+	var cur string
+	for _, elem := range strings.Split(filepath.ToSlash(dir), "/") {
+		cur = filepath.Join(cur, elem)
+		if err := root.Mkdir(cur, os.FileMode(0770)); err != nil && !errors.Is(err, fs.ErrExist) {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func uploadMode(perm os.FileMode) os.FileMode {
+	if perm&0111 != 0 {
+		return perm & 0755
+	}
+
+	return perm & 0644
+}
+
+// openInRoot opens name for reading inside dir. It refuses names that leave
+// dir, including through symbolic links.
+func openInRoot(dir, name string) (*os.File, error) {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+
+	return root.Open(name)
+}
+
+func sendFileError(ID int, name string, err error, send func(m *Message) error) error {
+	return send(&Message{
+		Type: MESSAGE_FILE,
+		File: &File{
+			ID:   ID,
+			Name: name,
+		},
+		Error: err.Error(),
+	})
+}
+
 // SendFile sends a file in chunks using the send func.
 func SendFile(dir, fpath string, ID int, chunkSize int64, send func(m *Message) error) error {
 	rel, err := filepath.Rel(dir, fpath)
@@ -78,23 +175,23 @@ func SendFile(dir, fpath string, ID int, chunkSize int64, send func(m *Message) 
 		return err
 	}
 
-	sendError := func(err error) error {
-		return send(&Message{
-			Type: MESSAGE_FILE,
-			File: &File{
-				ID:   ID,
-				Name: rel,
-			},
-			Error: err.Error(),
-		})
-	}
-
 	f, err := os.Open(fpath)
 	if err != nil {
 		log.Error("cannot open file %v: %v", fpath, err)
-		return sendError(err)
+		return sendFileError(ID, rel, err, send)
 	}
 	defer f.Close()
+
+	return sendOpenFile(f, rel, ID, chunkSize, send)
+}
+
+// sendOpenFile sends the open file f in chunks with the name rel.
+func sendOpenFile(f *os.File, rel string, ID int, chunkSize int64, send func(m *Message) error) error {
+	fpath := f.Name()
+
+	sendError := func(err error) error {
+		return sendFileError(ID, rel, err, send)
+	}
 
 	// we do have the file, calculate the number of parts
 	fi, err := f.Stat()

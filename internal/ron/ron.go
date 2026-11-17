@@ -41,8 +41,9 @@ func unmangle(uuid string) string {
 	re := regexp.MustCompile("[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}")
 
 	u := re.FindString(strings.ToLower(uuid))
-	if uuid == "" {
-		log.Fatal("uuid failed to match uuid format: %v", uuid)
+	if u == "" {
+		log.Debug("uuid failed to match uuid format: %q", uuid)
+		return ""
 	}
 
 	ret += u[6:8]
