@@ -1070,3 +1070,54 @@ func TestScheduleNonAndroidAnchorWithAndroidColocateSkipsAndroidFullHost(t *test
 		t.Fatalf("expected both colocated VMs on host 1, got schedule: %#v", s)
 	}
 }
+
+// TestScheduleBatch checks that each host gets the VMs of one queued entry in
+// one launch.
+func TestScheduleBatch(t *testing.T) {
+	var names []string
+	for i := 0; i < 100; i++ {
+		names = append(names, "vm"+strconv.Itoa(i))
+	}
+
+	q := &QueuedVMs{
+		Names: names,
+		VMConfig: VMConfig{
+			BaseConfig: BaseConfig{
+				Coschedule: -1,
+				VCPUs:      1,
+				Memory:     1,
+			},
+		},
+	}
+	hosts := fakeHostData(2, true)
+
+	s, err := schedule([]*QueuedVMs{q}, hosts, cpuCommit)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	seen := map[string]bool{}
+	for host, queue := range s {
+		if len(queue) != 1 {
+			t.Errorf("host %v has %d launches, want 1", host, len(queue))
+		}
+		for _, q2 := range queue {
+			for _, name := range q2.Names {
+				if seen[name] {
+					t.Errorf("%v scheduled twice", name)
+				}
+				seen[name] = true
+			}
+		}
+	}
+
+	if len(s) != 2 {
+		t.Errorf("VMs on %d hosts, want 2", len(s))
+	}
+	if len(seen) != len(names) {
+		t.Errorf("scheduled %d VMs, want %d", len(seen), len(names))
+	}
+	if len(q.Names) != len(names) {
+		t.Errorf("the queued entry has %d names after scheduling, want %d", len(q.Names), len(names))
+	}
+}

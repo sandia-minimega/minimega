@@ -21,6 +21,11 @@ type Scheduler struct {
 	// colocated are VMs that need to be scheduled with another VM, indexed by
 	// the name of the VM to be colocated with
 	colocated map[string][]*QueuedVMs
+
+	// batches are the copies in res of each queued entry, indexed by the
+	// original entry and the host, so that a host gets all its VMs of an
+	// entry in one launch
+	batches map[*QueuedVMs]map[string]*QueuedVMs
 }
 
 // hostSortBy defines the ordering of hosts based on some notion of load
@@ -66,6 +71,7 @@ func (s *Scheduler) Schedule() (map[string][]*QueuedVMs, error) {
 
 	s.res = map[string][]*QueuedVMs{}
 	s.colocated = map[string][]*QueuedVMs{}
+	s.batches = map[*QueuedVMs]map[string]*QueuedVMs{}
 
 	for _, q := range s.queue {
 		// resolve `localhost` to actual hostname
@@ -343,11 +349,22 @@ func (s *Scheduler) add(host *HostStats, name string, q *QueuedVMs) error {
 		return fmt.Errorf("too many VMs scheduled on %v for coschedule requirement of %v", host.Name, host.Limit)
 	}
 
+	//log.Debug("scheduling VM on %v: %v", host.Name, name)
+
+	// add the name to the copy of q for this host, if there is one
+	if q2 := s.batches[q][host.Name]; q2 != nil {
+		q2.Names = append(q2.Names, name)
+		return nil
+	}
+
 	// create copy of q
 	q2 := *q
 	q2.Names = []string{name}
 
-	//log.Debug("scheduling VM on %v: %v", host.Name, name)
+	if s.batches[q] == nil {
+		s.batches[q] = map[string]*QueuedVMs{}
+	}
+	s.batches[q][host.Name] = &q2
 	s.res[host.Name] = append(s.res[host.Name], &q2)
 
 	return nil
