@@ -32,6 +32,15 @@ jobs:
           JUNITFILE: junit.xml
         run: ./scripts/test.bash
 
+      # These tests mount a small tmpfs to fill a real file system, so they
+      # need root and skip in the step above.
+      - name: Run root-only tests
+        shell: bash
+        run: |
+          sudo env "PATH=$PATH" GOCACHE=/tmp/root-gocache GOMODCACHE="$(go env GOMODCACHE)" \
+            go test -count=1 -v -run '^TestTransferNoSpaceTmpfs$' ./internal/iomeshage | tee root-tests.log
+          grep -q -- '--- PASS: TestTransferNoSpaceTmpfs' root-tests.log
+
       # annotate_only needs no checks: write, so it also works for fork pull requests.
       - name: Report test results
         if: ${{ !cancelled() && hashFiles('junit.xml') != '' }}

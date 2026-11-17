@@ -74,14 +74,27 @@ file get foo
 ```
 
 If the file exists, the command will return with no error. The `file` API is
-non-blocking - it will return immediately and enqueue the file transfer. To see
-the status of existing file transfers, use the `file status` API:
+non-blocking - it will return immediately and enqueue the file transfer.
+
+Parts are written directly into a temporary file that is moved into place once
+every part arrives, so a transfer needs about as much free space as the file
+itself. Replacing an existing file in `-headnode` mode needs room for both
+copies until the new one is moved into place. When the node serving the file
+reports its size (older versions do not), `file get` reserves the space
+before it returns and fails with a "no space left on device" error if the file
+will not fit. For a directory or glob, files are reserved one at a time, so the
+files before the one that does not fit are still transferred. If the serving
+node does not report the size, or the file system cannot reserve space, a full
+disk fails the transfer later. A transfer that fails after `file get` returns
+is logged, and commands that wait for the file, such as `vm launch`, report the
+error. To see the status of existing file transfers, use the
+`file status` API:
 
 ```text
 minimega$ file get bigfile
 minimega$ file status
-host  | Filename | Temporary directory                    | Completed parts | Queued
-foo   | bigfile  | /tmp/minimega/files/transfer_442933642 | 65/103          | false
+host  | Filename | Temporary directory                        | Completed parts | Queued
+foo   | bigfile  | /tmp/minimega/files/transfer_foo_442933642 | 65/103          | false
 ```
 
 You can also list and delete files using the `file` API:
