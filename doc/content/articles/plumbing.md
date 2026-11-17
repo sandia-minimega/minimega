@@ -35,10 +35,11 @@ read/write options. Pipelines are compositions of pipes and external programs.
 Pipes are simply named I/O points, similar to a named pipe on a unix system.
 minimega pipes exchange newline delimited messages as opposed to a byte stream
 like unix pipes. By using messages, minimega pipes allow for any number of
-readers and writers to a sinlge named pipe. Messages are written and are
-delivered to any attached readers according to that pipe's current mode.
-Message writes are non-blocking, and if no readers are present on the pipe, the
-message is discarded. No buffering of messages takes place.
+readers and writers to a single named pipe. Messages are written and are
+delivered to any attached readers according to that pipe's current mode. A
+write does not wait for readers to attach: if no readers are present on the
+pipe, the message is discarded. No buffering of messages takes place, so a
+reader that is slow to take its messages slows down the writers of the pipe.
 
 Named pipes are also unique to the namespace they were created in, so it's safe
 to reuse pipe names between experiments.
@@ -52,8 +53,12 @@ on the command line:
 minimega -pipe foo
 ```
 
-Invoking a pipe this way will block until standard in is closed. Let's write to
-the pipe now using the command line as well as the minimega CLI:
+Invoking a pipe this way will block until standard in is closed. minimega then
+exits once every line it read from standard in has been written to the pipe,
+which takes longer when a reader of the pipe is slow to take its messages.
+It prints every line that is written to the pipe, including the lines it
+writes itself.
+Let's write to the pipe now using the command line as well as the minimega CLI:
 
 ```text
 echo "Hallo von minimega!" | minimega -pipe foo
@@ -62,7 +67,7 @@ echo "Hallo von minimega!" | minimega -pipe foo
 And from the minimega cli:
 
 ```text
-miniemga$ pipe foo "Or would you rather use English?"
+minimega$ pipe foo "Or would you rather use English?"
 ```
 
 Meanwhile, back at our reader:
@@ -89,6 +94,10 @@ pairs on the `exec` and `background` commands:
 minimega$ cc exec stdin=foo my_program
 minimega$ cc background stdin=foo stdout=bar my_program
 ```
+
+miniccc sends the output of such a process to the pipe until the process has
+exited. If the process leaves other processes behind that still have the output
+open, miniccc closes the output 5 seconds later.
 
 <a id="TOC_2.1.1."></a>
 
@@ -117,7 +126,9 @@ are cases however, where you may want messages to be delivered to only one
 reader, similar to a load balancer. minimega pipes support three message
 delivery modes: all (the default one-to-many mode), round-robin, and random. In
 round-robin and random modes, messages written to a pipe will be delivered to
-exactly one reader (including distributed readers).
+exactly one reader (including distributed readers). A `minimega -pipe` process
+that writes to the pipe reads from it as well, so it can be the reader of its
+own messages.
 
 To change the mode on a named pipe, use the `pipe` API:
 
@@ -141,11 +152,11 @@ written to the pipe:
 One approach would be to have the writer count the number of readers and
 generate N unique values based on the mean to a pipe with round-robin delivery.
 This is problematic as it requires the agent to check reader and pipe state at
-every potential write. Instead, we can have the pipe use a via to geneate
+every potential write. Instead, we can have the pipe use a via to generate
 unique values for every reader automatically when a write occurs:
 
 ```text
-minimega$ pipe foo via "normal -stddev 5.0"
+minimega$ pipe foo via normal -stddev 5.0
 ```
 
 In the above example, "normal" is a program that takes, on standard input, a

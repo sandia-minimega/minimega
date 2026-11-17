@@ -110,7 +110,7 @@ $ echo "Hallo von minimega!" | minimega -pipe foo
 And from the minimega cli:
 
 ```text
-miniemga$ pipe foo "Or would you rather use English?"
+minimega$ pipe foo "Or would you rather use English?"
 ```
 
 Meanwhile, back at our reader:
@@ -202,7 +202,7 @@ This is problematic as it requires the agent to check reader and pipe state at e
 Instead, we can have the pipe use a via to generate unique values for every reader automatically when a write occurs:
 
 ```text
-minimega$ pipe foo via "normal -stddev 5.0"
+minimega$ pipe foo via normal -stddev 5.0
 ```
 
 In the above example, "normal" is a program that takes, on standard input, a floating point value as a mean, and generates a single value on a normal distribution with the given mean and standard deviation.

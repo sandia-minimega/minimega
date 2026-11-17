@@ -6,11 +6,12 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
+	"syscall"
 
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 	"github.com/sandia-minimega/minimega/v2/pkg/miniclient"
@@ -65,42 +66,7 @@ func commandSocketHandle(c net.Conn) {
 
 		// check the plumbing
 		if r.PlumbPipe != "" {
-			reader := plumber.NewReader(r.PlumbPipe)
-			writer := plumber.NewWriter(r.PlumbPipe)
-
-			go func() {
-				for {
-					select {
-					case <-reader.Done:
-						return
-					case line := <-reader.C:
-						if err := enc.Encode(line); err != nil {
-							if !strings.Contains(err.Error(), "write: broken pipe") {
-								log.Errorln(err)
-							}
-							break
-						}
-					}
-				}
-
-			}()
-
-			for err == nil {
-				var line string
-				err = dec.Decode(&line)
-				if err != nil {
-					break
-				}
-
-				if line != "" {
-					writer <- line
-				}
-			}
-
-			// stop the reader
-			reader.Close()
-			close(writer)
-
+			err = commandSocketPipe(enc, dec, r.PlumbPipe)
 			break
 		}
 
@@ -186,11 +152,81 @@ func commandSocketHandle(c net.Conn) {
 	// finally, log the error, if there was one
 	if err == nil || err == io.EOF {
 		log.Debugln("command client disconnected")
-	} else if err != nil && strings.Contains(err.Error(), "write: broken pipe") {
+	} else if isClientGone(err) {
 		log.Infoln("command client disconnected without waiting for responses")
-	} else if err != nil {
+	} else {
 		log.Errorln(err)
 	}
+}
+
+// isClientGone reports whether err is how a write to, or a read from, the
+// command socket fails when the client disconnected early: EPIPE on a write
+// and, if the client left data it was sent unread, ECONNRESET on a read.
+func isClientGone(err error) bool {
+	return errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET)
+}
+
+// commandSocketPipe attaches a client to a named pipe: lines from the client
+// are written to the pipe and lines written to the pipe are sent to the
+// client, until the client closes its end of the connection or disconnects.
+//
+// It returns the error that ended the client's input (io.EOF if the client
+// closed its end), once every line from the client has been written to the
+// pipe and nothing more will be sent to the client, so the caller can close
+// the connection.
+func commandSocketPipe(enc *json.Encoder, dec *json.Decoder, pipe string) error {
+	reader := plumber.NewReader(pipe)
+	writer, written := plumber.NewWriterDone(pipe)
+
+	// Send lines written to the pipe to the client. Nothing else uses enc
+	// while the client is attached to the pipe.
+	sent := make(chan struct{})
+	go func() {
+		defer close(sent)
+
+		var gone bool
+
+		// C is closed once the reader is closed and off the pipe
+		for line := range reader.C {
+			if gone {
+				continue
+			}
+
+			if err := enc.Encode(line); err != nil {
+				if !isClientGone(err) {
+					log.Error("pipe %v: %v", pipe, err)
+				}
+
+				// stop the plumber from delivering to a client that is gone
+				gone = true
+				reader.Close()
+			}
+		}
+	}()
+
+	var err error
+	for {
+		var line string
+		if err = dec.Decode(&line); err != nil {
+			break
+		}
+
+		if line != "" {
+			writer <- line
+		}
+	}
+
+	// The client has nothing more to write, or is gone. Finish writing its
+	// lines to the pipe while the reader still drains the pipe, then stop the
+	// reader and wait for it, so that nothing is sent on a closed connection
+	// and the client is off the pipe when its connection is closed.
+	close(writer)
+	<-written
+
+	reader.Close()
+	<-sent
+
+	return err
 }
 
 func readLocalRequest(dec *json.Decoder) (*miniclient.Request, error) {
