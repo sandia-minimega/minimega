@@ -502,49 +502,54 @@ func (n *Namespace) schedule(assignment map[string][]*QueuedVMs, queue []*Queued
 
 	n.scheduleStats = append(n.scheduleStats, stats)
 
-	// Result of vm launch commands
-	respChan := make(chan minicli.Responses)
+	// set names here instead of on the remote host to ensure that we get
+	// names that are unique across the namespace
+	for _, queue := range assignment {
+		for _, q := range queue {
+			for i, name := range q.Names {
+				if name == "" {
+					q.Names[i] = fmt.Sprintf("vm-%v", n.vmID.Next())
+				}
+			}
+		}
+	}
+
+	results := make(chan scheduleResult)
 
 	var wg sync.WaitGroup
 
 	for host, queue := range assignment {
-		wg.Add(1)
+		// limit the launches in progress on each host
+		slots := make(chan struct{}, scheduleHostParallel())
 
-		go func(host string, queue []*QueuedVMs) {
-			defer wg.Done()
+		for _, q := range queue {
+			wg.Add(1)
 
-			for _, q := range queue {
-				// set name here instead of on the remote host to ensure that we
-				// get names that are unique across the namespace
-				for i, name := range q.Names {
-					if name == "" {
-						q.Names[i] = fmt.Sprintf("vm-%v", n.vmID.Next())
-					}
-				}
+			go func(host string, q *QueuedVMs) {
+				defer wg.Done()
 
-				n.hostLaunch(host, q, respChan)
-			}
-		}(host, queue)
+				slots <- struct{}{}
+				defer func() { <-slots }()
+
+				results <- scheduleLaunch(n, host, q)
+			}(host, q)
+		}
 	}
 
 	go func() {
 		wg.Wait()
-		close(respChan)
+		close(results)
 	}()
 
-	// Collect all the responses and log them
-	for resps := range respChan {
-		for _, resp := range resps {
-			if resp.Error != "" {
-				stats.failures += 1
-				log.Error("launch error, host %v -- %v", resp.Host, resp.Error)
-			} else {
-				// Response should number of VMs launched
-				i, _ := strconv.Atoi(resp.Response)
-				stats.launched += i
+	// Collect all the results and log them
+	for r := range results {
+		stats.launched += r.launched
+		stats.failures += r.failed
 
-				log.Debug("launch response, host %v -- %v", resp.Host, resp.Response)
-			}
+		if r.err != "" {
+			log.Error("launch error, host %v -- %v", r.host, r.err)
+		} else {
+			log.Debug("launch response, host %v -- %v launched", r.host, r.launched)
 		}
 	}
 
@@ -679,27 +684,57 @@ func (ns *Namespace) NewCommand(c *ron.Command) int {
 	return id
 }
 
+// scheduleResult is the result of the launch of one queued entry on one host.
+type scheduleResult struct {
+	host             string
+	launched, failed int
+	err              string
+}
+
+// scheduleLaunch launches q on host. Tests replace it.
+var scheduleLaunch = (*Namespace).hostLaunch
+
+// scheduleHostParallel returns the maximum number of launches in progress on
+// each host. Tests replace it.
+var scheduleHostParallel = runtime.NumCPU
+
 // hostLaunch launches a queuedVM on the specified host and namespace.
-func (n *Namespace) hostLaunch(host string, queued *QueuedVMs, respChan chan<- minicli.Responses) {
+func (n *Namespace) hostLaunch(host string, queued *QueuedVMs) scheduleResult {
 	log.Info("scheduling %v %v VMs on %v", len(queued.Names), queued.VMType, host)
+
+	res := scheduleResult{host: host}
 
 	// Launching the VMs locally
 	if host == hostname {
-		resp := &minicli.Response{
-			Host:     hostname,
-			Response: strconv.Itoa(len(queued.Names)),
+		errs := n.Launch("", queued)
+
+		res.launched = launchedCount(len(queued.Names), errs)
+		res.failed = len(queued.Names) - res.launched
+		if err := makeErrSlice(errs); err != nil {
+			res.err = err.Error()
 		}
 
-		if err := makeErrSlice(n.Launch("", queued)); err != nil {
-			resp.Error = err.Error()
-		}
-
-		respChan <- minicli.Responses{resp}
-
-		return
+		return res
 	}
 
-	forward(meshageLaunch(host, n.Name, queued), respChan)
+	var resp *minicli.Response
+	for resps := range meshageLaunch(host, n.Name, queued) {
+		if len(resps) > 0 {
+			resp = resps[0]
+		}
+	}
+
+	if resp == nil {
+		res.failed = len(queued.Names)
+		res.err = "timed out"
+		return res
+	}
+
+	res.launched, _ = strconv.Atoi(resp.Response)
+	res.failed = len(queued.Names) - res.launched
+	res.err = resp.Error
+
+	return res
 }
 
 // hostSlice converts the hosts map into a slice of hostnames
