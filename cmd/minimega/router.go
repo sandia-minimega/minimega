@@ -46,12 +46,14 @@ type ospf struct {
 }
 
 type dhcp struct {
-	addr   string
-	low    string
-	high   string
-	router string
-	dns    string
-	static map[string]string
+	addr    string
+	low     string
+	high    string
+	netmask string
+	router  string
+	dns     string
+	static  map[string]string
+	relay   []string // DHCP servers to relay requests on addr to
 }
 
 type bgp struct {
@@ -351,6 +353,12 @@ func (r *Router) writeConfig(w io.Writer) error {
 	for _, d := range r.dhcp {
 		if d.low != "" {
 			fmt.Fprintf(w, "dnsmasq dhcp range %v %v %v\n", d.addr, d.low, d.high)
+		}
+		if d.netmask != "" {
+			fmt.Fprintf(w, "dnsmasq dhcp netmask %v %v\n", d.addr, d.netmask)
+		}
+		for _, server := range d.relay {
+			fmt.Fprintf(w, "dnsmasq dhcp relay %v %v\n", d.addr, server)
 		}
 		if d.router != "" {
 			fmt.Fprintf(w, "dnsmasq dhcp option router %v %v\n", d.addr, d.router)
@@ -736,6 +744,83 @@ func (r *Router) DHCPAddDNS(addr, dns string) error {
 	return nil
 }
 
+// Sets the netmask handed out for a DHCP range, needed for relayed subnets
+func (r *Router) DHCPAddNetmask(addr, mask string) error {
+	if listen := net.ParseIP(addr); listen.To4() == nil || mappedIPv4(addr, listen) {
+		return fmt.Errorf("invalid listen address: %v: netmask needs an IPv4 address", addr)
+	}
+	ip := net.ParseIP(mask).To4()
+	if ip == nil {
+		return fmt.Errorf("invalid netmask: %v", mask)
+	}
+	if ones, bits := net.IPMask(ip).Size(); ones == 0 && bits == 0 {
+		return fmt.Errorf("invalid netmask: %v", mask)
+	}
+
+	d := r.dhcpFindOrCreate(addr)
+
+	d.netmask = ip.String()
+
+	return nil
+}
+
+// Relays DHCP requests arriving on addr to a DHCP server
+func (r *Router) DHCPAddRelay(addr, server string) error {
+	listen, srv := net.ParseIP(addr), net.ParseIP(server)
+	if listen == nil || mappedIPv4(addr, listen) {
+		return fmt.Errorf("invalid listen address: %v", addr)
+	}
+	if srv == nil {
+		return fmt.Errorf("invalid DHCP server address: %v", server)
+	}
+	// dnsmasq relays to these servers only through a named interface
+	if srv.IsMulticast() || srv.IsUnspecified() || srv.Equal(net.IPv4bcast) ||
+		(srv.To4() == nil && srv.IsLinkLocalUnicast()) {
+		return fmt.Errorf("DHCP server address must be a unicast address that is not IPv6 link-local: %v", server)
+	}
+	// dnsmasq cannot relay DHCPv4 to a DHCPv6 server or vice versa
+	if (listen.To4() == nil) != (srv.To4() == nil) {
+		return fmt.Errorf("listen address %v and DHCP server %v must both be IPv4 or both be IPv6", addr, server)
+	}
+	server = srv.String()
+
+	d := r.dhcpFindOrCreate(addr)
+
+	for _, s := range d.relay {
+		if s == server {
+			return nil
+		}
+	}
+	d.relay = append(d.relay, server)
+
+	return nil
+}
+
+// Removes one relay server, or all of them when server is empty
+func (r *Router) DHCPDelRelay(addr, server string) error {
+	d, ok := r.dhcp[addr]
+	if !ok {
+		return fmt.Errorf("no such address: %v", addr)
+	}
+
+	if server == "" {
+		d.relay = nil
+		return nil
+	}
+	if ip := net.ParseIP(server); ip != nil {
+		server = ip.String()
+	}
+
+	for i, s := range d.relay {
+		if s == server {
+			d.relay = append(d.relay[:i], d.relay[i+1:]...)
+			return nil
+		}
+	}
+
+	return fmt.Errorf("no such relay server: %v", server)
+}
+
 // Creates a static IP reseravtion for DHCP
 func (r *Router) DHCPAddStatic(addr, mac, ip string) error {
 	d := r.dhcpFindOrCreate(addr)
@@ -743,6 +828,12 @@ func (r *Router) DHCPAddStatic(addr, mac, ip string) error {
 	d.static[mac] = ip
 
 	return nil
+}
+
+// mappedIPv4 reports if s writes the IPv4 address ip in IPv6 form, such as
+// ::ffff:10.0.0.1. dnsmasq does not accept this form for an IPv4 address.
+func mappedIPv4(s string, ip net.IP) bool {
+	return ip.To4() != nil && strings.Contains(s, ":")
 }
 
 func (r *Router) dhcpFindOrCreate(addr string) *dhcp {
@@ -767,6 +858,12 @@ func (d *dhcp) String() string {
 	fmt.Fprintf(w, "Listen address:\t%v\n", d.addr)
 	fmt.Fprintf(w, "Low address:\t%v\n", d.low)
 	fmt.Fprintf(w, "High address:\t%v\n", d.high)
+	if d.netmask != "" {
+		fmt.Fprintf(w, "Netmask:\t%v\n", d.netmask)
+	}
+	if len(d.relay) > 0 {
+		fmt.Fprintf(w, "Relay to:\t%v\n", strings.Join(d.relay, ", "))
+	}
 	fmt.Fprintf(w, "Router:\t%v\n", d.router)
 	fmt.Fprintf(w, "DNS:\t%v\n", d.dns)
 	fmt.Fprintf(w, "Static IPs:\t\n")
