@@ -699,6 +699,17 @@ func (vm *BaseVM) SetCCActive(active bool) {
 	vm.ActiveCC = active
 }
 
+// CCPolicy returns the cc policy of the VM: the configured cc-policy, or the
+// default of the VM type. The ron server reads it without the VM lock, so it
+// must not take it.
+func (vm *BaseVM) CCPolicy() string {
+	if vm.BaseConfig.CCPolicy != "" {
+		return vm.BaseConfig.CCPolicy
+	}
+
+	return ron.CCPolicyLegacy
+}
+
 func (vm *BaseVM) HasCC() bool {
 	vm.lock.Lock()
 	defer vm.lock.Unlock()
