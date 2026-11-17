@@ -55,6 +55,19 @@ router takes a number of subcommands:
 
 - 'upstream': Set upstream server for DNS.
 
+- 'dnsmasq': Append a raw line to the router's dnsmasq config, for options
+  the other subcommands do not cover. Lines are written after the generated
+  config, in the order they were added. Quote lines that contain a '#'. For
+  example, to answer every *.test.com query with 1.0.0.1, forward test2.com to
+  another DNS server, and add a CNAME:
+
+	router foo dnsmasq address=/test.com/1.0.0.1
+	router foo dnsmasq server=/test2.com/3.0.0.1
+	router foo dnsmasq cname=www.test.com,test.com
+
+  The router VM's minirouter must include 'dnsmasq custom' support; older
+  minirouter builds stop applying the config at the first custom line.
+
 - 'gw': Set default gateway which will be used if there is no matching route.
 
 - 'ra': Enable neighbor discovery protocol router advertisements for a given
@@ -141,6 +154,7 @@ router takes a number of subcommands:
 			"router <vm> <dhcp,> <listen address> <static,> <mac> <ip>",
 			"router <vm> <dns,> <ip> <hostname>",
 			"router <vm> <upstream,> <ip>",
+			"router <vm> <dnsmasq,> <config line>...",
 			"router <vm> <gw,> <gw>",
 			"router <vm> <ra,> <subnet>",
 			"router <vm> <route,> <static,> <network> <next-hop> [staticroutename]",
@@ -182,6 +196,7 @@ router takes a number of subcommands:
 			"clear router <vm> <dns,>",
 			"clear router <vm> <dns,> <ip>",
 			"clear router <vm> <upstream,>",
+			"clear router <vm> <dnsmasq,> [config line]...",
 			"clear router <vm> <gw,>",
 			"clear router <vm> <ra,>",
 			"clear router <vm> <ra,> <subnet>",
@@ -271,6 +286,8 @@ func cliRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		ip := c.StringArgs["ip"]
 		rtr.Upstream(ip)
 		return nil
+	} else if c.BoolArgs["dnsmasq"] {
+		return rtr.DnsmasqAdd(strings.Join(c.ListArgs["config"], " "))
 	} else if c.BoolArgs["gw"] {
 		rtr.Gateway(c.StringArgs["gw"])
 		return nil
@@ -540,6 +557,8 @@ func cliClearRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 		return rtr.DNSDel(ip)
 	} else if c.BoolArgs["upstream"] {
 		return rtr.UpstreamDel()
+	} else if c.BoolArgs["dnsmasq"] {
+		return rtr.DnsmasqDel(strings.Join(c.ListArgs["config"], " "))
 	} else if c.BoolArgs["gw"] {
 		return rtr.GatewayDel()
 	} else if c.BoolArgs["ra"] {
@@ -606,6 +625,7 @@ func cliClearRouter(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 			return err
 		}
 		rtr.DNSDel("")
+		rtr.DnsmasqDel("")
 		rtr.RADDel("")
 		rtr.RouteStaticDel("")
 		rtr.NamedRouteStaticDel("", "")

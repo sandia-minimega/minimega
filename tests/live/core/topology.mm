@@ -213,6 +213,10 @@ router rtr-ab dhcp 10.10.2.1 static 00:1f:53:00:02:14 10.10.2.14
 router rtr-ab dhcp 10.10.2.1 static 00:1f:53:00:02:15 10.10.2.15
 router rtr-ab dns 10.10.3.11 web.live
 router rtr-ab dns 10.10.4.11 fw.live
+# Raw dnsmasq lines: a wildcard domain, a CNAME, and a quoted comment.
+router rtr-ab dnsmasq address=/wild.live/10.10.3.11
+router rtr-ab dnsmasq cname=www.web.live,web.live
+router rtr-ab dnsmasq "# live custom dnsmasq"
 router rtr-ab route ospf 0 0
 router rtr-ab route ospf 0 1
 router rtr-ab commit
