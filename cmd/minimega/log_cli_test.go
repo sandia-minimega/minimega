@@ -34,7 +34,9 @@ func TestCLILogMeshSelfKeepsExisting(t *testing.T) {
 	})
 
 	hostname = "self"
-	meshageNode, _ = meshage.NewNode(hostname, "", 1, nil, 19999, "test")
+	// port 0: ephemeral listeners that cannot collide on repeated runs;
+	// degree 0: no discovery broadcasts. Only the local mesh entry matters.
+	meshageNode, _ = meshage.NewNode(hostname, "", 0, nil, 0, "test")
 
 	if err := setupMeshageLogging("head"); err != nil {
 		t.Fatal(err)
