@@ -1,0 +1,267 @@
+name: Firecracker
+on:
+  push:
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "pkg/**"
+      - "go.mod"
+      - "go.sum"
+      - "misc/firecracker/**"
+      - "tests/firecracker/**"
+      - ".github/workflows/firecracker.yml"
+  pull_request:
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "pkg/**"
+      - "go.mod"
+      - "go.sum"
+      - "misc/firecracker/**"
+      - "tests/firecracker/**"
+      - ".github/workflows/firecracker.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FC_VERSION: v1.17.0
+  # sha256 of firecracker-${FC_VERSION}-x86_64.tgz. Change it with FC_VERSION.
+  FC_TGZ_SHA256: 06094a1108ae9e82aa4c23a775aa92758f53f1175d422270d9d6162cb9ade558
+  # Guest kernel and root filesystem from the Firecracker CI artifact bucket.
+  # The bucket listing gives the newest prefix:
+  #   https://s3.amazonaws.com/spec.ccfc.min?list-type=2&prefix=firecracker-ci/&delimiter=/
+  FC_CI_BASE: https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci
+  FC_CI_ID: 20261105-6ea6634994fa-0
+  FC_KERNEL: vmlinux-6.1.188
+  FC_KERNEL_SHA256: 31fe88d6c72b93d5c9c63cca599ccadec49fd35673bbfd04850d6c00ff27f032
+  FC_ROOTFS: ubuntu-24.04.squashfs
+  FC_ROOTFS_SHA256: 91da33c2013bd1b018f2c1e6b3d37a3316e0ff8c19a71de640d7a4c3ca31b92b
+  MM_BASE: /tmp/mm
+  MM_LOG: /tmp/mm.log
+  FC_DIR: /var/lib/mmfc
+
+jobs:
+  functional:
+    name: Functional tests (${{ matrix.fs }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        fs: [xfs, ext4]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Host facts
+        run: |
+          set +e
+          uname -r
+          grep -m1 'model name' /proc/cpuinfo
+          nproc
+          free -g
+          stat -fc '%T %n' / /mnt /sys/fs/cgroup
+          ls -l /dev/kvm /dev/net/tun
+          losetup -f
+          sudo dmsetup version
+          exit 0
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo udevadm settle
+          if [ ! -c /dev/kvm ]; then
+            echo "::error::/dev/kvm is not a character device. This runner does not provide KVM."
+            exit 1
+          fi
+          if ! python3 -I -c 'import os; os.close(os.open("/dev/kvm", os.O_RDWR))'; then
+            echo "::error::Unable to open /dev/kvm read-write."
+            exit 1
+          fi
+          ls -l /dev/kvm
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential dnsmasq iproute2 isc-dhcp-client libpcap-dev ntfs-3g openssh-client openvswitch-switch qemu-kvm qemu-utils squashfs-tools e2fsprogs xfsprogs acl dmsetup fdisk iputils-ping binutils
+          # minimega check looks for a kvm binary.
+          if ! command -v kvm >/dev/null; then
+            sudo ln -s "$(command -v qemu-system-x86_64)" /usr/local/bin/kvm
+          fi
+          sudo systemctl start openvswitch-switch
+          sudo ovs-vsctl show
+          sudo modprobe loop || true
+          sudo modprobe dm_snapshot || true
+          ls -l /dev/loop-control /dev/mapper/control
+
+      - name: Install Firecracker
+        run: |
+          tmp="$(mktemp -d)"
+          cd "$tmp"
+          tgz="firecracker-${FC_VERSION}-x86_64.tgz"
+          url="https://github.com/firecracker-microvm/firecracker/releases/download/${FC_VERSION}"
+          curl -fsSL --retry 3 -o "$tgz" "${url}/${tgz}"
+          printf '%s  %s\n' "$FC_TGZ_SHA256" "$tgz" | sha256sum -c -
+          tar -xzf "$tgz"
+          rel="release-${FC_VERSION}-x86_64"
+          # minimega refuses binaries in a directory that other users can write; the runner image ships /usr/local/bin as 0777.
+          sudo chmod 0755 /usr/local /usr/local/bin
+          sudo install -o root -g root -m 0755 "${rel}/firecracker-${FC_VERSION}-x86_64" /usr/local/bin/firecracker
+          sudo install -o root -g root -m 0755 "${rel}/jailer-${FC_VERSION}-x86_64" /usr/local/bin/jailer
+          firecracker --version
+          jailer --version
+
+      - name: Cache guest artifacts
+        id: guest-cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/fc-artifacts
+          key: fc-guest-x86_64-${{ env.FC_CI_ID }}-${{ env.FC_KERNEL }}-${{ env.FC_ROOTFS }}
+
+      - name: Download guest artifacts
+        if: steps.guest-cache.outputs.cache-hit != 'true'
+        run: |
+          dir="${RUNNER_TEMP}/fc-artifacts"
+          mkdir -p "$dir"
+          for f in "$FC_KERNEL" "$FC_ROOTFS"; do
+            curl -fsSL --retry 3 -o "${dir}/${f}" "${FC_CI_BASE}/${FC_CI_ID}/x86_64/${f}"
+          done
+
+      - name: Verify guest artifacts
+        run: |
+          cd "${RUNNER_TEMP}/fc-artifacts"
+          printf '%s  %s\n' "$FC_KERNEL_SHA256" "$FC_KERNEL" "$FC_ROOTFS_SHA256" "$FC_ROOTFS" | sha256sum -c -
+
+      - name: Build minimega and miniccc
+        run: |
+          source scripts/env.bash
+          ./scripts/version.bash
+          go build -o bin/minimega ./cmd/minimega
+          CGO_ENABLED=0 go build -o bin/miniccc ./cmd/miniccc
+
+      - name: Prepare guest images
+        run: |
+          guest="${RUNNER_TEMP}/guest"
+          mkdir -p "$guest"
+          cp "${RUNNER_TEMP}/fc-artifacts/${FC_KERNEL}" "${guest}/vmlinux"
+          cp "${RUNNER_TEMP}/fc-artifacts/${FC_ROOTFS}" "${guest}/rootfs.squashfs"
+          sudo MINICCC="${PWD}/bin/miniccc" bash tests/firecracker/prepare-guest.sh "$guest"
+
+      - name: Build minimal guest
+        run: bash misc/firecracker/guest/build-rootfs.sh "${RUNNER_TEMP}/guest/minimal" --miniccc bin/miniccc
+
+      - name: Prepare Firecracker directory (${{ matrix.fs }})
+        env:
+          FS: ${{ matrix.fs }}
+        run: |
+          sudo mkdir -p "$FC_DIR"
+          case "$FS" in
+            xfs)
+              img=/var/tmp/mmfc-xfs.img
+              sudo truncate -s 12G "$img"
+              sudo mkfs.xfs -q -f -m reflink=1 "$img"
+              sudo mount -o loop "$img" "$FC_DIR"
+              ;;
+            ext4)
+              ;;
+            *)
+              echo "::error::Unknown filesystem $FS"
+              exit 1
+              ;;
+          esac
+          sudo chown root:root "$FC_DIR"
+          sudo chmod 0755 "$FC_DIR"
+          findmnt -T "$FC_DIR"
+          stat -fc '%T %n' "$FC_DIR"
+          stat -c '%A %U:%G %n' "$FC_DIR" /var/lib /var /
+          fstype="$(stat -fc %T "$FC_DIR")"
+          if [ "$FS" = xfs ] && [ "$fstype" != xfs ]; then
+            echo "::error::$FC_DIR is $fstype, not xfs"
+            exit 1
+          fi
+          if [ "$FS" = ext4 ] && [ "$fstype" != ext2/ext3 ]; then
+            echo "::error::$FC_DIR is $fstype, not ext4"
+            exit 1
+          fi
+
+      - name: Start minimega
+        run: |
+          sudo rm -rf "$MM_BASE"
+          # shellcheck disable=SC2024 # the runner user writes /tmp/mm.stdout
+          sudo nohup bin/minimega -nostdin -base "$MM_BASE" -firecracker-dir "$FC_DIR" -level debug -logfile "$MM_LOG" > /tmp/mm.stdout 2>&1 &
+          for _ in $(seq 60); do
+            if sudo test -S "${MM_BASE}/minimega"; then
+              break
+            fi
+            sleep 1
+          done
+          if ! sudo test -S "${MM_BASE}/minimega"; then
+            echo "::error::minimega did not create ${MM_BASE}/minimega within 60 seconds"
+            cat /tmp/mm.stdout || true
+            sudo tail -n 50 "$MM_LOG" || true
+            exit 1
+          fi
+          sudo bin/minimega -base "$MM_BASE" -e version
+
+      - name: Run smoke tests
+        env:
+          FS: ${{ matrix.fs }}
+          # On the AWS-hosted runners (nested KVM on Intel), 100 VMs at the same time can fail with KVM_EXIT_FAIL_ENTRY.
+          # https://github.blog/changelog/2026-10-28-github-actions-adds-multi-cloud-compute-to-improve-reliability/
+          RATE_VMS: "25"
+        run: sudo -E bash tests/firecracker/smoke.sh "${RUNNER_TEMP}/guest"
+
+      - name: Collect diagnostics
+        if: always()
+        run: |
+          set +e
+          d="${RUNNER_TEMP}/diag"
+          mkdir -p "$d"
+          # save runs a command and writes its output to a file in $d
+          save() {
+            local out="$1"
+            shift
+            "$@" > "${d}/${out}" 2>&1
+          }
+          save vm-info.txt sudo bin/minimega -base "$MM_BASE" -e 'vm info'
+          save cc-clients.txt sudo bin/minimega -base "$MM_BASE" -e 'cc clients'
+          save cc-commands.txt sudo bin/minimega -base "$MM_BASE" -e 'cc commands'
+          sudo cp "$MM_LOG" /tmp/mm.stdout "$d/"
+          if sudo test -d "${FC_DIR}/vm"; then
+            sudo find "${FC_DIR}/vm" -maxdepth 2 -type f \( -name 'console.log*' -o -name 'firecracker.log*' -o -name jailer.log \) -exec cp --parents -t "$d" {} +
+          fi
+          save netns.txt ip netns
+          save ovs-vsctl-show.txt sudo ovs-vsctl show
+          save dmsetup-ls.txt sudo dmsetup ls
+          save losetup-a.txt losetup -a
+          save jail-tree.txt sudo find "${FC_DIR}/jail" -maxdepth 4 -ls
+          save fc-dir-tree.txt sudo find "$FC_DIR" -maxdepth 3 -ls
+          save findmnt.txt findmnt
+          save dmesg.txt sudo dmesg
+          sudo chown -R "$(id -u):$(id -g)" "$d"
+          ls -lR "$d"
+          exit 0
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: firecracker-${{ matrix.fs }}-diagnostics
+          path: ${{ runner.temp }}/diag
+          retention-days: 7
+          if-no-files-found: warn
