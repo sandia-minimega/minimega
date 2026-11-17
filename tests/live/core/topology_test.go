@@ -78,6 +78,8 @@ var topology = func() []vmSpec {
 
 const (
 	d5UUID = "4c1e0000-0000-4000-8000-0000000000d5"
+	// host-d3's fixed VNC shim port
+	d3VNCPort = "5903"
 	// total NICs across the topology (routers 5, hosts 21)
 	totalNICs = 26
 )

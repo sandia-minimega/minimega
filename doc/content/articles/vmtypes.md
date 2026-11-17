@@ -93,6 +93,7 @@ Configuration parameters specific to `KVM` instances:
 - `baremetal-network-driver` - Admit a board-integrated QEMU NIC model for bare-metal network configuration.
 - `serial` - Specify serial ports.
 - `virtio-serial` - Specify virtio-serial ports.
+- `vnc-port` - Set the TCP port of the VM's VNC shim instead of letting minimega pick a free one. The port is reserved on the host, across namespaces and Android emulator ports, until the VM is flushed. Android VMs reject it.
 
 <a id="TOC_4.1.2."></a>
 
