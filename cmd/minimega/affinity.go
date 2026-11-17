@@ -101,11 +101,18 @@ func (ns *Namespace) disableAffinity() error {
 	return nil
 }
 
+// setAffinityArgs returns the command that sets the affinity of all the
+// threads of the PID. Threads that start later, such as the vCPU threads of a
+// Firecracker VMM, get the same affinity.
+func setAffinityArgs(cpu string, pid int) []string {
+	return []string{"taskset", "-a", "-p", cpu, strconv.Itoa(pid)}
+}
+
 // setAffinity sets the affinity for the PID to the given CPU.
 func setAffinity(cpu string, pid int) error {
 	log.Debug("set affinity to %v for %v", cpu, pid)
 
-	out, err := processWrapper("taskset", "-a", "-p", cpu, strconv.Itoa(pid))
+	out, err := processWrapper(setAffinityArgs(cpu, pid)...)
 	if err != nil {
 		return fmt.Errorf("%v: %v", err, out)
 	}

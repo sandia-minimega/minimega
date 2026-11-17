@@ -32,6 +32,7 @@ const (
 	KVM
 	CONTAINER
 	ANDROID
+	FIRECRACKER
 )
 
 type VM interface {
@@ -177,9 +178,14 @@ func init() {
 	gob.Register(&KvmVM{})
 	gob.Register(&ContainerVM{})
 	gob.Register(&AndroidVM{})
+	gob.Register(&FirecrackerVM{})
 }
 
 func NewVM(name, namespace string, vmType VMType, config VMConfig) (VM, error) {
+	if err := fcCheckDiskOptions(vmType, config.KVMConfig.Disks); err != nil {
+		return nil, err
+	}
+
 	switch vmType {
 	case KVM:
 		return NewKVM(name, namespace, config)
@@ -187,6 +193,8 @@ func NewVM(name, namespace string, vmType VMType, config VMConfig) (VM, error) {
 		return NewContainer(name, namespace, config)
 	case ANDROID:
 		return NewAndroid(name, namespace, config)
+	case FIRECRACKER:
+		return NewFirecracker(name, namespace, config)
 	}
 
 	return nil, errors.New("unknown VM type")
@@ -276,6 +284,8 @@ func (s VMType) String() string {
 		return "container"
 	case ANDROID:
 		return "android"
+	case FIRECRACKER:
+		return "firecracker"
 	default:
 		return "???"
 	}
@@ -289,6 +299,8 @@ func ParseVMType(s string) (VMType, error) {
 		return CONTAINER, nil
 	case "android":
 		return ANDROID, nil
+	case "firecracker":
+		return FIRECRACKER, nil
 	default:
 		return 0, errors.New("invalid VMType")
 	}
@@ -705,6 +717,10 @@ func (vm *BaseVM) SetCCActive(active bool) {
 func (vm *BaseVM) CCPolicy() string {
 	if vm.BaseConfig.CCPolicy != "" {
 		return vm.BaseConfig.CCPolicy
+	}
+
+	if vm.Type == FIRECRACKER {
+		return ron.CCPolicyStrict
 	}
 
 	return ron.CCPolicyLegacy

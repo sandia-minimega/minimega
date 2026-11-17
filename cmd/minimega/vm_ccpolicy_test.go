@@ -16,9 +16,11 @@ func TestBaseVMCCPolicy(t *testing.T) {
 		config string
 		want   string
 	}{
+		{FIRECRACKER, "", ron.CCPolicyStrict},
 		{KVM, "", ron.CCPolicyLegacy},
 		{CONTAINER, "", ron.CCPolicyLegacy},
 		{ANDROID, "", ron.CCPolicyLegacy},
+		{FIRECRACKER, ron.CCPolicyLegacy, ron.CCPolicyLegacy},
 		{KVM, ron.CCPolicyStrict, ron.CCPolicyStrict},
 	} {
 		vm := &BaseVM{Type: tt.typ}

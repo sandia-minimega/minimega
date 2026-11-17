@@ -160,3 +160,22 @@ func TestVMsFlush(t *testing.T) {
 		})
 	}
 }
+
+func TestQueuedVMsFirecrackerSnapshotFiles(t *testing.T) {
+	q := QueuedVMs{VMConfig: NewVMConfig()}
+	q.FirecrackerSnapshotPath = "/snaps/web"
+
+	for _, vmType := range []VMType{KVM, CONTAINER, FIRECRACKER} {
+		q.VMType = vmType
+
+		var found bool
+		for _, f := range q.files() {
+			if f == "/snaps/web.mem" {
+				found = true
+			}
+		}
+		if found != (vmType == FIRECRACKER) {
+			t.Errorf("type %v: snapshot files listed = %v", vmType, found)
+		}
+	}
+}
