@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/sandia-minimega/minimega/v2/internal/bridge"
 	"github.com/sandia-minimega/minimega/v2/internal/gonetflow"
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 )
@@ -34,7 +35,7 @@ var captureCLIHandlers = []minicli.Handler{
 	{ // capture for VM
 		HelpShort: "capture experiment data for a VM",
 		Patterns: []string{
-			"capture <pcap,> vm <vm name> <interface index> <filename>",
+			"capture <pcap,> vm <vm name> <interface index> <filename> [option]...",
 			"capture <pcap,> <delete,> vm <vm name> [interface index]",
 		},
 		Call:    wrapVMTargetCLI(cliCaptureVM),
@@ -56,11 +57,32 @@ configured. There are several APIs to configure new netflow captures:
 	capture netflow gzip [true,false]
 	capture netflow timeout [timeout]
 
-PCAP capture can be from a bridge or VM interface. To set the snaplen or filter
-for new PCAP captures, use:
+PCAP capture can be from a bridge or VM interface. PCAP files use the classic
+pcap format with nanosecond timestamps. To set the snaplen or filter for new
+PCAP captures in the namespace, use:
 
 	capture pcap snaplen <size>
 	capture pcap filter <bpf>
+
+The snaplen must be from 14 to 262144. minimega compiles the filter to check
+it. Give an empty filter, "", to remove the filter.
+
+You can give options as key=value items after the file name. The options
+override the namespace settings for one capture:
+
+	snaplen=<size>      bytes kept for each packet, 14 to 262144
+	filter=<bpf>        BPF filter for this capture
+	maxsize=<size>      stop the capture as full when the file reaches this
+	                    size, in bytes, or with a K, M or G suffix
+	direction=<dir>     VM captures only: in, out or both (the default). in
+	                    captures the frames that the host receives on the tap,
+	                    which are the frames that the VM sends.
+
+Put a filter that contains spaces in quotes, for example filter="tcp port 80".
+
+minimega makes the directory of the file. A relative file name is relative to
+the -filepath directory. minimega refuses a file that another running capture
+writes, except for files that are not regular files, such as /dev/null.
 
 Examples:
 
@@ -73,21 +95,32 @@ Examples:
 	# Capture the 0-th interface for VM foo to foo.pcap
 	capture pcap vm foo 0 foo.pcap
 
-When run without arguments, capture prints all running captures. To stop a
-capture, use the delete commands:
+	# Capture only the TCP port 80 frames that VM foo sends, at most 1 GiB
+	capture pcap vm foo 0 foo.pcap filter="tcp port 80" direction=in maxsize=1G
+
+When run without arguments, capture prints all captures. Each capture has an
+ID and a state. The states are running, failed and full. A failed capture shows
+its error, for example when its VM is flushed. minimega closes the file of a
+failed or full capture, and keeps the capture in the list until you delete it.
+The list also shows the format, snaplen, filter, packets, bytes, kernel drops
+(kdrops), file size and start time of each PCAP capture. The path is always
+the last column. To stop a capture, use the delete commands:
 
 	capture netflow delete bridge <bridge>
 	capture pcap delete bridge <bridge>
 	capture pcap delete vm <name>
 	capture pcap delete vm <name> <interface index>
+	capture pcap delete id <id>
 
 To stop all captures of a particular kind, replace <bridge> or <vm> with "all".
 If a VM has multiple interfaces and there are multiple captures running,
 calling "capture pcap delete vm <name>" stops all the captures for that VM. To
 stop only the capture for a single interface, specify the interface index,
 e.g. "capture pcap delete vm <name> 0" stops the capture for interface 0
-without affecting captures on other interfaces of the same VM. To stop all
-captures of all types, use "clear capture".
+without affecting captures on other interfaces of the same VM. A delete that
+matches no capture returns an error. Capture IDs are local to each host. To
+stop all captures of all types, use "clear capture". To stop all captures of
+one type, use "clear capture pcap" or "clear capture netflow".
 
 Notes with namespaces:
  * Capturing traffic directly from the bridge (as PCAP or netflow) is not
@@ -105,17 +138,18 @@ minimega instance:
 	capture <netflow,> <bridge,> <bridge> <tcp,udp> <hostname:port>
 	capture <netflow,> <delete,> bridge <name>
 	capture <netflow,> <timeout,> [timeout in seconds]
-	capture <pcap,> bridge <bridge> <filename>
+	capture <pcap,> bridge <bridge> <filename> [option]...
 	capture <pcap,> <delete,> bridge <name>
-
+	capture <pcap,> <delete,> id <id>
 `,
 		Patterns: []string{
 			"capture <netflow,> <bridge,> <bridge> <filename>",
 			"capture <netflow,> <bridge,> <bridge> <tcp,udp> <hostname:port>",
 			"capture <netflow,> <delete,> bridge <bridge>",
 			"capture <netflow,> <timeout,> [timeout in seconds]",
-			"capture <pcap,> bridge <bridge> <filename>",
+			"capture <pcap,> bridge <bridge> <filename> [option]...",
 			"capture <pcap,> <delete,> bridge <bridge>",
+			"capture <pcap,> <delete,> id <id>",
 		},
 		Call: wrapSimpleCLI(cliCapture),
 		Suggest: wrapSuggest(func(ns *Namespace, val, prefix string) []string {
@@ -128,8 +162,8 @@ minimega instance:
 	{ // clear capture
 		HelpShort: "reset capture state",
 		HelpLong: `
-Resets state for captures across the namespace. See "help capture" for more
-information.`,
+Resets state for captures across the namespace. With netflow or pcap, stops
+only the captures of that type. See "help capture" for more information.`,
 		Patterns: []string{
 			"clear capture [netflow,pcap]",
 		},
@@ -154,6 +188,9 @@ func cliCaptureConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 		if v, ok := c.StringArgs["size"]; ok {
 			i, err := strconv.ParseUint(v, 10, 32)
 			if err != nil {
+				return fmt.Errorf("invalid snaplen %q", v)
+			}
+			if err := bridge.ValidateSnapLen(uint32(i)); err != nil {
 				return err
 			}
 
@@ -165,7 +202,14 @@ func cliCaptureConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 		return nil
 	} else if c.BoolArgs["filter"] {
 		if v, ok := c.StringArgs["bpf"]; ok {
-			// TODO: check syntax?
+			snaplen := ns.captures.SnapLen
+			if snaplen == 0 {
+				snaplen = bridge.DefaultSnapLen
+			}
+			if err := bridge.ValidateFilter(v, snaplen); err != nil {
+				return err
+			}
+
 			ns.captures.Filter = v
 			return nil
 		}
@@ -197,49 +241,8 @@ func cliCaptureConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 }
 
 func cliCaptureList(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	resp.Header = []string{
-		"bridge",
-		"type",
-		"interface",
-		"mode",
-		"compress",
-		"path",
-	}
-
-	resp.Tabular = [][]string{}
-
-	for _, v := range ns.captures.m {
-		var row []string
-
-		switch v := v.(type) {
-		case *pcapVMCapture:
-			row = []string{
-				v.Bridge,
-				v.Type(),
-				fmt.Sprintf("%v:%v", v.VM.GetName(), v.Interface),
-				"", "",
-				v.Path,
-			}
-		case *pcapBridgeCapture:
-			row = []string{
-				v.Bridge,
-				v.Type(),
-				"", "", "",
-				v.Path,
-			}
-		case *netflowCapture:
-			row = []string{
-				v.Bridge,
-				v.Type(),
-				"",
-				v.Mode.String(),
-				strconv.FormatBool(v.Compress),
-				v.Path,
-			}
-		}
-
-		resp.Tabular = append(resp.Tabular, row)
-	}
+	resp.Header = captureHeader
+	resp.Tabular = ns.captures.Rows()
 
 	return nil
 }
@@ -248,6 +251,8 @@ func cliCaptureVM(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	name := c.StringArgs["vm"]
 	iface := c.StringArgs["interface"]
 	fname := c.StringArgs["filename"]
+
+	vmExists := func(s string) bool { return ns.FindVM(s) != nil }
 
 	// stopping capture for one or all VMs, optionally scoped to a single
 	// interface index
@@ -258,10 +263,10 @@ func cliCaptureVM(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 				return fmt.Errorf("invalid interface: `%v`", iface)
 			}
 
-			return ns.captures.StopVM(name, &num)
+			return ns.captures.StopVM(name, &num, vmExists)
 		}
 
-		return ns.captures.StopVM(name, nil)
+		return ns.captures.StopVM(name, nil, vmExists)
 	}
 
 	// capture VM:interface -> pcap
@@ -275,10 +280,27 @@ func cliCaptureVM(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return vmNotFound(name)
 	}
 
-	return captureVM(&ns.captures, vm, num, capturePath(fname))
+	if err := checkCaptureFilename(fname); err != nil {
+		return err
+	}
+
+	config, err := parseCaptureOptions(captureKindVM, ns.captures.CaptureConfig, c.ListArgs["option"])
+	if err != nil {
+		return err
+	}
+
+	_, err = captureVM(&ns.captures, vm, num, capturePath(fname), config)
+	return err
 }
 
 func cliCaptureClear(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	switch {
+	case c.BoolArgs["pcap"]:
+		return ns.captures.StopType("pcap")
+	case c.BoolArgs["netflow"]:
+		return ns.captures.StopType("netflow")
+	}
+
 	return ns.captures.StopAll()
 }
 
@@ -288,10 +310,29 @@ func cliCapturePcap(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 	fname := c.StringArgs["filename"]
 
 	if c.BoolArgs["delete"] {
+		if v, ok := c.StringArgs["id"]; ok {
+			id, err := strconv.Atoi(v)
+			if err != nil {
+				return fmt.Errorf("invalid capture ID: `%v`", v)
+			}
+
+			return ns.captures.StopID(id)
+		}
+
 		return ns.captures.StopBridge(b, "pcap")
 	}
 
-	return captureBridge(&ns.captures, b, capturePath(fname))
+	if err := checkCaptureFilename(fname); err != nil {
+		return err
+	}
+
+	config, err := parseCaptureOptions(captureKindBridge, ns.captures.CaptureConfig, c.ListArgs["option"])
+	if err != nil {
+		return err
+	}
+
+	_, err = captureBridge(&ns.captures, b, capturePath(fname), config)
+	return err
 }
 
 // cliCaptureNetflow manages the CLI for starting and stopping captures to netflow.

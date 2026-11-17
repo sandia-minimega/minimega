@@ -34,9 +34,8 @@ type Bridge struct {
 	// and the interface name is the key to the second map.
 	bonds map[string]map[string]int
 
-	// captures records the "stop" flags that are set to non-zero values when
-	// we want to stop a capture.
-	captures map[int]capture
+	// captures records the pcap captures on this bridge by ID
+	captures map[int]*capture
 
 	// captureID is a monotonically increasing counter used to assign unique
 	// IDs to captures. IDs must never be reused, even after captures are
@@ -98,19 +97,6 @@ type Tap struct {
 	stats []tapStat
 }
 
-type capture struct {
-	tap string
-
-	// isstopped is set to non-zero when stopped
-	isstopped *uint64
-
-	// ack is closed when the goroutine doing the capture closes
-	ack chan bool
-
-	// pcap handle, needed so that we can close it in stopCapture
-	handle *pcap.Handle
-}
-
 type tapStat struct {
 	t time.Time
 
@@ -130,6 +116,18 @@ func (b *Bridge) destroy() error {
 
 	if b.handle != nil {
 		b.handle.Close()
+	}
+
+	// stop the captures before their taps go away
+	for _, c := range b.captures {
+		b.stopCaptureLocked(c)
+	}
+
+	// mirror rows stay in OVSDB on a pre-existing bridge unless we remove them
+	for m := range b.mirrors {
+		if err := b.destroyMirror(m); err != nil {
+			log.Info("could not destroy mirror: %v", err)
+		}
 	}
 
 	// first get all of the taps off of this bridge and destroy them
@@ -153,9 +151,6 @@ func (b *Bridge) destroy() error {
 		if err := b.removeTunnel(v); err != nil {
 			return err
 		}
-	}
-	for v := range b.captures {
-		b.stopCapture(v)
 	}
 
 	if b.nf != nil {
