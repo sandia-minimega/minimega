@@ -48,6 +48,12 @@ func respondJSON(w http.ResponseWriter, data interface{}) {
 // indexHandler handles all unmatched URLs, redirects / to /vms
 func indexHandler(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/" {
+		// stay in the namespace when redirecting from /<namespace>/
+		if ns := r.URL.Query().Get("namespace"); ns != "" && *f_namespace == "" {
+			http.Redirect(w, r, "/"+url.PathEscape(ns)+"/vms", http.StatusFound)
+			return
+		}
+
 		http.Redirect(w, r, "/vms", 302)
 		return
 	}

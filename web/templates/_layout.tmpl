@@ -11,6 +11,26 @@
     <link rel="stylesheet" type="text/css" href="/css/minimega.css">
 
     <script type="text/javascript" src="/libs/jquery-3.7.1.min.js"></script>
+    <script type="text/javascript">
+      // Leave pages for a namespace that was cleared instead of alerting on every refresh.
+      function leaveUnknownNamespace(xhr) {
+        if (xhr && xhr.status == 404 && xhr.getResponseHeader("X-Minimega-Unknown-Namespace")) {
+          window.location.href = "/namespaces";
+          return true;
+        }
+        return false;
+      }
+      $.ajaxPrefilter(function(options) {
+        var error = options.error;
+        options.error = function(xhr) {
+          if (leaveUnknownNamespace(xhr)) {
+            return;
+          }
+          var self = this, args = arguments;
+          $.each([].concat(error || []), function(i, fn) { fn.apply(self, args); });
+        };
+      });
+    </script>
   </head>
   <body>
 

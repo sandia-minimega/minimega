@@ -1078,13 +1078,19 @@ func GetNamespace() *Namespace {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
 
-	_, ok := namespaces[namespace]
-	if namespace == DefaultNamespace && !ok {
-		// recreate automatically
-		namespaces[namespace] = NewNamespace(namespace)
+	if namespace == DefaultNamespace {
+		ensureDefaultNamespace()
 	}
 
 	return namespaces[namespace]
+}
+
+// ensureDefaultNamespace recreates the default namespace if it was cleared so
+// that it always exists. Caller must hold namespaceLock.
+func ensureDefaultNamespace() {
+	if _, ok := namespaces[DefaultNamespace]; !ok {
+		namespaces[DefaultNamespace] = NewNamespace(DefaultNamespace)
+	}
 }
 
 // resolveNamespace returns the namespace a command must run in: the one tagged
@@ -1169,6 +1175,8 @@ func ListNamespaces() []string {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
 
+	ensureDefaultNamespace()
+
 	res := []string{}
 	for n := range namespaces {
 		res = append(res, n)
@@ -1197,6 +1205,8 @@ func allNamespaces() []*Namespace {
 func InfoNamespaces() []NamespaceInfo {
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()
+
+	ensureDefaultNamespace()
 
 	res := []NamespaceInfo{}
 	for n := range namespaces {

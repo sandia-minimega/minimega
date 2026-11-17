@@ -64,7 +64,12 @@ func newVNCTestServer(t *testing.T) (*httptest.Server, *sync.Map) {
 	oldRoot, oldNamespace := *f_root, *f_namespace
 	*f_root, *f_namespace = tmp, ""
 	oldRunTabular := runTabularFunc
+	oldListNamespaces := listNamespacesFunc
 	oldMux := mux
+
+	listNamespacesFunc = func() ([]string, error) {
+		return []string{"minimega", "ns1"}, nil
+	}
 
 	var queries sync.Map
 	runTabularFunc = func(cmd *Command) []map[string]string {
@@ -86,6 +91,7 @@ func newVNCTestServer(t *testing.T) (*httptest.Server, *sync.Map) {
 		srv.Close()
 		*f_root, *f_namespace = oldRoot, oldNamespace
 		runTabularFunc = oldRunTabular
+		listNamespacesFunc = oldListNamespaces
 		mux = oldMux
 	})
 
