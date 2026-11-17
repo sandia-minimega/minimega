@@ -6,8 +6,8 @@
 ## Introduction
 
 This document describes the virtual machine (VM) types minimega is capable
-of launching — QEMU/KVM virtual machines, containers, and Android emulator
-instances. minimega uses a common API to describe features and supports
+of launching — QEMU/KVM virtual machines, containers, Android emulator
+instances, and Firecracker microVMs. minimega uses a common API to describe features and supports
 launching experiments consisting of any combination of VM types.
 
 <a id="TOC_2."></a>
@@ -33,7 +33,7 @@ which allows you to launch multiple copies of a VM easily.
 
 Also notice that in the `vm launch` command, we specify that we want to
 launch a `kvm` type VM. minimega currently supports the `kvm`, `container`,
-and `android` types, described in detail below.
+`android`, and `firecracker` types, described in detail below.
 
 <a id="TOC_3."></a>
 
@@ -42,7 +42,8 @@ and `android` types, described in detail below.
 All VM types are configured using the `vm config` API. Many configuration
 parameters are common to all VM types, such as `memory`, `net`, and `uuid`.
 Others are specific to one type of VM, such as `disk`, which is specific for
-KVM type VMs, and `filesystem`, which is specific to `container` type VMs.
+KVM and Firecracker type VMs, and `filesystem`, which is specific to
+`container` type VMs.
 
 When launching a VM, only the configuration parameters used by that VM type are
 used. For example, it is safe to have `vm config disk` specified when launching
@@ -315,3 +316,37 @@ When launching `android` type VMs, the following occurs, in order:
 - The Android Emulator process is started with the appropriate SDK environment
 - A QMP connection is established for lifecycle management
 - Handlers are created to watch the emulator state and handle shutdown
+
+<a id="TOC_4.4."></a>
+
+### Firecracker microVMs
+
+minimega supports launching `firecracker` type VMs. Each VM is a Linux guest in
+a Firecracker microVM. The Firecracker jailer confines the virtual machine
+monitor (VMM) of each VM. Firecracker VMs attach to the same openvswitch VLANs
+as KVM VMs.
+
+Firecracker VMs need an x86_64 Linux host with `/dev/kvm`, and the
+`firecracker` and `jailer` binaries v1.17.0 or later. A Firecracker VM boots the
+kernel of `vm config kernel` directly. `vm launch` configures the VMM, and
+`vm start` boots the guest. cc uses vsock.
+
+For full details, see the [Firecracker VM guide](firecracker.md).
+
+<a id="TOC_4.4.1."></a>
+
+#### Firecracker-specific configuration parameters
+
+Firecracker VMs also use these KVM parameters: `disk`, `kernel`, `initrd`, and
+`append`. Configuration parameters specific to `firecracker` instances:
+
+- `firecracker-path` - Set the Firecracker binary.
+- `jailer-path` - Set the jailer binary. It must have the same version as the Firecracker binary.
+- `firecracker-pci` - Use the PCI transport for the devices. The device limit is then 31, not 17.
+- `firecracker-entropy` - Add a virtio entropy device.
+- `vsock-cid` - Set the guest CID of the vsock device.
+- `firecracker-scratch` - Add an empty writable scratch disk.
+- `firecracker-snapshot` - Restore a snapshot that `vm save` wrote.
+- `inject` - Inject files into the first disk at launch.
+
+The common parameter `cc-policy` is `strict` by default for Firecracker VMs.

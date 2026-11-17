@@ -44,6 +44,11 @@ install virtio-serial drivers, available from
 Domain sockets for container-based VMs are created by default when launching
 containers.
 
+Firecracker-based VMs use vsock for the second connection mode. With
+`vm config backchannel true`, minimega adds a vsock device to the VM and
+listens for the guest on vsock port 9002. The guest kernel must have the virtio
+vsock transport. See the [Firecracker VM guide](../firecracker.md).
+
 Both connection modes provide the same features, although the TCP mode can be
 significantly faster, depending on the underlying network.
 
@@ -86,6 +91,14 @@ miniccc -parent 10.0.0.1 -uuid 3b440429-067f-5b75-a0c3-f436519f8ccb
 
 **NOTE:** In linux, the default virtio-serial cc port is `/dev/virtio-ports/cc`.
 In Windows, the path is `\\.\Global\cc`.
+
+To use vsock in a Firecracker-based VM, use the `-family vsock` flag. miniccc
+then connects to the host, CID 2, on the `-port` port. The guest has no
+platform UUID, so minimega binds the connection to the UUID of the VM.
+
+```bash
+miniccc -family vsock -port 9002
+```
 
 By default, miniccc will create the directory `/tmp/miniccc` to store state and
 files in. Files sent to the client will be stored in `/tmp/miniccc/files`. You
