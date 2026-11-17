@@ -60,7 +60,7 @@ func recvFiles(files []string) {
 
 		m := &ron.Message{
 			Type: ron.MESSAGE_FILE,
-			UUID: client.UUID,
+			UUID: clientUUID(),
 			File: &ron.File{
 				Name: v,
 			},
