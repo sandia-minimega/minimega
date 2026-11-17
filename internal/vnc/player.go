@@ -118,6 +118,8 @@ func (p *Player) PlaybackString(id, rhost, str string) error {
 	for _, char := range str {
 		keysym, err := asciiCharToKeysymString(char)
 		if err != nil {
+			f.Close()
+			os.Remove(f.Name())
 			return err
 		}
 		shift := requiresShift(keysym)
@@ -131,10 +133,15 @@ func (p *Player) PlaybackString(id, rhost, str string) error {
 		}
 	}
 	if err := f.Close(); err != nil {
+		os.Remove(f.Name())
 		return err
 	}
 
 	pb, err := p.playback(id, rhost, f.Name())
+	if err != nil {
+		os.Remove(f.Name())
+		return err
+	}
 
 	// remove file when playback is done
 	go func() {
@@ -144,7 +151,7 @@ func (p *Player) PlaybackString(id, rhost, str string) error {
 		}
 	}()
 
-	return err
+	return nil
 }
 
 func (p *Player) playback(id, rhost, filename string) (*playback, error) {

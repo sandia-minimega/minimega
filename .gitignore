@@ -305,6 +305,7 @@ volatile
 /LICENSES/go/
 internal/version/version.go
 lib/VERSION
+lib/minimega.py
 doc/content/reference/minimega.md
 doc/content/reference/minirouter.md
 

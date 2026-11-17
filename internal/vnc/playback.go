@@ -361,7 +361,7 @@ func (v *playback) playFile(parent *os.File, filename string) error {
 					return nil
 				}
 
-				waited := start.Sub(time.Now())
+				waited := time.Since(start)
 				v.addDuration(-waited)
 
 				// don't need to wait as long next time

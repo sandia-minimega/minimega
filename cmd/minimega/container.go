@@ -889,11 +889,8 @@ func (vm *ContainerVM) launch() error {
 	ioutil.WriteFile(uuidPath, []byte(vm.UUID+"\n"), 0400)
 
 	// create fifos
-	for i := uint64(0); i < vm.Fifos; i++ {
-		p := vm.path(fmt.Sprintf("fifo%v", i))
-		if err = syscall.Mkfifo(p, 0660); err != nil {
-			return vm.setErrorf("fifo: %v", err)
-		}
+	if err = mkfifos(vm.instancePath, vm.Fifos); err != nil {
+		return vm.setErrorf("fifo: %v", err)
 	}
 
 	//	0 :  minimega binary
@@ -972,7 +969,9 @@ func (vm *ContainerVM) launch() error {
 	childLog.Close()
 	log.LogAll(parentLog, log.DEBUG, "containerShim")
 
-	go vm.console(pseudotty)
+	// console only sets up listeners, so run it inline: teardown below must
+	// see the listeners it creates.
+	vm.console(pseudotty)
 
 	// network creation for containers happens /after/ the container is
 	// started, as we need the PID in order to attach a veth to the container
@@ -997,11 +996,51 @@ func (vm *ContainerVM) launch() error {
 		parentSync2.Close()
 	}
 
-	if err != nil {
-		// Some error occurred.. clean up the process
-		cmd.Process.Kill()
+	cgroupFreezer := vm.cgroup("freezer")
+	cgroupMemory := vm.cgroup("memory")
+	cgroupDevices := vm.cgroup("devices")
+	cgroupCPU := vm.cgroup("cpu")
+	cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
+
+	// teardown releases the listeners, netns, taps and cgroups of this launch.
+	// The caller must hold vm.lock.
+	teardown := func() {
+		if vm.ptyUnixListener != nil {
+			vm.ptyUnixListener.Close()
+		}
+		if vm.ptyTCPListener != nil {
+			vm.ptyTCPListener.Close()
+		}
 
 		vm.unlinkNetns()
+
+		for _, net := range vm.Networks {
+			br, err := getBridge(net.Bridge)
+			if err != nil {
+				log.Error("get bridge: %v", err)
+			} else {
+				br.DestroyTap(net.Tap)
+			}
+		}
+
+		// clean up the cgroup directory
+		for _, cgroup := range cgroups {
+			if err := os.Remove(cgroup); err != nil {
+				log.Errorln(err)
+			}
+		}
+	}
+
+	if err != nil {
+		// Some error occurred. Reap the process and tear down before
+		// returning, while vm.lock is still held, so that a relaunch or flush
+		// cannot run until the cleanup is done.
+		cmd.Process.Kill()
+		pseudotty.Close()
+		vm.thaw() // a frozen process cannot exit
+		cmd.Wait()
+
+		teardown()
 
 		return vm.setErrorf("%v", err)
 	}
@@ -1019,12 +1058,6 @@ func (vm *ContainerVM) launch() error {
 	go func() {
 		defer vm.cond.Signal()
 
-		cgroupFreezer := vm.cgroup("freezer")
-		cgroupMemory := vm.cgroup("memory")
-		cgroupDevices := vm.cgroup("devices")
-		cgroupCPU := vm.cgroup("cpu")
-		cgroups := []string{cgroupFreezer, cgroupMemory, cgroupDevices, cgroupCPU}
-
 		select {
 		case err := <-errChan:
 			log.Info("VM %v exited", vm.ID)
@@ -1034,7 +1067,7 @@ func (vm *ContainerVM) launch() error {
 
 			// we don't need to check the error for a clean kill,
 			// as there's no way to get here if we killed it.
-			if err != nil {
+			if err != nil && vm.State != VM_ERROR {
 				vm.setErrorf("killed container: %v", err)
 			}
 		case <-vm.kill:
@@ -1073,30 +1106,7 @@ func (vm *ContainerVM) launch() error {
 			}
 		}
 
-		if vm.ptyUnixListener != nil {
-			vm.ptyUnixListener.Close()
-		}
-		if vm.ptyTCPListener != nil {
-			vm.ptyTCPListener.Close()
-		}
-
-		vm.unlinkNetns()
-
-		for _, net := range vm.Networks {
-			br, err := getBridge(net.Bridge)
-			if err != nil {
-				log.Error("get bridge: %v", err)
-			} else {
-				br.DestroyTap(net.Tap)
-			}
-		}
-
-		// clean up the cgroup directory
-		for _, cgroup := range cgroups {
-			if err := os.Remove(cgroup); err != nil {
-				log.Errorln(err)
-			}
-		}
+		teardown()
 
 		if vm.State != VM_ERROR {
 			// Set to QUIT unless we've already been put into the error state
@@ -1104,6 +1114,21 @@ func (vm *ContainerVM) launch() error {
 		}
 	}()
 
+	return nil
+}
+
+// mkfifos creates fifo0..fifoN-1 in dir, replacing any left over from a
+// previous launch of the same VM.
+func mkfifos(dir string, n uint64) error {
+	for i := uint64(0); i < n; i++ {
+		p := filepath.Join(dir, fmt.Sprintf("fifo%v", i))
+		if err := os.Remove(p); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		if err := syscall.Mkfifo(p, 0660); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

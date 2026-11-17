@@ -361,8 +361,14 @@ func (vms *VMs) Kill(target string) error {
 // Flush VMs matching target.
 func (vms *VMs) Flush(target string, cc *ron.Server) error {
 	var mapLock sync.Mutex
+	var flushed []int
 
-	return vms.Apply(target, func(vm VM, _ bool) (bool, error) {
+	vms.mu.Lock()
+	defer vms.mu.Unlock()
+
+	// apply ranges over vms.m while the callbacks run, so record the IDs and
+	// delete them once apply has returned.
+	errs := vms.apply(target, func(vm VM, _ bool) (bool, error) {
 		if vm.GetState()&(VM_QUIT|VM_ERROR) == 0 {
 			return false, nil
 		}
@@ -382,10 +388,16 @@ func (vms *VMs) Flush(target string, cc *ron.Server) error {
 		mapLock.Lock()
 		defer mapLock.Unlock()
 
-		delete(vms.m, vm.GetID())
+		flushed = append(flushed, vm.GetID())
 
 		return true, nil
 	})
+
+	for _, id := range flushed {
+		delete(vms.m, id)
+	}
+
+	return makeErrSlice(errs)
 }
 
 // FlushAll deletes VMs that are in the QUIT or ERROR state, disconnecting them
@@ -396,12 +408,15 @@ func (vms *VMs) FlushAll(cc *ron.Server) error {
 
 	var wg sync.WaitGroup
 	var mapLock sync.Mutex
+	var flushed []int
 
 	for i, vm := range vms.m {
 		if vm.GetState()&(VM_QUIT|VM_ERROR) != 0 {
 			wg.Add(1)
 
 			go func(i int, vm VM) {
+				defer wg.Done()
+
 				log.Info("deleting VM: %v", i)
 
 				if err := vm.Disconnect(cc); err != nil {
@@ -414,12 +429,16 @@ func (vms *VMs) FlushAll(cc *ron.Server) error {
 
 				mapLock.Lock()
 				defer mapLock.Unlock()
-				delete(vms.m, i)
-				wg.Done()
+				flushed = append(flushed, i)
 			}(i, vm)
 		}
 	}
 	wg.Wait()
+
+	// delete only after the range loop is done
+	for _, i := range flushed {
+		delete(vms.m, i)
+	}
 
 	return nil
 }

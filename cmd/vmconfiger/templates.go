@@ -134,7 +134,7 @@ const mapTemplate = `{
 
 		if c.StringArgs["value"] == "" {
 			if ns.vmConfig.{{ .Field }} != nil {
-				r.Response = ns.vmConfig.{{ .Field }}[c.StringArgs["value"]]
+				r.Response = ns.vmConfig.{{ .Field }}[c.StringArgs["key"]]
 			}
 			return nil
 		}
@@ -292,7 +292,7 @@ func (v *{{ $type }} ) WriteConfig(w io.Writer) error {
 			}
 		{{- else if eq .Type "map" }}
 			for k, v := range v.{{ .Field }} {
-				fmt.Fprintf(w, "vm config {{ .ConfigName }} %v %v\n", k, v)
+				fmt.Fprintf(w, "vm config {{ .ConfigName }} %q %q\n", k, v)
 			}
 		{{- else if eq .Type "string" "int64" "uint64"}}
 			if v.{{ .Field }} != {{ .Default }} {
@@ -331,7 +331,11 @@ func (v *{{ $type }} ) ReadConfig(r io.Reader, ns string, vmConfig *VMConfig) er
 			{{- if eq .Type "bool" }}
 			v.{{ .Field }}, _ = strconv.ParseBool(config[1])
 			{{- else if eq .Type "map" }}
-			v.{{ .Field }}[config[1]] = config[2]
+			if v.{{ .Field }} == nil {
+				v.{{ .Field }} = make(map[string]string)
+			}
+			k, val := parseMapConfig(line)
+			v.{{ .Field }}[k] = val
 			{{- else if eq .Type "string" }}
 			v.{{ .Field }} = config[1]
 			{{- else if eq .Type "int64" }}

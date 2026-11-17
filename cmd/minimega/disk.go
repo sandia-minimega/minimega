@@ -87,7 +87,7 @@ func diskChainInfo(image string) ([]DiskInfo, error) {
 		if err != nil {
 			return infos, fmt.Errorf("[image %s] %v", image, err)
 		}
-		info.InUse, err = checkDiskInUse(image)
+		info.InUse, err = checkDiskInUse(info.Name)
 		if err != nil {
 			return infos, fmt.Errorf("could not check if image in use: %w", err)
 		}
@@ -459,26 +459,28 @@ func parseFiles(files interface{}, delete bool) (map[string]string, []string, er
 	switch v := files.(type) {
 	case []string:
 		if delete {
-			if sliceContainsString(v, ",") {
-				paths = strings.Split(v[0], ",")
-			} else {
-				paths = []string{v[0]} // single file
+			for _, p := range v {
+				paths = append(paths, strings.Split(p, ",")...)
 			}
 		} else {
 			pairs, err = parseInjectPairs(v)
 		}
 	case string:
 		if delete {
-			if strings.Contains(v, ",") {
-				paths = strings.Split(v, ",")
-			} else {
-				paths = []string{v} // single file
-			}
+			paths = strings.Split(v, ",")
 		} else {
 			pairs, err = parseInjectPairs([]string{v})
 		}
 	default:
 		return nil, nil, errors.New("error parsing files: unknown type")
+	}
+
+	// an empty path (e.g. from "foo.txt,") or "/" resolves to the mount
+	// directory itself, and deleting it would wipe the whole image.
+	for _, p := range paths {
+		if filepath.Clean("/"+p) == "/" {
+			return nil, nil, fmt.Errorf("refusing to delete the image root: %q", p)
+		}
 	}
 
 	return pairs, paths, err

@@ -639,6 +639,9 @@ func (vm *KVMConfig) DiskString(namespace string) string {
 }
 
 func (vm *KvmVM) QMPRaw(input string) (string, error) {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
 	return vm.q.Raw(input)
 }
 
@@ -678,13 +681,14 @@ func (vm *KvmVM) Save(filename string) error {
 	}
 
 	for d, devi := range device {
+		name := filename
 		if d > 0 {
-			filename = fmt.Sprintf("%s.%s", filename, strconv.Itoa(d))
-			//Appending drive number if there are multiple drives.
+			// Appending drive number if there are multiple drives.
+			name = fmt.Sprintf("%s.%d", filename, d)
 		}
-		log.Info("Saving disk %s to %s", devi, filename)
+		log.Info("Saving disk %s to %s", devi, name)
 
-		if err := vm.q.SaveDisk(filename, devi); err != nil {
+		if err := vm.q.SaveDisk(name, devi); err != nil {
 			return err
 		}
 
@@ -718,7 +722,9 @@ func (vm *KvmVM) QueryMigrate() (string, float64, error) {
 	var status string
 	var completed float64
 
+	vm.lock.Lock()
 	r, err := vm.q.QueryMigrate()
+	vm.lock.Unlock()
 	if err != nil {
 		return "", 0.0, err
 	}
@@ -736,8 +742,6 @@ func (vm *KvmVM) QueryMigrate() (string, float64, error) {
 	case "completed":
 		completed = 100.0
 		return status, completed, nil
-	case "failed":
-		return status, completed, nil
 	case "active":
 		if e, ok := r["ram"]; !ok {
 			return status, completed, fmt.Errorf("could not decode ram segment: %v", e)
@@ -749,10 +753,16 @@ func (vm *KvmVM) QueryMigrate() (string, float64, error) {
 				return status, completed, fmt.Errorf("invalid ram type: %v", e)
 			}
 		}
+	default:
+		// failed, setup, cancelling, cancelled, ... have no progress to report
+		return status, completed, nil
 	}
 
-	total := ram["total"].(float64)
-	transferred := ram["transferred"].(float64)
+	total, ok1 := ram["total"].(float64)
+	transferred, ok2 := ram["transferred"].(float64)
+	if !ok1 || !ok2 {
+		return status, completed, fmt.Errorf("invalid ram segment: %v", ram)
+	}
 
 	if total == 0.0 {
 		return status, completed, fmt.Errorf("zero total ram!")
@@ -772,7 +782,10 @@ func (vm *KvmVM) Screenshot(size int) ([]byte, error) {
 	tmp := filepath.Join(os.TempDir(), fmt.Sprintf("minimega_screenshot_%v", suffix))
 
 	// We have to write this out to a file, because QMP
+	vm.lock.Lock()
 	err := vm.q.Screendump(tmp)
+	vm.lock.Unlock()
+	defer os.Remove(tmp)
 	if err != nil {
 		return nil, err
 	}
@@ -783,11 +796,6 @@ func (vm *KvmVM) Screenshot(size int) ([]byte, error) {
 	}
 
 	pngResult, err := ppmToPng(ppmFile, size)
-	if err != nil {
-		return nil, err
-	}
-
-	err = os.Remove(tmp)
 	if err != nil {
 		return nil, err
 	}
@@ -923,6 +931,11 @@ func (vm *KvmVM) addTap(name, bridge, mac string, vlan int, qinq bool) (string, 
 
 	if qinq {
 		if err := br.SetTapQinQ(tap, vlan); err != nil {
+			// the caller has not recorded the tap yet, so nothing else
+			// would destroy it
+			if err := br.DestroyTap(tap); err != nil {
+				log.Error("unable to destroy tap %v: %v", tap, err)
+			}
 			return tap, err
 		}
 	}
@@ -1198,31 +1211,77 @@ func (vm *KvmVM) AddNIC(nic NetConfig) error {
 
 		nic.MAC = mac
 	}
-	var err error
-	nic.Tap, err = vm.createTapName(nic.Bridge)
-	vm.Networks = append(vm.Networks, nic)
+	tap, err := vm.createTapName(nic.Bridge)
+	if err != nil {
+		return err
+	}
+	nic.Tap = tap
 
 	if _, err := vm.addTap(nic.Tap, nic.Bridge, nic.MAC, nic.VLAN, nic.QinQ); err != nil {
 		return vm.setErrorf("Unable to add tap %v: %v", nic.Tap, err)
 	}
 
+	// Record the NIC only once it is fully added. rollback undoes the tap and
+	// the record if anything after this point fails.
+	vm.Networks = append(vm.Networks, nic)
+	rollback := func() {
+		vm.Networks = vm.Networks[:len(vm.Networks)-1]
+		if br, err := getBridge(nic.Bridge); err == nil {
+			if err := br.DestroyTap(nic.Tap); err != nil {
+				log.Error("unable to destroy tap %v: %v", nic.Tap, err)
+			}
+		}
+		if err := vm.writeTaps(); err != nil {
+			log.Error("unable to write taps: %v", err)
+		}
+	}
+
 	if err := vm.writeTaps(); err != nil {
+		rollback()
 		return vm.setErrorf("unable to write taps: %v", err)
 	}
 
+	if err := vm.qmpAddNIC(nic); err != nil {
+		rollback()
+		return err
+	}
+
+	return nil
+}
+
+// qmpAddNIC adds the QEMU netdev and NIC device for nic. If the device cannot
+// be added, the netdev is deleted again so that QEMU does not keep the tap
+// open.
+func (vm *KvmVM) qmpAddNIC(nic NetConfig) error {
 	// TODO: figure out a better naming convention for these
 	r, err := vm.q.NetDevAdd("tap", nic.Tap, nic.Tap)
-	if err != nil {
+	if err = hmpResult(r, err); err != nil {
 		return err
 	}
 	log.Debugln("qmp netdev_add response:", r)
 
 	r, err = vm.q.NicAdd(nic.Tap, nic.Tap, "pci.0", nic.Driver, nic.MAC)
-	if err != nil {
+	if err = hmpResult(r, err); err != nil {
+		if err := hmpResult(vm.q.HumanMonitorCommand("netdev_del " + nic.Tap)); err != nil {
+			log.Error("unable to delete netdev %v: %v", nic.Tap, err)
+		}
 		return err
 	}
 	log.Debugln("qmp device_add response:", r)
 
+	return nil
+}
+
+// hmpResult turns the reply of a human-monitor-command into an error. HMP
+// reports failures as text with no QMP error, so anything other than an empty
+// reply or QEMU's "OK" is a failure.
+func hmpResult(resp string, err error) error {
+	if err != nil {
+		return err
+	}
+	if r := strings.TrimSpace(resp); r != "" && r != "OK" {
+		return errors.New(r)
+	}
 	return nil
 }
 
@@ -1264,14 +1323,17 @@ func (vm *KvmVM) Hotplug(f, version, serial string) error {
 	log.Debugln("hotplug generated id:", hid)
 
 	r, err := vm.q.DriveAdd(hid, f)
-	if err != nil {
-		return err
+	if err = hmpResult(r, err); err != nil {
+		return fmt.Errorf("drive_add: %v", err)
 	}
 	log.Debugln("hotplug drive_add response:", r)
 
 	r, err = vm.q.USBDeviceAdd(hid, bus, serial)
-	if err != nil {
-		return err
+	if err = hmpResult(r, err); err != nil {
+		if _, derr := vm.q.DriveDel(hid); derr != nil {
+			log.Error("unable to remove drive %v: %v", hid, derr)
+		}
+		return fmt.Errorf("device_add: %v", err)
 	}
 
 	log.Debugln("hotplug usb device add response:", r)

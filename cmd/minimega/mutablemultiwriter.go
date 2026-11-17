@@ -13,20 +13,22 @@ type mutableMultiWriter struct {
 func (t *mutableMultiWriter) Write(p []byte) (n int, err error) {
 	t.Lock()
 	defer t.Unlock()
-	for i, w := range t.writers {
+	// a failed or short writer (e.g. a dead console connection) is dropped
+	// so that it cannot stop the copy from the pty to the other writers
+	live := t.writers[:0]
+	for _, w := range t.writers {
 		if w == nil {
 			continue
 		}
-		n, err = w.Write(p)
-		if err != nil {
-			// if a write fails, get rid of the writer
-			t.writers[i] = nil
+		if n, err := w.Write(p); err != nil || n != len(p) {
+			continue
 		}
-		if n != len(p) {
-			err = io.ErrShortWrite
-			return
-		}
+		live = append(live, w)
 	}
+	for i := len(live); i < len(t.writers); i++ {
+		t.writers[i] = nil
+	}
+	t.writers = live
 	return len(p), nil
 }
 

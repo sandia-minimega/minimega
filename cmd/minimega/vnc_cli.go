@@ -154,6 +154,8 @@ func cliVNCPlay(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 				id,
 				res,
 			})
+
+			return true, nil
 		}
 
 		// strange...
