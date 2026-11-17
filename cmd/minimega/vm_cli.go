@@ -133,7 +133,9 @@ example:
 
 If queueing is enabled (see "ns"), VMs will be queued for launching until "vm
 launch" is called with no additional arguments. This allows the scheduler to
-better allocate resources across the cluster.
+better allocate resources across the cluster. With queueing, minimega checks
+the names and UUIDs of the queued VMs against the VMs in the namespace when the
+queue launches.
 
 Android VMs use host-side emulator console/ADB port pairs. minimega currently
 uses 64 valid port pairs per host, so each host can run at most 64 Android VMs

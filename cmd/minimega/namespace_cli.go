@@ -378,7 +378,7 @@ func cliNamespaceFlush(ns *Namespace, c *minicli.Command, resp *minicli.Response
 	ns.configLock.Lock()
 	defer ns.configLock.Unlock()
 
-	ns.queue = nil
+	ns.clearQueue()
 	return nil
 }
 
