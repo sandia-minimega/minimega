@@ -552,7 +552,11 @@ func (p *Plumber) newReader(pipe string) *Reader {
 		}
 	}
 	pp := p.pipes[pipe]
+	// pp.lock, not p.lock, guards readers: a closing reader deletes itself
+	// under pp.lock only
+	pp.lock.Lock()
 	pp.readers[r.ID] = r
+	pp.lock.Unlock()
 
 	go func() {
 		<-r.Done

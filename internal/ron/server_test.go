@@ -542,3 +542,56 @@ func TestReaperNotBlockedByStalledPipeWrite(t *testing.T) {
 		}
 	}
 }
+
+// Consecutive guest commands reuse a stdin pipe: the guest closes its reader
+// and immediately opens a new one. The server must register the new reader
+// and must not tell the guest to close it.
+func TestPipeReaderReopenedAfterClose(t *testing.T) {
+	local, remote := net.Pipe()
+	defer local.Close()
+	defer remote.Close()
+
+	msgs := make(chan *Message, 16)
+	go func() {
+		dec := gob.NewDecoder(remote)
+		for {
+			var m Message
+			if err := dec.Decode(&m); err != nil {
+				return
+			}
+			msgs <- &m
+		}
+	}()
+
+	c := newGuestClient("c1", local)
+	defer c.closePipes()
+	p := miniplumber.New(nil)
+
+	c.pipeHandler(p, &Message{Pipe: "foo", PipeMode: PIPE_NEW_READER})
+	c.pipeHandler(p, &Message{Pipe: "foo", PipeMode: PIPE_CLOSE_READER})
+	c.pipeHandler(p, &Message{Pipe: "foo", PipeMode: PIPE_NEW_READER})
+
+	timeout := time.After(200 * time.Millisecond)
+	for done := false; !done; {
+		select {
+		case m := <-msgs:
+			if m.PipeMode == PIPE_CLOSE_READER {
+				t.Fatal("server closed the guest's reopened reader")
+			}
+		case <-timeout:
+			done = true
+		}
+	}
+
+	c.pipeLock.Lock()
+	r, ok := c.pipeReaders["foo"]
+	c.pipeLock.Unlock()
+	if !ok {
+		t.Fatal("reopened reader was not registered")
+	}
+	select {
+	case <-r.Done:
+		t.Fatal("reopened reader is closed")
+	default:
+	}
+}

@@ -254,11 +254,6 @@ func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 			p := plumber.NewReader(pipe)
 			c.pipeReaders[pipe] = p
 			go func() {
-				defer func() {
-					c.pipeLock.Lock()
-					defer c.pipeLock.Unlock()
-					delete(c.pipeReaders, pipe)
-				}()
 				for {
 					select {
 					case v := <-p.C:
@@ -269,12 +264,25 @@ func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 							PipeData: v,
 						})
 					case <-p.Done:
-						// signal the close downstream
-						c.sendMessage(&Message{
-							Type:     MESSAGE_PIPE,
-							Pipe:     m.Pipe, // use the non-namespace pipe name for downstream
-							PipeMode: PIPE_CLOSE_READER,
-						})
+						// If p is still registered, miniplumber closed it
+						// on its own: drop it and signal the close
+						// downstream. Otherwise the guest closed it and
+						// may already have opened a new reader on this
+						// pipe, which a close signal would kill.
+						c.pipeLock.Lock()
+						mine := c.pipeReaders[pipe] == p
+						if mine {
+							delete(c.pipeReaders, pipe)
+						}
+						c.pipeLock.Unlock()
+
+						if mine {
+							c.sendMessage(&Message{
+								Type:     MESSAGE_PIPE,
+								Pipe:     m.Pipe, // use the non-namespace pipe name for downstream
+								PipeMode: PIPE_CLOSE_READER,
+							})
+						}
 						return
 					}
 				}
@@ -287,10 +295,10 @@ func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 		}
 	case PIPE_CLOSE_READER:
 		if p, ok := c.pipeReaders[pipe]; ok {
-			// the reader goroutine will delete the reader from the
-			// map. We do this because miniplumber can close the
-			// reader for us asynchronously, and we want to clean
-			// up accordingly.
+			// unregister now so that a PIPE_NEW_READER right behind
+			// this gets a fresh reader. The reader goroutine cleans
+			// up readers that miniplumber closes on its own.
+			delete(c.pipeReaders, pipe)
 			p.Close()
 		}
 	case PIPE_CLOSE_WRITER:
