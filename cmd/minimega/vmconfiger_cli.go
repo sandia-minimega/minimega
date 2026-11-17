@@ -1216,6 +1216,33 @@ Default: true
 		}),
 	},
 	{
+		HelpShort: "configures cc-policy",
+		HelpLong: `Set the policy for the command and control layer of a VM. "strict"
+applies stricter rules to requests from the guest, and denies tunnel
+requests from the guest. "legacy" keeps the behavior of earlier
+releases. An empty value uses the default of the VM type, which is
+legacy for all VM types.
+`,
+		Patterns: []string{
+			"vm config cc-policy [value]",
+		},
+
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = ns.vmConfig.CCPolicy
+				return nil
+			}
+
+			if err := validCCPolicy(ns.vmConfig, c.StringArgs["value"]); err != nil {
+				return err
+			}
+
+			ns.vmConfig.CCPolicy = c.StringArgs["value"]
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "configures tags",
 		HelpLong: `Set tags in the same manner as "vm tag". These tags will apply to all
 newly launched VMs.
@@ -1268,6 +1295,7 @@ Default: empty map
 			"clear vm config <baremetal-network-driver,>",
 			"clear vm config <bidirectional-copy-paste,>",
 			"clear vm config <bonds,>",
+			"clear vm config <cc-policy,>",
 			"clear vm config <cpu,>",
 			"clear vm config <cdrom,>",
 			"clear vm config <colocate,>",
@@ -1498,6 +1526,9 @@ func (v *BaseConfig) Info(field string) (string, error) {
 	if field == "backchannel" {
 		return strconv.FormatBool(v.Backchannel), nil
 	}
+	if field == "cc-policy" {
+		return v.CCPolicy, nil
+	}
 	if field == "networks" {
 		return fmt.Sprintf("%v", v.Networks), nil
 	}
@@ -1536,6 +1567,9 @@ func (v *BaseConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "backchannel" {
 		v.Backchannel = true
 	}
+	if mask == Wildcard || mask == "cc-policy" {
+		v.CCPolicy = ""
+	}
 	if mask == Wildcard || mask == "networks" {
 		v.Networks = NetConfigs{}
 	}
@@ -1571,6 +1605,9 @@ func (v *BaseConfig) WriteConfig(w io.Writer) error {
 	}
 	if v.Backchannel != true {
 		fmt.Fprintf(w, "vm config backchannel %t\n", v.Backchannel)
+	}
+	if v.CCPolicy != "" {
+		fmt.Fprintf(w, "vm config cc-policy %v\n", v.CCPolicy)
 	}
 	if err := v.Networks.WriteConfig(w); err != nil {
 		return err
@@ -1615,6 +1652,8 @@ func (v *BaseConfig) ReadConfig(r io.Reader, ns string, vmConfig *VMConfig) erro
 			v.Coschedule, _ = strconv.ParseInt(config[1], 10, 64)
 		case "backchannel":
 			v.Backchannel, _ = strconv.ParseBool(config[1])
+		case "cc-policy":
+			v.CCPolicy = config[1]
 		case "networks":
 			if err := v.ReadFieldConfig(strings.NewReader(line), "networks", ns, vmConfig); err != nil {
 				return err
