@@ -1173,14 +1173,22 @@ func testHotplug(t *testing.T) {
 
 func testSave(t *testing.T) {
 	harness.MustRun(t, "vm save host-c2 live/saved-c2")
-	harness.Eventually(t, 3*time.Minute, 3*time.Second, func() error {
+	// poll quickly so the listing also sees the setup states QEMU reports before RAM progress
+	seen := map[string]bool{}
+	harness.Eventually(t, 3*time.Minute, 200*time.Millisecond, func() error {
 		for _, r := range harness.MustTable(t, "vm save") {
-			if r["name"] == "host-c2" && r["status"] != "completed" {
+			if r["name"] != "host-c2" {
+				continue
+			}
+			seen[r["status"]] = true
+			if r["status"] != "completed" {
 				return fmt.Errorf("save status: %v", r)
 			}
+			return nil
 		}
-		return nil
+		return fmt.Errorf("host-c2 missing from vm save")
 	})
+	t.Logf("save states seen: %v", seen)
 	for _, ext := range []string{".state", ".hdd"} {
 		harness.Eventually(t, time.Minute, 2*time.Second, func() error {
 			fi, err := os.Stat(fmt.Sprintf("%v/live/saved-c2%v", harness.MMFiles, ext))

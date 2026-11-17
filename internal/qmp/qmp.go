@@ -369,11 +369,11 @@ func (q *Conn) QueryMigrate() (map[string]interface{}, error) {
 	}
 	v := <-q.messageSync
 
-	status := v["return"]
-	if status == nil {
-		return nil, errors.New("received nil status")
+	status, ok := v["return"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid query-migrate response: %v", v)
 	}
-	return status.(map[string]interface{}), nil
+	return status, nil
 }
 
 func (q *Conn) QueryBlock() ([]interface{}, error) {
