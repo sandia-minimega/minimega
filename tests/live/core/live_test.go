@@ -117,6 +117,9 @@ func TestLive(t *testing.T) {
 		// tools shipped in the image
 		p("Passwordify", testPasswordify, cc),
 
+		// a second mesh node pulling files with iomeshage
+		p("FileTransfer", testFileTransfer, version),
+
 		// teardown
 		p("ClearNamespace", testClearNamespace, version),
 	})
