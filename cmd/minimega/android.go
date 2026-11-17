@@ -275,13 +275,17 @@ func (vm *AndroidVM) Info(field string) (string, error) {
 }
 
 func (vm *AndroidVM) Conflicts(vm2 VM) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	return vm.conflictsNoLock(vm2)
+}
+
+func (vm *AndroidVM) conflictsNoLock(vm2 VM) error {
 	switch vm2 := vm2.(type) {
 	case *AndroidVM:
 		return vm.conflictsAndroid(vm2)
 	case *KvmVM:
-		vm.lock.Lock()
-		defer vm.lock.Unlock()
-
 		if err := vm.conflictsKVMDisks(vm2.KVMConfig.Disks, vm2.Snapshot); err != nil {
 			return err
 		}
@@ -294,9 +298,6 @@ func (vm *AndroidVM) Conflicts(vm2 VM) error {
 }
 
 func (vm *AndroidVM) conflictsAndroid(vm2 *AndroidVM) error {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
-
 	if err := vm.conflictsKVMDisks(vm2.KVMConfig.Disks, vm2.Snapshot); err != nil {
 		return err
 	}

@@ -244,7 +244,8 @@ func (n *Namespace) Destroy() error {
 		log.Error("unable to delete mirrors: %v", err)
 	}
 
-	// Kill and flush all the VMs
+	// Kill and flush all the VMs, including the VMs that are launching
+	n.WaitLaunches()
 	n.Kill(Wildcard)
 	n.FlushAll(n.ccServer)
 
