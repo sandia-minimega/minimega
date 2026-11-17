@@ -292,6 +292,7 @@ type ContainerVM struct {
 	ContainerConfig // embed
 
 	effectivePath   string
+	overlay         bool // the overlay of the container is mounted
 	ptyUnixListener net.Listener
 	ptyTCPListener  net.Listener
 	netns           string
@@ -1329,13 +1330,20 @@ func (vm *ContainerVM) overlayMount() error {
 		log.Error("overlay mount: %v %v", err, out)
 		return err
 	}
+	vm.overlay = true
 	return nil
 }
 
 func (vm *ContainerVM) overlayUnmount() error {
+	// a container without snapshot, or whose launch failed early, has no overlay
+	if !vm.overlay {
+		return nil
+	}
+
 	for i := 0; i < UnmountRetries; i++ {
 		err := syscall.Unmount(vm.effectivePath, 0)
 		if err == nil {
+			vm.overlay = false
 			return nil
 		}
 

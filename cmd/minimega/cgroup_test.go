@@ -207,6 +207,69 @@ func TestContainerLaunchCgroupError(t *testing.T) {
 	}
 }
 
+// TestContainerFlushAfterOverlayError checks that vm flush removes a container
+// that failed to launch because its overlay did not mount.
+func TestContainerFlushAfterOverlayError(t *testing.T) {
+	for name, filesystem := range map[string]func(*testing.T) string{
+		"missing filesystem": func(t *testing.T) string {
+			return filepath.Join(t.TempDir(), "missing")
+		},
+		// the lower directory of an overlay cannot be a file
+		"filesystem is a file": func(t *testing.T) string {
+			file := filepath.Join(t.TempDir(), "file")
+			if err := os.WriteFile(file, nil, 0644); err != nil {
+				t.Fatal(err)
+			}
+			return file
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			setContainerInit(t, nil)
+			vm := testContainer(t, true)
+			vm.FilesystemPath = filesystem(t)
+
+			err := vm.Launch()
+			if err == nil || !strings.Contains(err.Error(), "overlayMount") || vm.State != VM_ERROR {
+				t.Fatalf("launch: got %v and state %v, want the overlay error", err, vm.State)
+			}
+
+			if err := vm.Flush(); err != nil {
+				t.Fatalf("flush: %v", err)
+			}
+			if _, err := os.Stat(vm.instancePath); !os.IsNotExist(err) {
+				t.Errorf("instance directory: got %v, want it removed", err)
+			}
+		})
+	}
+}
+
+// TestContainerOverlayUnmountNoOverlay checks that overlayUnmount does nothing
+// for a container that has no overlay mount, as after a failed launch.
+func TestContainerOverlayUnmountNoOverlay(t *testing.T) {
+	vm := testContainer(t, false)
+	vm.effectivePath = vm.FilesystemPath
+
+	if err := vm.overlayUnmount(); err != nil {
+		t.Errorf("overlayUnmount without an overlay: %v", err)
+	}
+}
+
+// TestBaseVMFlushNoAlias checks that Flush removes the instance directory of a
+// VM that has no instance path alias, as after a launch that failed early.
+func TestBaseVMFlushNoAlias(t *testing.T) {
+	vm := testContainer(t, false)
+	if err := os.MkdirAll(vm.instancePath, 0700); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := vm.BaseVM.Flush(); err != nil {
+		t.Fatalf("flush: %v", err)
+	}
+	if _, err := os.Stat(vm.instancePath); !os.IsNotExist(err) {
+		t.Errorf("instance directory: got %v, want it removed", err)
+	}
+}
+
 // TestContainerLaunchShimExit checks that a launch whose container shim exits
 // during setup reaps the shim, closes the console of the container, and
 // removes the empty cgroups of the VM.

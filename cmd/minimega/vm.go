@@ -538,8 +538,9 @@ func (vm *BaseVM) Flush() error {
 	namespaceAliasDir := filepath.Join(namespacesDir, vm.Namespace)
 	vmAlias := filepath.Join(namespaceAliasDir, vm.UUID)
 
-	// remove just the symlink to the instance path
-	if err := os.Remove(vmAlias); err != nil {
+	// remove just the symlink to the instance path, which a VM whose launch
+	// failed early does not have
+	if err := os.Remove(vmAlias); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
