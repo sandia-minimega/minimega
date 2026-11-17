@@ -6,6 +6,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -128,5 +129,50 @@ func TestFCReadHostTuningRoot(t *testing.T) {
 	h = fcReadHostTuning(root)
 	if !h.RootIsChild || h.RootProcs != "1\n" {
 		t.Errorf("child root: got RootIsChild %v, RootProcs %q", h.RootIsChild, h.RootProcs)
+	}
+}
+
+// TestFirecrackerScripts checks the syntax of the Firecracker guest and Docker
+// scripts. It runs shellcheck too when it is in $PATH.
+func TestFirecrackerScripts(t *testing.T) {
+	repo := filepath.Join("..", "..")
+	guest := filepath.Join(repo, "misc", "firecracker", "guest")
+
+	shells := []struct {
+		shell, path string
+	}{
+		{"bash", filepath.Join(repo, "docker", "start-minimega.sh")},
+		{"bash", filepath.Join(guest, "build-rootfs.sh")},
+		{"bash", filepath.Join(guest, "build-kernel.sh")},
+		{"sh", filepath.Join(guest, "init")},
+		{"sh", filepath.Join(guest, "udhcpc.script")},
+	}
+
+	for _, s := range shells {
+		t.Run(filepath.Base(s.path), func(t *testing.T) {
+			runs := [][]string{{s.shell, "-n", s.path}}
+			if s.shell == "sh" {
+				if _, err := exec.LookPath("busybox"); err == nil {
+					runs = append(runs, []string{"busybox", "sh", "-n", s.path})
+				}
+			}
+			if _, err := exec.LookPath("shellcheck"); err == nil {
+				severity := "warning"
+				if filepath.Base(s.path) == "start-minimega.sh" {
+					severity = "error"
+				}
+				runs = append(runs, []string{"shellcheck", "-s", s.shell, "-S", severity, s.path})
+			}
+
+			for _, r := range runs {
+				if _, err := exec.LookPath(r[0]); err != nil {
+					t.Logf("skip %v: %v", strings.Join(r, " "), err)
+					continue
+				}
+				if out, err := exec.Command(r[0], r[1:]...).CombinedOutput(); err != nil {
+					t.Errorf("%v: %v\n%s", strings.Join(r, " "), err, out)
+				}
+			}
+		})
 	}
 }

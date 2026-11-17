@@ -43,6 +43,10 @@ fi
 : "${MM_RECOVER:=false}"
 : "${MM_CGROUP:=/sys/fs/cgroup}"
 : "${MM_ABSSNAPSHOT:=false}"
+: "${MM_FIRECRACKER_DIR:=/var/lib/minimega/firecracker}"
+: "${MM_FIRECRACKER_UID_BASE:=2000000000}"
+: "${MM_FIRECRACKER_LAUNCH_PARALLEL:=0}"
+: "${MM_FIRECRACKER_START_PARALLEL:=0}"
 : "${MM_APPEND:=}"
 : "${MM_OOM_SCORE_ADJ:=}"
 
@@ -98,6 +102,52 @@ log() {
   echo "$*" | tee -a "${MM_LOGFILE}"
 }
 
+# On cgroup v2, a cgroup that holds processes cannot enable controllers for its
+# children. Move the container processes into a child cgroup so that the
+# parent cgroup of the Firecracker jails can get the cpu, memory, and pids
+# controllers. The host root cgroup has no cgroup.type and is not changed.
+setup_cgroup() {
+  local root=/sys/fs/cgroup pid ctrl
+
+  [[ -f "${root}/cgroup.controllers" && -f "${root}/cgroup.type" ]] || return 0
+  [[ -n "$(<"${root}/cgroup.procs")" ]] || return 0
+
+  if ! mkdir -p "${root}/init"; then
+    log "unable to create ${root}/init; firecracker VMs may not get cgroup controllers"
+    return 0
+  fi
+
+  # Processes can start while this runs, so do more than one pass.
+  for _ in 1 2 3 4 5; do
+    while read -r pid; do
+      echo "${pid}" > "${root}/init/cgroup.procs" 2>/dev/null || true
+    done < "${root}/cgroup.procs"
+    [[ -n "$(<"${root}/cgroup.procs")" ]] || break
+  done
+
+  for ctrl in cpu memory pids; do
+    if ! grep -qw "${ctrl}" "${root}/cgroup.controllers"; then
+      log "cgroup controller ${ctrl} is not available in ${root}"
+    elif ! echo "+${ctrl}" > "${root}/cgroup.subtree_control" 2>/dev/null; then
+      log "unable to enable the ${ctrl} cgroup controller in ${root}"
+    fi
+  done
+}
+
+# Each Firecracker VM uses several file descriptors in minimega.
+raise_nofile() {
+  local hard
+
+  hard="$(ulimit -Hn)"
+  if ! ulimit -n "${hard}" 2>/dev/null; then
+    log "unable to raise the open file limit to ${hard}"
+  fi
+
+  if [[ "$(ulimit -n)" != "unlimited" && "$(ulimit -n)" -lt 100000 ]]; then
+    log "WARNING: the open file limit is $(ulimit -n); firecracker VMs need more (docker run --ulimit nofile=1048576:1048576)"
+  fi
+}
+
 # Keep the OOM killer away from the Open vSwitch daemons.
 protect_ovs() {
   local f pid
@@ -113,6 +163,8 @@ trap shutdown EXIT
 trap 'exit 143' TERM INT
 
 cleanup_stale_minimega_state
+setup_cgroup
+raise_nofile
 
 # Start Open vSwitch
 /usr/share/openvswitch/scripts/ovs-ctl start ${OVS_APPEND} |& tee -a ${MM_LOGFILE}
@@ -196,6 +248,10 @@ fi
   -logfile=${MM_LOGFILE} \
   -cgroup=${MM_CGROUP} \
   -abssnapshot=${MM_ABSSNAPSHOT} \
+  -firecracker-dir=${MM_FIRECRACKER_DIR} \
+  -firecracker-uid-base=${MM_FIRECRACKER_UID_BASE} \
+  -firecracker-launch-parallel=${MM_FIRECRACKER_LAUNCH_PARALLEL} \
+  -firecracker-start-parallel=${MM_FIRECRACKER_START_PARALLEL} \
   ${MM_APPEND} &
 MINIMEGA_PID=$!
 echo "[$(date --rfc-3339=seconds)] minimega started with PID ${MINIMEGA_PID}" | tee -a ${MM_LOGFILE}
