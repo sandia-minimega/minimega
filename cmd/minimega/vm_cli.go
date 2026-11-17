@@ -471,6 +471,25 @@ status of in-flight migrations by invoking vm migrate with no arguments.`,
 		Call:    wrapVMTargetCLI(cliVMSave),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
+	{ // vm shutdown
+		HelpShort: "ask the guest of running VMs to shut down",
+		HelpLong: `
+Ask the guest of one or more running VMs to shut down. See "vm start" for a
+full description of allowable targets.
+
+The command returns immediately. The guest decides when to power off or
+reboot, and it can ignore the request. Use "vm info" to see the VM state.
+
+For KVM VMs, minimega sends the QMP command system_powerdown, which is an ACPI
+power button event.
+
+Other VM types do not support vm shutdown.`,
+		Patterns: []string{
+			"vm shutdown <vm target>",
+		},
+		Call:    wrapVMTargetCLI(cliVMShutdown),
+		Suggest: wrapVMSuggest(VM_RUNNING, true),
+	},
 	{ // vm cdrom
 		HelpShort: "eject or change an active VM's cdrom",
 		HelpLong: `
@@ -1010,6 +1029,33 @@ func cliVMSave(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 	log.Info("Saving state to file %s", state_name)
 
 	return vm.Migrate(state_name)
+}
+
+// vmShutdown asks the guest of vm to shut down.
+func vmShutdown(vm VM) error {
+	switch vm := vm.(type) {
+	case *KvmVM:
+		return vm.Shutdown()
+	}
+
+	return fmt.Errorf("vm shutdown is not supported for %v VMs", vm.GetType())
+}
+
+func cliVMShutdown(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	return ns.VMs.Apply(c.StringArgs["vm"], func(vm VM, wild bool) (bool, error) {
+		if wild {
+			switch vm.(type) {
+			case *KvmVM:
+			default:
+				return false, nil
+			}
+			if vm.GetState() != VM_RUNNING {
+				return false, nil
+			}
+		}
+
+		return true, vmShutdown(vm)
+	})
 }
 
 func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

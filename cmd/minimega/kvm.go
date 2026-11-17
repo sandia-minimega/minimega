@@ -538,6 +538,24 @@ func (vm *KvmVM) Stop() error {
 	return nil
 }
 
+// Shutdown sends an ACPI power button event to the guest and returns. The
+// guest decides when to power off.
+func (vm *KvmVM) Shutdown() error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	if vm.State != VM_RUNNING {
+		return vmNotRunning(vm.Name)
+	}
+
+	log.Info("sending powerdown to VM: %v", vm.ID)
+	if _, err := vm.q.Raw(`{"execute": "system_powerdown"}`); err != nil {
+		return fmt.Errorf("unable to shut down vm %v: %v", vm.Name, err)
+	}
+
+	return nil
+}
+
 func (vm *KvmVM) String() string {
 	return fmt.Sprintf("%s:%d:kvm", hostname, vm.ID)
 }
