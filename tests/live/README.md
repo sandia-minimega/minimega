@@ -47,16 +47,23 @@ flowchart LR
 5. **Tests** — the group's Go tests (`//go:build live`) talk to the bind-mounted socket
    with `pkg/miniclient`, the integration path phēnix uses.
 
+A group with containers (`vm config filesystem` in its `topology.mm`) runs
+them from the same guest image: `run.sh` unpacks `live.initrd` into
+`live/rootfs` in the files directory, and `image/overlay/usr/local/sbin/live-container`
+is the init program of each container.
+
 ## Layout
 
 ```
 tests/live/
   run.sh        run one group against a Docker image
+  stop.sh       check that containers stop with minimega (Docker, systemd)
   image/        vmbetter config (live.conf) and overlay for the guest kernel and initramfs
   harness/      package harness: shared helpers (socket client, cc, polling,
                 artifact parsers) and their offline unit tests
   core/         the 22-VM test group: topology.mm, topology_test.go, live_test.go,
                 vnc_test.go
+  containers/   the container test group (5 containers and 1 KVM VM), same files
 ```
 
 Each test group is a sub-folder holding its `topology.mm` and the Go tests
@@ -136,11 +143,68 @@ phases (screenshots, QMP, serial, ...) still run.
 | VNC | the RFB handshake and a frame through miniweb and the VNC shim, `vnc record fb` decoded, keys typed on the `host-d3` console with QEMU extended key events, `vnc record kb` + `vnc play`, paste as keys, `vnc type`, `vnc inject` (key and `LoadFile`, with and without a playback), `vm kill` while recording and playing (entries stop, files close) |
 | Teardown | `clear namespace` removes VMs, QEMU processes, and OVS ports |
 
-Out of scope: containers, Android, bare-metal VMs, and multi-node meshes.
+Out of scope: Android, bare-metal VMs, and multi-node meshes.
+
+## Containers group
+
+`LIVE_GROUP=containers` runs five containers and one KVM VM on two VLANs. One
+container runs minirouter and routes between the VLANs, so traffic crosses
+containers, the KVM VM, and Open vSwitch.
+
+```mermaid
+flowchart LR
+  subgraph A["lan-a · VLAN 1101 · 10.20.1.0/24 (dynamic DHCP)"]
+    a1["ctr-a1 (hostname alpha)<br/>2 CPUs · volume · fifo"]
+    a2[ctr-a2]
+    a3[ctr-a3]
+  end
+  subgraph B["lan-b · 10.20.2.0/24 (static DHCP)"]
+    b1["ctr-b1<br/>protonuke HTTP"]
+    k1["kvm-b1 (KVM)"]
+  end
+  rtr{{"ctr-rtr<br/>minirouter in a container"}}
+  A --- rtr --- B
+```
+
+minimega limits containers with cgroups, and the group passes on a host with
+cgroup v1 or cgroup v2 (GitHub-hosted runners have cgroup v2). `TestLive`
+reads the cgroup of each container on the minimega host (limits, processes,
+freezer state) and checks the device filter from inside the containers.
+
+| Area | Checks |
+|---|---|
+| Control plane | `version`, `namespace`, `vm info` for both VM types, `vm config` values (`filesystem`, `init`, `preinit`, `hostname`, `fifos`, `volume`), the VLAN of each interface, the ports on the OVS bridge, a network namespace for each container |
+| Cgroups | one cgroup per container with its memory limit and CPU quota, the init process of the container in it, none for the KVM VM, the freezer state on `vm stop`/`vm start`, no cgroup left after `vm kill` or `clear namespace` |
+| Boot | every VM `RUNNING`, a miniccc client for each (unix socket for containers, virtio-serial for KVM), DHCP leases from the router container |
+| Isolation | PID namespace, hostname, read-only `/proc/sys`, dropped capabilities, no `mount`, UUID, a snapshot overlay for each container |
+| Devices | the default devices work, and a block device node that the container creates cannot be opened |
+| Host integration | `vm config volume` in both directions, `vm config fifos`, `preinit` (IP forwarding on the router) |
+| Networking | ping on a LAN, ping across the router between containers and the KVM VM, HTTP to protonuke in a container |
+| VM operations | `vm top`, `vm stop/start`, `vm kill` + `vm start`, `vm kill` + `vm flush` + `vm config clone` + queued relaunch |
+| Teardown | `clear namespace` removes VMs, processes, OVS ports, overlay mounts, network namespaces, and cgroups |
+
+### Containers stop with minimega
+
+`stop.sh` checks on a cgroup v2 host that the containers of minimega stop when
+minimega stops and when it is killed with `SIGKILL`, and that their cgroups
+are below the cgroup of the Docker container or the systemd service. It
+launches three containers that run `sleep` from a small filesystem copied from
+the host and pauses one of them. The `containers` job runs it after the group
+with the image under test, with a private cgroup namespace and with
+`--cgroupns host`; the DEB Build workflow runs it against the installed
+package and its `minimega.service`.
+
+```bash
+sudo tests/live/stop.sh docker minimega:dev
+sudo tests/live/stop.sh docker-host-cgroupns minimega:dev
+# after installing the deb or rpm package; uses /tmp/minimega-stop as base
+sudo tests/live/stop.sh systemd
+```
 
 ## Running locally
 
 Needs Linux, root, Docker, `/dev/kvm`, the `openvswitch` kernel module, and Go.
+The containers group also needs `cpio` and `gzip`.
 
 ```bash
 # test the image CI publishes for master
@@ -154,6 +218,9 @@ sudo LIVE_PULL=0 tests/live/run.sh minimega:dev
 sudo LIVE_KEEP=1 LIVE_TEST_ARGS='-test.run TestLive/(Version|Namespace|Inventory|CCClients|DHCP|DNS)$' \
   tests/live/run.sh minimega:dev
 docker exec minimega mm namespace live vm info
+
+# run the containers group
+sudo LIVE_PULL=0 LIVE_GROUP=containers tests/live/run.sh minimega:dev
 ```
 
 `run.sh` refuses to replace an existing `minimega` container, or to delete a
@@ -171,7 +238,7 @@ pcap.
 The guests are x86. On a host that cannot run them under KVM, run them in
 QEMU's TCG emulator and supply an x86 guest image. `vmbetter` builds an x86 guest from the
 image's own binaries only on x86, so take the `guest/` directory (`live.kernel`
-and `live.initrd`) from the `live-test-artifacts` artifact of a CI run:
+and `live.initrd`) from the `live-test-artifacts-core` artifact of a CI run:
 
 ```bash
 sudo LIVE_PULL=0 LIVE_GUEST_DIR=/path/to/x86-guest \
@@ -194,7 +261,8 @@ slower.
   `github.com/sandia-minimega/minimega/v2/tests/live/harness`. Call
   `harness.Connect()` from `TestMain`, then use the harness helpers. Run it
   with `LIVE_GROUP=<name> tests/live/run.sh`. Put anything a second group
-  would reuse in `harness/`, with an offline test.
+  would reuse in `harness/`, with an offline test. Add the group to the
+  `matrix` in `.github/workflows/live.yml` to run it in CI.
 - Validate a `topology.mm` syntax against any running minimega, without
   launching VMs: `minimega -e read /abs/path/topology.mm check`.
 - Without a deployment: `go test ./tests/live/...` runs the

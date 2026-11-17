@@ -10,6 +10,8 @@ WantedBy=default.target
 Type=simple
 # Kill mode settings
 KillMode=control-group
+# cgroup v2: minimega makes the cgroups of containers below the cgroup of the service, so that they stop with it
+Delegate=yes
 TimeoutStopSec=5
 Restart=on-success
 # Setting ulimit and environment variables

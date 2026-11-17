@@ -77,7 +77,9 @@ depth; the essentials are:
   `MM_APPEND` adds raw flags. Docker defaults differ from native defaults
   (`MM_DEGREE=1`, `MM_LOGLEVEL=info`, `MM_FORCE=true`, a log file).
 - **systemd.** `misc/daemon/minimega.service` maps `/etc/minimega/minimega.conf`
-  to explicit `ExecStart` flags; `MM_APPEND` is not supported there.
+  to explicit `ExecStart` flags; `MM_APPEND` is not supported there. It sets
+  `Delegate=yes`, so on cgroup v2 minimega moves itself to the `init` child of
+  the service cgroup and puts container cgroups below the service.
 - **Help.** `minimega -h` for startup flags, `minimega -e help [command]` for
   runtime commands, `minimega -cli` for the runtime CLI as JSON. Pass the
   correct `-base=<path>` before `-e` when the daemon uses a non-default base.

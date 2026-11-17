@@ -1,0 +1,51 @@
+#!/bin/sh
+# init (PID 1) for the minimega live test guest when it runs as a container:
+#
+#   vm config init /usr/local/sbin/live-container [host|router]
+#
+# minimega has already mounted /proc, /sys and /dev, set the hostname and
+# created the interfaces (veth0, veth1, ...); a container has no privileges to
+# mount anything itself.
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ROLE="${1:-host}"
+
+ip link set lo up
+for dev in /sys/class/net/veth*; do
+    [ -e "$dev" ] || continue
+    dev="${dev##*/}"
+    ip link set "$dev" up
+    if [ "$ROLE" != "router" ]; then
+        # as in rcS: the router may not serve DHCP until its config is committed
+        udhcpc -i "$dev" -s /usr/share/udhcpc/default.script -b -S -t 3 -T 2 -A 3 -x hostname:"$(hostname)"
+    fi
+done
+
+# A counter that the host reads through a "vm config volume" at /scratch. It
+# stops while the container is paused.
+if [ -d /scratch ]; then
+    (
+        i=0
+        while true; do
+            i=$((i + 1))
+            echo "$i" > /scratch/heartbeat
+            sleep 1
+        done
+    ) &
+fi
+
+if [ "$ROLE" = "router" ]; then
+    # /proc/sys is read-only here: live-preinit enabled forwarding
+    /usr/bin/minirouter -v=false -logfile /var/log/minirouter.log &
+    # "router commit" arrives as soon as miniccc connects and needs this socket
+    i=0
+    while [ ! -S /tmp/minirouter/minirouter ] && [ $i -lt 60 ]; do
+        sleep 0.5
+        i=$((i + 1))
+    done
+fi
+
+# minimega listens for miniccc on a unix socket at /cc in the container
+while true; do
+    /usr/bin/miniccc -v=false -family unix -parent /cc -logfile /var/log/miniccc.log
+    sleep 1
+done
