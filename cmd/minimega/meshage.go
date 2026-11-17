@@ -52,9 +52,12 @@ type meshageVMResponse struct {
 	TID    int32    // unique ID for command/response pair
 }
 
+// meshageBulkCells is the number of table cells above which a response uses
+// the bulk link.
+const meshageBulkCells = 10000
+
 var (
-	meshageNode     *meshage.Node
-	meshageMessages chan *meshage.Message
+	meshageNode *meshage.Node
 
 	meshageCommandChan    = make(chan *meshage.Message, 1024)
 	meshageResponseChan   = make(chan *meshage.Message, 1024)
@@ -83,22 +86,47 @@ func meshageStart(host, namespace string, degree, msaTimeout uint, broadcastIP s
 		return fmt.Errorf("invalid broadcast IP %s for meshage", broadcastIP)
 	}
 
-	meshageNode, meshageMessages = meshage.NewNode(host, namespace, degree, bip, port, version.Revision)
+	meshageNode = meshage.NewNode(host, namespace, degree, bip, port, version.Revision)
 
 	meshageNode.Snoop = meshageSnooper
+	meshageNode.Classify = meshageClassify
 
 	meshageNode.SetMSATimeout(msaTimeout)
 
-	go meshageMux()
+	// One mux for each class, so that a full channel of one class does not
+	// stop the messages of the other classes.
+	for _, class := range []meshage.Class{meshage.Control, meshage.Bulk, meshage.Log} {
+		go meshageMux(meshageNode.Messages(class))
+	}
 	go meshageHandler()
 	go meshageVMLauncher()
 
 	return iomeshageStart(meshageNode)
 }
 
-func meshageMux() {
+// meshageClassify returns the link class for a message body.
+func meshageClassify(body interface{}) meshage.Class {
+	switch body := body.(type) {
+	case meshageLogMessage:
+		return meshage.Log
+	case iomeshage.Message, meshageVMLaunch:
+		return meshage.Bulk
+	case meshageResponse:
+		cells := 0
+		for _, row := range body.Tabular {
+			cells += len(row)
+		}
+		if cells > meshageBulkCells {
+			return meshage.Bulk
+		}
+	}
+
+	return meshage.Control
+}
+
+func meshageMux(messages <-chan *meshage.Message) {
 	for {
-		m := <-meshageMessages
+		m := <-messages
 		switch m.Body.(type) {
 		case meshageCommand:
 			meshageCommandChan <- m

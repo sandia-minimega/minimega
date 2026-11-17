@@ -33,6 +33,8 @@ type Message struct {
 	ID           uint64      // sequence ID, uses lollipop sequence numbering
 	Command      int         // mesh state announcement, message
 	Body         interface{} // message body
+	Class        Class       // class of the message, the same on each hop
+	Seq          uint64      // sequence number on one link, for the ACK
 }
 
 func (m *Message) String() string {
@@ -45,6 +47,8 @@ func (m *Message) String() string {
 	fmt.Fprintf(w, "\tRecipients:\t%v\n", m.Recipients)
 	fmt.Fprintf(w, "\tCurrent Route:\t%v\n", m.CurrentRoute)
 	fmt.Fprintf(w, "\tID:\t%v\n", m.ID)
+	fmt.Fprintf(w, "\tClass:\t%v\n", m.Class)
+	fmt.Fprintf(w, "\tSeq:\t%v\n", m.Seq)
 	switch m.Command {
 	case ACK:
 		fmt.Fprintf(w, "\tCommand:\tACK\n")
@@ -89,6 +93,7 @@ func (n *Node) Send(m *Message) ([]string, error) {
 				CurrentRoute: m.CurrentRoute,
 				Command:      m.Command,
 				Body:         m.Body,
+				Class:        m.Class,
 			}
 			err := n.clientSend(client, mOne)
 			if err != nil {
@@ -157,8 +162,21 @@ func (n *Node) Set(recipients []string, body interface{}) ([]string, error) {
 		CurrentRoute: []string{n.name},
 		Command:      MESSAGE,
 		Body:         body,
+		Class:        n.classify(body),
 	}
 	return n.Send(m)
+}
+
+// classify returns the class of body.
+func (n *Node) classify(body interface{}) Class {
+	if n.Classify == nil {
+		return Control
+	}
+	if class := n.Classify(body); class.valid() {
+		return class
+	}
+
+	return Control
 }
 
 // Broadcast sends a message to all nodes on the mesh.
@@ -172,6 +190,7 @@ func (n *Node) Broadcast(body interface{}) ([]string, error) {
 		CurrentRoute: []string{n.name},
 		Command:      MESSAGE,
 		Body:         body,
+		Class:        n.classify(body),
 	}
 	return n.Send(m)
 }
@@ -195,12 +214,12 @@ func (n *Node) BroadcastRecipients() []string {
 	return recipients
 }
 
-// messageHandler accepts messages from all connected clients and forwards them to the
-// appropriate handlers, and to the receiver channel should the message be intended for this
-// node.
-func (n *Node) messageHandler() {
+// messageHandler accepts messages from the links of class of all connected
+// clients and forwards them to the appropriate handlers, and to the receiver
+// channel should the message be intended for this node.
+func (n *Node) messageHandler(class Class) {
 	for {
-		m := <-n.messagePump
+		m := <-n.messagePump[class]
 		if log.WillLog(log.DEBUG) {
 			log.Debug("messageHandler: %v", m)
 		}
@@ -275,5 +294,11 @@ floodLoop:
 }
 
 func (n *Node) handleMessage(m *Message) {
-	n.receive <- m
+	// Do not change m, because Send can read it at the same time.
+	class := m.Class
+	if !class.valid() {
+		class = Control
+	}
+
+	n.receive[class] <- m
 }
