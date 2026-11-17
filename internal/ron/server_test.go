@@ -482,3 +482,63 @@ func TestOldHandlerDoesNotEvictReconnectedClient(t *testing.T) {
 		t.Fatal("old handler removed the reconnected client")
 	}
 }
+
+// A handler still dispatching pipe messages for a client the reaper dropped
+// must not send to or close a writer the drop already closed.
+func TestPipeMessagesAfterDropDoNotPanic(t *testing.T) {
+	s := newTestServer(t, t.TempDir(), "ns")
+	s.UseVMs = false
+	defer s.Destroy()
+
+	c := newGuestClient("c1", drainConn(t))
+	c.pipeWriters["foo"] = make(chan string, 1)
+
+	s.clientLock.Lock()
+	s.clients["c1"] = c
+	s.clientLock.Unlock()
+	s.removeClient(c)
+
+	p := miniplumber.New(nil)
+	c.pipeHandler(p, &Message{Pipe: "foo", PipeMode: PIPE_DATA, PipeData: "x"})
+	c.pipeHandler(p, &Message{Pipe: "foo", PipeMode: PIPE_CLOSE_WRITER})
+}
+
+// A pipe write stalled on a consumer that never reads must not block the
+// reaper, and with it every client lookup, when the client expires.
+func TestReaperNotBlockedByStalledPipeWrite(t *testing.T) {
+	s, err := newServer(t.TempDir(), "ns", nil, 10*time.Millisecond, 50*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.UseVMs = false
+	defer s.Destroy()
+
+	c := newGuestClient("c1", drainConn(t))
+	c.pipeWriters["foo"] = make(chan string) // never read
+
+	s.clientLock.Lock()
+	s.clients["c1"] = c
+	s.clientLock.Unlock()
+
+	sent := make(chan struct{})
+	go func() {
+		defer close(sent)
+		c.pipeHandler(miniplumber.New(nil), &Message{Pipe: "foo", PipeMode: PIPE_DATA, PipeData: "x"})
+	}()
+
+	reaped := make(chan struct{})
+	go func() {
+		defer close(reaped)
+		for s.Clients() != 0 {
+			time.Sleep(time.Millisecond)
+		}
+	}()
+
+	for _, ch := range []chan struct{}{reaped, sent} {
+		select {
+		case <-ch:
+		case <-time.After(5 * time.Second):
+			t.Fatal("reaper blocked by a stalled pipe write")
+		}
+	}
+}

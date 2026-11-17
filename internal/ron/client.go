@@ -93,15 +93,18 @@ type client struct {
 	// Namespace for the VM, set during handshake
 	Namespace string
 
-	// pipe readers and writers
+	// pipe readers and writers; pipesClosed is set once the client is
+	// dropped so late pipe messages are ignored
 	pipeLock    sync.Mutex
 	pipeReaders map[string]*miniplumber.Reader
 	pipeWriters map[string]chan<- string
+	pipesClosed bool
 
 	ufsListener net.Listener
 	ufsConn     net.Conn
 
-	// used to stop the server --> client heartbeat Goroutine
+	// used to stop the server --> client heartbeat Goroutine, and to cancel
+	// a pipe write blocked in pipeHandler, when the client is dropped
 	cancelHeartbeat chan struct{}
 
 	// updating is true while the server holds commands for the client during
@@ -213,9 +216,30 @@ func (c *Client) matchesMAC(f *Filter) bool {
 	return false
 }
 
+// closePipes closes the client's plumbing and ignores later pipe messages.
+func (c *client) closePipes() {
+	c.pipeLock.Lock()
+	defer c.pipeLock.Unlock()
+
+	c.pipesClosed = true
+
+	// the reader goroutines delete their own entries
+	for _, p := range c.pipeReaders {
+		p.Close()
+	}
+	for k, p := range c.pipeWriters {
+		close(p)
+		delete(c.pipeWriters, k)
+	}
+}
+
 func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 	c.pipeLock.Lock()
 	defer c.pipeLock.Unlock()
+
+	if c.pipesClosed {
+		return
+	}
 
 	pipe := m.Pipe
 	if c.Namespace != "" {
@@ -278,7 +302,11 @@ func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 		// incoming data to the server is a write. The corresponding
 		// data message in the miniccc client is a read.
 		if p, ok := c.pipeWriters[pipe]; ok {
-			p <- m.PipeData
+			// a consumer that never reads must not hold pipeLock forever
+			select {
+			case p <- m.PipeData:
+			case <-c.cancelHeartbeat:
+			}
 		} else {
 			log.Error("no such pipe: %v", pipe)
 		}

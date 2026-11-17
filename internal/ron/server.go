@@ -1161,26 +1161,22 @@ func (s *Server) removeClient(c *client) {
 	log.Debug("removeClient: %v", c.UUID)
 
 	s.clientLock.Lock()
-	defer s.clientLock.Unlock()
 	if s.clients[c.UUID] == c {
 		s.dropClient(c)
 	}
+	s.clientLock.Unlock()
+
+	// c's handler is exiting, so its plumbing goes whether or not it was
+	// still registered
+	c.closePipes()
 }
 
-// dropClient closes the client's connection, plumbing and heartbeat and
-// removes it from the client list. The caller must hold clientLock.
+// dropClient closes the client's connection and heartbeat and removes it from
+// the client list. The caller must hold clientLock, and must call
+// c.closePipes after releasing it: closing cancelHeartbeat releases a pipe
+// write blocked in pipeHandler, which holds pipeLock until then.
 func (s *Server) dropClient(c *client) {
 	c.conn.Close()
-
-	// with the client conn closed, close any lingering plumbing
-	c.pipeLock.Lock()
-	defer c.pipeLock.Unlock()
-	for _, p := range c.pipeReaders {
-		p.Close()
-	}
-	for _, p := range c.pipeWriters {
-		close(p)
-	}
 
 	// stop Goroutine sending heartbeats to this client
 	close(c.cancelHeartbeat)
@@ -1547,6 +1543,8 @@ func (s *Server) clientReaper() {
 		case <-ticker.C:
 		}
 
+		var expired []*client
+
 		s.clientLock.Lock()
 		for k, v := range s.clients {
 			// checked in more recently than expiration time
@@ -1555,6 +1553,7 @@ func (s *Server) clientReaper() {
 			if !active {
 				log.Debug("client %v expired", k)
 				s.dropClient(v)
+				expired = append(expired, v)
 			}
 
 			if vm, ok := s.vms[k]; ok {
@@ -1562,6 +1561,10 @@ func (s *Server) clientReaper() {
 			}
 		}
 		s.clientLock.Unlock()
+
+		for _, v := range expired {
+			v.closePipes()
+		}
 	}
 }
 
