@@ -147,6 +147,14 @@ func TestParseBondConfigDetails(t *testing.T) {
 		t.Fatalf("misparsed: %+v", r)
 	}
 
+	r, err = ParseBondConfig("0,1,2,balance-tcp,ACTIVE")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.LACP != "active" {
+		t.Fatalf("lacp mode not lowercased: %+v", r)
+	}
+
 	for _, s := range []string{
 		"0,1,active-backup,active,no-lacp-fallback,qinq,foo,extra",
 		"0,1,2,active-backup,active,qinq,foo,extra",

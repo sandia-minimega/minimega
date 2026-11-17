@@ -447,7 +447,7 @@ func ParseBondConfig(spec string) (*BondConfig, error) {
 	}
 
 	if len(rest) > 0 && isLACPMode(rest[0]) {
-		l, rest = rest[0], rest[1:]
+		l, rest = strings.ToLower(rest[0]), rest[1:]
 
 		if len(rest) > 0 && isNoFallback(rest[0]) {
 			nf, rest = true, rest[1:]
