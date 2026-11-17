@@ -25,6 +25,7 @@ var captureOptionKinds = map[string][]string{
 	"filter":    {captureKindVM, captureKindBridge},
 	"maxsize":   {captureKindVM, captureKindBridge},
 	"direction": {captureKindVM},
+	"format":    {captureKindVM, captureKindBridge},
 }
 
 var errFilenameOption = errors.New("give the file name before the options")
@@ -109,6 +110,10 @@ func parseCaptureOptions(kind string, base bridge.CaptureConfig, opts []string) 
 
 	if v, ok := m["direction"]; ok {
 		c.Direction = v
+	}
+
+	if v, ok := m["format"]; ok {
+		c.Format = v
 	}
 
 	return c, c.Validate()

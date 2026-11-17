@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sandia-minimega/minimega/v2/internal/pcapfile"
+
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/pcap"
 	"github.com/gopacket/gopacket/pcapgo"
@@ -594,6 +596,75 @@ func TestDestroyRemovesMirrors(t *testing.T) {
 	}
 }
 
+func TestCapturePcapng(t *testing.T) {
+	src := newFakeSource()
+	useFakeSources(t, src)
+
+	b := testBridge()
+	path := filepath.Join(t.TempDir(), "a.pcapng")
+
+	id, err := b.CaptureTap("tap0", path, CaptureConfig{
+		Format:      "pcapng",
+		Direction:   DirectionIn,
+		Filter:      "tcp",
+		Description: "web01 interface 0, VLAN EXP_1 (101)",
+		Names:       []pcapfile.Name{{Addr: "10.0.0.7", Names: []string{"web01"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 3; i++ {
+		src.ch <- make([]byte, 60)
+	}
+
+	waitFor(t, "packets", func() bool {
+		info, _ := b.CaptureInfo(id)
+		return info.Packets == 3 && info.Format == "pcapng"
+	})
+
+	if err := b.StopCapture(id); err != nil {
+		t.Fatal(err)
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	r, err := pcapgo.NewNgReader(f, pcapgo.DefaultNgReaderOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var n int
+	for {
+		_, ci, err := r.ReadPacketData()
+		if errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		if ci.Timestamp.Nanosecond() != 123456789 {
+			t.Errorf("timestamp %v", ci.Timestamp)
+		}
+		n++
+	}
+
+	if n != 3 {
+		t.Errorf("read %d frames, want 3", n)
+	}
+
+	intf, err := r.Interface(0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if intf.Name != "tap0" || intf.Description != "web01 interface 0, VLAN EXP_1 (101)" || intf.Filter != "tcp" {
+		t.Errorf("interface %+v", intf)
+	}
+}
+
 // TestCreateFileSinkReleasesPath checks that createFileSink, which runs with
 // bridgeLock held, releases its path when it fails, and that closing a sink
 // frees its path at once.
@@ -612,7 +683,7 @@ func TestCreateFileSinkReleasesPath(t *testing.T) {
 		bridgeLock.Lock()
 		defer bridgeLock.Unlock()
 
-		_, err := createFileSink(bad, CaptureConfig{})
+		_, err := createFileSink(bad, "tap0", CaptureConfig{})
 		done <- err
 	}()
 
@@ -634,7 +705,7 @@ func TestCreateFileSinkReleasesPath(t *testing.T) {
 	good := filepath.Join(dir, "good.pcap")
 
 	bridgeLock.Lock()
-	sink, err := createFileSink(good, CaptureConfig{})
+	sink, err := createFileSink(good, "tap0", CaptureConfig{})
 	bridgeLock.Unlock()
 	if err != nil {
 		t.Fatal(err)
@@ -649,4 +720,61 @@ func TestCreateFileSinkReleasesPath(t *testing.T) {
 		t.Fatalf("path is still claimed after close: %v", err)
 	}
 	release()
+}
+
+// TestCaptureMaxSizePcapng checks that a pcapng capture stays within maxsize,
+// with its larger packet blocks and the statistics block at the end.
+func TestCaptureMaxSizePcapng(t *testing.T) {
+	src := newFakeSource()
+	useFakeSources(t, src)
+
+	b := testBridge()
+	path := filepath.Join(t.TempDir(), "full.pcapng")
+
+	c := CaptureConfig{Format: pcapfile.FormatPcapng}
+
+	// the header blocks, as createFileSink writes them
+	var buf bytes.Buffer
+	w, err := NewCaptureWriter(&buf, c.format(), c.snapLen(), c.Comment)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.AddInterface(pcapfile.Interface{Name: "tap0", SnapLen: c.snapLen()}); err != nil {
+		t.Fatal(err)
+	}
+
+	// one byte too few for two packets of 100 bytes and the statistics
+	epb := int64(pcapfile.RecordSize(pcapfile.FormatPcapng, 100, pcapfile.RecordOptions{}))
+	isb := int64(pcapfile.StatsSize(pcapfile.FormatPcapng, pcapfile.Stats{Start: time.Now(), End: time.Now()}, ""))
+	c.MaxSize = w.Size() + 2*epb + isb - 1
+
+	id, err := b.CaptureTap("tap0", path, c)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 5; i++ {
+		src.ch <- make([]byte, 100)
+	}
+
+	waitFor(t, "full", func() bool {
+		info, _ := b.CaptureInfo(id)
+		return info.State == CaptureFull
+	})
+
+	if info, _ := b.CaptureInfo(id); info.Packets != 1 {
+		t.Errorf("packets = %d, want 1", info.Packets)
+	}
+
+	if err := b.StopCapture(id); err != nil {
+		t.Fatal(err)
+	}
+
+	fi, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Size() > c.MaxSize {
+		t.Errorf("file size = %d, more than maxsize %d", fi.Size(), c.MaxSize)
+	}
 }

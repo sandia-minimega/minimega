@@ -27,6 +27,7 @@ var captureCLIHandlers = []minicli.Handler{
 		Patterns: []string{
 			"capture <pcap,> <snaplen,> [size]",
 			"capture <pcap,> <filter,> [bpf]",
+			"capture <pcap,> <format,> [pcap or pcapng]",
 			"capture <netflow,> <mode,> [raw,ascii]",
 			"capture <netflow,> <gzip,> [true,false]",
 		},
@@ -57,12 +58,16 @@ configured. There are several APIs to configure new netflow captures:
 	capture netflow gzip [true,false]
 	capture netflow timeout [timeout]
 
-PCAP capture can be from a bridge or VM interface. PCAP files use the classic
-pcap format with nanosecond timestamps. To set the snaplen or filter for new
-PCAP captures in the namespace, use:
+PCAP capture can be from a bridge or VM interface. By default, PCAP files use
+the classic pcap format with nanosecond timestamps. To set the snaplen, filter
+or file format for new PCAP captures in the namespace, use:
 
 	capture pcap snaplen <size>
 	capture pcap filter <bpf>
+	capture pcap format <pcap or pcapng>
+
+A pcapng file also records the interface, its description, the filter, the
+snaplen, the drop counts and the known VM addresses.
 
 The snaplen must be from 14 to 262144. minimega compiles the filter to check
 it. Give an empty filter, "", to remove the filter.
@@ -74,6 +79,7 @@ override the namespace settings for one capture:
 	filter=<bpf>        BPF filter for this capture
 	maxsize=<size>      stop the capture as full when the file reaches this
 	                    size, in bytes, or with a K, M or G suffix
+	format=<format>     file format: pcap or pcapng
 	direction=<dir>     VM captures only: in, out or both (the default). in
 	                    captures the frames that the host receives on the tap,
 	                    which are the frames that the VM sends.
@@ -215,6 +221,21 @@ func cliCaptureConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 		}
 
 		resp.Response = ns.captures.Filter
+		return nil
+	} else if c.BoolArgs["format"] {
+		if v, ok := c.StringArgs["pcap"]; ok {
+			if err := bridge.ValidateFormat(v); err != nil {
+				return err
+			}
+
+			ns.captures.Format = v
+			return nil
+		}
+
+		resp.Response = ns.captures.Format
+		if resp.Response == "" {
+			resp.Response = "pcap"
+		}
 		return nil
 	} else if c.BoolArgs["mode"] {
 		if c.BoolArgs["raw"] {
