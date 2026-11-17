@@ -314,7 +314,7 @@ func TestCommandSocketPipe(t *testing.T) {
 
 	// The client is done writing. minimega closes the connection once the
 	// client's lines are written to the pipe, and the client has read what
-	// was written to the pipe meanwhile, including its own lines.
+	// others wrote to the pipe meanwhile: it doesn't get its own lines back.
 	if err := w.Close(); err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +323,7 @@ func TestCommandSocketPipe(t *testing.T) {
 	if err != nil {
 		t.Errorf("read: %v", err)
 	}
-	if want := "one\ntwo\nthree\n"; got != want {
+	if want := "three\n"; got != want {
 		t.Errorf("client read %q, want %q", got, want)
 	}
 	if err := mm.Error(); err != nil {
@@ -371,13 +371,13 @@ func TestCommandSocketPipeWriteAndClose(t *testing.T) {
 			t.Fatalf("run %d: close: %v", i, err)
 		}
 
-		// the client reads its own line back
+		// the client doesn't get its own line back
 		got, err := readAll(t, r)
 		if err != nil {
 			t.Fatalf("run %d: read: %v", i, err)
 		}
-		if got != line {
-			t.Fatalf("run %d: client read %q, want %q", i, got, line)
+		if got != "" {
+			t.Fatalf("run %d: client read %q, want nothing", i, got)
 		}
 		if err := mm.Error(); err != nil {
 			t.Fatalf("run %d: client error: %v", i, err)
@@ -490,8 +490,8 @@ func TestCommandSocketPipeClients(t *testing.T) {
 	if err != nil {
 		t.Errorf("a: read: %v", err)
 	}
-	if want := "from a\n"; got != want {
-		t.Errorf("a read %q, want %q", got, want)
+	if got != "" {
+		t.Errorf("a read %q, want nothing", got)
 	}
 
 	if _, err := io.WriteString(wB, "from b\n"); err != nil {
@@ -505,7 +505,8 @@ func TestCommandSocketPipeClients(t *testing.T) {
 	if err != nil {
 		t.Errorf("b: read: %v", err)
 	}
-	if want := "from a\nfrom b\n"; got != want {
+	// each client gets the other's lines, not its own
+	if want := "from a\n"; got != want {
 		t.Errorf("b read %q, want %q", got, want)
 	}
 
@@ -522,7 +523,7 @@ func TestCommandSocketPipeClients(t *testing.T) {
 }
 
 // TestCommandSocketPipeLongLines sends lines up to the largest size a client
-// accepts through a pipe.
+// accepts through a pipe, in both directions.
 func TestCommandSocketPipeLongLines(t *testing.T) {
 	expectNoLogs(t)
 	testPlumber(t)
@@ -534,29 +535,128 @@ func TestCommandSocketPipeLongLines(t *testing.T) {
 	mm, r, w := attachPipe(t, base, pipe)
 
 	var want []string
-	go func() {
-		defer w.Close()
-
-		for _, n := range []int{1, 4096, 64 * 1024, TOKEN_MAX - 1} {
-			io.WriteString(w, strings.Repeat("x", n)+"\n")
-		}
-	}()
 	for _, n := range []int{1, 4096, 64 * 1024, TOKEN_MAX - 1} {
 		want = append(want, strings.Repeat("x", n)+"\n")
 	}
 
-	got, err := readAll(t, r)
-	if err != nil {
-		t.Errorf("read: %v", err)
+	// client to pipe
+	go func() {
+		for _, v := range want {
+			io.WriteString(w, v)
+		}
+	}()
+	other.expect(t, want...)
+
+	// pipe to client, which reads until the end of its session
+	type result struct {
+		data []byte
+		err  error
 	}
-	if got != strings.Join(want, "") {
-		t.Errorf("client read %d bytes, want %d", len(got), len(strings.Join(want, "")))
+	read := make(chan result, 1)
+	go func() {
+		data, err := io.ReadAll(r)
+		read <- result{data, err}
+	}()
+
+	writePipe(t, pipe, want...)
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case res := <-read:
+		if res.err != nil {
+			t.Errorf("read: %v", res.err)
+		}
+		if got := string(res.data); got != strings.Join(want, "") {
+			t.Errorf("client read %d bytes, want %d", len(got), len(strings.Join(want, "")))
+		}
+	case <-time.After(testTimeout):
+		t.Fatal("timed out reading from the pipe")
 	}
 	if err := mm.Error(); err != nil {
 		t.Errorf("client error: %v", err)
 	}
 
-	other.expect(t, want...)
+	other.expect(t, append(want, want...)...)
+}
+
+// TestCommandSocketPipeModes checks that what a client writes to a
+// round-robin or random pipe goes to one of the other readers, never back to
+// the client, while the client takes its turn for what others write.
+func TestCommandSocketPipeModes(t *testing.T) {
+	for name, mode := range map[string]int{"round-robin": miniplumber.MODE_RR, "random": miniplumber.MODE_RND} {
+		t.Run(name, func(t *testing.T) {
+			expectNoLogs(t)
+			testPlumber(t)
+			base := startCommandSocket(t)
+
+			const pipe = "test//foo"
+
+			plumber.Mode(pipe, mode)
+
+			// no other reader: the lines are discarded, not sent back
+			mm, r, w := attachPipe(t, base, pipe)
+			if _, err := io.WriteString(w, "nobody reads this\n"); err != nil {
+				t.Fatal(err)
+			}
+			waitFor(t, "the line to be written", func() bool {
+				return getPipe(t, pipe).NumMessages() == 1
+			})
+
+			a, b := readPipe(t, pipe), readPipe(t, pipe)
+
+			const n = 20
+			for i := 0; i < n; i++ {
+				if _, err := fmt.Fprintf(w, "from the client %d\n", i); err != nil {
+					t.Fatal(err)
+				}
+			}
+			waitFor(t, "the other readers to get the client's lines", func() bool {
+				return len(a.Lines())+len(b.Lines()) == n
+			})
+			if mode == miniplumber.MODE_RR && len(a.Lines()) != n/2 {
+				t.Errorf("readers got %d and %d lines, want %d each", len(a.Lines()), len(b.Lines()), n/2)
+			}
+
+			// the client is a reader like the others for what someone
+			// else writes
+			var lines []string
+			for i := 0; i < 3*n; i++ {
+				lines = append(lines, fmt.Sprintf("from someone else %d\n", i))
+			}
+			writePipe(t, pipe, lines...)
+
+			if err := w.Close(); err != nil {
+				t.Fatal(err)
+			}
+			got, err := readAll(t, r)
+			if err != nil {
+				t.Errorf("read: %v", err)
+			}
+			if strings.Contains(got, "client") {
+				t.Errorf("client read its own lines: %q", got)
+			}
+			if err := mm.Error(); err != nil {
+				t.Errorf("client error: %v", err)
+			}
+
+			// every line went to exactly one reader
+			fromOthers := strings.Count(got, "from someone else")
+			waitFor(t, "the readers to get every line", func() bool {
+				return fromOthers+len(a.Lines())+len(b.Lines()) >= n+3*n
+			})
+			if total := fromOthers + len(a.Lines()) + len(b.Lines()); total != n+3*n {
+				t.Errorf("readers got %d lines in total, want %d", total, n+3*n)
+			}
+			if mode == miniplumber.MODE_RR && fromOthers != n {
+				t.Errorf("client read %d lines from someone else, want %d", fromOthers, n)
+			}
+			if mode == miniplumber.MODE_RND && fromOthers == 0 {
+				t.Errorf("client read none of %d lines from someone else", 3*n)
+			}
+		})
+	}
 }
 
 // TestCommandSocketRequests sends requests that are answered without running

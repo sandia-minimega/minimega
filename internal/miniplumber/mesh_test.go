@@ -353,6 +353,94 @@ func TestMeshViaRoundRobin(t *testing.T) {
 	}
 }
 
+// TestMeshWriterExcept checks that a writer's own reader gets nothing of what
+// the writer writes when other hosts are involved: readers on another host,
+// and a via on another host, which takes the writes and sends values back for
+// the readers on the writer's host.
+func TestMeshWriterExcept(t *testing.T) {
+	if _, err := exec.LookPath("tr"); err != nil {
+		t.Skip("tr not found")
+	}
+
+	for name, mode := range modes {
+		t.Run(name, func(t *testing.T) {
+			mesh := newFakeMesh(t)
+			a, b := mesh.add("a"), mesh.add("b")
+
+			// the host that writes a value picks its reader, or the
+			// host that runs the via
+			a.Mode("foo", mode)
+			b.Mode("foo", mode)
+
+			own := a.NewReader("foo")
+			mine := collect(own)
+			ra := collect(a.NewReader("foo"))
+			rb := collect(b.NewReader("foo"))
+
+			// every reader but the writer's own gets the messages, or
+			// one of them does
+			perMessage := map[int]int{MODE_ALL: 2, MODE_RR: 1, MODE_RND: 1}[mode]
+
+			const n = 20
+			want := n * perMessage
+
+			writeExcept(t, a, "foo", own, numbered("plain", n)...)
+			total(t, want, mine, ra, rb)
+
+			b.Via("foo", []string{"tr", "a-z", "A-Z"})
+
+			pp := getPipe(t, a, "foo")
+			eventually(t, "the via host", func() bool {
+				pp.lock.Lock()
+				defer pp.lock.Unlock()
+
+				return pp.viaHost == "b"
+			})
+
+			writeExcept(t, a, "foo", own, numbered("via", n)...)
+			want += n * perMessage
+			counts := total(t, want, mine, ra, rb)
+
+			if counts[0] != 0 {
+				t.Errorf("the writer's reader got %q", mine.Lines())
+			}
+			if mode != MODE_RND && counts[1] != counts[2] {
+				t.Errorf("the other readers got %d and %d messages, want as many each", counts[1], counts[2])
+			}
+
+			// what someone else writes still goes to the writer's
+			// reader, on either host
+			write(t, a, "foo", numbered("else", 30)...)
+			write(t, b, "foo", numbered("else", 30)...)
+
+			perMessage = map[int]int{MODE_ALL: 3, MODE_RR: 1, MODE_RND: 1}[mode]
+			want += 60 * perMessage
+			counts = total(t, want, mine, ra, rb)
+
+			switch mode {
+			case MODE_ALL:
+				if counts[0] != 60 {
+					t.Errorf("the writer's reader got %d messages, want 60", counts[0])
+				}
+			case MODE_RR:
+				if counts[0] != 20 {
+					t.Errorf("the writer's reader got %d messages, want 20", counts[0])
+				}
+			case MODE_RND:
+				if counts[0] == 0 {
+					t.Error("the writer's reader got none of 60 messages")
+				}
+			}
+
+			for _, v := range mine.Lines() {
+				if v[:4] != "ELSE" {
+					t.Errorf("the writer's reader got %q", v)
+				}
+			}
+		})
+	}
+}
+
 // TestMeshPipelineRoundRobin writes, on one host, to the first pipe of a
 // pipeline on another host. The pipeline's last pipe is in round-robin mode,
 // so the pipeline waits for the other hosts' readers for every line, while

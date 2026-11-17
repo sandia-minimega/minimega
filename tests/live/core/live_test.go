@@ -868,16 +868,12 @@ func testPipes(t *testing.T) {
 	t.Run("WriteAndExit", func(t *testing.T) {
 		pipe := pipeName("write")
 
-		var want strings.Builder
-		for i := 1; i <= 50; i++ {
-			fmt.Fprintf(&want, "hello %d\n", i)
-		}
-
-		// the client is a reader of the pipe too, so it reads its lines back
+		// the client is a reader of the pipe too, but it doesn't get its own
+		// lines back, so it prints nothing
 		out := pipeClientCLI(t, fmt.Sprintf(
 			`for i in $(seq 1 50); do echo "hello $i" | minimega -pipe %v//%v || exit 1; done`, ns, pipe))
-		if out != want.String() {
-			t.Errorf("minimega -pipe printed %q, want %q", out, want.String())
+		if out != "" {
+			t.Errorf("minimega -pipe printed %q, want nothing", out)
 		}
 
 		// no waiting here: the last client has exited
@@ -907,20 +903,29 @@ func testPipes(t *testing.T) {
 		expectLines(t, a, "from the cli\n", "from minimega -pipe\n")
 
 		b := attachPipe(t, pipe)
+		if err := a.Write("from a"); err != nil {
+			t.Fatal(err)
+		}
+		expectLines(t, b, "from a\n")
+
 		if err := b.Write("from b"); err != nil {
 			t.Fatal(err)
 		}
 		expectLines(t, a, "from the cli\n", "from minimega -pipe\n", "from b\n")
 
-		// b's session ends once its line is in the pipe; b read it back
+		// b's session ends once its line is in the pipe. Each client read
+		// the other's line, and not its own.
 		closePipe(t, b)
-		if got, want := b.Lines(), []string{"from b\n"}; !reflect.DeepEqual(got, want) {
+		if got, want := b.Lines(), []string{"from a\n"}; !reflect.DeepEqual(got, want) {
 			t.Errorf("b read %q, want %q", got, want)
 		}
 
 		closePipe(t, a)
-		if info := harness.PipeInfo(t, pipe); info["readers"] != "0" || info["writers"] != "0" || info["count"] != "3" {
-			t.Errorf("pipe has %v readers, %v writers and count %v, want 0, 0 and 3", info["readers"], info["writers"], info["count"])
+		if got, want := a.Lines(), []string{"from the cli\n", "from minimega -pipe\n", "from b\n"}; !reflect.DeepEqual(got, want) {
+			t.Errorf("a read %q, want %q", got, want)
+		}
+		if info := harness.PipeInfo(t, pipe); info["readers"] != "0" || info["writers"] != "0" || info["count"] != "4" {
+			t.Errorf("pipe has %v readers, %v writers and count %v, want 0, 0 and 4", info["readers"], info["writers"], info["count"])
 		}
 
 		// a pipe without writers can be deleted
@@ -951,6 +956,18 @@ func testPipes(t *testing.T) {
 		harness.Eventually(t, time.Minute, 200*time.Millisecond, func() error {
 			if na, nb := len(a.Lines()), len(b.Lines()); na != 3 || nb != 3 {
 				return fmt.Errorf("readers got %d and %d messages, want 3 each", na, nb)
+			}
+			return nil
+		})
+
+		// what a client writes itself goes to one of the other readers,
+		// never back to the client
+		if err := a.Write("from-a-0", "from-a-1", "from-a-2", "from-a-3"); err != nil {
+			t.Fatal(err)
+		}
+		harness.Eventually(t, time.Minute, 200*time.Millisecond, func() error {
+			if na, nb := len(a.Lines()), len(b.Lines()); na != 3 || nb != 7 {
+				return fmt.Errorf("readers got %d and %d messages, want 3 and 7", na, nb)
 			}
 			return nil
 		})

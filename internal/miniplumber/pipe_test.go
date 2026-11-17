@@ -211,6 +211,23 @@ func TestNewWriterDone(t *testing.T) {
 	}
 }
 
+// writeExcept sends values on a new writer whose own reader is r, and returns
+// once they are all written to the pipe.
+func writeExcept(t *testing.T, p *Plumber, pipe string, r *Reader, values ...string) {
+	t.Helper()
+
+	w, done := p.NewWriterExcept(pipe, r)
+	for _, v := range values {
+		w <- v
+	}
+	close(w)
+
+	wait(t, done, "writer to finish")
+}
+
+// modes are the delivery modes of a pipe, by the names the pipe API uses.
+var modes = map[string]int{"all": MODE_ALL, "round-robin": MODE_RR, "random": MODE_RND}
+
 // numbered returns n distinct messages.
 func numbered(prefix string, n int) []string {
 	var res []string
@@ -218,6 +235,64 @@ func numbered(prefix string, n int) []string {
 		res = append(res, fmt.Sprintf("%v %d\n", prefix, i))
 	}
 	return res
+}
+
+// TestNewWriterExcept checks that a writer's own reader gets nothing of what
+// the writer writes, and still its share of what others write, in every mode.
+func TestNewWriterExcept(t *testing.T) {
+	for name, mode := range modes {
+		t.Run(name, func(t *testing.T) {
+			p := New(nil)
+			p.Mode("foo", mode)
+
+			own := p.NewReader("foo")
+			mine := collect(own)
+
+			// without another reader the messages are discarded, like
+			// those written to a pipe without readers
+			writeExcept(t, p, "foo", own, "nobody", "reads", "this")
+
+			pp := getPipe(t, p, "foo")
+			if got := pp.NumMessages(); got != 3 {
+				t.Errorf("messages = %v, want 3", got)
+			}
+			if got := pp.Last(); got != "this\n" {
+				t.Errorf("last = %q, want %q", got, "this\n")
+			}
+
+			// another reader gets every message, also when a message
+			// goes to one reader only
+			other := collect(p.NewReader("foo"))
+
+			own20 := numbered("own", 20)
+			writeExcept(t, p, "foo", own, own20...)
+			other.expect(t, own20...)
+
+			// someone else's messages go to both readers, or to one of
+			// them
+			write(t, p, "foo", numbered("else", 40)...)
+
+			want := map[int]int{MODE_ALL: 80, MODE_RR: 40, MODE_RND: 40}[mode]
+			counts := total(t, 20+want, mine, other)
+
+			switch mode {
+			case MODE_ALL, MODE_RR:
+				if want := want / 2; counts[0] != want {
+					t.Errorf("the writer's reader got %d messages, want %d", counts[0], want)
+				}
+			case MODE_RND:
+				if counts[0] == 0 {
+					t.Error("the writer's reader got none of 40 messages")
+				}
+			}
+
+			for _, v := range mine.Lines() {
+				if !strings.HasPrefix(v, "else") {
+					t.Errorf("the writer's reader got %q", v)
+				}
+			}
+		})
+	}
 }
 
 func TestModeRoundRobin(t *testing.T) {
