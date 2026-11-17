@@ -127,7 +127,7 @@ phases (screenshots, QMP, serial, ...) still run.
 | Area | Checks |
 |---|---|
 | Control plane | `version`, `check`, `host`, `namespace`, `ns hosts/queue/queueing`, `vm info`, `vm info summary`, `vlans`, `bridge` + OVS port/VLAN tags, `file list`, `-hashfiles` (no hash mid-copy, bounded CPU while copying, appends, renames, new directories), `disk info/snapshot`, miniweb (`/`, `/vms/info.json`) |
-| Pipes | `minimega -pipe` (exits 0 with its lines in the pipe, no command socket errors in the minimega log), `pipe` writes, modes and vias, clients attached over the socket, `plumb` through a process and its teardown |
+| Pipes | `minimega -pipe` (exits 0 with its lines in the pipe, no command socket errors in the minimega log), `pipe` writes, modes and vias, clients attached over the socket (each reads what the others write, not its own lines), `plumb` through a process and its teardown |
 | Boot | all 22 VMs `RUNNING`, 21 miniccc clients, every expected address learned from tap snooping |
 | Command and control | `cc exec` (one, all, tag and column filters), `cc exitcode`, `cc send`/`recv`, `cc background`, `cc process list/kill`, `cc responses`, `cc delete`, pipes from a guest (`miniccc -pipe` both ways, `cc exec stdout=<pipe>`) |
 | Guest view of config | SMBIOS serial from `qemu-append`, VM UUID, disk sizes per interface, snapshot isolation, Q35 vs i440FX, xHCI, SMP, NIC driver and MAC, dual-homed addressing |

@@ -313,9 +313,9 @@ func TestPipeMM(t *testing.T) {
 		if got := getPipe(t, pipe).NumMessages(); got != int64(2*(i+1)) {
 			t.Fatalf("run %d: %d messages written to the pipe, want %d", i, got, 2*(i+1))
 		}
-		// the client reads its own lines back
-		if got, want := out.String(), "hello\nworld\n"; got != want {
-			t.Fatalf("run %d: client printed %q, want %q", i, got, want)
+		// the client doesn't get its own lines back
+		if got := out.String(); got != "" {
+			t.Fatalf("run %d: client printed %q, want nothing", i, got)
 		}
 
 		mm.Close()
@@ -489,14 +489,33 @@ func TestPipeMMErrors(t *testing.T) {
 		t.Error("no error on a closed connection")
 	}
 
-	// the output cannot be written to. The client reads its own line back.
+	// the output cannot be written to, with an input that is never closed
 	mm = dialCommandSocket(t, base)
 	stdin, stdinW := io.Pipe()
 	defer stdinW.Close()
-	go io.WriteString(stdinW, "hello\n")
 
-	if err := pipeMM(mm, pipe, stdin, failWriter{}); err != io.ErrClosedPipe {
-		t.Errorf("error = %v, want %v", err, io.ErrClosedPipe)
+	done := make(chan error, 1)
+	go func() {
+		done <- pipeMM(mm, pipe, stdin, failWriter{})
+	}()
+
+	waitFor(t, "the client to attach", func() bool {
+		for _, p := range plumber.Pipes() {
+			if p.Name() == pipe {
+				return p.NumReaders() == 1
+			}
+		}
+		return false
+	})
+	writePipe(t, pipe, "hello")
+
+	select {
+	case err := <-done:
+		if err != io.ErrClosedPipe {
+			t.Errorf("error = %v, want %v", err, io.ErrClosedPipe)
+		}
+	case <-time.After(testTimeout):
+		t.Fatal("client did not return when it could not write its output")
 	}
 	mm.Close()
 

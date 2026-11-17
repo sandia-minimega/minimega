@@ -167,8 +167,9 @@ func isClientGone(err error) bool {
 }
 
 // commandSocketPipe attaches a client to a named pipe: lines from the client
-// are written to the pipe and lines written to the pipe are sent to the
-// client, until the client closes its end of the connection or disconnects.
+// are written to the pipe and lines that others write to the pipe are sent to
+// the client, until the client closes its end of the connection or
+// disconnects.
 //
 // It returns the error that ended the client's input (io.EOF if the client
 // closed its end), once every line from the client has been written to the
@@ -176,7 +177,8 @@ func isClientGone(err error) bool {
 // the connection.
 func commandSocketPipe(enc *json.Encoder, dec *json.Decoder, pipe string) error {
 	reader := plumber.NewReader(pipe)
-	writer, written := plumber.NewWriterDone(pipe)
+	// the client doesn't get its own lines back
+	writer, written := plumber.NewWriterExcept(pipe, reader)
 
 	// Send lines written to the pipe to the client. Nothing else uses enc
 	// while the client is attached to the pipe.

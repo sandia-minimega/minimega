@@ -126,9 +126,9 @@ func (mm *Conn) Close() error {
 }
 
 // Pipe attaches the connection to a named pipe. Lines written to the returned
-// writer are written to the pipe, and lines written to the pipe are read from
-// the returned reader. Pipe returns nil, nil if the request cannot be sent; see
-// Error.
+// writer are written to the pipe, and lines that others write to the pipe are
+// read from the returned reader: minimega doesn't send the connection's own
+// lines back. Pipe returns nil, nil if the request cannot be sent; see Error.
 //
 // Closing the writer tells minimega that there is nothing more to write.
 // minimega then writes the lines it has received to the pipe and closes the

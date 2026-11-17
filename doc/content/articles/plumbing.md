@@ -56,8 +56,8 @@ minimega -pipe foo
 Invoking a pipe this way will block until standard in is closed. minimega then
 exits once every line it read from standard in has been written to the pipe,
 which takes longer when a reader of the pipe is slow to take its messages.
-It prints every line that is written to the pipe, including the lines it
-writes itself.
+It prints what others write to the pipe, not the lines it writes itself: those
+go to the other readers of the pipe.
 Let's write to the pipe now using the command line as well as the minimega CLI:
 
 ```text
@@ -127,8 +127,7 @@ reader, similar to a load balancer. minimega pipes support three message
 delivery modes: all (the default one-to-many mode), round-robin, and random. In
 round-robin and random modes, messages written to a pipe will be delivered to
 exactly one reader (including distributed readers). A `minimega -pipe` process
-that writes to the pipe reads from it as well, so it can be the reader of its
-own messages.
+that writes to the pipe is never the reader of its own messages.
 
 To change the mode on a named pipe, use the `pipe` API:
 
