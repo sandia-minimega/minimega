@@ -270,6 +270,112 @@ func TestBaseVMFlushNoAlias(t *testing.T) {
 	}
 }
 
+// TestContainerUnlinkNetnsError checks that unlinkNetns keeps the name of a
+// link that it cannot remove, and removes the link when it can.
+func TestContainerUnlinkNetnsError(t *testing.T) {
+	original := containerNetnsDir
+	t.Cleanup(func() { containerNetnsDir = original })
+	containerNetnsDir = t.TempDir()
+
+	vm := testContainer(t, false)
+	vm.netns = fmt.Sprintf("meganet_%v", vm.ID)
+
+	// a directory that is not empty cannot be removed
+	link := filepath.Join(containerNetnsDir, vm.netns)
+	if err := os.MkdirAll(filepath.Join(link, "file"), 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := vm.unlinkNetns(); err == nil {
+		t.Error("unlinkNetns of a link that it cannot remove: got no error")
+	}
+	if vm.netns == "" {
+		t.Fatal("unlinkNetns forgot the name of a link that it did not remove")
+	}
+
+	if err := os.Remove(filepath.Join(link, "file")); err != nil {
+		t.Fatal(err)
+	}
+	if err := vm.unlinkNetns(); err != nil {
+		t.Errorf("second unlinkNetns: %v", err)
+	}
+	if _, err := os.Lstat(link); !os.IsNotExist(err) {
+		t.Errorf("link after the second unlinkNetns: got %v, want it removed", err)
+	}
+	if vm.netns != "" {
+		t.Errorf("name after the link is removed: got %q, want none", vm.netns)
+	}
+}
+
+// TestContainerNetnsLink checks the link to the network namespace of a
+// container: a launch replaces a link that has no target, and it keeps the
+// link of a container that still runs, also in its cleanup.
+func TestContainerNetnsLink(t *testing.T) {
+	original := containerNetnsDir
+	t.Cleanup(func() { containerNetnsDir = original })
+
+	self := fmt.Sprintf("/proc/%d/ns/net", os.Getpid())
+
+	for _, tt := range []struct {
+		name string
+		old  string // target of a link that exists before the launch
+		keep bool   // the launch must fail and keep the link
+	}{
+		{name: "no link"},
+		{name: "link without a target", old: "/proc/0/ns/net"},
+		{name: "link of a running container", old: "/proc/self/ns/net", keep: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			containerNetnsDir = t.TempDir()
+
+			vm := testContainer(t, false)
+			vm.Pid = os.Getpid()
+			link := filepath.Join(containerNetnsDir, fmt.Sprintf("meganet_%v", vm.ID))
+
+			if tt.old != "" {
+				if err := os.Symlink(tt.old, link); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			err := vm.symlinkNetns()
+			if tt.keep {
+				if err == nil || !strings.Contains(err.Error(), "nuke") {
+					t.Errorf("symlinkNetns: got %v, want an error that names nuke", err)
+				}
+			} else if err != nil {
+				t.Fatalf("symlinkNetns: %v", err)
+			}
+
+			want := self
+			if tt.keep {
+				want = tt.old
+			}
+			if got, err := os.Readlink(link); err != nil || got != want {
+				t.Errorf("link after the launch: got %q, %v, want %q", got, err, want)
+			}
+
+			// the cleanup of the launch
+			if err := vm.unlinkNetns(); err != nil {
+				t.Errorf("unlinkNetns: %v", err)
+			}
+			if _, err := os.Lstat(link); tt.keep && err != nil {
+				t.Errorf("the cleanup removed the link of the other container: %v", err)
+			} else if !tt.keep && !os.IsNotExist(err) {
+				t.Errorf("link after the cleanup: got %v, want it removed", err)
+			}
+
+			// a second cleanup has no link to remove, and keeps the directory
+			if err := vm.unlinkNetns(); err != nil {
+				t.Errorf("second unlinkNetns: %v", err)
+			}
+			if _, err := os.Stat(containerNetnsDir); err != nil {
+				t.Errorf("directory of the links: %v", err)
+			}
+		})
+	}
+}
+
 // TestContainerLaunchShimExit checks that a launch whose container shim exits
 // during setup reaps the shim, closes the console of the container, and
 // removes the empty cgroups of the VM.
