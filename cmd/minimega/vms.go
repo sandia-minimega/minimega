@@ -44,6 +44,10 @@ type QueuedVMs struct {
 	VMType   // embed
 	VMConfig // embed
 
+	// FilesystemTar is the tarball that the tar: prefix extracted to
+	// FilesystemPath, which every host extracts before launching containers.
+	FilesystemTar string
+
 	// book keeping for scheduler
 
 	// counts for colocated VMs, indexed by name
@@ -56,7 +60,7 @@ type QueuedVMs struct {
 // fetches them if they do not already exist. Currently, we enumerate all the
 // fields that take a file. If updatee is provided, it will periodically be sent
 // status update messages about file transfer status.
-func (q QueuedVMs) GetFiles(updatee string) error {
+func (q *QueuedVMs) GetFiles(updatee string) error {
 	files := []string{
 		q.ContainerConfig.Preinit,
 		q.KVMConfig.CdromPath,
@@ -74,6 +78,21 @@ func (q QueuedVMs) GetFiles(updatee string) error {
 				return err
 			}
 		}
+	}
+
+	// a host without the extracted filesystem extracts the tarball itself
+	if q.FilesystemTar != "" && !isDir(q.FilesystemPath) {
+		tarball, err := fetchTarball(q.FilesystemTar, updatee)
+		if err != nil {
+			return err
+		}
+
+		dst, _, err := untar(tarball)
+		if err != nil {
+			return err
+		}
+
+		q.FilesystemPath = dst
 	}
 
 	return nil
