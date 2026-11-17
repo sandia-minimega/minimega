@@ -1,6 +1,6 @@
 # minimega live integration test topology
 #
-# 22 KVM VMs across 4 VLANs, routed by two minirouter VMs that run DHCP, DNS,
+# 23 KVM VMs across 5 VLANs, routed by two minirouter VMs that run DHCP, DNS,
 # OSPF, and a firewall. The topology deliberately touches as many "vm config"
 # options as possible so that a regression in any of them shows up as a failed
 # launch or a failed assertion in tests/live/core.
@@ -9,9 +9,10 @@
 #   lan-b 10.10.2.0/24  host-b1..b5  static DHCP (by MAC) from rtr-ab; OSPF transit
 #   lan-c 10.10.3.0/24  host-c1..c5  static DHCP from rtr-cd; disks, machine types
 #   lan-d 10.10.4.0/24  host-d1..d5  static DHCP from rtr-cd; firewall, no-cc host
+#   lan-e 10.10.5.0/24  host-e1      static DHCP from rtr-ab, relayed by rtr-cd
 #
 #   rtr-ab  lan-a .1, lan-b .1   (OSPF area 0, router id 1.1.1.1)
-#   rtr-cd  lan-b .2, lan-c .1, lan-d .1   (OSPF area 0, router id 2.2.2.2)
+#   rtr-cd  lan-b .2, lan-c .1, lan-d .1, lan-e .1   (OSPF area 0, router id 2.2.2.2)
 #
 # Requirements (staged by tests/live/run.sh):
 #   - live.kernel and live.initrd from tests/live/image/build.sh in the
@@ -58,7 +59,7 @@ vm config net lan-a,virtio-net-pci lan-b,virtio-net-pci
 vm launch kvm rtr-ab
 
 vm config append live.role=router live.hostname=rtr-cd
-vm config net lan-b,virtio-net-pci lan-c,virtio-net-pci lan-d,virtio-net-pci
+vm config net lan-b,virtio-net-pci lan-c,virtio-net-pci lan-d,virtio-net-pci lan-e,virtio-net-pci
 vm launch kvm rtr-cd
 
 # --- lan-a: dynamic DHCP clients ---------------------------------------------
@@ -187,6 +188,17 @@ vm config append live.role=host live.hostname=host-d5
 vm config net lan-d,00:1f:53:00:04:15,virtio-net-pci lan-c,00:1f:53:00:03:16,virtio-net-pci
 vm launch kvm host-d5
 
+# --- lan-e: DHCP relayed by rtr-cd to the server on rtr-ab -------------------
+
+vm config restore live-base
+vm config memory 352
+vm config tags role client
+vm config tags lan e
+
+vm config append live.role=host live.hostname=host-e1
+vm config net lan-e,00:1f:53:00:05:11,virtio-net-pci
+vm launch kvm host-e1
+
 # --- schedule, start ---------------------------------------------------------
 
 clear vm config
@@ -211,6 +223,12 @@ router rtr-ab dhcp 10.10.2.1 static 00:1f:53:00:02:12 10.10.2.12
 router rtr-ab dhcp 10.10.2.1 static 00:1f:53:00:02:13 10.10.2.13
 router rtr-ab dhcp 10.10.2.1 static 00:1f:53:00:02:14 10.10.2.14
 router rtr-ab dhcp 10.10.2.1 static 00:1f:53:00:02:15 10.10.2.15
+# lan-e is relayed from rtr-cd, so rtr-ab has no interface there to infer the
+# netmask from.
+router rtr-ab dhcp 10.10.5.1 netmask 255.255.255.0
+router rtr-ab dhcp 10.10.5.1 router 10.10.5.1
+router rtr-ab dhcp 10.10.5.1 dns 10.10.5.1
+router rtr-ab dhcp 10.10.5.1 static 00:1f:53:00:05:11 10.10.5.11
 router rtr-ab dns 10.10.3.11 web.live
 router rtr-ab dns 10.10.4.11 fw.live
 router rtr-ab route ospf 0 0
@@ -221,6 +239,7 @@ router rtr-cd rid 2.2.2.2
 router rtr-cd interface 0 10.10.2.2/24
 router rtr-cd interface 1 10.10.3.1/24
 router rtr-cd interface 2 10.10.4.1/24
+router rtr-cd interface 3 10.10.5.1/24
 router rtr-cd dhcp 10.10.3.1 router 10.10.3.1
 router rtr-cd dhcp 10.10.3.1 dns 10.10.3.1
 router rtr-cd dhcp 10.10.3.1 static 00:1f:53:00:03:11 10.10.3.11
@@ -236,11 +255,13 @@ router rtr-cd dhcp 10.10.4.1 static 00:1f:53:00:04:12 10.10.4.12
 router rtr-cd dhcp 10.10.4.1 static 00:1f:53:00:04:13 10.10.4.13
 router rtr-cd dhcp 10.10.4.1 static 00:1f:53:00:04:14 10.10.4.14
 router rtr-cd dhcp 10.10.4.1 static 00:1f:53:00:04:15 10.10.4.15
+router rtr-cd dhcp 10.10.5.1 relay 10.10.2.1
 router rtr-cd dns 10.10.3.11 web.live
 router rtr-cd dns 10.10.4.11 fw.live
 router rtr-cd route ospf 0 0
 router rtr-cd route ospf 0 1
 router rtr-cd route ospf 0 2
+router rtr-cd route ospf 0 3
 # Block TCP/8080 to host-d1 at its gateway; TCP/80 stays open.
 router rtr-cd fw drop out 2 10.10.4.11:8080 tcp
 router rtr-cd commit

@@ -22,7 +22,7 @@ flowchart LR
   R -->|4. mm read topology.mm| C
   R -->|5. go test -tags live| T["Go tests (one group)<br/>pkg/miniclient over /tmp/minimega/minimega"]
   T --> C
-  C --> V["22 KVM VMs · 4 VLANs"]
+  C --> V["23 KVM VMs · 5 VLANs"]
 ```
 
 1. **Image** — on master, CI tests the exact image the Docker workflow just
@@ -39,7 +39,7 @@ flowchart LR
    (`default.conf` makes a 360 MB initrd that needs ~3 GB per VM). The boot
    scripts are in `image/overlay/`. The unpacked rootfs is ~100 MiB and an
    initramfs lives in RAM (it may use about half of it), so the guests get
-   352–448 MB each: 22 VMs take ~8.5 GB of a standard runner's 16 GB.
+   352–448 MB each: 23 VMs take ~8.9 GB of a standard runner's 16 GB.
 3. **Deployment** — the container starts with the flags from
    `docker/README.md` (privileged, `/dev`, `/lib/modules`, `/tmp/minimega`).
 4. **Topology** — the group's `topology.mm` is loaded with `mm read`, exercising the CLI
@@ -55,7 +55,7 @@ tests/live/
   image/        vmbetter config (live.conf) and overlay for the guest kernel and initramfs
   harness/      package harness: shared helpers (socket client, cc, polling,
                 artifact parsers) and their offline unit tests
-  core/         the 22-VM test group: topology.mm, topology_test.go, live_test.go,
+  core/         the 23-VM test group: topology.mm, topology_test.go, live_test.go,
                 vnc_test.go
 ```
 
@@ -95,23 +95,28 @@ flowchart TB
     d3[host-d3]
     d4[host-d4 no cc]
   end
+  subgraph E["lan-e · 10.10.5.0/24 (DHCP relayed to rtr-ab)"]
+    e1[host-e1]
+  end
   rab{{"rtr-ab<br/>DHCP · DNS · OSPF"}}
-  rcd{{"rtr-cd<br/>DHCP · DNS · OSPF · firewall"}}
+  rcd{{"rtr-cd<br/>DHCP · DHCP relay · DNS · OSPF · firewall"}}
   d5[host-d5 dual-homed]
   A --- rab --- B --- rcd
   rcd --- C
   rcd --- D
+  rcd --- E
   d5 --- C
   d5 --- D
 ```
 
 | Group | VMs | What it exercises |
 |---|---|---|
-| Routers | `rtr-ab`, `rtr-cd` | minirouter: interfaces, DHCP ranges and static leases, DNS records, OSPF (bird), `fw` (iptables), `rid`, `schedule` |
+| Routers | `rtr-ab`, `rtr-cd` | minirouter: interfaces, DHCP ranges and static leases, DHCP relay, DNS records, OSPF (bird), `fw` (iptables), `rid`, `schedule` |
 | lan-a | `host-a1..a5` | dynamic leases, range launch (`host-a[2-5]`), `serial-ports`, `virtio-ports`, `colocate`, host tap |
 | lan-b | `host-b1..b5` | static MACs, `e1000` vs `virtio-net-pci`, `vcpus`/`cores` |
 | lan-c | `host-c1..c5` | `disk create`, virtio/IDE disks, cache mode, snapshot isolation, `qemu-append`, `machine q35`, `usb-use-xhci`, `vga cirrus` |
 | lan-d | `host-d1..d5` | firewall target, `backchannel false`, dual-homed NICs, fixed `uuid` |
+| lan-e | `host-e1` | static lease from rtr-ab relayed by rtr-cd (`router dhcp ... relay`, `netmask`) |
 
 Every VM shares one saved configuration (`vm config save live-base`), launches
 through the namespace queue (`ns queueing true` + `vm launch`), and is started
@@ -127,10 +132,10 @@ phases (screenshots, QMP, serial, ...) still run.
 | Area | Checks |
 |---|---|
 | Control plane | `version`, `check`, `host`, `namespace`, `ns hosts/queue/queueing`, `vm info`, `vm info summary`, `vlans`, `bridge` + OVS port/VLAN tags, `file list`, `-hashfiles` (no hash mid-copy, bounded CPU while copying, appends, renames, new directories), `disk info/snapshot`, miniweb (`/`, `/vms/info.json`) |
-| Boot | all 22 VMs `RUNNING`, 21 miniccc clients, every expected address learned from tap snooping |
+| Boot | all 23 VMs `RUNNING`, 22 miniccc clients, every expected address learned from tap snooping |
 | Command and control | `cc exec` (one, all, tag and column filters), `cc exitcode`, `cc send`/`recv`, `cc background`, `cc process list/kill`, `cc responses`, `cc delete` |
 | Guest view of config | SMBIOS serial from `qemu-append`, VM UUID, disk sizes per interface, snapshot isolation, Q35 vs i440FX, xHCI, SMP, NIC driver and MAC, dual-homed addressing |
-| Networking | same-LAN ping, OSPF routes, cross-router ping and traceroute, no-cc host reachable, DNS, HTTP to protonuke, firewall drop vs control, host tap (both directions), QoS delay and loss, `capture pcap` |
+| Networking | DHCP relay (lease, netmask, gateway, DNS, reachability), same-LAN ping, OSPF routes, cross-router ping and traceroute, no-cc host reachable, DNS, HTTP to protonuke, firewall drop vs control, host tap (both directions), QoS delay and loss, `capture pcap` |
 | VM operations | `vm screenshot` (std and cirrus), `vm serial`, `vm qmp`, `vm tag` + tag filter, `vm top`, `vm stop/start`, `vm net disconnect/connect`, `vm hotplug add/remove`, `vm save`, `vm kill` + `vm flush` + `vm config clone` + queued relaunch |
 | Tools | `passwordify` on the guest initrd: a VM booted from it accepts the new root password and has the installed keys |
 | VNC | the RFB handshake and a frame through miniweb and the VNC shim, `vnc record fb` decoded, keys typed on the `host-d3` console with QEMU extended key events, `vnc record kb` + `vnc play`, paste as keys, `vnc type`, `vnc inject` (key and `LoadFile`, with and without a playback), `vm kill` while recording and playing (entries stop, files close) |

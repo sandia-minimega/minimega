@@ -67,6 +67,7 @@ func TestLive(t *testing.T) {
 		// guests come up
 		p("CCClients", testCCClients, inv),
 		p("DHCP", testDHCP, inv),
+		p("DHCPRelay", testDHCPRelay, cc),
 
 		// command and control
 		p("CCExec", testCCExec, cc),
@@ -304,7 +305,7 @@ func testVLANs(t *testing.T) {
 		t.Errorf("lan-a = %q, want 1001 (vlans add)", got["lan-a"])
 	}
 	seen := map[string]string{}
-	for _, alias := range []string{"lan-a", "lan-b", "lan-c", "lan-d"} {
+	for _, alias := range []string{"lan-a", "lan-b", "lan-c", "lan-d", "lan-e"} {
 		v, ok := got[alias]
 		if !ok {
 			t.Errorf("alias %v missing: %v", alias, got)
@@ -621,6 +622,9 @@ func testDHCP(t *testing.T) {
 		vms := harness.VMInfo(t)
 		var bad []string
 		for _, s := range topology {
+			if s.Relay {
+				continue
+			}
 			ips := harness.List(vms[s.Name]["ip"])
 			for i, want := range s.IPs {
 				got := ""
@@ -654,6 +658,37 @@ func testDHCP(t *testing.T) {
 }
 
 // --- command and control -----------------------------------------------------
+
+// testDHCPRelay checks host-e1's lease: rtr-cd relays lan-e's DHCP requests
+// to the server on rtr-ab, which has no interface on lan-e.
+func testDHCPRelay(t *testing.T) {
+	harness.Eventually(t, harness.SettleTimeout, 5*time.Second, func() error {
+		if ips := harness.List(harness.VMInfo(t)["host-e1"]["ip"]); len(ips) == 0 || ips[0] != "10.10.5.11" {
+			return fmt.Errorf("host-e1 ip = %v, want 10.10.5.11", ips)
+		}
+		return nil
+	})
+
+	if out := harness.CCOK(t, "rtr-cd", "grep -E '^[[:space:]]*dhcp-(relay|range)' /etc/dnsmasq.conf"); !strings.Contains(out, "dhcp-relay=10.10.5.1,10.10.2.1") || strings.Contains(out, "set:10.10.5.1") {
+		t.Errorf("rtr-cd dnsmasq.conf should relay 10.10.5.1 and not serve it:\n%s", out)
+	}
+	if out := harness.CCOK(t, "rtr-ab", "grep -E '^[[:space:]]*dhcp-range=set:10.10.5.1' /etc/dnsmasq.conf"); !strings.Contains(out, "255.255.255.0") {
+		t.Errorf("rtr-ab dnsmasq.conf range for 10.10.5.1 lacks the netmask:\n%s", out)
+	}
+	harness.CCEventually(t, "rtr-ab", "grep -qi 00:1f:53:00:05:11 /var/lib/misc/dnsmasq.leases", time.Minute)
+
+	// the relayed lease carries the netmask, gateway, and DNS server from rtr-ab
+	if out := harness.CCOK(t, "host-e1", "ip -4 -o addr show dev eth0"); !strings.Contains(out, "10.10.5.11/24") {
+		t.Errorf("host-e1 address is not 10.10.5.11/24:\n%s", out)
+	}
+	if out := harness.CCOK(t, "host-e1", "ip route show default"); !strings.Contains(out, "via 10.10.5.1") {
+		t.Errorf("host-e1 default route is not via 10.10.5.1:\n%s", out)
+	}
+	if out := harness.CCOK(t, "host-e1", "cat /etc/resolv.conf"); !strings.Contains(out, "10.10.5.1") {
+		t.Errorf("host-e1 resolv.conf does not use 10.10.5.1:\n%s", out)
+	}
+	harness.CCEventually(t, "host-e1", "ping -c 3 -W 2 10.10.1.1", 2*time.Minute)
+}
 
 func testCCExec(t *testing.T) {
 	out := harness.CCOK(t, "host-b1", "hostname; uname -s")
