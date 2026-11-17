@@ -897,6 +897,44 @@ Default: "std"
 		}),
 	},
 	{
+		HelpShort: "configures vnc-port",
+		HelpLong: `Set the TCP port that the VM's VNC shim listens on. When unset (0),
+minimega picks a free port at launch. The port must not be in use on
+the host that runs the VM, so it can only be set when launching a
+single VM. The port stays reserved on that host, across namespaces and
+Android emulator ports, until the VM is flushed. Use "vm info" to see the
+port of a running VM.
+
+Note: this configuration only applies to KVM-based VMs. Android VMs
+reject it.
+
+Default: 0
+`,
+		Patterns: []string{
+			"vm config vnc-port [value]",
+		},
+
+		Call: wrapSimpleCLI(func(ns *Namespace, c *minicli.Command, r *minicli.Response) error {
+			if len(c.StringArgs) == 0 {
+				r.Response = strconv.FormatUint(ns.vmConfig.VNCListenPort, 10)
+				return nil
+			}
+
+			i, err := strconv.ParseUint(c.StringArgs["value"], 10, 64)
+			if err != nil {
+				return err
+			}
+
+			if err := validVNCPort(ns.vmConfig, i); err != nil {
+				return err
+			}
+
+			ns.vmConfig.VNCListenPort = i
+
+			return nil
+		}),
+	},
+	{
 		HelpShort: "configures append",
 		HelpLong: `Add an append string to a kernel set with vm kernel. Setting vm append
 without using vm kernel will result in an error.
@@ -1305,6 +1343,7 @@ Default: empty map
 			"clear vm config <uuid,>",
 			"clear vm config <usb-use-xhci,>",
 			"clear vm config <vcpus,>",
+			"clear vm config <vnc-port,>",
 			"clear vm config <vga,>",
 			"clear vm config <virtio-ports,>",
 			"clear vm config <volume,>",
@@ -1784,6 +1823,9 @@ func (v *KVMConfig) Info(field string) (string, error) {
 	if field == "vga" {
 		return v.Vga, nil
 	}
+	if field == "vnc-port" {
+		return strconv.FormatUint(v.VNCListenPort, 10), nil
+	}
 	if field == "append" {
 		return fmt.Sprintf("%v", v.Append), nil
 	}
@@ -1855,6 +1897,9 @@ func (v *KVMConfig) Clear(mask string) {
 	if mask == Wildcard || mask == "vga" {
 		v.Vga = "std"
 	}
+	if mask == Wildcard || mask == "vnc-port" {
+		v.VNCListenPort = 0
+	}
 	if mask == Wildcard || mask == "append" {
 		v.Append = nil
 	}
@@ -1923,6 +1968,9 @@ func (v *KVMConfig) WriteConfig(w io.Writer) error {
 	}
 	if v.Vga != "std" {
 		fmt.Fprintf(w, "vm config vga %v\n", v.Vga)
+	}
+	if v.VNCListenPort != 0 {
+		fmt.Fprintf(w, "vm config vnc-port %v\n", v.VNCListenPort)
 	}
 	if len(v.Append) > 0 {
 		fmt.Fprintf(w, "vm config append %v\n", quoteJoin(v.Append, " "))
@@ -1993,6 +2041,8 @@ func (v *KVMConfig) ReadConfig(r io.Reader, ns string, vmConfig *VMConfig) error
 			v.VirtioPorts = config[1]
 		case "vga":
 			v.Vga = config[1]
+		case "vnc-port":
+			v.VNCListenPort, _ = strconv.ParseUint(config[1], 10, 64)
 		case "append":
 			v.Append = fieldsQuoteEscape("\"", strings.Join(config[1:], " "))
 		case "disks":

@@ -61,6 +61,9 @@ type AndroidVM struct {
 // Ensure that AndroidVM implements the VM interface.
 var _ VM = (*AndroidVM)(nil)
 
+// errAndroidVNCPort rejects vnc-port, since the emulator has no minimega VNC shim.
+var errAndroidVNCPort = errors.New("android VMs do not support vnc-port; clear vm config vnc-port")
+
 var (
 	androidPortMu       sync.Mutex
 	androidReservedPort = map[int]bool{}
@@ -92,6 +95,10 @@ func NewAndroid(name, namespace string, config VMConfig) (*AndroidVM, error) {
 
 	if vm.AVDName == "" {
 		return nil, errors.New("unable to create android VM without a configured android-avd")
+	}
+
+	if vm.VNCListenPort != 0 {
+		return nil, errAndroidVNCPort
 	}
 
 	return vm, nil
