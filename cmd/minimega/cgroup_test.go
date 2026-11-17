@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 	"golang.org/x/sys/unix"
 )
 
@@ -336,6 +337,67 @@ func TestContainerNetnsLink(t *testing.T) {
 				t.Errorf("directory of the links: %v", err)
 			}
 		})
+	}
+}
+
+// syncBuffer is a log output that more than one goroutine can write.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf strings.Builder
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return b.buf.String()
+}
+
+// TestContainerTeardown checks that containerTeardown removes the minimega
+// cgroups, logs no error for a cgroup that is gone, as after the nuke command,
+// and logs an error for a cgroup that it cannot remove.
+func TestContainerTeardown(t *testing.T) {
+	success := containerInitSuccess
+	t.Cleanup(func() { containerInitSuccess = success })
+	containerInitSuccess = true
+
+	// a directory that is not a cgroup v2 mount has the cgroup v1 layout
+	root := t.TempDir()
+	setCgroup(t, root)
+
+	var logs syncBuffer
+	log.AddLogger("teardown-test", &logs, log.ERROR, false)
+	t.Cleanup(func() { log.DelLogger("teardown-test") })
+
+	// all the cgroups are gone
+	containerTeardown()
+	if got := logs.String(); strings.Contains(got, root) {
+		t.Errorf("teardown without cgroups logged an error: %v", got)
+	}
+
+	empty := filepath.Join(root, "freezer", "minimega")
+	busy := filepath.Join(root, "memory", "minimega")
+	for _, d := range []string{empty, filepath.Join(busy, "0")} {
+		if err := os.MkdirAll(d, 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	containerTeardown()
+	if _, err := os.Stat(empty); !os.IsNotExist(err) {
+		t.Errorf("empty cgroup: got %v, want it removed", err)
+	}
+	if got := logs.String(); !strings.Contains(got, busy) {
+		t.Errorf("teardown did not log the cgroup that it cannot remove: %q", got)
+	} else if strings.Contains(got, empty) || strings.Contains(got, filepath.Join(root, "cpu")) {
+		t.Errorf("teardown logged an error for a cgroup that is gone: %q", got)
 	}
 }
 

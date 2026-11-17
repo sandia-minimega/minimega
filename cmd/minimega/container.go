@@ -367,7 +367,8 @@ func containerInit() (err error) {
 
 func containerTeardown() {
 	for _, cgroup := range cgroupDirs() {
-		if err := os.Remove(cgroup); err != nil {
+		// the nuke command removes the cgroups before the shutdown
+		if err := os.Remove(cgroup); err != nil && !os.IsNotExist(err) {
 			if containerInitSuccess {
 				log.Errorln(err)
 			}
