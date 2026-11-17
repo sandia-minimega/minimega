@@ -286,7 +286,9 @@ type BondConfig struct {
 	VLAN       int
 	Raw        string
 
-	created bool
+	// Created is true after the bond is added to its bridge. It is exported so
+	// that the VMs in mesh responses keep it.
+	Created bool `json:"-"`
 }
 
 type BondConfigs []BondConfig

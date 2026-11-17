@@ -39,6 +39,11 @@ type VLANs struct {
 
 	ranges map[string]*Range
 
+	// held contains the blacklisted VLANs that are being removed from the
+	// blacklist and the ID of each hold
+	held   map[int]uint64
+	holdID uint64
+
 	sync.Mutex
 }
 
@@ -46,6 +51,7 @@ func NewVLANs() *VLANs {
 	return &VLANs{
 		byVLAN:  make(map[int]Alias),
 		byAlias: make(map[Alias]int),
+		held:    make(map[int]uint64),
 		ranges: map[string]*Range{
 			"": &Range{
 				Min:  VLANStart,
@@ -302,6 +308,78 @@ func (v *VLANs) blacklist(vlan int) {
 	v.byVLAN[vlan] = Alias{Value: BlacklistedVLAN}
 }
 
+// HoldBlacklisted marks a blacklisted VLAN as held. While the VLAN is held,
+// ParseVLAN returns an error for it so that new users cannot start to use it.
+// Call release or Unblacklist to end the hold. release ends only this hold: it
+// does nothing after a different hold starts for the VLAN. Returns an error if
+// the VLAN is not blacklisted or is already held.
+func (v *VLANs) HoldBlacklisted(vlan int) (release func(), err error) {
+	v.Lock()
+	defer v.Unlock()
+
+	if !v.blacklisted(vlan) {
+		return nil, fmt.Errorf("VLAN %v is not blacklisted", vlan)
+	}
+	if _, ok := v.held[vlan]; ok {
+		return nil, fmt.Errorf("VLAN %v is already being removed from the blacklist", vlan)
+	}
+
+	if v.held == nil {
+		v.held = make(map[int]uint64)
+	}
+	v.holdID++
+	id := v.holdID
+	v.held[vlan] = id
+
+	return func() {
+		v.Lock()
+		defer v.Unlock()
+
+		if v.held[vlan] == id {
+			delete(v.held, vlan)
+		}
+	}, nil
+}
+
+// Unblacklist removes a VLAN from the blacklist so that the VLAN can be
+// allocated again. Also ends the hold on the VLAN. Returns an error if the VLAN
+// is not blacklisted.
+func (v *VLANs) Unblacklist(vlan int) error {
+	v.Lock()
+	defer v.Unlock()
+
+	if !v.blacklisted(vlan) {
+		return fmt.Errorf("VLAN %v is not blacklisted", vlan)
+	}
+
+	log.Info("removing %v from blacklist", vlan)
+
+	delete(v.byVLAN, vlan)
+	delete(v.held, vlan)
+
+	// Move next counters back so that we can find the freed VLAN
+	for _, r := range v.ranges {
+		if r.Min <= vlan && vlan < r.Next {
+			r.Next = vlan
+		}
+	}
+
+	return nil
+}
+
+// blacklisted returns true if the VLAN is blacklisted. This should only be
+// invoked if the caller has acquired the lock for v.
+func (v *VLANs) blacklisted(vlan int) bool {
+	a, ok := v.byVLAN[vlan]
+	if !ok || a != (Alias{Value: BlacklistedVLAN}) {
+		return false
+	}
+
+	// an alias that is literally named BLACKLISTED is not a blacklist entry
+	vlan2, ok := v.byAlias[a]
+	return !ok || vlan2 != vlan
+}
+
 // GetBlacklist returns a list of VLANs that have been blacklisted.
 func (v *VLANs) GetBlacklist() []int {
 	v.Lock()
@@ -333,6 +411,10 @@ func (v *VLANs) ParseVLAN(namespace, s string) (int, error) {
 		// Check to ensure that VLAN is sane
 		if vlan < 0 || vlan >= 4096 {
 			return 0, errors.New("invalid VLAN (0 <= vlan < 4096)")
+		}
+
+		if _, ok := v.held[vlan]; ok {
+			return 0, fmt.Errorf("VLAN %v is being removed from the blacklist", vlan)
 		}
 
 		if alias, ok := v.byVLAN[vlan]; ok && alias.Value != BlacklistedVLAN {
@@ -428,6 +510,12 @@ func GetRanges() map[string]Range {
 }
 func Blacklist(vlan int) {
 	Default.Blacklist(vlan)
+}
+func HoldBlacklisted(vlan int) (func(), error) {
+	return Default.HoldBlacklisted(vlan)
+}
+func Unblacklist(vlan int) error {
+	return Default.Unblacklist(vlan)
 }
 func GetBlacklist() []int {
 	return Default.GetBlacklist()

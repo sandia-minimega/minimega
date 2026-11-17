@@ -101,6 +101,30 @@ exported `*Namespace` functions acquire this lock automatically. We currently
 do not use this lock to synchronize access to the underlying Namespace structs
 -- these should be synchronized via the `cmdChannel` used by `runCommands`.
 
+<a id="TOC_1.2.7."></a>
+
+#### `vlanUseLock`
+
+`vlanUseLock` lets `clear vlans blacklist` wait for commands that looked up a
+VLAN before the VLAN was held. It is not a mutex. A command that looks up a
+VLAN and then stores it in a VM, a VM configuration, or a host tap calls
+`vlanUseLock.Use` before the lookup. The command ends the use after it stores
+the VLAN. `clear vlans blacklist` calls `vlanUseLock.Wait`, which waits only for
+the uses that started before it. Other commands do not wait for `Wait`. Call
+`Use` before `vmLock`. Do not hold a lock or a use while you call `Wait`.
+
+<a id="TOC_1.2.8."></a>
+
+#### `Namespace.configLock`
+
+`Namespace.configLock` protects the hosts, the saved VM configurations, the VM
+queue, and the launching VMs of a namespace. It also protects the writes that
+replace the VM configuration, its `BaseConfig`, or its `Networks`. Hold it to
+read these fields from a different goroutine. `clear vlans blacklist` holds it
+to read these fields from all namespaces. It is one of the other locks: acquire
+it after `VM.lock`. Do not acquire other minimega locks or send commands while
+you hold it.
+
 <a id="TOC_1.3."></a>
 
 ### Hierarchy of locks
@@ -111,12 +135,14 @@ and have defined the following hierarchy:
 
 ```mermaid
 flowchart TD
-    A[cmdChannel] --> B[vmLock]
+    A[cmdChannel] --> V[vlanUseLock]
+    V --> B[vmLock]
     B --> C[VM.lock]
     C --> D[All other locks]
 
     subgraph M[minimega package]
         A
+        V
         B
         C
         D

@@ -778,24 +778,19 @@ func cliVMLaunch(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 	// adding VM to queue
 	if len(c.StringArgs) > 0 {
-		// create a local copy of the current or specified VMConfig
-		var vmConfig VMConfig
-
-		if name := c.StringArgs["config"]; name != "" {
-			if _, ok := ns.savedVMConfig[name]; !ok {
-				return fmt.Errorf("config %v does not exist", name)
-			}
-			vmConfig = ns.savedVMConfig[name].Copy()
-		} else {
-			vmConfig = ns.vmConfig.Copy()
-		}
-
 		vmType, err := findVMType(c.BoolArgs)
 		if err != nil {
 			return err
 		}
 
+		// create a local copy of the current or specified VMConfig
+		vmConfig, done, err := ns.copyVMConfig(c.StringArgs["config"])
+		if err != nil {
+			return err
+		}
+
 		err = ns.Queue(c.StringArgs["name"], vmType, vmConfig)
+		done()
 
 		if err == nil && !ns.QueueVMs {
 			// no error queueing and user has disabled queueing -- launch now!
@@ -1093,6 +1088,12 @@ func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 }
 
 func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if c.BoolArgs["add"] || c.BoolArgs["connect"] {
+		// Use the VLAN until the VMs store it, see vlanUseLock
+		done := vlanUseLock.Use()
+		defer done()
+	}
+
 	target := c.StringArgs["vm"]
 
 	var fn vmApplyFunc
