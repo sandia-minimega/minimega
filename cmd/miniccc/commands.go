@@ -7,12 +7,16 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/sandia-minimega/minimega/v2/internal/ron"
@@ -79,19 +83,128 @@ func lookPath(file string, env []string) (string, error) {
 	return exec.LookPath(file)
 }
 
+// outputWait is how long miniccc waits for the end of a command's output to a
+// pipe once the command has exited. The output only ends later than the
+// command when a process that the command started still has it open.
+var outputWait = 5 * time.Second
+
+// commandOutput is the output of a command that goes to named pipes.
+type commandOutput struct {
+	child   []*os.File     // the command's ends, which miniccc closes once the command has started
+	parent  []*os.File     // the ends that miniccc reads
+	readers sync.WaitGroup // the goroutines that read them
+	stop    chan struct{}  // closed to stop the readers
+	wait    time.Duration  // outputWait for this command
+}
+
+// pipe returns a file to use as the command's stdout or stderr. The lines
+// that the command writes to it go to the named pipe.
+func (o *commandOutput) pipe(name string) (*os.File, error) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		return nil, err
+	}
+
+	out, err := NewPlumberWriter(name)
+	if err != nil {
+		r.Close()
+		w.Close()
+		return nil, err
+	}
+
+	o.child = append(o.child, w)
+	o.parent = append(o.parent, r)
+
+	o.readers.Add(1)
+	go func() {
+		defer o.readers.Done()
+		defer close(out)
+
+		scanner := bufio.NewScanner(r)
+		for scanner.Scan() {
+			select {
+			case out <- scanner.Text() + "\n":
+			case <-o.stop:
+				return
+			}
+		}
+
+		// the read fails when finish closed output that did not end in time
+		if err := scanner.Err(); err != nil && !errors.Is(err, os.ErrClosed) {
+			log.Errorln(err)
+		}
+	}()
+
+	return w, nil
+}
+
+// started closes the command's ends of the output, so that the output ends
+// when the last process that writes it has exited. Call it when the command
+// has started.
+func (o *commandOutput) started() {
+	for _, f := range o.child {
+		f.Close()
+	}
+	o.child = nil
+}
+
+// finish waits for the end of the output, but no longer than o.wait, and then
+// closes it. Call it when the command has exited or could not be
+// started.
+func (o *commandOutput) finish() {
+	o.started()
+
+	ended := make(chan struct{})
+	go func() {
+		o.readers.Wait()
+		close(ended)
+	}()
+
+	select {
+	case <-ended:
+	case <-time.After(o.wait):
+		log.Debug("output is still open %v after the command exited, closing it", o.wait)
+	}
+
+	close(o.stop)
+	for _, f := range o.parent {
+		f.Close()
+	}
+	<-ended
+}
+
 func runCommand(c *ron.Command) (string, string, int) {
-	done := make(chan struct{})
 	var bufout, buferr bytes.Buffer
 
 	cmd := &exec.Cmd{
 		Args: c.Command,
 	}
 
+	// done is closed when the command has exited, or could not be started
+	done := make(chan struct{})
+
+	// output is the command's output that goes to pipes
+	output := &commandOutput{stop: make(chan struct{}), wait: outputWait}
+
+	// finish gives up the command's pipes
+	finish := func() {
+		close(done)
+		output.finish()
+	}
+
+	// a command in the background runs on when this function returns, and
+	// gives up its pipes when it exits
+	background := false
+	defer func() {
+		if !background {
+			finish()
+		}
+	}()
+
 	if c.Session != "" {
 		release, err := setSession(cmd, c.Session)
 		if err != nil {
 			log.Errorln(err)
-			close(done)
 			return "", err.Error(), -1
 		}
 		defer release()
@@ -100,7 +213,6 @@ func runCommand(c *ron.Command) (string, string, int) {
 	path, err := lookPath(c.Command[0], cmd.Env)
 	if err != nil {
 		log.Errorln(err)
-		close(done)
 		return "", err.Error(), -1
 	}
 	cmd.Path = path
@@ -124,9 +236,16 @@ func runCommand(c *ron.Command) (string, string, int) {
 		}()
 
 		go func() {
+			// give up the pipe when the command no longer reads its input
+			defer cStdin.Close()
+
 			for v := range cStdin.C {
 				_, err := pStdin.Write([]byte(v))
-				if err != nil {
+				if errors.Is(err, syscall.EPIPE) || errors.Is(err, os.ErrClosed) {
+					// not an error: the command closed its input or exited
+					log.Debug("%v no longer reads its input: %v", c.Command, err)
+					return
+				} else if err != nil {
 					log.Errorln(err)
 					return
 				}
@@ -136,69 +255,23 @@ func runCommand(c *ron.Command) (string, string, int) {
 	}
 
 	if c.Stdout != "" {
-		pStdout, err := cmd.StdoutPipe()
+		f, err := output.pipe(c.Stdout)
 		if err != nil {
 			log.Errorln(err)
-			close(done)
 			return "", "", -1
 		}
-
-		cStdout, err := NewPlumberWriter(c.Stdout)
-		if err != nil {
-			log.Errorln(err)
-			close(done)
-			return "", "", -1
-		}
-
-		go func() {
-			defer close(cStdout)
-			scanner := bufio.NewScanner(pStdout)
-			for scanner.Scan() {
-				select {
-				case cStdout <- scanner.Text() + "\n":
-				case <-done:
-					return
-				}
-			}
-			if err := scanner.Err(); err != nil {
-				log.Errorln(err)
-				return
-			}
-		}()
+		cmd.Stdout = f
 	} else {
 		cmd.Stdout = &bufout
 	}
 
 	if c.Stderr != "" {
-		pStderr, err := cmd.StderrPipe()
+		f, err := output.pipe(c.Stderr)
 		if err != nil {
 			log.Errorln(err)
-			close(done)
 			return "", "", -1
 		}
-
-		cStderr, err := NewPlumberWriter(c.Stderr)
-		if err != nil {
-			log.Errorln(err)
-			close(done)
-			return "", "", -1
-		}
-
-		go func() {
-			defer close(cStderr)
-			scanner := bufio.NewScanner(pStderr)
-			for scanner.Scan() {
-				select {
-				case cStderr <- scanner.Text() + "\n":
-				case <-done:
-					return
-				}
-			}
-			if err := scanner.Err(); err != nil {
-				log.Errorln(err)
-				return
-			}
-		}()
+		cmd.Stderr = f
 	} else {
 		cmd.Stderr = &buferr
 	}
@@ -211,6 +284,8 @@ func runCommand(c *ron.Command) (string, string, int) {
 			log.Errorln(err)
 			return "", buferr.String(), -1
 		}
+		output.started()
+		background = true
 
 		pid := cmd.Process.Pid
 
@@ -224,6 +299,7 @@ func runCommand(c *ron.Command) (string, string, int) {
 
 		go func() {
 			cmd.Wait()
+
 			log.Debug("command exited: %v", c.Command)
 			if bufout.Len() > 0 {
 				log.Debug("%s", bufout.String())
@@ -233,8 +309,10 @@ func runCommand(c *ron.Command) (string, string, int) {
 			}
 
 			client.Lock()
-			defer client.Unlock()
 			delete(client.Processes, pid)
+			client.Unlock()
+
+			finish()
 		}()
 
 		return "", "", 0
@@ -244,7 +322,13 @@ func runCommand(c *ron.Command) (string, string, int) {
 	// isn't an exec.ExitError.
 	exitCode := -1
 
-	if err := cmd.Run(); err == nil {
+	err = cmd.Start()
+	if err == nil {
+		output.started()
+		err = cmd.Wait()
+	}
+
+	if err == nil {
 		exitCode = 0
 	} else {
 		log.Errorln(err)
@@ -254,6 +338,7 @@ func runCommand(c *ron.Command) (string, string, int) {
 		}
 	}
 
+	// the deferred finish waits for the end of output that goes to pipes
 	return bufout.String(), buferr.String(), exitCode
 }
 

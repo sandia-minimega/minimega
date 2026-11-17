@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strconv"
 	"strings"
@@ -63,6 +64,7 @@ func TestLive(t *testing.T) {
 		p("FileHash", testFileHash, version),
 		p("Disk", testDisk, inv),
 		p("Miniweb", testMiniweb, inv),
+		p("Pipes", testPipes, version),
 
 		// guests come up
 		p("CCClients", testCCClients, inv),
@@ -75,6 +77,7 @@ func TestLive(t *testing.T) {
 		p("CCSendRecv", testCCSendRecv, cc),
 		p("CCBackgroundProcess", testCCBackgroundProcess, cc),
 		p("CCResponses", testCCResponses, cc),
+		p("CCPipes", testCCPipes, cc),
 
 		// what the guest sees of its VM configuration
 		p("GuestQemuAppend", testGuestQemuAppend, cc),
@@ -773,6 +776,337 @@ func testCCResponses(t *testing.T) {
 		t.Errorf("cc responses %d = %q", id, out)
 	}
 	harness.MustRun(t, fmt.Sprintf("cc delete response %d", id))
+}
+
+// --- pipes -------------------------------------------------------------------
+
+// pipeName returns a name for a pipe that no earlier run against the same
+// minimega has used: pipes outlive the clients that used them.
+func pipeName(what string) string {
+	return fmt.Sprintf("live-%v-%d", what, time.Now().UnixNano())
+}
+
+// attachPipe attaches a client to a pipe, like `minimega -pipe`, and waits
+// until minimega lists it as a reader.
+func attachPipe(t *testing.T, pipe string) *harness.PipeClient {
+	t.Helper()
+
+	readers := func() int {
+		n, _ := strconv.Atoi(harness.PipeInfo(t, pipe)["readers"])
+		return n
+	}
+	before := readers()
+
+	p, err := harness.AttachPipe(pipe)
+	if err != nil {
+		t.Fatal(err)
+	}
+	harness.Eventually(t, time.Minute, 200*time.Millisecond, func() error {
+		if got := readers(); got != before+1 {
+			return fmt.Errorf("pipe %v has %d readers, want %d", pipe, got, before+1)
+		}
+		return nil
+	})
+
+	return p
+}
+
+// expectLines waits until a pipe client has read exactly want.
+func expectLines(t *testing.T, p *harness.PipeClient, want ...string) {
+	t.Helper()
+
+	harness.Eventually(t, time.Minute, 200*time.Millisecond, func() error {
+		if got := p.Lines(); !reflect.DeepEqual(got, want) {
+			return fmt.Errorf("pipe client read %q, want %q", got, want)
+		}
+		return nil
+	})
+}
+
+// closePipe ends a pipe client's session, which must not fail.
+func closePipe(t *testing.T, p *harness.PipeClient) {
+	t.Helper()
+
+	if err := p.Close(); err != nil {
+		t.Errorf("pipe client: %v", err)
+	}
+}
+
+// commandSocketErrors counts the errors minimega has logged for its command
+// socket.
+func commandSocketErrors(t *testing.T) int {
+	t.Helper()
+
+	// grep exits 1 when it counts no lines
+	out, err := harness.InContainer(t, "sh", "-c", `grep -cE '(ERROR|FATAL) command_socket\.go' "$MM_LOGFILE"`)
+	n, perr := strconv.Atoi(strings.TrimSpace(out))
+	if perr != nil {
+		t.Fatalf("count command socket errors in the minimega log: %v: %s", err, out)
+	}
+	return n
+}
+
+// pipeClientCLI runs a shell script in the minimega container that uses
+// `minimega -pipe`, and returns what it printed.
+func pipeClientCLI(t *testing.T, script string) string {
+	t.Helper()
+
+	out, err := harness.InContainer(t, "sh", "-c", script)
+	if err != nil {
+		t.Fatalf("`%v` failed: %v\n%s", script, err, out)
+	}
+	return out
+}
+
+func testPipes(t *testing.T) {
+	ns := harness.Namespace
+	errorsBefore := commandSocketErrors(t)
+
+	// echo hello | minimega -pipe foo: the client must exit 0, without
+	// minimega logging an error for its connection, and its line must be in
+	// the pipe when it exits (sandia-minimega/minimega#905).
+	t.Run("WriteAndExit", func(t *testing.T) {
+		pipe := pipeName("write")
+
+		var want strings.Builder
+		for i := 1; i <= 50; i++ {
+			fmt.Fprintf(&want, "hello %d\n", i)
+		}
+
+		// the client is a reader of the pipe too, so it reads its lines back
+		out := pipeClientCLI(t, fmt.Sprintf(
+			`for i in $(seq 1 50); do echo "hello $i" | minimega -pipe %v//%v || exit 1; done`, ns, pipe))
+		if out != want.String() {
+			t.Errorf("minimega -pipe printed %q, want %q", out, want.String())
+		}
+
+		// no waiting here: the last client has exited
+		info := harness.PipeInfo(t, pipe)
+		if info["count"] != "50" || info["previous"] != "hello 50" {
+			t.Errorf("pipe has count %q and previous %q, want 50 and hello 50", info["count"], info["previous"])
+		}
+		if info["readers"] != "0" || info["writers"] != "0" {
+			t.Errorf("pipe has %v readers and %v writers after its clients exited, want none", info["readers"], info["writers"])
+		}
+	})
+
+	// one reader, written to from the CLI, from minimega -pipe, and from a
+	// second client over the socket
+	t.Run("ReadersAndWriters", func(t *testing.T) {
+		pipe := pipeName("rw")
+
+		a := attachPipe(t, pipe)
+		if info := harness.PipeInfo(t, pipe); info["mode"] != "all" || info["writers"] != "1" {
+			t.Errorf("pipe has mode %q and %v writers, want all and 1", info["mode"], info["writers"])
+		}
+
+		harness.MustRun(t, fmt.Sprintf("pipe %v %q", pipe, "from the cli"))
+		expectLines(t, a, "from the cli\n")
+
+		pipeClientCLI(t, fmt.Sprintf(`echo "from minimega -pipe" | minimega -pipe %v//%v`, ns, pipe))
+		expectLines(t, a, "from the cli\n", "from minimega -pipe\n")
+
+		b := attachPipe(t, pipe)
+		if err := b.Write("from b"); err != nil {
+			t.Fatal(err)
+		}
+		expectLines(t, a, "from the cli\n", "from minimega -pipe\n", "from b\n")
+
+		// b's session ends once its line is in the pipe; b read it back
+		closePipe(t, b)
+		if got, want := b.Lines(), []string{"from b\n"}; !reflect.DeepEqual(got, want) {
+			t.Errorf("b read %q, want %q", got, want)
+		}
+
+		closePipe(t, a)
+		if info := harness.PipeInfo(t, pipe); info["readers"] != "0" || info["writers"] != "0" || info["count"] != "3" {
+			t.Errorf("pipe has %v readers, %v writers and count %v, want 0, 0 and 3", info["readers"], info["writers"], info["count"])
+		}
+
+		// a pipe without writers can be deleted
+		harness.MustRun(t, "clear pipe "+pipe)
+		if info := harness.PipeInfo(t, pipe); info != nil {
+			t.Errorf("pipe still listed after clear: %v", info)
+		}
+	})
+
+	t.Run("RoundRobin", func(t *testing.T) {
+		pipe := pipeName("rr")
+
+		a := attachPipe(t, pipe)
+		b := attachPipe(t, pipe)
+		defer closePipe(t, a)
+		defer closePipe(t, b)
+
+		harness.MustRun(t, fmt.Sprintf("pipe %v mode round-robin", pipe))
+		if info := harness.PipeInfo(t, pipe); info["mode"] != "round-robin" {
+			t.Errorf("mode = %q, want round-robin", info["mode"])
+		}
+
+		for i := 0; i < 6; i++ {
+			harness.MustRun(t, fmt.Sprintf("pipe %v message-%d", pipe, i))
+		}
+
+		// each message goes to one reader, and the readers take turns
+		harness.Eventually(t, time.Minute, 200*time.Millisecond, func() error {
+			if na, nb := len(a.Lines()), len(b.Lines()); na != 3 || nb != 3 {
+				return fmt.Errorf("readers got %d and %d messages, want 3 each", na, nb)
+			}
+			return nil
+		})
+
+		harness.MustRun(t, fmt.Sprintf("clear pipe %v mode", pipe))
+		if info := harness.PipeInfo(t, pipe); info["mode"] != "all" {
+			t.Errorf("mode = %q after clear, want all", info["mode"])
+		}
+	})
+
+	t.Run("Via", func(t *testing.T) {
+		pipe := pipeName("via")
+
+		a := attachPipe(t, pipe)
+		defer closePipe(t, a)
+
+		harness.MustRun(t, fmt.Sprintf("pipe %v via tr a-z A-Z", pipe))
+		if info := harness.PipeInfo(t, pipe); info["via"] != "tr a-z A-Z" {
+			t.Errorf("via = %q", info["via"])
+		}
+
+		harness.MustRun(t, fmt.Sprintf("pipe %v hello", pipe))
+		expectLines(t, a, "HELLO\n")
+
+		harness.MustRun(t, fmt.Sprintf("clear pipe %v via", pipe))
+		harness.MustRun(t, fmt.Sprintf("pipe %v hello", pipe))
+		expectLines(t, a, "HELLO\n", "hello\n")
+	})
+
+	// plumb in "sed -u s/foo/moo/" out, as in the plumb help
+	t.Run("Pipeline", func(t *testing.T) {
+		in, out := pipeName("in"), pipeName("out")
+		pipeline := fmt.Sprintf("%v//%v sed -u s/foo/moo/ %v//%v", ns, in, ns, out)
+
+		listed := func() bool {
+			for _, r := range harness.MustTable(t, "plumb") {
+				if r["pipeline"] == pipeline {
+					return true
+				}
+			}
+			return false
+		}
+
+		harness.MustRun(t, fmt.Sprintf(`plumb %v "sed -u s/foo/moo/" %v`, in, out))
+		if !listed() {
+			t.Fatalf("pipeline %q not listed", pipeline)
+		}
+
+		a := attachPipe(t, out)
+		defer closePipe(t, a)
+
+		// the pipeline reads the first pipe once it has started
+		harness.Eventually(t, time.Minute, 200*time.Millisecond, func() error {
+			if info := harness.PipeInfo(t, in); info["readers"] != "1" {
+				return fmt.Errorf("pipe %v has %q readers, want 1", in, info["readers"])
+			}
+			return nil
+		})
+
+		harness.MustRun(t, fmt.Sprintf("pipe %v %q", in, "the cow says foo"))
+		expectLines(t, a, "the cow says moo\n")
+
+		// Closing the first pipe shuts the pipeline down. The pipe can be
+		// deleted once the writer of the message above is gone.
+		harness.Eventually(t, time.Minute, 200*time.Millisecond, func() error {
+			_, err := harness.Run("clear pipe " + in)
+			return err
+		})
+		harness.Eventually(t, time.Minute, 200*time.Millisecond, func() error {
+			if listed() {
+				return fmt.Errorf("pipeline %q still listed", pipeline)
+			}
+			return nil
+		})
+
+		// sed is gone, also as a zombie, and nothing more was written
+		// downstream. grep lists the processes named sed, and fails when
+		// there are none.
+		if out, _ := harness.InContainer(t, "sh", "-c", "grep -lx sed /proc/[0-9]*/comm 2>/dev/null"); strings.TrimSpace(out) != "" {
+			t.Errorf("sed left behind by the pipeline: %s", out)
+		}
+		harness.Eventually(t, time.Minute, 200*time.Millisecond, func() error {
+			if info := harness.PipeInfo(t, out); info["writers"] != "1" {
+				return fmt.Errorf("pipe %v has %q writers, want only the client", out, info["writers"])
+			}
+			return nil
+		})
+		if info := harness.PipeInfo(t, out); info["count"] != "1" {
+			t.Errorf("%v messages written to %v, want 1", info["count"], out)
+		}
+		expectLines(t, a, "the cow says moo\n")
+	})
+
+	if got := commandSocketErrors(t); got != errorsBefore {
+		out, _ := harness.InContainer(t, "sh", "-c", `grep -E '(ERROR|FATAL) command_socket\.go' "$MM_LOGFILE" | tail -20`)
+		t.Errorf("minimega logged %d command socket errors while pipes were used:\n%s", got-errorsBefore, out)
+	}
+}
+
+// testCCPipes uses pipes from guests: miniccc -pipe, and the standard streams
+// of processes that miniccc starts.
+func testCCPipes(t *testing.T) {
+	const vm = "host-b3"
+
+	// what miniccc has logged as errors in the guest
+	guestErrors := func() string {
+		return harness.CCOK(t, vm, "grep ERROR /var/log/miniccc.log || true")
+	}
+	errorsBefore := guestErrors()
+
+	// guest to host: echo ... | miniccc -pipe, one client after the other
+	up := pipeName("up")
+	a := attachPipe(t, up)
+	defer closePipe(t, a)
+
+	var writes, want []string
+	for i := 1; i <= 5; i++ {
+		writes = append(writes, fmt.Sprintf("echo guest-%d | miniccc -pipe %v", i, up))
+		want = append(want, fmt.Sprintf("guest-%d\n", i))
+	}
+	harness.CCOK(t, vm, strings.Join(writes, " && "))
+	expectLines(t, a, want...)
+
+	// guest to host: the standard output of a command
+	harness.CCRun(t, "name="+vm, fmt.Sprintf("exec stdout=%v echo from-cc-exec", up), 1, time.Minute)
+	expectLines(t, a, append(want, "from-cc-exec\n")...)
+
+	// host to guest: a miniccc -pipe that keeps reading while its input is
+	// open. Its input ends, and so does the client, when the hold file is gone.
+	down := pipeName("down")
+	hold := fmt.Sprintf("/tmp/%v.hold", down)
+	harness.CCOK(t, vm, "touch "+hold)
+	harness.CCRun(t, "name="+vm, fmt.Sprintf("background sh -c %q",
+		fmt.Sprintf("while [ -e %v ]; do sleep 1; done | miniccc -pipe %v > /tmp/%v.out", hold, down, down)), 1, time.Minute)
+	defer harness.CCOK(t, vm, "rm -f "+hold)
+
+	harness.Eventually(t, time.Minute, time.Second, func() error {
+		if info := harness.PipeInfo(t, down); info["readers"] != "1" {
+			return fmt.Errorf("pipe %v has %q readers, want the guest", down, info["readers"])
+		}
+		return nil
+	})
+
+	// miniccc logs a command that fails as an error, so look at the file with
+	// a command that doesn't fail while the line is on its way
+	harness.MustRun(t, fmt.Sprintf("pipe %v from-the-host", down))
+	harness.Eventually(t, time.Minute, 3*time.Second, func() error {
+		if out := harness.CCOK(t, vm, fmt.Sprintf("cat /tmp/%v.out", down)); out != "from-the-host\n" {
+			return fmt.Errorf("guest read %q from pipe %v, want the line from the host", out, down)
+		}
+		return nil
+	})
+
+	if got := guestErrors(); got != errorsBefore {
+		t.Errorf("miniccc logged errors in the guest while pipes were used:\nbefore:\n%s\nafter:\n%s", errorsBefore, got)
+	}
 }
 
 // --- guest view of VM configuration ----------------------------------------

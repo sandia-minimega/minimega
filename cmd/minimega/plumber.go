@@ -7,6 +7,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -79,7 +80,7 @@ pipelines:
 Interact with named pipes. To write to a pipe, simply invoke the pipe API with
 the pipe name and value:
 
-	pipe foo Hello pipes!
+	pipe foo "Hello pipes!"
 
 Pipes have several message delivery modes. Based on the mode, messages written
 to a pipe will be delivered to one or more readers. Mode "all" copies messages
@@ -157,8 +158,11 @@ func cliPlumbBroadcast(ns *Namespace, c *minicli.Command, resp *minicli.Response
 	resp.Header = []string{"pipeline"}
 	resp.Tabular = [][]string{}
 
+	// a pipeline is in the namespace if one of its pipes is
+	prefix := fmt.Sprintf("%v//", ns)
+
 	for _, v := range plumber.Pipelines() {
-		if !strings.Contains(v, fmt.Sprintf("%v//", ns)) {
+		if !strings.HasPrefix(v, prefix) && !strings.Contains(v, " "+prefix) {
 			continue
 		}
 		resp.Tabular = append(resp.Tabular, []string{v})
@@ -207,7 +211,7 @@ func cliPipeBroadcast(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 
 		for _, v := range plumber.Pipes() {
 			name := v.Name()
-			if !strings.Contains(name, fmt.Sprintf("%v//", ns)) {
+			if !strings.HasPrefix(name, fmt.Sprintf("%v//", ns)) {
 				continue
 			}
 			resp.Tabular = append(resp.Tabular, []string{name, v.Mode(), fmt.Sprintf("%v", v.NumReaders()), fmt.Sprintf("%v", v.NumWriters()), fmt.Sprintf("%v", v.NumMessages()), v.GetVia(), strings.TrimSpace(v.Last())})
@@ -275,46 +279,83 @@ func pipeMMHandler() {
 		log.Fatalln(err)
 	}
 
-	r, w := mm.Pipe(pipe)
-	wait := make(chan struct{})
+	if err := pipeMM(mm, pipe, os.Stdin, os.Stdout); err != nil {
+		log.Fatalln(err)
+	}
+}
 
+// pipeMM attaches in and out to a named pipe over mm: lines read from in are
+// written to the pipe, and lines written to the pipe are written to out. It
+// returns nil once in is closed and minimega has written everything read from
+// it to the pipe, or the first error.
+func pipeMM(mm *miniclient.Conn, pipe string, in io.Reader, out io.Writer) error {
+	r, w := mm.Pipe(pipe)
+	if r == nil {
+		return mm.Error()
+	}
+
+	// pipe to out, until minimega closes the connection
+	outErr := make(chan error, 1)
 	go func() {
 		scanner := bufio.NewScanner(r)
 		buf := make([]byte, 0, TOKEN_MAX)
 		scanner.Buffer(buf, TOKEN_MAX)
 		for scanner.Scan() {
-			_, err := os.Stdout.Write(append(scanner.Bytes(), '\n'))
+			_, err := out.Write(append(scanner.Bytes(), '\n'))
 			if err != nil {
-				log.Fatalln(err)
+				outErr <- err
+				return
 			}
 		}
-		if err := scanner.Err(); err != nil {
-			log.Fatalln(err)
-		}
-		close(wait)
+		outErr <- scanner.Err()
 	}()
 
-	scanner := bufio.NewScanner(os.Stdin)
-	buf := make([]byte, 0, TOKEN_MAX)
-	scanner.Buffer(buf, TOKEN_MAX)
-	for scanner.Scan() {
-		log.Debug("writing: %v", scanner.Text())
-		_, err := w.Write(append(scanner.Bytes(), '\n'))
+	// in to pipe, until in is closed
+	inErr := make(chan error, 1)
+	go func() {
+		// tell minimega that there is nothing more to write
+		defer w.Close()
+
+		scanner := bufio.NewScanner(in)
+		buf := make([]byte, 0, TOKEN_MAX)
+		scanner.Buffer(buf, TOKEN_MAX)
+		for scanner.Scan() {
+			log.Debug("writing: %v", scanner.Text())
+			_, err := w.Write(append(scanner.Bytes(), '\n'))
+			if err != nil {
+				inErr <- err
+				return
+			}
+		}
+		inErr <- scanner.Err()
+	}()
+
+	return pipeMMResult(outErr, inErr)
+}
+
+// pipeMMResult returns the result of a pipeMM session from the results of its
+// output and input goroutines.
+func pipeMMResult(outErr, inErr <-chan error) error {
+	select {
+	case err := <-outErr:
+		if err == nil {
+			// The session ended cleanly, which happens only after the input
+			// was closed, perhaps because reading it failed.
+			return <-inErr
+		}
+		// minimega closed the connection, or writing to out failed. Don't
+		// wait for in, which may never be closed.
+		return err
+	case err := <-inErr:
 		if err != nil {
-			log.Fatalln(err)
+			return err
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		log.Fatalln(err)
-	}
 
-	// we can't just exit at this point, as there exists a race between
-	// writing to the pipe and the other end reading and sending the data
-	// over the command socket. Instead, we close the writer and wait until
-	// the miniclient pipe handler exits for us.
-	w.Close()
-
-	<-wait
+	// We can't just return at this point: minimega may not have read
+	// everything we sent yet, let alone written it to the pipe. It closes the
+	// connection once it has, which ends the reader.
+	return <-outErr
 }
 
 func fqnsPipe(ns *Namespace, p string) string {

@@ -15,6 +15,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
@@ -73,6 +74,9 @@ type Conn struct {
 
 	// TTY is sent with commands, see Request.TTY
 	TTY bool
+
+	// finish ends the session that Pipe started, if any
+	finish func(error)
 }
 
 func Dial(base string) (*Conn, error) {
@@ -106,80 +110,136 @@ func Dial(base string) (*Conn, error) {
 	return mm, nil
 }
 
+// Close closes the connection. It also ends a session that Pipe started: its
+// reader and writer then return net.ErrClosed.
 func (mm *Conn) Close() error {
+	mm.lock.Lock()
+	finish := mm.finish
+	mm.lock.Unlock()
+
+	if finish != nil {
+		finish(net.ErrClosed)
+		return nil
+	}
+
 	return mm.conn.Close()
 }
 
-// Read or write to a named pipe.
+// Pipe attaches the connection to a named pipe. Lines written to the returned
+// writer are written to the pipe, and lines written to the pipe are read from
+// the returned reader. Pipe returns nil, nil if the request cannot be sent; see
+// Error.
+//
+// Closing the writer tells minimega that there is nothing more to write.
+// minimega then writes the lines it has received to the pipe and closes the
+// connection, which ends the reader with io.EOF. The caller must therefore
+// read until the reader returns an error, also to learn that everything it
+// wrote has reached the pipe. If the connection fails, or minimega closes it
+// first, the reader and the writer return the error, as does Error.
+//
+// The connection cannot be used for anything else afterwards.
 func (mm *Conn) Pipe(pipe string) (io.Reader, io.WriteCloser) {
+	mm.lock.Lock()
 	err := mm.enc.Encode(Request{
 		PlumbPipe: pipe,
 	})
 	if err != nil {
 		mm.err = fmt.Errorf("local pipe gob encode: %v", err)
+	}
+	mm.lock.Unlock()
+
+	if err != nil {
 		return nil, nil
 	}
 
-	rr, rw, err := os.Pipe()
-	if err != nil {
-		log.Fatalln(err)
-	}
-	wr, ww, err := os.Pipe()
-	if err != nil {
-		log.Fatalln(err)
+	// rr and rw carry lines from minimega to the caller, wr and ww carry
+	// lines from the caller to minimega
+	rr, rw := io.Pipe()
+	wr, ww := io.Pipe()
+
+	// set once the caller has closed the writer and we told minimega so
+	var closed atomic.Bool
+
+	// finish ends the session, once: it records err, if any, closes the
+	// connection, and makes the reader and the writer return err (the reader
+	// returns io.EOF if err is nil).
+	var once sync.Once
+	finish := func(err error) {
+		once.Do(func() {
+			if err != nil {
+				mm.lock.Lock()
+				mm.err = err
+				mm.lock.Unlock()
+			}
+
+			mm.conn.Close()
+
+			// the writer first: once the caller has seen the reader end, a
+			// write must fail and not lose the line
+			wr.CloseWithError(err)
+			rw.CloseWithError(err)
+		})
 	}
 
-	var done bool
+	mm.lock.Lock()
+	mm.finish = finish
+	mm.lock.Unlock()
 
 	go func() {
-		var buf string
-		defer rr.Close()
 		for {
+			var buf string
+
 			err := mm.dec.Decode(&buf)
-			if done {
+			if err == io.EOF && closed.Load() {
+				// minimega has written everything we sent to the pipe
+				finish(nil)
 				return
-			}
-			if err == io.EOF {
-				mm.err = errors.New("server disconnected")
+			} else if err == io.EOF {
+				finish(errors.New("server disconnected"))
 				return
 			} else if err != nil {
-				mm.err = fmt.Errorf("local command gob decode: %v", err)
+				finish(fmt.Errorf("local command gob decode: %v", err))
 				return
 			}
 
-			_, err = rw.WriteString(buf)
-			if done {
-				return
-			}
-			if err != nil {
-				mm.err = fmt.Errorf("write: %v", err)
+			if _, err := io.WriteString(rw, buf); err != nil {
+				finish(fmt.Errorf("write: %v", err))
 				return
 			}
 		}
 	}()
 
 	go func() {
-		defer rw.Close()
-		defer mm.Close()
-		for {
-			scanner := bufio.NewScanner(wr)
-			buf := make([]byte, 0, TOKEN_MAX)
-			scanner.Buffer(buf, TOKEN_MAX)
-			for scanner.Scan() {
-				err = mm.enc.Encode(scanner.Text() + "\n")
-				if err != nil {
-					log.Fatal("local command gob encode: %v", err)
-				}
+		scanner := bufio.NewScanner(wr)
+		buf := make([]byte, 0, TOKEN_MAX)
+		scanner.Buffer(buf, TOKEN_MAX)
+		for scanner.Scan() {
+			err := mm.enc.Encode(scanner.Text() + "\n")
+			if err != nil {
+				finish(fmt.Errorf("local command gob encode: %v", err))
+				return
 			}
+		}
 
-			// scanners don't return EOF errors
-			if err := scanner.Err(); err != nil {
-				log.Fatal("read: %v", err)
-			}
-
-			log.Debugln("client closed stdin")
-			done = true
+		// scanners don't return EOF errors
+		if err := scanner.Err(); err != nil {
+			finish(fmt.Errorf("read: %v", err))
 			return
+		}
+
+		log.Debugln("client closed stdin")
+
+		// Don't close the connection: minimega may not have read everything
+		// we sent yet, and may still have lines for us. Close our side only,
+		// and let the reader above finish when minimega closes the connection.
+		closed.Store(true)
+
+		c, ok := mm.conn.(interface{ CloseWrite() error })
+		if !ok {
+			// cannot close one side only
+			finish(nil)
+		} else if err := c.CloseWrite(); err != nil {
+			finish(fmt.Errorf("local command close: %v", err))
 		}
 	}()
 

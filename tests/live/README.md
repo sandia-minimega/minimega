@@ -53,8 +53,8 @@ flowchart LR
 tests/live/
   run.sh        run one group against a Docker image
   image/        vmbetter config (live.conf) and overlay for the guest kernel and initramfs
-  harness/      package harness: shared helpers (socket client, cc, polling,
-                artifact parsers) and their offline unit tests
+  harness/      package harness: shared helpers (socket client, cc, pipes,
+                polling, artifact parsers) and their offline unit tests
   core/         the 22-VM test group: topology.mm, topology_test.go, live_test.go,
                 vnc_test.go
 ```
@@ -127,8 +127,9 @@ phases (screenshots, QMP, serial, ...) still run.
 | Area | Checks |
 |---|---|
 | Control plane | `version`, `check`, `host`, `namespace`, `ns hosts/queue/queueing`, `vm info`, `vm info summary`, `vlans`, `bridge` + OVS port/VLAN tags, `file list`, `-hashfiles` (no hash mid-copy, bounded CPU while copying, appends, renames, new directories), `disk info/snapshot`, miniweb (`/`, `/vms/info.json`) |
+| Pipes | `minimega -pipe` (exits 0 with its lines in the pipe, no command socket errors in the minimega log), `pipe` writes, modes and vias, clients attached over the socket, `plumb` through a process and its teardown |
 | Boot | all 22 VMs `RUNNING`, 21 miniccc clients, every expected address learned from tap snooping |
-| Command and control | `cc exec` (one, all, tag and column filters), `cc exitcode`, `cc send`/`recv`, `cc background`, `cc process list/kill`, `cc responses`, `cc delete` |
+| Command and control | `cc exec` (one, all, tag and column filters), `cc exitcode`, `cc send`/`recv`, `cc background`, `cc process list/kill`, `cc responses`, `cc delete`, pipes from a guest (`miniccc -pipe` both ways, `cc exec stdout=<pipe>`) |
 | Guest view of config | SMBIOS serial from `qemu-append`, VM UUID, disk sizes per interface, snapshot isolation, Q35 vs i440FX, xHCI, SMP, NIC driver and MAC, dual-homed addressing |
 | Networking | same-LAN ping, OSPF routes, cross-router ping and traceroute, no-cc host reachable, DNS, HTTP to protonuke, firewall drop vs control, host tap (both directions), QoS delay and loss, `capture pcap` |
 | VM operations | `vm screenshot` (std and cirrus), `vm serial`, `vm qmp`, `vm tag` + tag filter, `vm top`, `vm stop/start`, `vm net disconnect/connect`, `vm hotplug add/remove`, `vm save`, `vm kill` + `vm flush` + `vm config clone` + queued relaunch |
