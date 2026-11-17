@@ -112,6 +112,7 @@ func TestLive(t *testing.T) {
 		p("NetDisconnectConnect", testNetDisconnectConnect, network),
 		p("Hotplug", testHotplug, cc),
 		p("Save", testSave, cc),
+		p("VMNameRules", testVMNameRules, inv),
 		p("KillFlushRelaunch", testKillFlushRelaunch, cc),
 
 		// tools shipped in the image
@@ -1198,6 +1199,93 @@ func testSave(t *testing.T) {
 		harness.MustRun(t, "vm start host-c2")
 	}
 	harness.CCEventually(t, "host-c2", "true", time.Minute)
+}
+
+// testVMNameRules checks which names "vm launch" accepts. The VMs come from
+// the saved configuration, which has no NICs, so they get no taps.
+func testVMNameRules(t *testing.T) {
+	harness.MustRun(t, "vm config restore live-base")
+	t.Cleanup(func() { logRun(t, "clear vm config") })
+
+	label63 := strings.Repeat("a", 63)
+	cases := []struct {
+		desc  string
+		name  string // "vm launch kvm" argument
+		valid bool
+	}{
+		{"Underscore", "web_1", false},
+		{"OneCharacter", "a", false},
+		{"LeadingHyphen", "-web", false},
+		{"TrailingHyphen", "web-", false},
+		{"LeadingDot", ".web", false},
+		{"TrailingDot", "web.", false},
+		{"EmptyLabel", "web..lan", false},
+		{"Slash", "web/1", false},
+		{"Backslash", `web\\1`, false}, // minimega reads `\\` as one backslash
+		{"NonASCII", "w\u00e9b", false},
+		{"Label64", label63 + "a", false},
+		{"ListWithBadName", "ok,bad_name", false},
+		{"TwoCharacters", "ab", true},
+		{"OneCharacterLabels", "a.b", true},
+		{"Dotted", "Name-Rules.live.test", true},
+		{"Label63", label63, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			// a failed case must not leave queued VMs for the next case
+			t.Cleanup(func() { logRun(t, "ns flush") })
+
+			_, err := harness.Run("vm launch kvm " + tc.name)
+			if !tc.valid {
+				if err == nil || !strings.Contains(err.Error(), "valid host name") {
+					t.Errorf("err = %v, want a host name error", err)
+				}
+				if q := strings.TrimSpace(harness.MustText(t, "ns queue")); q != "" {
+					t.Errorf("rejected name was queued: %q", q)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("valid name rejected: %v", err)
+			}
+			removeVM(t, tc.name)
+			harness.MustRun(t, "vm launch")
+			if s := harness.VMInfo(t)[tc.name]["state"]; s != "BUILDING" {
+				t.Errorf("state = %q, want BUILDING", s)
+			}
+		})
+	}
+}
+
+// removeVM kills and flushes vm when the test ends, also when the test fails
+// first, and flushes no other VM.
+func removeVM(t *testing.T, vm string) {
+	t.Cleanup(func() {
+		if _, ok := harness.VMInfo(t)[vm]; !ok {
+			return
+		}
+		logRun(t, "vm kill "+vm)
+		harness.Eventually(t, 30*time.Second, 2*time.Second, func() error {
+			if s := harness.VMInfo(t)[vm]["state"]; s != "QUIT" {
+				return fmt.Errorf("%v state = %v", vm, s)
+			}
+			return nil
+		})
+		logRun(t, "vm flush "+vm)
+		if _, ok := harness.VMInfo(t)[vm]; ok {
+			t.Errorf("%v still present after vm flush", vm)
+		}
+	})
+}
+
+// logRun runs a cleanup command and logs its error instead of failing.
+func logRun(t *testing.T, cmd string) {
+	t.Helper()
+	if _, err := harness.Run(cmd); err != nil {
+		t.Log(err)
+	}
 }
 
 func testKillFlushRelaunch(t *testing.T) {

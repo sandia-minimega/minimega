@@ -770,7 +770,7 @@ func TestClearVLANsBlacklistLaunchCopy(t *testing.T) {
 
 	queued := make(chan error, 1)
 	go func() {
-		queued <- cliVMLaunch(ns, minicli.MustCompile("vm launch kvm a"), &minicli.Response{})
+		queued <- cliVMLaunch(ns, minicli.MustCompile("vm launch kvm vm-a"), &minicli.Response{})
 	}()
 
 	pollUntil(func() bool { return launchingCount(ns) > 0 })
@@ -790,7 +790,7 @@ func TestClearVLANsBlacklistLaunchCopy(t *testing.T) {
 	}
 
 	got = ns.vlanConfigUsers(100)
-	if strings.Join(got, ",") != "queued VMs a in namespace test" {
+	if strings.Join(got, ",") != "queued VMs vm-a in namespace test" {
 		t.Errorf("got users %q after the copy is queued, want queued VMs", got)
 	}
 }

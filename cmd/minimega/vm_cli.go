@@ -124,6 +124,17 @@ naming scheme:
 
 Note: VM names cannot be integers or reserved words (e.g. "all").
 
+A VM name usually becomes the host name of the guest, so it must be a valid
+host name (RFC 1123): one or more labels separated by dots, where each label
+has 1 to 63 letters, digits and hyphens and does not start or end with a
+hyphen. The full name has 2 to 253 characters. For example, "web-1", "a.b" and
+"web1.example.com" are valid, and "a", "web_1", "-web" and "web." are not.
+Namespace names are not host names and may also contain underscores.
+
+Host names are not case-sensitive (RFC 4343). Thus, minimega refuses a new VM
+name that differs only in letter case from another VM name in the namespace.
+For example, "WEB1" and "web1" cannot both be in one namespace.
+
 Users may specify a saved config explicitly rather than use the current one, for
 example:
 

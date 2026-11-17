@@ -292,22 +292,25 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 		return errors.New("cannot launch multiple VMs with a pre-configured UUID")
 	}
 
-	// look for name and UUID conflicts across the namespace
-	takenName := map[string]bool{}
+	// look for name and UUID conflicts across the namespace. takenName maps
+	// vmNameKey of each name to the name.
+	takenName := map[string]string{}
 	takenUUID := map[string]bool{}
 
 	for _, vm := range globalVMs(n) {
-		takenName[vm.GetName()] = true
+		takenName[vmNameKey(vm.GetName())] = vm.GetName()
 		takenUUID[vm.GetUUID()] = true
 	}
 
 	for _, name := range names {
-		if takenName[name] {
-			return fmt.Errorf("vm already exists with name `%s`", name)
+		if err := nameTaken(takenName, name, "exists"); err != nil {
+			return err
 		}
 
-		if name != "" && !validName.MatchString(name) {
-			return fmt.Errorf("%v: `%v`", validNameErr, name)
+		if name != "" {
+			if err := validVMName(name); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -318,14 +321,16 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 	// add in all the queued VM names and then recheck
 	for _, q := range n.queued() {
 		for _, name := range q.Names {
-			takenName[name] = true
+			if name != "" {
+				takenName[vmNameKey(name)] = name
+			}
 		}
 		takenUUID[q.VMConfig.UUID] = true
 	}
 
 	for _, name := range names {
-		if takenName[name] && name != "" {
-			return fmt.Errorf("vm already queued with name `%s`", name)
+		if err := nameTaken(takenName, name, "queued"); err != nil {
+			return err
 		}
 	}
 
@@ -343,6 +348,34 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 	})
 
 	return nil
+}
+
+// nameTaken returns an error when taken, from Queue, has a VM name that is
+// equal to name or differs from it only in letter case. state is "exists" or
+// "queued".
+func nameTaken(taken map[string]string, name, state string) error {
+	if name == "" {
+		return nil
+	}
+
+	other, ok := taken[vmNameKey(name)]
+	if !ok {
+		return nil
+	}
+
+	if other == name {
+		if state == "exists" {
+			return fmt.Errorf("vm already exists with name `%s`", name)
+		}
+
+		return fmt.Errorf("vm already queued with name `%s`", name)
+	}
+
+	if state == "exists" {
+		return fmt.Errorf("vm name `%s` conflicts with existing vm `%s`: %s", name, other, caseConflictReason)
+	}
+
+	return fmt.Errorf("vm name `%s` conflicts with queued vm `%s`: %s", name, other, caseConflictReason)
 }
 
 // queued returns a copy of queue.

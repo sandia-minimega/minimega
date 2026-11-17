@@ -732,9 +732,15 @@ func expandLaunchNames(arg string) ([]string, error) {
 		// Check for conflicts within the provided names. Don't conflict with
 		// ourselves or if the name is unspecified.
 		for j, name2 := range names {
-			if i != j && name == name2 && name != "" {
+			if i == j || name == "" || vmNameKey(name) != vmNameKey(name2) {
+				continue
+			}
+
+			if name == name2 {
 				return nil, fmt.Errorf("`%s` is specified twice in VMs to launch", name)
 			}
+
+			return nil, fmt.Errorf("`%s` and `%s` conflict in VMs to launch: %s", name, name2, caseConflictReason)
 		}
 	}
 

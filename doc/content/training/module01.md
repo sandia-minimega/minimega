@@ -158,7 +158,7 @@ First, we change the kernel and initrd pair to use an image that is pre-loaded w
 
 Note: it is possible to load all the software required to a single VM image, and use that image for every virtual machine, but that can be impractical. Sometimes, it's best to use the right image for the right VM.
 
-Next, we add the router VM to both networks: the network vm_left is in, and the network vm_right is in.
+Next, we add the router VM to both networks: the network vm-left is in, and the network vm-right is in.
 
 <a id="TOC_14."></a>
 
@@ -287,14 +287,14 @@ cc background /tmp/miniccc/files/protonuke -serve -https
 miniccc allows you to filter on specific VMs so you can isolate which VMs the command is for:
 
 ```text
-cc filter name=vm_right
+cc filter name=vm-right
 ```
 
 allows us to specify the VM we want to target. You can filter on any property of a VM, including tags.
 
-Finally, we run protonuke in the background on vm_right to request http/https traffic, which we told vm_left to serve.
+Finally, we run protonuke in the background on vm-right to request http/https traffic, which we told vm-left to serve.
 
-We ask it to request from 10.0.0.2 (vm_left) and we set the log to allow info-level detail and print to a file
+We ask it to request from 10.0.0.2 (vm-left) and we set the log to allow info-level detail and print to a file
 
 ```text
 cc background /tmp/miniccc/files/protonuke -level info -logfile proto.log -http -https 10.0.0.2
@@ -331,7 +331,7 @@ With minimega, there is a built-in QOS API that allows you to ask these question
 The next commands we run will introduce packet loss to the network:
 
 ```text
-qos add vm_left 0 loss 0.5
+qos add vm-left 0 loss 0.5
 ```
 
 We need to give the network some time to allows the QOS API to take effect.

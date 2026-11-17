@@ -6,3 +6,27 @@ E: invalid vm name, `all` is a reserved word
 E: invalid vm name, `0` is an integer
 ## vm launch kvm foo,all
 E: invalid vm name, `all` is a reserved word
+## vm launch kvm foo_1
+E: invalid vm name `foo_1`: must be a valid host name (RFC 1123) of 2 to 253 characters: dot-separated labels of 1 to 63 letters, digits and hyphens that do not start or end with a hyphen
+## vm launch kvm -foo
+E: invalid vm name `-foo`: must be a valid host name (RFC 1123) of 2 to 253 characters: dot-separated labels of 1 to 63 letters, digits and hyphens that do not start or end with a hyphen
+## vm launch kvm foo-
+E: invalid vm name `foo-`: must be a valid host name (RFC 1123) of 2 to 253 characters: dot-separated labels of 1 to 63 letters, digits and hyphens that do not start or end with a hyphen
+## vm launch kvm foo.
+E: invalid vm name `foo.`: must be a valid host name (RFC 1123) of 2 to 253 characters: dot-separated labels of 1 to 63 letters, digits and hyphens that do not start or end with a hyphen
+## vm launch kvm .foo
+E: invalid vm name `.foo`: must be a valid host name (RFC 1123) of 2 to 253 characters: dot-separated labels of 1 to 63 letters, digits and hyphens that do not start or end with a hyphen
+## vm launch kvm foo..bar
+E: invalid vm name `foo..bar`: must be a valid host name (RFC 1123) of 2 to 253 characters: dot-separated labels of 1 to 63 letters, digits and hyphens that do not start or end with a hyphen
+## vm launch kvm aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+E: invalid vm name `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`: must be a valid host name (RFC 1123) of 2 to 253 characters: dot-separated labels of 1 to 63 letters, digits and hyphens that do not start or end with a hyphen
+## vm launch kvm foo,bar_[1-2]
+E: invalid vm name `bar_1`: must be a valid host name (RFC 1123) of 2 to 253 characters: dot-separated labels of 1 to 63 letters, digits and hyphens that do not start or end with a hyphen
+## vm launch kvm a
+E: invalid vm name `a`: length is 1; must be a valid host name (RFC 1123) of 2 to 253 characters: dot-separated labels of 1 to 63 letters, digits and hyphens that do not start or end with a hyphen
+## vm launch kvm foo/bar
+E: invalid vm name `foo/bar`: must be a valid host name (RFC 1123) of 2 to 253 characters: dot-separated labels of 1 to 63 letters, digits and hyphens that do not start or end with a hyphen
+## vm launch kvm foo\\bar
+E: invalid vm name `foo\bar`: must be a valid host name (RFC 1123) of 2 to 253 characters: dot-separated labels of 1 to 63 letters, digits and hyphens that do not start or end with a hyphen
+## vm launch kvm web1,WEB1
+E: `web1` and `WEB1` conflict in VMs to launch: VM names are host names, which are not case-sensitive (RFC 4343)

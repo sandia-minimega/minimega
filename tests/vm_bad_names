@@ -2,3 +2,15 @@ vm launch kvm [0]
 vm launch kvm all
 vm launch kvm foo,[0]
 vm launch kvm foo,all
+vm launch kvm foo_1
+vm launch kvm -foo
+vm launch kvm foo-
+vm launch kvm foo.
+vm launch kvm .foo
+vm launch kvm foo..bar
+vm launch kvm aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+vm launch kvm foo,bar_[1-2]
+vm launch kvm a
+vm launch kvm foo/bar
+vm launch kvm foo\\bar
+vm launch kvm web1,WEB1

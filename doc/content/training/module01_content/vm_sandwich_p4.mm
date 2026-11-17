@@ -7,13 +7,13 @@ vm top
 # Let's use miniccc to push out a tool to our VMs
 cc send file:protonuke
 
-# We will have vm_left server traffic
-cc filter name=vm_left
+# We will have vm-left server traffic
+cc filter name=vm-left
 cc background /tmp/miniccc/files/protonuke -serve -http
 cc background /tmp/miniccc/files/protonuke -serve -https
 
-# We will have vm_right request http/https
+# We will have vm-right request http/https
 clear cc filter
-cc filter name=vm_right
+cc filter name=vm-right
 cc background /tmp/miniccc/files/protonuke -level info -logfile proto.log -http -https 10.0.0.2
 
