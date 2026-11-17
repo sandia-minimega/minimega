@@ -467,16 +467,20 @@ func parseFiles(files interface{}, delete bool) (map[string]string, []string, er
 		}
 	case string:
 		if delete {
-			if strings.Contains(v, ",") {
-				paths = strings.Split(v, ",")
-			} else {
-				paths = []string{v} // single file
-			}
+			paths = strings.Split(v, ",")
 		} else {
 			pairs, err = parseInjectPairs([]string{v})
 		}
 	default:
 		return nil, nil, errors.New("error parsing files: unknown type")
+	}
+
+	// an empty path (e.g. from "foo.txt,") or "/" resolves to the mount
+	// directory itself, and deleting it would wipe the whole image.
+	for _, p := range paths {
+		if filepath.Clean("/"+p) == "/" {
+			return nil, nil, fmt.Errorf("refusing to delete the image root: %q", p)
+		}
 	}
 
 	return pairs, paths, err

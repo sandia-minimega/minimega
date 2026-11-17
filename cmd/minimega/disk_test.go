@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"syscall"
 	"testing"
 )
@@ -29,29 +30,57 @@ func TestParseFilesDeleteList(t *testing.T) {
 	}
 }
 
+// Entries that resolve to the mount directory would delete the whole image.
+func TestParseFilesDeleteRejectsImageRoot(t *testing.T) {
+	for _, in := range []interface{}{
+		"foo.txt,",
+		"a,,b",
+		",",
+		"",
+		"/",
+		"a,.",
+		"a,../..",
+		[]string{"a", ""},
+		[]string{"a,"},
+		[]string{"a", "/"},
+	} {
+		if _, got, err := parseFiles(in, true); err == nil {
+			t.Errorf("parseFiles(%q) = %q, want error", in, got)
+		}
+	}
+}
+
 func TestCLIDiskSnapshotNoDstDoesNotLeak(t *testing.T) {
 	old := *f_iomBase
 	*f_iomBase = t.TempDir()
 	defer func() { *f_iomBase = old }()
 
+	// count only descriptors open on files in the snapshot directory, so
+	// unrelated descriptors opened or closed elsewhere do not matter
 	nfds := func() int {
 		ents, err := os.ReadDir("/proc/self/fd")
 		if err != nil {
 			t.Skip("needs /proc")
 		}
-		return len(ents)
+		n := 0
+		for _, e := range ents {
+			target, err := os.Readlink(filepath.Join("/proc/self/fd", e.Name()))
+			if err == nil && strings.HasPrefix(target, *f_iomBase+"/") {
+				n++
+			}
+		}
+		return n
 	}
 
 	c := &minicli.Command{StringArgs: map[string]string{"image": "missing.qcow2"}}
-	before := nfds()
 	for i := 0; i < 5; i++ {
 		// the source image does not exist so the snapshot fails
 		if err := cliDiskSnapshot(nil, c, &minicli.Response{}); err == nil {
 			t.Fatal("expected error")
 		}
 	}
-	if after := nfds(); after != before {
-		t.Errorf("leaked %d file descriptors", after-before)
+	if n := nfds(); n != 0 {
+		t.Errorf("leaked %d file descriptors", n)
 	}
 	if ents, _ := os.ReadDir(*f_iomBase); len(ents) != 0 {
 		t.Errorf("failed snapshot left %d temp files behind", len(ents))
