@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/sandia-minimega/minimega/v2/tests/live/harness"
+	"github.com/twmb/murmur3"
 )
 
 func TestMain(m *testing.M) {
@@ -59,6 +60,7 @@ func TestLive(t *testing.T) {
 		p("VLANs", testVLANs, inv),
 		p("Bridge", testBridge, inv),
 		p("FileList", testFileList, inv),
+		p("FileHash", testFileHash, version),
 		p("Disk", testDisk, inv),
 		p("Miniweb", testMiniweb, inv),
 
@@ -380,6 +382,151 @@ func testFileList(t *testing.T) {
 			t.Errorf("file list missing %v (have %v)", f, harness.Keys(names))
 		}
 	}
+}
+
+// fileHash returns the "file list" hash column for a file under live/, and
+// whether the file is listed at all.
+func fileHash(t *testing.T, name string) (string, bool) {
+	t.Helper()
+	for _, r := range harness.MustTable(t, "file list live") {
+		if strings.TrimPrefix(r["name"], "/") == "live/"+name {
+			if _, ok := r["hash"]; !ok {
+				t.Fatalf("file list has no hash column: minimega must run with -hashfiles (tests/live/run.sh)")
+			}
+			return r["hash"], true
+		}
+	}
+	return "", false
+}
+
+// waitFileHash waits for a file under live/ to be listed with the wanted hash.
+func waitFileHash(t *testing.T, name, want string) {
+	t.Helper()
+	harness.Eventually(t, time.Minute, 500*time.Millisecond, func() error {
+		if got, ok := fileHash(t, name); !ok || got != want {
+			return fmt.Errorf("%v: hash %q (listed: %v), want %q", name, got, ok, want)
+		}
+		return nil
+	})
+}
+
+func murmurHex(b []byte) string {
+	h := murmur3.New64()
+	h.Write(b)
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+// testFileHash checks -hashfiles on files copied into the files directory:
+// a file is hashed once it stops changing, not on every write to it
+// (sandia-minimega/minimega#1677), and the hash follows changes and renames.
+func testFileHash(t *testing.T) {
+	dir := harness.MMFiles + "/live/"
+	names := []string{"hash-copy.img", "hash-moved.img", "hash-dir/sub/nested.img", "hash-dir"}
+	defer func() {
+		for _, n := range names {
+			os.RemoveAll(dir + n)
+		}
+	}()
+
+	// files staged before minimega started are hashed at startup
+	initrd, err := os.ReadFile(dir + "live.initrd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFileHash(t, "live.initrd", murmurHex(initrd))
+
+	// what minimega uses when no file is being copied
+	const window = 8 * time.Second
+	idle := harness.MinimegaCPU(t)
+	time.Sleep(window)
+	idle = harness.MinimegaCPU(t) - idle
+
+	// Copy 256 MiB the way a copy from another file system or over the
+	// network arrives: thousands of small writes spread over several seconds.
+	const (
+		chunks = 2048
+		size   = 128 << 10
+	)
+	chunk := make([]byte, size)
+	for i := range chunk {
+		chunk[i] = byte(i * 7)
+	}
+	f, err := os.Create(dir + "hash-copy.img")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	sum := murmur3.New64()
+	before, start := harness.MinimegaCPU(t), time.Now()
+	for i := 0; i < chunks; i++ {
+		chunk[0] = byte(i)
+		if _, err := f.Write(chunk); err != nil {
+			t.Fatal(err)
+		}
+		sum.Write(chunk)
+		if i == chunks/2 {
+			// a half-written file must not be served with a hash
+			if got, ok := fileHash(t, "hash-copy.img"); !ok || got != "" {
+				t.Errorf("mid-copy: hash %q (listed: %v), want listed with no hash", got, ok)
+			}
+		}
+		// pace the copy over the same window the idle sample covered
+		if wait := time.Duration(i+1)*window/chunks - time.Since(start); wait > 0 {
+			time.Sleep(wait)
+		}
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf("%x", sum.Sum(nil))
+	waitFileHash(t, "hash-copy.img", want)
+	used := harness.MinimegaCPU(t) - before
+	t.Logf("minimega CPU: %v idle, %v during a %v copy of %d MiB", idle, used, time.Since(start).Round(time.Second), chunks*size>>20)
+
+	// Hashing the file once takes well under a second. Rehashing it on every
+	// write kept every core busy for the whole copy.
+	if used > idle+4*time.Second {
+		t.Errorf("minimega used %v of CPU during the copy (%v when idle): is it hashing on every write?", used, idle)
+	}
+
+	// appending changes the hash
+	a, err := os.OpenFile(dir+"hash-copy.img", os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sum.Write([]byte("more"))
+	if _, err := a.Write([]byte("more")); err != nil {
+		t.Fatal(err)
+	}
+	a.Close()
+	appended := fmt.Sprintf("%x", sum.Sum(nil))
+	waitFileHash(t, "hash-copy.img", appended)
+
+	// a rename moves the hash to the new name
+	if err := os.Rename(dir+"hash-copy.img", dir+"hash-moved.img"); err != nil {
+		t.Fatal(err)
+	}
+	waitFileHash(t, "hash-moved.img", appended)
+	if _, ok := fileHash(t, "hash-copy.img"); ok {
+		t.Errorf("renamed file is still listed under its old name")
+	}
+
+	// a file written into directories created a moment earlier is hashed too
+	if err := os.MkdirAll(dir+"hash-dir/sub", 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dir+"hash-dir/sub/nested.img", []byte("nested"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	harness.Eventually(t, time.Minute, 500*time.Millisecond, func() error {
+		for _, r := range harness.MustTable(t, "file list live/hash-dir/sub") {
+			if strings.HasSuffix(r["name"], "nested.img") && r["hash"] == murmurHex([]byte("nested")) {
+				return nil
+			}
+		}
+		return fmt.Errorf("live/hash-dir/sub/nested.img has no hash yet")
+	})
 }
 
 func testDisk(t *testing.T) {

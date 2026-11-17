@@ -128,7 +128,8 @@ func (this Files) use(path, hash string, local bool) (*Message, bool) {
 	if this.head != "" { // running in -headnode mode
 		for _, msg := range this.msgMap[path] {
 			if msg.From == this.head { // file exists on head node
-				if msg.Hash == hash {
+				// two empty hashes only match if there is a local file at all
+				if msg.Hash == hash && (hash != "" || local) {
 					// This will happen if the local file is the same as the file on the
 					// head node.
 					return nil, true

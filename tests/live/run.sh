@@ -180,6 +180,7 @@ trap cleanup EXIT
 
 # Same flags as docker/README.md, plus the hostname topology.mm schedules on
 # and a host-visible log file.
+# -hashfiles (MM_APPEND) is on so the tests exercise file hashing.
 log "starting ${CONTAINER}"
 docker run -d \
     --name "${CONTAINER}" \
@@ -196,6 +197,7 @@ docker run -d \
     -e MM_FILEPATH="${MM_FILES}" \
     -e MM_LOGFILE=/var/log/minimega/minimega.log \
     -e MM_LOGLEVEL="${LIVE_LOGLEVEL:-info}" \
+    -e MM_APPEND="-hashfiles" \
     --health-cmd "mm version" \
     "${IMAGE}" >/dev/null || die "unable to start container"
 

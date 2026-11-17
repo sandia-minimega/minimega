@@ -229,6 +229,24 @@ func (iom *IOMeshage) updateHash(path, hash string) {
 	}
 }
 
+// deleteHashes removes the hash of path and of everything below it.
+func (iom *IOMeshage) deleteHashes(path string) {
+	if !filepath.IsAbs(path) {
+		path = iom.cleanPath(path)
+	}
+
+	below := path + string(filepath.Separator)
+
+	iom.hashLock.Lock()
+	defer iom.hashLock.Unlock()
+
+	for p := range iom.hashes {
+		if p == path || strings.HasPrefix(p, below) {
+			delete(iom.hashes, p)
+		}
+	}
+}
+
 // stream reads a file from the local node's filesystem and returns the parts
 // via a channel.
 func stream(fname string) (chan []byte, error) {
