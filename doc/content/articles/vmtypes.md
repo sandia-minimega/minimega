@@ -169,6 +169,32 @@ circumstances some of these arguments need to by removed or modified. The
 `vm config qemu-override` API provides a mechanism to patch the QEMU argument
 string before launching VMs.
 
+<a id="TOC_4.1.4."></a>
+
+#### QEMU monitor commands
+
+`vm hmp` runs one QEMU human monitor (HMP) command on a KVM VM and returns the
+output. Use it to examine a VM. For example, show the state of the VM `foo`,
+and then show its block devices:
+
+```text
+vm hmp foo "info status"
+VM status: running
+
+vm hmp foo "info block"
+```
+
+Each command is independent of the commands before it. HMP commands and their
+output can change between QEMU versions. For scripts, use `vm qmp`, which sends
+a QMP command and returns the JSON reply.
+
+minimega expands `$name` in a command as an environment variable. To send a `$`
+to QEMU, for example in a register name, put `.preprocess false` first:
+
+```text
+.preprocess false vm hmp foo "x/10i $eip"
+```
+
 <a id="TOC_4.2."></a>
 
 ### Containers
