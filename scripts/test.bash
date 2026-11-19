@@ -25,6 +25,7 @@ for i in "${DIRECTORY_ARRAY[@]}"; do
         PACKAGES+=("$path")
     done
 done
+PACKAGES+=("$ROOT_DIR/tests/live/harness/")
 
 # The harness unit tests need no root, KVM, or Docker.
 PACKAGES+=("$ROOT_DIR/tests/live/harness/")

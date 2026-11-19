@@ -380,6 +380,11 @@ restart any VMs after it completes, so they will be left in a paused state. The
 saved experiment can be restarted using the `read` command and passing it
 the generated minimega script.
 
+QEMU loads a memory state file only with the machine type that saved it. At
+launch, minimega reads the machine type from the state file. minimega uses it
+when `vm config machine` is empty, or is `pc` or `q35` for a machine type of
+that family. The `machine` column of `vm info` shows the machine type in use.
+
 Warning: The process of saving both disk and memory state for an entire
 experiment can result in large files created on the host filesystem. Before
 running, verify there is enough storage available.
