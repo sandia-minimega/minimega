@@ -430,11 +430,23 @@ func (q *Conn) HumanMonitorCommand(command string) (string, error) {
 		return "", err
 	}
 	v := <-q.messageSync
+	if e, ok := v["error"]; ok {
+		if m, ok := e.(map[string]interface{}); ok {
+			if desc, ok := m["desc"].(string); ok {
+				return "", fmt.Errorf("human-monitor-command: %v", desc)
+			}
+		}
+		return "", fmt.Errorf("human-monitor-command: %v", e)
+	}
 	response := v["return"]
 	if response == nil {
 		return "", errors.New("received nil response")
 	}
-	return response.(string), nil
+	out, ok := response.(string)
+	if !ok {
+		return "", fmt.Errorf("human-monitor-command: unexpected response type %T", response)
+	}
+	return out, nil
 }
 
 func (q *Conn) DriveAdd(id, file string) (string, error) {
