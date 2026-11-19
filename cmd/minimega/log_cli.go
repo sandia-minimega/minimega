@@ -217,6 +217,10 @@ func cliLogMesh(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 		return fmt.Errorf("node %s not in mesh", node)
 	}
 
+	if node == hostname {
+		return errors.New("cannot use self as destination node for mesh logging")
+	}
+
 	// reset logging to mesh if it's already enabled
 	log.DelLogger("meshage")
 	logMeshNode = ""
@@ -239,6 +243,9 @@ func cliLogRing(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 	size, err := strconv.Atoi(c.StringArgs["size"])
 	if err != nil {
 		return err
+	}
+	if size <= 0 {
+		return fmt.Errorf("invalid log ring size: %v", size)
 	}
 
 	if logRing != nil {

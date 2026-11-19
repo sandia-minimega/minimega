@@ -1,0 +1,3 @@
+# Overrides the rules file of the same name in /usr/lib/udev/rules.d, which
+# renames NICs (eth0 to enp0s1, ...). init configures eth0, so keep the
+# kernel names.

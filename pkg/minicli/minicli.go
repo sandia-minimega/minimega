@@ -227,8 +227,10 @@ func Compile(input string) (*Command, error) {
 	}
 
 	if strings.HasPrefix(input, CommentLeader) {
-		cmd := &Command{Original: input, Nop: true}
-		return cmd, nil
+		flagsLock.Lock()
+		defer flagsLock.Unlock()
+
+		return &Command{Original: input, Nop: true, Record: defaultFlags.Record}, nil
 	}
 
 	cmd := trie.compile(in.items)

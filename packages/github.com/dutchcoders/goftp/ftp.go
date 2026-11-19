@@ -416,7 +416,11 @@ func (ftp *FTP) Pasv() (port int, err error) {
 
 // open new data connection
 func (ftp *FTP) newConnection(port int) (conn net.Conn, err error) {
-	addr := fmt.Sprintf("%s:%d", strings.Split(ftp.addr, ":")[0], port)
+	host, _, err := net.SplitHostPort(ftp.addr)
+	if err != nil {
+		return
+	}
+	addr := net.JoinHostPort(host, strconv.Itoa(port))
 
 	if ftp.debug {
 		log.Printf("Connecting to %s\n", addr)

@@ -71,12 +71,13 @@ start() {
   fi
   ulimit -n 1024000 -u 4096000
   mkdir -p $MM_BASE
+  rm -f $MM_BASE/minimega.pid # not running, so any pidfile is stale from a crash
   pushd "$MINIMEGA_DIR" &>/dev/null || return 1
-  $MINIMEGA_DIR/bin/minimega -base=$MM_BASE -filepath=$MM_FILEPATH -degree=$MM_DEGREE -nostdin=$MM_DAEMON -context=$MM_CONTEXT -port=$MM_PORT -level=$MM_LOGLEVEL -logfile=$MM_LOGFILE "${@:1}" &> /dev/null &
+  $MINIMEGA_DIR/bin/minimega -base=$MM_BASE -filepath=$MM_FILEPATH -degree=$MM_DEGREE -nostdin=$MM_DAEMON -force=${MM_FORCE:-false} -recover=${MM_RECOVER:-false} -context=$MM_CONTEXT -port=$MM_PORT -level=$MM_LOGLEVEL -logfile=$MM_LOGFILE "${@:1}" &> /dev/null &
   popd &>/dev/null || return 1
   sleep 1
   new_pid=`cat $MM_BASE/minimega.pid 2> /dev/null`
-  if [ "$?" != "0" ]; then # if the process has already died
+  if [ "$?" != "0" ] || ! kill -0 $new_pid 2> /dev/null; then # if the process has already died
     echo "minimega did not start"
     return 1
   fi
@@ -96,8 +97,17 @@ stop() {
   fi
   pid=`cat $MM_BASE/minimega.pid 2> /dev/null`
   kill $pid
-  rm $MM_BASE/minimega.pid
-  rm $MM_BASE/minimega
+  # wait for teardown to finish so a restart doesn't race the old instance
+  for _ in $(seq 120); do
+    kill -0 $pid 2> /dev/null || break
+    sleep 0.5
+  done
+  if kill -0 $pid 2> /dev/null; then
+    echo "minimega (pid $pid) did not exit within 60s"
+    return 1
+  fi
+  rm -f $MM_BASE/minimega.pid
+  rm -f $MM_BASE/minimega
   echo "minimega stopped"
   return 0
 }

@@ -246,6 +246,11 @@ func cliMeshageSend(c *minicli.Command, respChan chan<- minicli.Responses) {
 // suggestions. If direct is true, only peers of the local node will be
 // included in the suggestions.
 func cliHostnameSuggest(prefix string, local, direct, wild bool) []string {
+	// -suggest runs without starting meshage, so there is no mesh to ask
+	if meshageNode == nil {
+		return nil
+	}
+
 	mesh := meshageNode.Mesh()
 
 	res := []string{}

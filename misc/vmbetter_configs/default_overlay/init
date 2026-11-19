@@ -5,8 +5,14 @@ mount -t sysfs sysfs /sys
 mount -t devtmpfs udev /dev
 mkdir /dev/pts
 mount -n -t devpts -o gid=5,mode=620 none /dev/pts
-udevd --daemon
-udevadm trigger
+# current Debian and Ubuntu ship udevd only as systemd-udevd
+if command -v udevd >/dev/null; then
+    udevd --daemon
+else
+    /lib/systemd/systemd-udevd --daemon
+fi
+# load drivers: trigger's default action, change, loads none
+udevadm trigger --action=add
 udevadm settle
 chmod a+rx /
 modprobe loop

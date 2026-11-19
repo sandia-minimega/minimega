@@ -95,10 +95,12 @@ func readConfig(filename string) (Config, error) {
 	if err != nil {
 		return ret, err
 	}
+	defer f.Close()
 	b := bufio.NewScanner(f)
-	for b.Scan() {
-		line := b.Text()
-		fields := strings.Fields(line)
+	// errors report the line number, not the line: node lines carry IPMI
+	// passwords, and main sends errors to log.Fatal (stderr/syslog)
+	for lineno := 1; b.Scan(); lineno++ {
+		fields := strings.Fields(b.Text())
 		if len(fields) == 0 {
 			continue
 		}
@@ -122,9 +124,15 @@ func readConfig(filename string) (Config, error) {
 			d.outlets = make(map[string]string)
 			ret.devices[d.name] = d
 		case "ipmi":
+			if len(fields) != 2 {
+				return ret, fmt.Errorf("line %d: ipmi requires a path, got %d fields", lineno, len(fields))
+			}
 			ret.ipmiPath = fields[1]
 		case "node":
 			ln := len(fields)
+			if ln != 4 && ln != 7 {
+				return ret, fmt.Errorf("line %d: node requires <name> <pdu> <outlet> [<ip> <user> <password>], got %d fields", lineno, ln)
+			}
 			nodename := fields[1]
 			dev := fields[2]
 			outlet := fields[3]
@@ -133,7 +141,7 @@ func readConfig(filename string) (Config, error) {
 			}
 			ret.nodes = append(ret.nodes, nodename)
 			// IPMI Data
-			if ln > 4 {
+			if ln == 7 {
 				var ipmi IPMIData
 				ipmi.ip = fields[4]
 				ipmi.username = fields[5]
@@ -145,14 +153,13 @@ func readConfig(filename string) (Config, error) {
 			if len(fields) > 1 {
 				ll, err := log.ParseLevel(fields[1])
 				if err != nil {
-					log.Error("%v", err.Error())
-					return ret, nil
+					return ret, fmt.Errorf("bad loglevel: %v", err)
 				}
 				log.AddSyslog("local", "", "powerbot", ll)
 			}
 		}
 	}
-	return ret, nil
+	return ret, b.Err()
 }
 
 func main() {

@@ -169,6 +169,7 @@ func (irc *Connection) setupCallbacks() {
 	// work. It has to be set somewhere first in case the nick is already
 	// taken or unavailable from the beginning.
 	irc.AddCallback("437", func(e *Event) {
+		irc.Lock()
 		// If irc.nickcurrent hasn't been set yet, set to irc.nick
 		if irc.nickcurrent == "" {
 			irc.nickcurrent = irc.nick
@@ -179,7 +180,9 @@ func (irc *Connection) setupCallbacks() {
 		} else {
 			irc.nickcurrent = irc.nickcurrent + "_"
 		}
-		irc.SendRawf("NICK %s", irc.nickcurrent)
+		nick := irc.nickcurrent
+		irc.Unlock()
+		irc.SendRawf("NICK %s", nick)
 	})
 
 	irc.AddCallback("PONG", func(e *Event) {
@@ -194,7 +197,9 @@ func (irc *Connection) setupCallbacks() {
 	// Set irc.nickcurrent to the new nick actually used in this connection.
 	irc.AddCallback("NICK", func(e *Event) {
 		if e.Nick == irc.nick {
+			irc.Lock()
 			irc.nickcurrent = e.Message()
+			irc.Unlock()
 		}
 	})
 

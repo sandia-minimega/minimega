@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Check if stdout is a terminal (tty)
-if [ -t 1 ]; then
+# Allocate a TTY only if both stdin and stdout are terminals (docker exec -t
+# fails with "the input device is not a TTY" when stdin is not one)
+if [ -t 0 ] && [ -t 1 ]; then
     FLAGS="-it"
 else
     # No TTY if piping/redirecting (clean output for completion scripts)

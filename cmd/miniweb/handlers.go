@@ -33,6 +33,13 @@ import (
 var ptys = map[int]*os.File{}
 var ptyMu sync.Mutex
 
+// consoleAttachTimeout is how long a new console may wait for its websocket
+// before the minimega process and pty are reaped.
+var consoleAttachTimeout = 30 * time.Second
+
+// ptyReapers holds the pending reap timer for each pty with no websocket yet.
+var ptyReapers = map[int]*time.Timer{}
+
 func respondJSON(w http.ResponseWriter, data interface{}) {
 	js, err := json.Marshal(data)
 
@@ -168,7 +175,10 @@ func filesHandler(w http.ResponseWriter, r *http.Request) {
 			defer fileMm.Close()
 			defer log.Info("closing file mm connection")
 
-			for resps := range fileMm.Run(cmd.String()) {
+			ch := fileMm.Run(cmd.String())
+			defer drain(ch)
+
+			for resps := range ch {
 				for _, resp := range resps.Resp {
 					if resp.Error != "" {
 						log.Errorln(resp.Error)
@@ -239,7 +249,10 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request, name string) {
 		cmd := NewCommand(r)
 		cmd.Command = fmt.Sprintf("vm screenshot %s file /dev/null %s", name, size)
 
-		for resps := range run(cmd) {
+		ch := run(cmd)
+		defer drain(ch)
+
+		for resps := range ch {
 			for _, resp := range resps.Resp {
 				if resp.Error != "" {
 					if strings.HasPrefix(resp.Error, "vm not running:") {
@@ -454,7 +467,10 @@ func vmsHandler(w http.ResponseWriter, r *http.Request) {
 			cmd.Command = fmt.Sprintf("vm launch %q %q %q", kind, name, config)
 
 			// check for error
-			for resps := range run(cmd) {
+			ch := run(cmd)
+			defer drain(ch)
+
+			for resps := range ch {
 				for _, resp := range resps.Resp {
 					if resp.Error != "" {
 						http.Error(w, resp.Error, http.StatusBadRequest)
@@ -530,6 +546,21 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 		ptyMu.Lock()
 		defer ptyMu.Unlock()
 		ptys[pid] = tty
+		ptyReapers[pid] = time.AfterFunc(consoleAttachTimeout, func() {
+			ptyMu.Lock()
+			defer ptyMu.Unlock()
+
+			if _, ok := ptyReapers[pid]; !ok {
+				return
+			}
+
+			log.Warn("console %v never attached, reaping", pid)
+			delete(ptyReapers, pid)
+			delete(ptys, pid)
+			tty.Close()
+			cmd.Process.Kill()
+			cmd.Wait()
+		})
 
 		data := struct{ Pid int }{
 			Pid: pid,
@@ -558,11 +589,11 @@ func consoleHandler(w http.ResponseWriter, r *http.Request) {
 
 	ptyMu.Lock()
 	tty, ok := ptys[pid]
+	ptyMu.Unlock()
 	if !ok {
 		http.Error(w, "pty not found", http.StatusNotFound)
 		return
 	}
-	ptyMu.Unlock()
 
 	switch path[3] {
 	case "size":
