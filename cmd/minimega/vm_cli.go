@@ -362,6 +362,37 @@ and a JSON string, and returns the JSON encoded response. For example:
 		Call:    wrapVMTargetCLI(cliVMQmp),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
+	{ // vm hmp
+		HelpShort: "run a human monitor (HMP) command",
+		HelpLong: `
+Run one human monitor (HMP) command on a KVM VM through the QMP command
+human-monitor-command, and return the output. vm hmp takes two arguments, a VM
+name and an HMP command. For example:
+
+	vm hmp foo "info status"
+	VM status: paused (prelaunch)
+
+Each vm hmp command is stateless. HMP commands that depend on earlier commands
+do not work. HMP commands that prompt for input do not work.
+
+HMP command names, arguments, and output are not stable across QEMU versions.
+For automation, use vm qmp.
+
+vm hmp uses the one QMP connection of the VM. A long HMP command delays other
+operations on that VM.
+
+HMP reports most errors as normal output text, not as command errors.
+
+minimega expands $name in the HMP command as an environment variable. To send
+a $ to QEMU, for example in a register name, put .preprocess false first:
+
+	.preprocess false vm hmp foo "x/10i $eip"`,
+		Patterns: []string{
+			"vm hmp <vm name> <hmp command>",
+		},
+		Call:    wrapVMTargetCLI(cliVMHmp),
+		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
+	},
 	{ // vm serial
 		HelpShort: "read a bounded snapshot from a VM serial port",
 		HelpLong: `
@@ -822,6 +853,21 @@ func cliVMQmp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	}
 
 	resp.Response = out
+	return nil
+}
+
+func cliVMHmp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
+	if err != nil {
+		return err
+	}
+
+	out, err := vm.HMP(c.StringArgs["hmp"])
+	if err != nil {
+		return err
+	}
+
+	resp.Response = strings.ReplaceAll(out, "\r\n", "\n")
 	return nil
 }
 

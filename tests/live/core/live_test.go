@@ -100,6 +100,7 @@ func TestLive(t *testing.T) {
 		p("Screenshot", testScreenshot, inv),
 		p("Serial", testSerial, inv),
 		p("QMP", testQMP, inv),
+		p("HMP", testHMP, inv),
 		p("VNCShim", testVNCShim, inv),
 		p("VNCRecordFB", testVNCRecordFB, inv),
 		p("VNCKeyboard", testVNCKeyboard, cc),
@@ -1102,6 +1103,16 @@ func testQMP(t *testing.T) {
 	out = harness.MustText(t, `vm qmp host-c3 '{ "execute": "query-name" }'`)
 	if !strings.Contains(out, "return") {
 		t.Errorf("query-name: %s", out)
+	}
+}
+
+func testHMP(t *testing.T) {
+	out := harness.MustText(t, `vm hmp host-a1 "info status"`)
+	if !strings.Contains(out, "running") {
+		t.Errorf("info status: %s", out)
+	}
+	if strings.Contains(out, "\r") {
+		t.Errorf("info status output has a carriage return: %q", out)
 	}
 }
 
