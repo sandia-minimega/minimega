@@ -165,7 +165,7 @@ basic VM use but are required for some more advanced operations:
 The following debian packages should install most of the dependencies:
 
 ```text
-openvswitch-switch qemu-kvm qemu-utils dnsmasq ntfs-3g iproute
+openvswitch-switch qemu-system-x86 qemu-utils dnsmasq ntfs-3g iproute
 ```
 
 <a id="TOC_2.1.1."></a>
