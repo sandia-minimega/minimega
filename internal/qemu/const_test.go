@@ -384,3 +384,128 @@ name "pc-dimm", desc "DIMM memory module"
 name "sd-card", bus sd-bus
 name "tpm-tis", bus ISA
 name "xen-pvdevice", bus PCI, desc "Xen PV Device"`
+
+// Excerpts of output from QEMU 11.1.3 (x86_64, no KVM).
+
+// qemu-system-x86_64 -cpu help
+const cpusOutQEMU11 = `Available CPUs:
+  486                   (alias configured by machine type)
+  486-v1
+  Broadwell             (alias configured by machine type)
+  Broadwell-IBRS        (alias of Broadwell-v3)
+  Broadwell-noTSX       (alias of Broadwell-v2)
+  Broadwell-noTSX-IBRS  (alias of Broadwell-v4)
+  Broadwell-v1          Intel Core Processor (Broadwell)
+  Broadwell-v2          Intel Core Processor (Broadwell, no TSX)
+  Broadwell-v3          Intel Core Processor (Broadwell, IBRS)
+  Broadwell-v4          Intel Core Processor (Broadwell, no TSX, IBRS)
+  Cascadelake-Server-noTSX  (alias of Cascadelake-Server-v3)
+  Cascadelake-Server-v1  Intel Xeon Processor (Cascadelake)
+  Cascadelake-Server-v2  Intel Xeon Processor (Cascadelake) [ARCH_CAPABILITIES]
+  EPYC                  (alias configured by machine type)
+  EPYC-IBPB             (alias of EPYC-v2)
+  EPYC-Rome-v4          AMD EPYC-Rome-v4 Processor (no XSAVES)
+  EPYC-v1               AMD EPYC Processor
+  EPYC-v2               AMD EPYC Processor (with IBPB)
+  Skylake-Server        (alias configured by machine type)
+  Skylake-Server-IBRS   (alias of Skylake-Server-v2)
+  Skylake-Server-noTSX-IBRS  (alias of Skylake-Server-v3)
+  Skylake-Server-v1     Intel Xeon Processor (Skylake)
+  kvm64                 (alias configured by machine type)
+  kvm64-v1              Common KVM processor
+  pentium               (alias configured by machine type)
+  pentium-v1
+  qemu64                (alias configured by machine type)
+  qemu64-v1             QEMU Virtual CPU version 2.5+
+  base                  base CPU model type with no features enabled
+  max                   Enables all features supported by the accelerator in the current host
+
+Recognized CPUID flags:
+  3dnow 3dnowext 3dnowprefetch abm ace2 ace2-en acpi adx aes amd-no-ssb
+  amd-psfd amd-ssbd amd-stibp amx-avx512 amx-bf16 amx-bf16-alias
+  amx-complex amx-complex-alias amx-fp16 amx-fp16-alias amx-fp8 amx-int8
+  vnmi vpclmulqdq waitpkg wbnoinvd wdt wrmsrns x2apic xcrypt xcrypt-en xfd
+  xgetbv1 xop xsave xsavec xsaveerptr xsaveopt xsaves xstore xstore-en xtpr
+  zero-fcs-fds
+
+`
+
+// qemu-system-x86_64 -machine help
+const machinesOutQEMU11 = `Supported machines are:
+microvm              microvm (i386)
+pc-i440fx-9.2        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-9.1        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-9.0        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-8.2        Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-8.1        Standard PC (i440FX + PIIX, 1996) (deprecated)
+pc-i440fx-8.0        Standard PC (i440FX + PIIX, 1996) (deprecated)
+pc-i440fx-5.2        Standard PC (i440FX + PIIX, 1996) (deprecated)
+pc                   Standard PC (i440FX + PIIX, 1996) (alias of pc-i440fx-11.1)
+pc-i440fx-11.1       Standard PC (i440FX + PIIX, 1996) (default)
+pc-i440fx-11.0       Standard PC (i440FX + PIIX, 1996)
+pc-i440fx-10.2       Standard PC (i440FX + PIIX, 1996)
+pc-q35-9.2           Standard PC (Q35 + ICH9, 2009)
+pc-q35-8.1           Standard PC (Q35 + ICH9, 2009) (deprecated)
+pc-q35-5.2           Standard PC (Q35 + ICH9, 2009) (deprecated)
+q35                  Standard PC (Q35 + ICH9, 2009) (alias of pc-q35-11.1)
+pc-q35-11.1          Standard PC (Q35 + ICH9, 2009)
+pc-q35-11.0          Standard PC (Q35 + ICH9, 2009)
+isapc                ISA-only PC
+none                 empty machine
+`
+
+// qemu-system-x86_64 -device help
+const deviceOutQEMU11 = `Controller/Bridge/Hub devices:
+name "cxl-downstream", bus PCI, desc "CXL Switch Downstream Port"
+name "cxl-rp", bus PCI, desc "CXL Root Port"
+
+USB devices:
+name "ich9-usb-uhci1", bus PCI
+
+Storage devices:
+name "am53c974", bus PCI, desc "AMD Am53c974 PCscsi-PCI SCSI adapter"
+name "virtio-scsi-device", bus virtio-bus
+name "virtio-scsi-pci", bus PCI, alias "virtio-scsi"
+name "virtio-scsi-pci-non-transitional", bus PCI
+name "virtio-scsi-pci-transitional", bus PCI
+
+Network devices:
+name "e1000", bus PCI, alias "e1000-82540em", desc "Intel Gigabit Ethernet"
+name "e1000-82544gc", bus PCI, desc "Intel Gigabit Ethernet"
+name "e1000-82545em", bus PCI, desc "Intel Gigabit Ethernet"
+name "e1000e", bus PCI, desc "Intel 82574L GbE Controller"
+name "i82550", bus PCI, desc "Intel i82550 Ethernet"
+name "i82551", bus PCI, desc "Intel i82551 Ethernet"
+name "i82557a", bus PCI, desc "Intel i82557A Ethernet"
+name "i82557b", bus PCI, desc "Intel i82557B Ethernet"
+name "i82557c", bus PCI, desc "Intel i82557C Ethernet"
+name "i82558a", bus PCI, desc "Intel i82558A Ethernet"
+name "i82558b", bus PCI, desc "Intel i82558B Ethernet"
+name "i82559a", bus PCI, desc "Intel i82559A Ethernet"
+name "i82559b", bus PCI, desc "Intel i82559B Ethernet"
+name "i82559c", bus PCI, desc "Intel i82559C Ethernet"
+name "i82559er", bus PCI, desc "Intel i82559ER Ethernet"
+name "i82562", bus PCI, desc "Intel i82562 Ethernet"
+name "i82801", bus PCI, desc "Intel i82801 Ethernet"
+name "igb", bus PCI, desc "Intel 82576 Gigabit Ethernet Controller"
+name "ne2k_isa", bus ISA
+name "ne2k_pci", bus PCI
+name "pcnet", bus PCI
+name "rocker", bus PCI, desc "Rocker Switch"
+name "rtl8139", bus PCI
+name "tulip", bus PCI
+name "usb-net", bus usb-bus
+name "virtio-net-device", bus virtio-bus
+name "virtio-net-pci", bus PCI, alias "virtio-net"
+name "virtio-net-pci-non-transitional", bus PCI
+name "virtio-net-pci-transitional", bus PCI
+name "vmxnet3", bus PCI, desc "VMWare Paravirtualized Ethernet v3"
+
+Input devices:
+name "ccid-card-emulated", bus ccid-bus, desc "emulated smartcard"
+name "ccid-card-passthru", bus ccid-bus, desc "passthrough smartcard"
+name "i8042", bus ISA
+name "ipoctal232", bus IndustryPack, desc "GE IP-Octal 232 8-channel RS-232 IndustryPack"
+name "isa-parallel", bus ISA
+name "isa-serial", bus ISA
+`
