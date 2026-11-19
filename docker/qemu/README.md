@@ -19,6 +19,13 @@ from it.
 - A modular build. QEMU loads the block drivers, SPICE, QXL, and USB
   redirection only when a VM uses them.
 - No graphical display backends and no host audio backends.
+- Network boot ROMs from the Ubuntu `ipxe-qemu` package, in place of the iPXE
+  ROMs of upstream QEMU. A saved VM state contains these ROMs, and QEMU loads a
+  state only when each ROM has the same size. Thus the ROM sizes do not stop a
+  state from the Ubuntu QEMU packages from loading in this QEMU. The state also
+  needs a machine type that this QEMU has.
+  The file `share/qemu/ipxe-qemu.version` in the prefix records the package
+  version, and `share/doc/ipxe-qemu/copyright` records its license.
 
 The `configure` command enables each feature with an explicit option. Thus
 `configure` stops when a library for a feature is absent.
@@ -33,16 +40,22 @@ The build compares the libraries that the installed files load with the
 package list in the Dockerfile. The build stops when the two lists are
 different. If this occurs, correct the package list in the Dockerfile.
 
+The build also stops when an upstream iPXE ROM has no file of the same name in
+the `ipxe-qemu` package, or when `efi-e1000.rom` or `efi-virtio.rom` is not
+524288 bytes. If this occurs, examine the `ipxe-qemu` package.
+
 ## Published tags
 
 The workflow `.github/workflows/qemu-build.yml` publishes the image as
 `ghcr.io/<owner>/qemu-build:<QEMU version>-noble-<build revision>`.
 
-- The workflow runs when a change to `docker/qemu/` merges into `master`.
+- The workflow publishes when a change to `docker/qemu/` merges into `master`.
+  A change to only this README does not start it.
+- A maintainer can also start the workflow manually on `master`.
 - The workflow does not replace a published tag. To publish a changed recipe,
   increase `QEMU_BUILD_REVISION`.
 - A pull request that changes `docker/qemu/` builds the image and does not
-  publish it.
+  publish it. A manual run on a branch other than `master` does the same.
 
 ## Change the QEMU version
 
