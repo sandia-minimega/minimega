@@ -7,9 +7,9 @@ mkdir /dev/pts
 mount -n -t devpts -o gid=5,mode=620 none /dev/pts
 # current Debian and Ubuntu ship udevd only as systemd-udevd
 if command -v udevd >/dev/null; then
-	udevd --daemon
+    udevd --daemon
 else
-	/lib/systemd/systemd-udevd --daemon
+    /lib/systemd/systemd-udevd --daemon
 fi
 # load drivers: trigger's default action, change, loads none
 udevadm trigger --action=add
