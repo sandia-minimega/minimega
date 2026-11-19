@@ -113,6 +113,8 @@ func TestLive(t *testing.T) {
 		p("Hotplug", testHotplug, cc),
 		p("Save", testSave, cc),
 		p("KillFlushRelaunch", testKillFlushRelaunch, cc),
+		// last VM operation: it replaces host-c2 with its restored copy
+		p("SaveRestore", testSaveRestore, cc),
 
 		// tools shipped in the image
 		p("Passwordify", testPasswordify, cc),
@@ -1243,6 +1245,114 @@ func testKillFlushRelaunch(t *testing.T) {
 	}
 	if r["uuid"] == harness.VMInfo(t)["host-a4"]["uuid"] {
 		t.Errorf("clone kept the source UUID")
+	}
+}
+
+// launched fails the test when a VM that "vm launch" took from the queue is
+// missing or in the ERROR state. The scheduler logs launch errors and does not
+// return them to the caller.
+func launched(t *testing.T, vm string) {
+	t.Helper()
+	r, ok := harness.VMInfo(t)[vm]
+	if !ok {
+		t.Fatalf("%v not launched from the queue (ns queue: %q)", vm, harness.MustText(t, "ns queue"))
+	}
+	if r["state"] == "ERROR" {
+		t.Fatalf("%v launch failed: state ERROR, tags %v", vm, r["tags"])
+	}
+}
+
+// guestUptime returns a guest's /proc/uptime in seconds.
+func guestUptime(t *testing.T, vm string) float64 {
+	t.Helper()
+	out := harness.CCOK(t, vm, "cat /proc/uptime")
+	f := strings.Fields(out)
+	if len(f) == 0 {
+		t.Fatalf("%v /proc/uptime: %q", vm, out)
+	}
+	up, err := strconv.ParseFloat(f[0], 64)
+	if err != nil {
+		t.Fatalf("%v /proc/uptime: %q: %v", vm, out, err)
+	}
+	return up
+}
+
+func testSaveRestore(t *testing.T) {
+	// host-c2 has an IDE disk, miniccc, and a static MAC; the Save phase
+	// already showed that it saves
+	const vm, name = "host-c2", "live/restore-c2"
+	// skip now when there is no container, not after the VM is gone
+	harness.InContainer(t, "true")
+	state := harness.MMFiles + "/" + name + ".state"
+	disk := harness.MMFiles + "/" + name + ".hdd"
+	before := harness.VMInfo(t)[vm]
+
+	// clone needs a launched VM, so take the configuration now
+	harness.MustRun(t, "vm config clone "+vm)
+	defer harness.Run("clear vm config")
+	saved := guestUptime(t, vm)
+
+	harness.MustRun(t, "vm save "+vm+" "+name)
+	harness.Eventually(t, 3*time.Minute, 3*time.Second, func() error {
+		for _, r := range harness.MustTable(t, "vm save") {
+			if r["name"] == vm {
+				if r["status"] != "completed" {
+					return fmt.Errorf("save status: %v", r)
+				}
+				return nil
+			}
+		}
+		return fmt.Errorf("vm save does not list %v", vm)
+	})
+	for _, f := range []string{state, disk} {
+		if fi, err := os.Stat(f); err != nil || fi.Size() == 0 {
+			t.Fatalf("saved file %v: %v", f, err)
+		}
+	}
+
+	harness.MustRun(t, "vm kill "+vm)
+	harness.Eventually(t, 30*time.Second, 2*time.Second, func() error {
+		if s := harness.VMInfo(t)[vm]["state"]; s != "QUIT" {
+			return fmt.Errorf("state = %v", s)
+		}
+		return nil
+	})
+	harness.MustRun(t, "vm flush")
+
+	// the saved disk must not depend on the flushed VM's instance directory
+	if out, err := harness.InContainer(t, "qemu-img", "info", "--backing-chain", disk); err != nil {
+		t.Fatalf("saved disk %v is not usable after vm flush: %v\n%s", disk, err, out)
+	}
+
+	// the same VM again: clone keeps the MAC and clears the UUID
+	for _, cmd := range []string{
+		"vm config uuid " + before["uuid"],
+		"vm config state " + state,
+		"vm config disks " + disk + ",ide,writeback",
+		"vm launch kvm " + vm,
+		"vm launch",
+	} {
+		harness.MustRun(t, cmd)
+	}
+	launched(t, vm)
+	harness.MustRun(t, "vm start "+vm)
+
+	harness.Eventually(t, 3*time.Minute, 5*time.Second, func() error {
+		r := harness.VMInfo(t)[vm]
+		if r["state"] != "RUNNING" || r["cc_active"] != "true" {
+			return fmt.Errorf("%v state=%v cc=%v", vm, r["state"], r["cc_active"])
+		}
+		return nil
+	})
+	after := harness.VMInfo(t)[vm]
+	if after["uuid"] != before["uuid"] || after["mac"] != before["mac"] {
+		t.Errorf("restored %v uuid/mac = %v/%v, want %v/%v", vm, after["uuid"], after["mac"], before["uuid"], before["mac"])
+	}
+	// a restore continues the guest clock; a reboot starts it again near 0
+	if up := guestUptime(t, vm); up <= saved {
+		t.Errorf("%v uptime %.1fs after restore, %.1fs before save: the guest rebooted", vm, up, saved)
+	} else {
+		t.Logf("%v uptime %.1fs before save, %.1fs after restore", vm, saved, up)
 	}
 }
 
