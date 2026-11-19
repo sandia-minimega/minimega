@@ -166,7 +166,7 @@ scheduler.
   50); `.width 0`, piped output, `.csv true`, and `.json true` show all data.
 - Use `pkg/miniclient` for Go integrations instead of implementing the socket
   framing again.
-- `lib/minimega.py` is not checked in; `lib/` is ignored by git and the file
+- `lib/minimega.py` is not checked in; git ignores the file, and the file
   only exists after `scripts/build.bash` generates it with `pyapigen` from the
   built binary. Never edit it directly, and do not report it missing from a
   fresh checkout.
