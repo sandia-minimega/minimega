@@ -168,15 +168,9 @@ func diskSnapshot(src, dst string) error {
 		return fmt.Errorf("[image %s] error getting info: %v", src, err)
 	}
 
-	backing := src
-
-	if !*f_absSnapshot {
-		var err error
-
-		backing, err = filepath.Rel(filepath.Dir(dst), src)
-		if err != nil {
-			return fmt.Errorf("[image %s] error getting src backing image relative to dst: %v", src, err)
-		}
+	backing, err := backingName(dst, src, *f_absSnapshot)
+	if err != nil {
+		return fmt.Errorf("[image %s] error getting src backing image relative to dst: %v", src, err)
 	}
 
 	out, err := processWrapper("qemu-img", "create", "-f", "qcow2", "-b", backing, "-F", info.Format, dst)
@@ -204,15 +198,9 @@ func diskRebase(image, backing string, unsafe bool) error {
 			log.Warn("minimega expects backing images to be in the files directory")
 		}
 
-		parent := backing
-
-		if !*f_absSnapshot {
-			var err error
-
-			parent, err = filepath.Rel(filepath.Dir(image), backing)
-			if err != nil {
-				return fmt.Errorf("[image %s] error getting parent backing relative to dst: %v", backing, err)
-			}
+		parent, err := backingName(image, backing, *f_absSnapshot)
+		if err != nil {
+			return fmt.Errorf("[image %s] error getting parent backing relative to dst: %v", backing, err)
 		}
 
 		backingInfo, err := diskInfo(backing)
@@ -234,6 +222,130 @@ func diskRebase(image, backing string, unsafe bool) error {
 	out, err := processWrapper(args...)
 	if err != nil {
 		return fmt.Errorf("[image %s] %v: %v", image, out, err)
+	}
+
+	return nil
+}
+
+// backingName returns the backing file name to write in image for the backing
+// file backing. The name is relative to the directory of image unless abs is
+// true.
+func backingName(image, backing string, abs bool) (string, error) {
+	if abs {
+		return backing, nil
+	}
+
+	rel, err := filepath.Rel(filepath.Dir(image), backing)
+	if err == nil {
+		if i := strings.IndexAny(rel, ":/"); i >= 0 && rel[i] == ':' {
+			// QEMU reads a name with a colon before the first slash as a protocol
+			rel = "./" + rel
+		}
+	}
+
+	return rel, err
+}
+
+// savedDiskBacking returns the path of the saved disk image and the path of
+// its backing file to give to diskRebase, and whether the stored backing name
+// is different from the name that diskRebase writes. For a drive-backup
+// target, QEMU writes the backing name that the VM overlay resolves to, such as
+// "<base>/<id>/../files/x.qcow2". That name does not open after "vm flush"
+// removes the instance directory. The clean paths are used when they identify
+// the same files as QEMU does. If a symlink makes them different, the paths
+// with resolved symlinks are used.
+func savedDiskBacking(image, stored string, abs bool) (string, string, bool, error) {
+	// as in QEMU, a ":" before the first "/" makes the name a protocol or
+	// "json:" name and not a path, so leave it as it is
+	if i := strings.IndexAny(stored, ":/"); stored == "" || (i >= 0 && stored[i] == ':') {
+		return "", "", false, nil
+	}
+
+	realImage, err := realPath(image)
+	if err != nil {
+		return "", "", false, err
+	}
+	dir := filepath.Dir(realImage)
+
+	target, err := realPath(joinBacking(dir, stored))
+	if err != nil {
+		return "", "", false, err
+	}
+
+	cleanImage, err := filepath.Abs(image)
+	if err != nil {
+		return "", "", false, err
+	}
+	backing := filepath.Clean(joinBacking(filepath.Dir(cleanImage), stored))
+
+	name, err := backingName(cleanImage, backing, abs)
+	if err == nil {
+		gotImage, err1 := realPath(cleanImage)
+		gotBacking, err2 := realPath(joinBacking(dir, name))
+		if err1 == nil && err2 == nil && gotImage == realImage && gotBacking == target {
+			return cleanImage, backing, name != stored, nil
+		}
+	}
+
+	name, err = backingName(realImage, target, abs)
+	if err != nil {
+		return "", "", false, err
+	}
+
+	return realImage, target, name != stored, nil
+}
+
+// joinBacking returns the path that QEMU opens for the backing file name of an
+// image in dir. QEMU does not clean the path.
+func joinBacking(dir, name string) string {
+	if filepath.IsAbs(name) {
+		return name
+	}
+
+	return dir + string(filepath.Separator) + name
+}
+
+// realPath returns p as an absolute path whose directory has no symlinks. It
+// does not clean p first because, as in the OS, a ".." after a symlink goes to
+// the parent of the symlink target. The last element of p does not change.
+func realPath(p string) (string, error) {
+	if !filepath.IsAbs(p) {
+		wd, err := os.Getwd()
+		if err != nil {
+			return "", err
+		}
+		p = wd + string(filepath.Separator) + p
+	}
+
+	i := strings.LastIndexByte(p, filepath.Separator)
+	dir, err := filepath.EvalSymlinks(p[:i+1])
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(dir, p[i+1:]), nil
+}
+
+// fixSavedDiskBacking rebases the saved disk image, without a data copy, so
+// that its backing file name does not use the VM instance directory.
+func fixSavedDiskBacking(image string) error {
+	info, err := diskInfo(image)
+	if err != nil {
+		return fmt.Errorf("saved disk %v: %w", image, err)
+	}
+
+	path, backing, rebase, err := savedDiskBacking(image, info.BackingFile, *f_absSnapshot)
+	if err != nil {
+		return fmt.Errorf("saved disk %v: %w", image, err)
+	}
+	if !rebase {
+		return nil
+	}
+
+	log.Debug("rebasing saved disk %v on %v", path, backing)
+
+	if err := diskRebase(path, backing, true); err != nil {
+		return fmt.Errorf("saved disk %v: %w", path, err)
 	}
 
 	return nil
