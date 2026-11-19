@@ -700,6 +700,10 @@ func (vm *KvmVM) Save(filename string) error {
 			}
 			time.Sleep(time.Second * 1)
 		}
+
+		if err := fixSavedDiskBacking(filename); err != nil {
+			return err
+		}
 	}
 
 	return err
