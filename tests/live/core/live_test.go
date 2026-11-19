@@ -117,6 +117,10 @@ func TestLive(t *testing.T) {
 		// tools shipped in the image
 		p("Passwordify", testPasswordify, cc),
 
+		// optimizations: last, so that their VMs do not change the VM counts
+		// of the other phases
+		p("Hugepages", testHugepages, inv),
+
 		// teardown
 		p("ClearNamespace", testClearNamespace, version),
 	})
@@ -1323,6 +1327,214 @@ echo %v | passwordify -keys passwordify.keys live-ssh.initrd live-pw.initrd`, di
 	if mode := strings.TrimSpace(harness.CCOK(t, "host-pw", "stat -c %a /")); mode != "755" {
 		t.Errorf("/ has mode %v, want 755", mode)
 	}
+}
+
+// --- optimizations -----------------------------------------------------------
+
+const (
+	hugeVM        = "huge-a"
+	hugeOddVM     = "huge-odd"
+	hugeMemory    = 384 // MB, a multiple of 2 MiB that boots the live guest
+	hugeOddMemory = 257 // MB, not a multiple of 2 MiB
+	hugePageSize  = 2 << 20
+	hugeMount     = "/mnt/live-hugepages"
+)
+
+// testHugepages launches a VM backed by hugepages through "optimize
+// hugepages", then checks that minimega rejects a VM whose memory is not a
+// multiple of the hugepage size. LIVE_HUGEPAGES is the number of 2 MiB
+// hugepages that the host reserved for the phase.
+func testHugepages(t *testing.T) {
+	env := os.Getenv("LIVE_HUGEPAGES")
+	reserved, err := strconv.Atoi(env)
+	if env != "" && err != nil {
+		t.Fatalf("LIVE_HUGEPAGES=%q is not a number", env)
+	}
+	if reserved <= 0 {
+		t.Skip("LIVE_HUGEPAGES is not set: reserve 2 MiB hugepages on the host (vm.nr_hugepages) and set LIVE_HUGEPAGES to their number")
+	}
+	need := hugeMemory * (1 << 20) / hugePageSize
+	if reserved < need {
+		t.Fatalf("LIVE_HUGEPAGES=%d, but a %d MB VM needs %d hugepages of 2 MiB", reserved, hugeMemory, need)
+	}
+
+	path := hugetlbfsMount(t)
+	t.Logf("hugetlbfs mount in the container: %v", path)
+
+	before := hugePages(t)
+	if avail := before["HugePages_Free"] - before["HugePages_Rsvd"]; avail < need {
+		t.Fatalf("host has %d available hugepages, want >= %d: %v", avail, need, before)
+	}
+
+	done := false
+	t.Cleanup(func() {
+		if !done {
+			harness.Run("ns flush")
+			harness.Run("vm kill " + hugeVM)
+			harness.Run("vm flush " + hugeVM + "," + hugeOddVM)
+			harness.Run("clear optimize hugepages")
+			harness.Run("clear vm config")
+		}
+	})
+
+	harness.MustRun(t, "optimize hugepages "+path)
+	if got := strings.TrimSpace(harness.MustText(t, "optimize hugepages")); got != path {
+		t.Errorf("optimize hugepages = %q, want %q", got, path)
+	}
+
+	// live-base holds the kernel, the initrd, and the run.sh overrides. The VM
+	// has no NIC and no cc backchannel, so it does not change the cc clients.
+	harness.MustRun(t, "vm config restore live-base")
+	harness.MustRun(t, "vm config backchannel false")
+	harness.MustRun(t, "vm config tags role hugepages")
+	harness.MustRun(t, fmt.Sprintf("vm config memory %d", hugeMemory))
+	harness.MustRun(t, "vm config append live.role=host live.dhcp=0 live.hostname="+hugeVM)
+	harness.MustRun(t, "vm launch kvm "+hugeVM)
+	harness.MustRun(t, "vm launch")
+	harness.MustRun(t, "vm start "+hugeVM)
+
+	var pid string
+	harness.Eventually(t, time.Minute, 2*time.Second, func() error {
+		r, ok := harness.VMInfo(t)[hugeVM]
+		if !ok {
+			return fmt.Errorf("%v not listed", hugeVM)
+		}
+		if r["state"] != "RUNNING" {
+			return fmt.Errorf("%v: state %v (tags: %v)", hugeVM, r["state"], r["tags"])
+		}
+		pid = r["pid"]
+		return nil
+	})
+
+	out, err := harness.InContainer(t, "cat", "/proc/"+pid+"/cmdline")
+	if err != nil {
+		t.Fatalf("QEMU command line of %v (pid %v): %v: %s", hugeVM, pid, err, out)
+	}
+	if args := strings.Split(strings.TrimRight(out, "\x00"), "\x00"); !hasMemPath(args, path) {
+		t.Errorf("QEMU command line of %v has no -mem-path %v: %q", hugeVM, path, args)
+	}
+
+	harness.Eventually(t, 30*time.Second, 2*time.Second, func() error {
+		now := hugePages(t)
+		if now["HugePages_Free"] < before["HugePages_Free"] || now["HugePages_Rsvd"] > before["HugePages_Rsvd"] {
+			return nil
+		}
+		return fmt.Errorf("%v uses no hugepages: before %v, now %v", hugeVM, before, now)
+	})
+
+	// The scheduler logs launch errors, so the error is in the tags of the VM.
+	harness.MustRun(t, fmt.Sprintf("vm config memory %d", hugeOddMemory))
+	harness.MustRun(t, "vm config append live.role=host live.dhcp=0 live.hostname="+hugeOddVM)
+	harness.MustRun(t, "vm launch kvm "+hugeOddVM)
+	want := fmt.Sprintf("vm memory %d MB is not a multiple of the 2 MiB hugepage size of %v", hugeOddMemory, path)
+	if _, err := harness.Run("vm launch"); err != nil && !strings.Contains(err.Error(), want) {
+		t.Errorf("vm launch %v: %v, want an error that contains %q", hugeOddVM, err, want)
+	}
+	harness.Eventually(t, 30*time.Second, 2*time.Second, func() error {
+		r, ok := harness.VMInfo(t)[hugeOddVM]
+		if !ok {
+			return fmt.Errorf("%v not listed", hugeOddVM)
+		}
+		if r["state"] != "ERROR" || !strings.Contains(r["tags"], want) {
+			return fmt.Errorf("%v: state %v, tags %v; want ERROR with %q", hugeOddVM, r["state"], r["tags"], want)
+		}
+		return nil
+	})
+
+	harness.MustRun(t, "vm kill "+hugeVM)
+	harness.Eventually(t, 30*time.Second, 2*time.Second, func() error {
+		if s := harness.VMInfo(t)[hugeVM]["state"]; s != "QUIT" {
+			return fmt.Errorf("%v: state %v", hugeVM, s)
+		}
+		return nil
+	})
+	harness.MustRun(t, "vm flush "+hugeVM+","+hugeOddVM)
+	harness.MustRun(t, "clear optimize hugepages")
+	harness.MustRun(t, "clear vm config")
+	done = true
+
+	vms := harness.VMInfo(t)
+	for _, name := range []string{hugeVM, hugeOddVM} {
+		if _, ok := vms[name]; ok {
+			t.Errorf("%v still present after flush", name)
+		}
+	}
+	if got := strings.TrimSpace(harness.MustText(t, "optimize hugepages")); got != "" {
+		t.Errorf("optimize hugepages = %q after clear", got)
+	}
+}
+
+// hugetlbfsMount returns a hugetlbfs mount with 2 MiB pages in the container.
+// It uses the host /dev/hugepages, which the /dev bind mount of run.sh can
+// show, or it mounts one that it removes at the end of the test.
+func hugetlbfsMount(t *testing.T) string {
+	t.Helper()
+	if hugetlbfsPageSize(t, "/dev/hugepages") == hugePageSize {
+		return "/dev/hugepages"
+	}
+
+	out, err := harness.InContainer(t, "sh", "-c", "mkdir -p "+hugeMount+" && mount -t hugetlbfs -o pagesize=2M none "+hugeMount)
+	if err != nil {
+		t.Fatalf("no hugetlbfs mount: /dev/hugepages in the container is not hugetlbfs with 2 MiB pages, and the mount failed: %v: %s", err, out)
+	}
+	t.Cleanup(func() {
+		out, err := harness.InContainer(t, "sh", "-c", "umount "+hugeMount+" && rmdir "+hugeMount)
+		switch {
+		case err == nil:
+		case t.Failed():
+			// a VM of the failed test can still use the mount
+			t.Logf("remove %v: %v: %s", hugeMount, err, out)
+		default:
+			t.Errorf("remove %v: %v: %s", hugeMount, err, out)
+		}
+	})
+
+	if size := hugetlbfsPageSize(t, hugeMount); size != hugePageSize {
+		t.Fatalf("%v in the container has page size %d, want %d", hugeMount, size, hugePageSize)
+	}
+	return hugeMount
+}
+
+// hugetlbfsPageSize returns the hugepage size of the hugetlbfs at path in the
+// container, or 0 when path is not on hugetlbfs.
+func hugetlbfsPageSize(t *testing.T, path string) int {
+	t.Helper()
+	out, err := harness.InContainer(t, "stat", "-f", "-c", "%T %s", path)
+	f := strings.Fields(out)
+	if err != nil || len(f) != 2 || f[0] != "hugetlbfs" {
+		return 0
+	}
+	size, _ := strconv.Atoi(f[1])
+	return size
+}
+
+// hugePages returns the HugePages_* counters from /proc/meminfo of the host.
+// The kernel is shared with the container.
+func hugePages(t *testing.T) map[string]int {
+	t.Helper()
+	b, err := os.ReadFile("/proc/meminfo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res := map[string]int{}
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 2 || !strings.HasPrefix(f[0], "HugePages_") {
+			continue
+		}
+		res[strings.TrimSuffix(f[0], ":")], _ = strconv.Atoi(f[1])
+	}
+	return res
+}
+
+// hasMemPath reports whether args contain "-mem-path path".
+func hasMemPath(args []string, path string) bool {
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "-mem-path" && args[i+1] == path {
+			return true
+		}
+	}
+	return false
 }
 
 // --- teardown ----------------------------------------------------------------
