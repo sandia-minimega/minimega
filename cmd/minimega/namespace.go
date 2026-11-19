@@ -1241,6 +1241,7 @@ func NewHostStats() *HostStats {
 	if err != nil {
 		log.Error("unable to compute uptime: %v", err)
 	}
+	h.QEMU = hostQemuVersion()
 
 	namespaceLock.Lock()
 	defer namespaceLock.Unlock()

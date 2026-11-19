@@ -34,6 +34,7 @@ type HostStats struct {
 	NetworkCommit int
 	Load          string
 	Uptime        time.Duration
+	QEMU          string
 }
 
 var hostCLIHandlers = []minicli.Handler{
@@ -50,6 +51,7 @@ Report information about hosts in the current namespace:
 - memused    : memory used in MB
 - name       : name of the machine
 - netcommit  : total network interface commit
+- qemu       : QEMU version from "kvm -version" on the host
 - rx         : RX bandwidth stats (MB/s)
 - tx         : TX bandwidth stats (MB/s)
 - uptime     : uptime
@@ -57,7 +59,11 @@ Report information about hosts in the current namespace:
 - androidvms : number of active Android VMs counted against the per-host Android port limit
 - vmlimit    : limit based on coschedule values (-1 is no limit)
 
-All VM-based stats are computed across namespaces.`,
+All VM-based stats are computed across namespaces.
+
+A VM can use a different QEMU binary through "vm config qemu". minimega keeps
+the first QEMU version that it reads. If QEMU changes while minimega runs,
+restart minimega to show the new version.`,
 		Patterns: []string{
 			"host",
 			"host <cpucommit,>",
@@ -74,6 +80,7 @@ All VM-based stats are computed across namespaces.`,
 			"host <vms,>",
 			"host <vmlimit,>",
 			"host <androidvms,>",
+			"host <qemu,>",
 		},
 		Call: wrapBroadcastCLI(cliHost),
 	},
@@ -117,6 +124,8 @@ func (h *HostStats) Print(v string) string {
 		return strconv.Itoa(h.Limit)
 	case "uptime":
 		return h.Uptime.String()
+	case "qemu":
+		return h.QEMU
 	}
 
 	return "???"
@@ -127,7 +136,7 @@ func (h *HostStats) Print(v string) string {
 // it's usually redundant in the tabular data unless .annotate is false.
 var hostInfoKeys = []string{
 	"cpus", "load", "memused", "memtotal", "rx", "tx", "vms", "vmlimit",
-	"androidvms", "cpucommit", "memcommit", "netcommit", "uptime",
+	"androidvms", "cpucommit", "memcommit", "netcommit", "uptime", "qemu",
 }
 
 func cliHost(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {

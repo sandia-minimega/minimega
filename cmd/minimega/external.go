@@ -5,11 +5,13 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -195,17 +197,71 @@ func ovsVersion() ([]int, error) {
 }
 
 func qemuVersion() ([]int, error) {
-	out, err := processWrapper("kvm", "-version")
+	return qemuVersionContext(context.Background())
+}
+
+func qemuVersionContext(ctx context.Context) ([]int, error) {
+	out, err := processWrapperContext(ctx, "kvm", "-version")
 	if err != nil {
 		return nil, fmt.Errorf("check qemu version failed: %v", err)
 	}
 
+	return parseQemuVersion(out)
+}
+
+// parseQemuVersion parses the output of `kvm -version`, for example
+// "QEMU emulator version 11.1.3 (Debian 1:11.1.3+ds-1)".
+func parseQemuVersion(out string) ([]int, error) {
 	f := strings.Fields(out)
 	if len(f) < 4 {
 		return nil, fmt.Errorf("cannot parse qemu version: %v", out)
 	}
 
 	return parseVersion("qemu", f[3])
+}
+
+// hostQemuProbeTimeout limits how long `host` waits for `kvm -version`.
+const hostQemuProbeTimeout = 5 * time.Second
+
+func hostQemuProbe() ([]int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), hostQemuProbeTimeout)
+	defer cancel()
+
+	return qemuVersionContext(ctx)
+}
+
+// versionCache keeps the first successful result of probe as a dotted version.
+// It runs probe again after a failure.
+type versionCache struct {
+	mu      sync.Mutex
+	version string
+	probe   func() ([]int, error)
+}
+
+func (c *versionCache) get() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.version != "" {
+		return c.version
+	}
+
+	v, err := c.probe()
+	if err != nil {
+		log.Debug("unable to determine version: %v", err)
+		return ""
+	}
+
+	c.version = printVersion(v)
+	return c.version
+}
+
+var hostQemu = &versionCache{probe: hostQemuProbe}
+
+// hostQemuVersion returns the dotted QEMU version from `kvm -version`, or an
+// empty string when the probe fails or times out.
+func hostQemuVersion() string {
+	return hostQemu.get()
 }
 
 // parseVersion parses a version string like 1.2.3, returning a slice of ints
@@ -308,12 +364,23 @@ func lsModule(s string) bool {
 // processWrapper executes the given arg list and returns a combined
 // stdout/stderr and any errors. processWrapper blocks until the process exits.
 func processWrapper(args ...string) (string, error) {
+	return processWrapperContext(context.Background(), args...)
+}
+
+// processWrapperContext is processWrapper with a context. When ctx ends,
+// processWrapperContext kills the process and returns an error.
+func processWrapperContext(ctx context.Context, args ...string) (string, error) {
 	if len(args) == 0 {
 		return "", fmt.Errorf("empty argument list")
 	}
 
 	start := time.Now()
-	out, err := exec.Command(args[0], args[1:]...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	if ctx.Done() != nil {
+		// a child that keeps the output pipe open must not block the return
+		cmd.WaitDelay = time.Second
+	}
+	out, err := cmd.CombinedOutput()
 	stop := time.Now()
 	log.Debug("cmd %v completed in %v", args[0], stop.Sub(start))
 
