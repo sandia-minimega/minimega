@@ -132,8 +132,9 @@ func ovsSetPortQinQ(tap string, outer int) error {
 }
 
 // ovsAddMirror creates a mirror on bridge from src to dst. If src is empty,
-// mirrors the entire bridge. tags say who owns the mirror.
-func ovsAddMirror(bridge, src, dst string, vlans []int, tags MirrorTags) error {
+// mirrors the entire bridge. tags say who owns the mirror. When port is set,
+// its ovs-vsctl commands, which create dst, run in the same transaction.
+func ovsAddMirror(bridge, src, dst string, vlans []int, tags MirrorTags, port []string) error {
 	findPort := func(name, tap string) []string {
 		return []string{
 			"--",
@@ -144,7 +145,7 @@ func ovsAddMirror(bridge, src, dst string, vlans []int, tags MirrorTags) error {
 		}
 	}
 
-	args := findPort("dst", dst)
+	args := append(append([]string{}, port...), findPort("dst", dst)...)
 
 	if src != "" {
 		args = append(args, findPort("src", src)...)

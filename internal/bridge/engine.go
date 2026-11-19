@@ -412,6 +412,7 @@ type engine struct {
 	started time.Time
 
 	stop     chan struct{}
+	stopAt   time.Time // set before stop is closed
 	done     chan struct{}
 	stopOnce sync.Once
 
@@ -469,7 +470,10 @@ func (e *engine) fail(err string) {
 }
 
 func (e *engine) signal() {
-	e.stopOnce.Do(func() { close(e.stop) })
+	e.stopOnce.Do(func() {
+		e.stopAt = time.Now()
+		close(e.stop)
+	})
 }
 
 // Stop tells the engine to stop and waits until the file is closed.
@@ -515,7 +519,8 @@ func (e *engine) run() {
 
 	for {
 		if e.stopped() && drainEnd.IsZero() {
-			// read what is already queued, but not for long
+			// read what is already queued, up to the first frame after the
+			// stop, but not for long
 			drainEnd = time.Now().Add(drainLimit)
 		}
 		if !drainEnd.IsZero() && time.Now().After(drainEnd) {
@@ -531,6 +536,8 @@ func (e *engine) run() {
 			if !e.stopped() {
 				fail(err)
 			}
+			break
+		} else if e.stopped() && ci.Timestamp.After(e.stopAt) {
 			break
 		} else {
 			size := e.sink.w.Size() + int64(pcapfile.RecordSize(format, len(data), e.recOpts)) + trailer

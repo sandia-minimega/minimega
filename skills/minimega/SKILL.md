@@ -268,7 +268,9 @@ Consult command help before mutating state; subcommand requirements evolve.
 - **Packet captures have IDs, states, and counters.** `capture` lists the ID,
   state (`running`, `failed`, or `full`), packets, kernel drops, and file size
   of each pcap capture, with `path` as the last column. A failed or full capture
-  stays in the list until `capture pcap delete id <id>`. `clear capture pcap`
+  stays in the list until you delete it. IDs are local to each host, and
+  `capture pcap delete id <id>` acts only on the local host; for a VM on another
+  host, use `capture pcap delete vm <name>`. `clear capture pcap`
   stops only pcap captures. Give `snaplen=`, `filter=`, `maxsize=`,
   `format=pcap|pcapng`, and (VM only) `direction=` after the file name instead of changing the namespace
   settings around one capture.
@@ -277,11 +279,16 @@ Consult command help before mutating state; subcommand requirements evolve.
   that runs it and returns an ID. List with `capture pcap namespace` and stop
   with `capture pcap delete namespace <id|file|all>` on that same node; plain
   `capture` does not list them. Every mesh node, relays included, must support
-  it, or the start fails.
+  it, or the start fails. `ns del-hosts` stops it on the removed hosts and
+  `ns add-hosts` starts it on the added hosts, also on a host that was removed.
 - **A bridge has at most 32 working mirrors.** Open vSwitch silently ignores
   more. Tap mirrors and captures share them; minimega refuses a new mirror at
   32. `bridge mirrors` lists every Mirror row with its owner namespace and
-  kind, also rows that minimega did not make (`external`).
+  kind, also rows that minimega did not make (`external`). At start and in
+  `nuke`, minimega removes the mirrors and capture ports of a minimega process
+  on the host that no longer runs; `-recover` keeps the tap mirrors of the
+  recovered taps. Mirrors of a minimega in another PID namespace (another
+  container) stay.
 - **Do not parse default tables by column position.** Select columns explicitly
   because command output is also consumed by phēnix, FIREWHEEL, and scripts.
 

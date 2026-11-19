@@ -254,7 +254,7 @@ func main() {
 	// check all the external dependencies
 	if err := checkExternal(); err != nil {
 		log.Warnln(err.Error())
-	} else if err := bridge.CleanStaleMirrors(); err != nil {
+	} else if err := bridge.CleanStaleMirrors(cleanKeep(*f_recover)...); err != nil {
 		log.Warn("unable to remove stale capture mirrors: %v", err)
 	}
 

@@ -155,6 +155,12 @@ capture-namespace and external, or a kind that another tool sets:
 	bridge mirrors
 	bridge mirrors mega_bridge
 
+At start and in nuke, minimega removes the mirrors and capture ports of a
+minimega process on this host that no longer runs. With -recover, it keeps the
+tap mirrors of the recovered taps and removes the other tap mirrors. It cannot
+check a minimega process in another PID namespace, such as another container,
+so it keeps the mirrors of that process.
+
 Note: bridge is not a namespace-aware command.`,
 		Patterns: []string{
 			"bridge",

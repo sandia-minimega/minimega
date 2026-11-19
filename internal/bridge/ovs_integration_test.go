@@ -23,7 +23,8 @@ import (
 )
 
 // TestOVSCapture runs captures on a real Open vSwitch bridge. It needs root
-// and a running Open vSwitch, so it runs only with MINIMEGA_OVS_TEST=1.
+// and a running Open vSwitch, so it runs only with MINIMEGA_OVS_TEST=1. The
+// Test workflow runs it.
 func TestOVSCapture(t *testing.T) {
 	if os.Getenv("MINIMEGA_OVS_TEST") != "1" {
 		t.Skip("set MINIMEGA_OVS_TEST=1 to run with Open vSwitch")
@@ -229,7 +230,17 @@ func TestOVSCapture(t *testing.T) {
 	}
 
 	// a mirror and port of a dead minimega are removed
-	if _, err := ovsCmdWrapper([]string{"set", "Port", tap2, "external_ids:minimega-pid=999999999"}); err != nil {
+	self, err := selfOwner()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dead := []string{"set", "Port", tap2,
+		"external_ids:minimega-boot-id=" + self.boot,
+		"external_ids:minimega-pid-ns=" + self.pidNS,
+		"external_ids:minimega-pid=999999999",
+		"external_ids:minimega-start-time=1",
+	}
+	if _, err := ovsCmdWrapper(dead); err != nil {
 		t.Fatal(err)
 	}
 	if err := CleanStaleMirrors(); err != nil {

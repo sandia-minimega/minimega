@@ -440,6 +440,9 @@ To capture all the traffic of a namespace on all its hosts into one file, use
 namespace, that is, its VM, container and host taps, and sends the frames to
 the node that runs the command. That node merges the frames in timestamp order.
 Each frame is in the file once, also when it crosses a GRE or VXLAN tunnel.
-Keep the clocks of the hosts synchronized with chrony or PTP, because the
-order of frames from different hosts depends on the host clocks. Every mesh
-node must run minimega 3.4.0 or later. See `help capture pcap namespace`.
+To order the frames, that node adds the measured clock offset of each host to
+the host timestamps. The file keeps the host timestamps. Frames that a host
+sends before the first acknowledgment from that node have no offset
+correction. Thus, keep the clocks of the hosts synchronized with chrony or
+PTP. Every mesh node must run a minimega that supports namespace captures. See
+`help capture pcap namespace`.

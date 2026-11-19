@@ -5,6 +5,7 @@
 package main
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -50,5 +51,48 @@ func TestHostTapRecoveryKeepsNamespace(t *testing.T) {
 
 	if _, err := parseHostTap("mega_bridge mega_tap1"); err == nil {
 		t.Error("parseHostTap accepted a line with two columns")
+	}
+}
+
+// TestMirrorDeleteAllContinues checks that deleting all the mirrors of a
+// namespace tries each mirror after an error.
+func TestMirrorDeleteAllContinues(t *testing.T) {
+	ns := &Namespace{Mirrors: map[string]bool{"mm_test_gone1": true, "mm_test_gone2": true}}
+
+	err := mirrorDelete(ns, Wildcard)
+	if err == nil || !strings.Contains(err.Error(), "mm_test_gone1") || !strings.Contains(err.Error(), "mm_test_gone2") {
+		t.Errorf("mirrorDelete(all) = %v, want an error for each mirror", err)
+	}
+}
+
+// TestCleanKeep checks that the clean-up at start keeps the tap mirrors only
+// with -recover, which takes them back.
+func TestCleanKeep(t *testing.T) {
+	if got := cleanKeep(false); len(got) != 0 {
+		t.Errorf("cleanKeep(false) = %v, want nothing", got)
+	}
+	if got := cleanKeep(true); !slices.Equal(got, []string{bridge.MirrorKindTap}) {
+		t.Errorf("cleanKeep(true) = %v, want %v", got, bridge.MirrorKindTap)
+	}
+}
+
+// TestAdoptMirrors checks that a recovered tap mirror is a mirror of its
+// namespace, so that mirror delete removes it.
+func TestAdoptMirrors(t *testing.T) {
+	nss := map[string]*Namespace{"exp": {Name: "exp", Mirrors: map[string]bool{}}}
+	get := func(name string) *Namespace {
+		if nss[name] == nil {
+			nss[name] = &Namespace{Name: name, Mirrors: map[string]bool{}}
+		}
+		return nss[name]
+	}
+
+	adoptMirrors([]bridge.MirrorInfo{
+		{Bridge: "mega_bridge", Mirror: "mirror-mega_tap2", Output: "mega_tap2", Namespace: "exp", Kind: bridge.MirrorKindTap},
+		{Bridge: "mega_bridge", Mirror: "mirror-mega_tap3", Output: "mega_tap3", Namespace: "other", Kind: bridge.MirrorKindTap},
+	}, get)
+
+	if !nss["exp"].Mirrors["mega_tap2"] || !nss["other"].Mirrors["mega_tap3"] || len(nss["exp"].Mirrors) != 1 {
+		t.Errorf("namespace mirrors: exp %v, other %v", nss["exp"].Mirrors, nss["other"].Mirrors)
 	}
 }

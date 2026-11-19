@@ -190,5 +190,7 @@ func recover() error {
 		}
 	}
 
+	recoverMirrors()
+
 	return nil
 }

@@ -74,3 +74,60 @@ func TestCaptureHandlerPaths(t *testing.T) {
 		}
 	}
 }
+
+// TestCaptureConfigSnapLen checks that snaplen 0 sets the default and that a
+// snaplen out of range fails.
+func TestCaptureConfigSnapLen(t *testing.T) {
+	ns := &Namespace{}
+
+	for _, tc := range []struct {
+		size string
+		want uint32
+		fail bool
+	}{
+		{"128", 128, false},
+		{"0", 0, false},
+		{"13", 0, true},
+		{"262145", 0, true},
+	} {
+		ns.captures.SnapLen = 99
+		c := &minicli.Command{StringArgs: map[string]string{"size": tc.size}, BoolArgs: map[string]bool{"snaplen": true}}
+
+		err := cliCaptureConfig(ns, c, &minicli.Response{})
+		if tc.fail {
+			if err == nil {
+				t.Errorf("snaplen %v did not fail", tc.size)
+			}
+			continue
+		}
+		if err != nil || ns.captures.SnapLen != tc.want {
+			t.Errorf("snaplen %v: got %v, %v", tc.size, ns.captures.SnapLen, err)
+		}
+	}
+}
+
+// TestCaptureBridgeVMs checks that a bridge capture refuses vms= names that
+// are not VMs of the namespace.
+func TestCaptureBridgeVMs(t *testing.T) {
+	var started bool
+
+	orig := captureBridge
+	t.Cleanup(func() { captureBridge = orig })
+	captureBridge = func(_ *captures, _, _ string, _ bridge.CaptureConfig) (int, error) { started = true; return 0, nil }
+
+	vm := &KvmVM{BaseVM: &BaseVM{ID: 0, Name: "vm0"}}
+	ns := &Namespace{Name: "exp", VMs: VMs{m: map[int]VM{0: vm}}}
+
+	for vms, ok := range map[string]bool{"vm0": true, "vm0,vm1": false, "0": false} {
+		c := &minicli.Command{
+			StringArgs: map[string]string{"bridge": "br0", "filename": "a.pcap"},
+			ListArgs:   map[string][]string{"option": {"ports=edge", "vms=" + vms}},
+		}
+
+		started = false
+		err := cliCapturePcap(ns, c, &minicli.Response{})
+		if ok != (err == nil) || ok != started {
+			t.Errorf("vms=%v: started %v, err %v", vms, started, err)
+		}
+	}
+}

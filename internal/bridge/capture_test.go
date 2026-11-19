@@ -208,6 +208,70 @@ func TestCaptureTapStopFlushes(t *testing.T) {
 	}
 }
 
+// busySource gives a frame stamped with the current time on every read, like
+// a tap with steady traffic, so that a read never times out.
+type busySource struct{ fakeSource }
+
+func (s *busySource) ReadPacketData() ([]byte, gopacket.CaptureInfo, error) {
+	time.Sleep(100 * time.Microsecond)
+
+	return make([]byte, 60), gopacket.CaptureInfo{Timestamp: time.Now(), CaptureLength: 60, Length: 60}, nil
+}
+
+// TestCaptureStopBusyTap checks that a stop on a tap with steady traffic ends
+// at the first frame after the stop, not at the drain limit.
+func TestCaptureStopBusyTap(t *testing.T) {
+	old := openCaptureSource
+	t.Cleanup(func() { openCaptureSource = old })
+	openCaptureSource = func(string, CaptureConfig) (packetSource, error) {
+		return &busySource{}, nil
+	}
+
+	b := testBridge()
+	path := filepath.Join(t.TempDir(), "busy.pcap")
+
+	id, err := b.CaptureTap("tap0", path, CaptureConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	waitFor(t, "packets", func() bool {
+		info, _ := b.CaptureInfo(id)
+		return info.Packets > 10
+	})
+
+	bridgeLock.Lock()
+	e := b.captures[id].engine
+	bridgeLock.Unlock()
+
+	start := time.Now()
+	if err := b.StopCapture(id); err != nil {
+		t.Fatal(err)
+	}
+	if d := time.Since(start); d >= drainLimit/2 {
+		t.Errorf("stop took %v on a busy tap", d)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := pcapgo.NewReader(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		_, ci, err := r.ReadPacketData()
+		if err != nil {
+			break
+		}
+		// a frame can be stamped between stopAt and the close of stop
+		if ci.Timestamp.After(e.stopAt.Add(50 * time.Millisecond)) {
+			t.Fatalf("frame at %v written after the stop at %v", ci.Timestamp, e.stopAt)
+		}
+	}
+}
+
 func TestCaptureIDsNotReused(t *testing.T) {
 	useFakeSources(t, newFakeSource(), newFakeSource(), newFakeSource())
 
@@ -528,11 +592,11 @@ func TestBridgeCaptureRemovesTap(t *testing.T) {
 		t.Errorf("bridge capture direction %q, want in", got.Direction)
 	}
 
+	// the port and its mirror are made in one transaction
 	for _, want := range []string{
-		"ovs-vsctl add-port test_bridge mega_tap42 -- set Interface mega_tap42 type=internal",
+		`ovs-vsctl add-port test_bridge mega_tap42 external_ids:minimega-namespace="" external_ids:minimega-kind="capture-bridge"`,
+		"-- set Interface mega_tap42 type=internal -- --id=@dst get port mega_tap42 -- --id=@m create mirror name=mirror-mega_tap42 output-port=@dst select-all=true",
 		"ip link set mega_tap42 up promisc on",
-		"name=mirror-mega_tap42",
-		"select-all=true",
 	} {
 		if !cmds.has(want) {
 			t.Errorf("missing command %q in %q", want, cmds.cmds)
@@ -594,6 +658,106 @@ func TestDestroyRemovesMirrors(t *testing.T) {
 
 	if got := readFrames(t, path); len(got) != 0 {
 		t.Errorf("file has %d frames", len(got))
+	}
+}
+
+// TestDestroyStopsCapturesTogether checks that destroy tells every capture to
+// stop before it waits for one, so that their drains do not add up.
+func TestDestroyStopsCapturesTogether(t *testing.T) {
+	useFakeCommands(t)
+
+	block := make(chan struct{})
+	var srcs []*fakeSource
+	for i := 0; i < 3; i++ {
+		src := newFakeSource()
+		src.block = block
+		srcs = append(srcs, src)
+	}
+	useFakeSources(t, srcs...)
+
+	b := testBridge()
+	b.preExist = true
+
+	var engines []*engine
+	for i := 0; i < 3; i++ {
+		id, err := b.CaptureTap("tap0", os.DevNull, CaptureConfig{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		engines = append(engines, b.captures[id].engine)
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		bridgeLock.Lock()
+		defer bridgeLock.Unlock()
+		done <- b.destroy()
+	}()
+
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(block) }) }
+	t.Cleanup(unblock)
+
+	// the readers are blocked, so destroy waits; all must be told to stop
+	waitFor(t, "all captures told to stop", func() bool {
+		for _, e := range engines {
+			if !e.stopped() {
+				return false
+			}
+		}
+		return true
+	})
+
+	unblock()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// closeSource is a fakeSource that runs onClose when the engine closes it.
+type closeSource struct {
+	*fakeSource
+	onClose func()
+}
+
+func (s closeSource) Close() {
+	s.onClose()
+	s.fakeSource.Close()
+}
+
+// TestStopCaptureKeepsMirror checks that a stop removes the mirror only after
+// the engine ends: without the mirror, the capture tap gets flooded frames.
+func TestStopCaptureKeepsMirror(t *testing.T) {
+	cmds := useFakeCommands(t)
+
+	old := openCaptureSource
+	t.Cleanup(func() { openCaptureSource = old })
+	openCaptureSource = func(string, CaptureConfig) (packetSource, error) {
+		return closeSource{newFakeSource(), func() { cmds.add("source closed") }}, nil
+	}
+
+	b := testBridge()
+	b.tapChan = testTapChan()
+
+	id, err := b.Capture(filepath.Join(t.TempDir(), "m.pcap"), CaptureConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := b.StopCapture(id); err != nil {
+		t.Fatal(err)
+	}
+
+	closed, removed := -1, -1
+	for i, v := range cmds.cmds {
+		switch {
+		case v == "source closed":
+			closed = i
+		case strings.Contains(v, "remove bridge test_bridge mirrors"):
+			removed = i
+		}
+	}
+	if closed < 0 || removed < closed {
+		t.Errorf("mirror removed at %d, source closed at %d: %q", removed, closed, cmds.cmds)
 	}
 }
 
@@ -777,5 +941,117 @@ func TestCaptureMaxSizePcapng(t *testing.T) {
 	}
 	if fi.Size() > c.MaxSize {
 		t.Errorf("file size = %d, more than maxsize %d", fi.Size(), c.MaxSize)
+	}
+}
+
+// TestDestroyWaitsForStoppingCapture checks that destroy waits for a capture
+// that StopCapture stops, so that the capture does not read a removed tap.
+func TestDestroyWaitsForStoppingCapture(t *testing.T) {
+	useFakeCommands(t)
+
+	src := newFakeSource()
+	src.block = make(chan struct{})
+	useFakeSources(t, src)
+
+	var once sync.Once
+	unblock := func() { once.Do(func() { close(src.block) }) }
+	t.Cleanup(unblock)
+
+	b := testBridge()
+	b.preExist = true
+
+	id, err := b.CaptureTap("tap0", os.DevNull, CaptureConfig{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := b.captures[id].engine
+
+	stopped := make(chan struct{})
+	go func() {
+		b.StopCapture(id)
+		close(stopped)
+	}()
+	waitFor(t, "stop signaled", e.stopped)
+
+	destroyed := make(chan error, 1)
+	go func() {
+		bridgeLock.Lock()
+		defer bridgeLock.Unlock()
+		destroyed <- b.destroy()
+	}()
+
+	select {
+	case <-destroyed:
+		t.Fatal("destroy returned while a stopping capture still reads its tap")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	unblock()
+	if err := <-destroyed; err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case <-e.done:
+	default:
+		t.Error("destroy returned before the stopping capture ended")
+	}
+
+	<-stopped
+}
+
+// TestCaptureTapSetupFails checks that a capture tap that does not come up
+// loses its mirror and its port, and that the edge mirrors forget the old
+// port of the same name.
+func TestCaptureTapSetupFails(t *testing.T) {
+	for _, step := range []string{"disable IPv6", "up"} {
+		t.Run(step, func(t *testing.T) {
+			cmds := useFakeCommands(t)
+
+			oldIPv6 := disableIPv6
+			t.Cleanup(func() { disableIPv6 = oldIPv6 })
+			disableIPv6 = func(string) error { return nil }
+
+			fail := errors.New(step + " failed")
+			if step == "disable IPv6" {
+				disableIPv6 = func(string) error { return fail }
+			} else {
+				processExec = func(args []string) (string, error) {
+					cmds.add(strings.Join(args, " "))
+					return "", fail
+				}
+			}
+
+			b := testBridge()
+			b.tapChan = testTapChan()
+
+			// an edge mirror that had an old port with the name of the new tap
+			ec := &edgeCapture{ports: map[string]bool{"mega_tap42": true}, done: make(chan struct{})}
+			b.edgeCaptures["mega_tapX"] = ec
+
+			bridgeLock.Lock()
+			err := b.createCaptureTap("mega_tap42", MirrorTags{Kind: MirrorKindBridge}, func(port []string) error {
+				return b.createMirrorVLANs("", "mega_tap42", nil, MirrorTags{Kind: MirrorKindBridge}, port)
+			})
+			_, tap := b.taps["mega_tap42"]
+			mirror := b.mirrors["mega_tap42"]
+			forgot := !ec.ports["mega_tap42"]
+			bridgeLock.Unlock()
+
+			if !errors.Is(err, fail) && (err == nil || !strings.Contains(err.Error(), fail.Error())) {
+				t.Errorf("createCaptureTap = %v, want %v", err, fail)
+			}
+			if tap || mirror {
+				t.Errorf("after the failure: tap %v, mirror %v, want neither", tap, mirror)
+			}
+			if !forgot {
+				t.Error("the edge mirror keeps the old port of the capture tap")
+			}
+			for _, want := range []string{"get mirror mirror-mega_tap42 -- remove bridge test_bridge mirrors @m", "del-port test_bridge mega_tap42"} {
+				if !cmds.has(want) {
+					t.Errorf("missing command %q in %q", want, cmds.cmds)
+				}
+			}
+		})
 	}
 }

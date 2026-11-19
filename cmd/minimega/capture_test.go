@@ -193,7 +193,9 @@ func TestParseCaptureOptions(t *testing.T) {
 		{"filter=tcp port eighty"},
 		{"maxsize=1T"},
 		{"direction=up"},
+		{"direction="},
 		{"format=pcapx"},
+		{"format="},
 		{"colour=blue"},
 		{"novalue"},
 		{"snaplen=100", "snaplen=200"},
@@ -218,14 +220,45 @@ func TestParseCaptureOptions(t *testing.T) {
 		{"vlans=4096"},
 		{"vlans=NOPE"},
 		{"vms=a"},
+		{"ports="},
+		{"ports=edge", "vms="},
+		{"ports=edge", "vms=,"},
 	} {
 		if _, err := parseCaptureOptions(captureKindBridge, "exp", base, opts); err == nil {
 			t.Errorf("bridge options %q did not fail", opts)
 		}
 	}
 
-	if err := checkCaptureFilename("snaplen=100"); err != errFilenameOption {
-		t.Errorf("file name with = : %v", err)
+	for _, fname := range []string{"snaplen=100", "window=1s"} {
+		if err := checkCaptureFilename(fname); err != errFilenameOption {
+			t.Errorf("file name %q: %v", fname, err)
+		}
+	}
+
+	for _, fname := range []string{"date=2026-11-19/x.pcap", "dir/snaplen=100.pcap", "a=b"} {
+		if err := checkCaptureFilename(fname); err != nil {
+			t.Errorf("file name %q: %v", fname, err)
+		}
+	}
+}
+
+func TestParseNSCaptureOptionsEmpty(t *testing.T) {
+	ns := &Namespace{Name: "nscapture-test"}
+
+	for _, opts := range [][]string{
+		{"format="},
+		{"vms="},
+		{"vms=,"},
+		{"bridges="},
+		{"bridges=,"},
+	} {
+		if _, err := parseNSCaptureOptions(ns, opts, false); err == nil {
+			t.Errorf("options %q did not fail", opts)
+		}
+	}
+
+	if o, err := parseNSCaptureOptions(ns, []string{"filter="}, false); err != nil || o.filter != "" {
+		t.Errorf("empty filter: %+v %v", o, err)
 	}
 }
 

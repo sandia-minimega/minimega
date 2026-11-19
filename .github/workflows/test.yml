@@ -64,3 +64,35 @@ jobs:
             junit.xml
             coverage.out
             coverage.html
+
+  ovs:
+    # TestOVSCapture needs root and a running Open vSwitch, so it skips in the
+    # job above.
+    name: Run Open vSwitch Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libpcap-dev openvswitch-switch
+          sudo systemctl start openvswitch-switch
+          sudo ovs-vsctl show
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests
+        shell: bash
+        run: |
+          ./scripts/version.bash
+          go test -c -race -o "$RUNNER_TEMP/bridge.test" ./internal/bridge
+          sudo MINIMEGA_OVS_TEST=1 "$RUNNER_TEMP/bridge.test" -test.run '^TestOVSCapture$' -test.count=1 -test.v | tee "$RUNNER_TEMP/ovs.log"
+          # a skipped test, or no test that matches, also exits with 0
+          grep -q '^--- PASS: TestOVSCapture ' "$RUNNER_TEMP/ovs.log"

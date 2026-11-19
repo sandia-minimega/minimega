@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -32,7 +33,7 @@ const (
 	nsCaptureAckPeriod   = 100 * time.Millisecond
 	nsCaptureReconcile   = 2 * time.Second
 	nsCaptureStatsCheck  = 10 * time.Second
-	nsCaptureMaxSnapLen  = 65535
+	nsCaptureMaxSnapLen  = 65535 // a member batch keeps room for one record of this size
 	nsCaptureInboxSize   = 1024
 )
 
@@ -96,6 +97,9 @@ func nsCaptureDrop(what string) {
 // nsSender sends capture messages over the mesh, or in process to this host.
 type nsSender struct{}
 
+// nsCaptureSender sends the host-level final batches. Tests replace it.
+var nsCaptureSender nscapture.Sender = nsSender{}
+
 func (nsSender) Send(host string, body interface{}) error {
 	if host == hostname {
 		switch v := body.(type) {
@@ -138,9 +142,10 @@ type nsCaptureOptions struct {
 	head      string
 	id        int
 	token     uint64
+	gen       uint64 // start of the member; 0 for the first start
 }
 
-var nsCaptureInternal = map[string]bool{"head": true, "id": true, "token": true}
+var nsCaptureInternal = map[string]bool{"head": true, "id": true, "token": true, "gen": true}
 
 // nsFilterOK reports whether f is printable ASCII without a quote or a
 // backslash, so that it passes the mesh as one quoted item.
@@ -163,7 +168,7 @@ func parseNSCaptureOptions(ns *Namespace, opts []string, internal bool) (nsCaptu
 		names:     true,
 		window:    nscapture.DefaultWindow,
 	}
-	if o.snaplen == 0 || o.snaplen > nsCaptureMaxSnapLen {
+	if o.snaplen == 0 {
 		o.snaplen = bridge.DefaultSnapLen
 	}
 
@@ -183,6 +188,10 @@ func parseNSCaptureOptions(ns *Namespace, opts []string, internal bool) (nsCaptu
 			return o, fmt.Errorf("internal option: %v", k)
 		}
 
+		if v == "" && k != "filter" {
+			return o, fmt.Errorf("option %v needs a value", k)
+		}
+
 		var err error
 
 		switch k {
@@ -198,17 +207,9 @@ func parseNSCaptureOptions(ns *Namespace, opts []string, internal bool) (nsCaptu
 			}
 			o.vlanIDs, err = parseCaptureVLANs(ns.Name, v)
 		case "bridges":
-			for _, s := range strings.Split(v, ",") {
-				if s != "" {
-					o.bridges = append(o.bridges, s)
-				}
-			}
+			o.bridges, err = splitCaptureNames(k, v)
 		case "vms":
-			for _, s := range strings.Split(v, ",") {
-				if s != "" {
-					o.vms = append(o.vms, s)
-				}
-			}
+			o.vms, err = splitCaptureNames(k, v)
 		case "filter":
 			if !nsFilterOK(v) {
 				return o, errors.New("filter must be printable ASCII without \" or \\")
@@ -244,6 +245,8 @@ func parseNSCaptureOptions(ns *Namespace, opts []string, internal bool) (nsCaptu
 			o.id, err = strconv.Atoi(v)
 		case "token":
 			o.token, err = strconv.ParseUint(v, 10, 64)
+		case "gen":
+			o.gen, err = strconv.ParseUint(v, 10, 64)
 		default:
 			return o, fmt.Errorf("unknown option: %v", k)
 		}
@@ -251,6 +254,10 @@ func parseNSCaptureOptions(ns *Namespace, opts []string, internal bool) (nsCaptu
 		if err != nil {
 			return o, fmt.Errorf("invalid option %v: %v", k, err)
 		}
+	}
+
+	if o.snaplen > nsCaptureMaxSnapLen {
+		return o, fmt.Errorf("namespace snaplen %v is more than %v, the maximum for namespace captures; give snaplen=<size>", o.snaplen, nsCaptureMaxSnapLen)
 	}
 
 	if o.format != pcapfile.FormatPcapng && (seen["attribute"] || seen["names"]) {
@@ -302,6 +309,9 @@ func (o nsCaptureOptions) memberArgs() []string {
 	if len(o.vms) > 0 {
 		args = append(args, "vms="+strings.Join(o.vms, ","))
 	}
+	if o.gen > 0 {
+		args = append(args, "gen="+strconv.FormatUint(o.gen, 10))
+	}
 
 	return args
 }
@@ -335,20 +345,39 @@ type headCapture struct {
 	release func()
 	merger  *nscapture.Merger
 
-	inbox chan *nscapture.Batch
-	stop  chan struct{}
-	done  chan struct{}
+	inbox   chan *nscapture.Batch
+	hostOps chan hostOp
+	stop    chan struct{}
+	done    chan struct{}
 
 	stopOnce sync.Once
 
 	mu      sync.Mutex
 	hosts   []string
+	gens    map[string]uint64 // start of the member of each host
+	lastGen uint64
 	state   string
 	err     string
 	streams []nscapture.StreamStatus
 	sum     nscapture.StreamStatus
 	size    int64
 	acks    map[string]nscapture.Control
+}
+
+// hostOp tells the merger of a capture that ns add-hosts added a host, or
+// that ns del-hosts removed it.
+type hostOp struct {
+	host string
+	add  bool
+	gen  uint64
+}
+
+// hostOp gives op to the merger and waits until the merger has it.
+func (c *headCapture) hostOp(op hostOp) {
+	select {
+	case c.hostOps <- op:
+	case <-c.done:
+	}
 }
 
 func (r *headRegistry) add(c *headCapture) {
@@ -404,7 +433,7 @@ func nsCaptureDispatcher() {
 		c := nsHeads.get(b.Namespace, b.ID)
 		if c == nil || b.Head != hostname || b.Token != c.token {
 			go nsSender{}.Send(b.Host, nscapture.Control{
-				Op: nscapture.OpAck, Namespace: b.Namespace, Head: b.Head, ID: b.ID, Token: b.Token,
+				Op: nscapture.OpAck, Namespace: b.Namespace, Head: b.Head, ID: b.ID, Token: b.Token, Gen: b.Gen,
 				Bridge: b.Bridge, Unknown: true,
 			})
 			continue
@@ -455,24 +484,43 @@ func (c *headCapture) run() {
 	var stopping bool
 	var stopDeadline time.Time
 
+	// stop is nil after the first receive: a closed channel is always ready
+	stop := c.stop
+
 	for {
 		select {
 		case b := <-c.inbox:
-			recv := b.SentAt
 			seq, ok := c.merger.Add(b)
 			if ok && b.Bridge != "" {
 				c.mu.Lock()
-				c.acks[b.Host+"/"+b.Bridge] = nscapture.Control{
-					Op: nscapture.OpAck, Namespace: c.ns, Head: hostname, ID: c.id, Token: c.token,
-					Bridge: b.Bridge, Seq: seq, HeadRecv: recv,
-				}
+				c.acks[b.Host+"/"+b.Bridge] = c.ack(b, seq)
 				c.mu.Unlock()
+			} else if !ok && c.merger.Stale(b) {
+				// the stop to this member can be lost; the Unknown ack also stops it
+				go nsSender{}.Send(b.Host, nscapture.Control{
+					Op: nscapture.OpAck, Namespace: c.ns, Head: hostname, ID: c.id, Token: c.token, Gen: b.Gen,
+					Bridge: b.Bridge, Unknown: true,
+				})
 			}
+		case op := <-c.hostOps:
+			if op.add {
+				c.merger.AddHost(op.host, op.gen)
+			} else {
+				c.merger.ForgetHost(op.host)
+			}
+			c.mu.Lock()
+			for key := range c.acks {
+				if strings.HasPrefix(key, op.host+"/") {
+					delete(c.acks, key)
+				}
+			}
+			c.mu.Unlock()
 		case <-tick.C:
 			c.merger.Tick()
 		case <-ackTick.C:
 			c.sendAcks()
-		case <-c.stop:
+		case <-stop:
+			stop = nil
 			if !stopping {
 				stopping = true
 				stopDeadline = time.Now().Add(nsCaptureStopWait)
@@ -527,6 +575,21 @@ func (c *headCapture) run() {
 	log.Info("namespace capture %v of %v ended", c.id, c.ns)
 }
 
+// ack returns the ack for batch b, when the merger has every batch of the
+// stream up to seq.
+func (c *headCapture) ack(b *nscapture.Batch, seq uint64) nscapture.Control {
+	// the skew estimate needs the receive time of batch seq
+	recv := b.SentAt
+	if seq != b.Seq {
+		recv = 0
+	}
+
+	return nscapture.Control{
+		Op: nscapture.OpAck, Namespace: c.ns, Head: hostname, ID: c.id, Token: c.token, Gen: b.Gen,
+		Bridge: b.Bridge, Seq: seq, HeadRecv: recv,
+	}
+}
+
 // sendAcks sends the latest ack of each stream, in a goroutine so that a slow
 // mesh never blocks the merger.
 func (c *headCapture) sendAcks() {
@@ -558,14 +621,27 @@ func (c *headCapture) sendAcks() {
 
 // sendStop sends OpStop to every host that accepted the start.
 func (c *headCapture) sendStop() {
-	for _, host := range c.getHosts() {
-		go func(host string) {
-			ctrl := nscapture.Control{Op: nscapture.OpStop, Namespace: c.ns, Head: hostname, ID: c.id, Token: c.token}
-			if err := (nsSender{}).Send(host, ctrl); err != nil {
-				log.Warn("namespace capture %v: stop to %v: %v", c.id, host, err)
-			}
-		}(host)
+	c.mu.Lock()
+	gens := map[string]uint64{}
+	for _, host := range c.hosts {
+		gens[host] = c.gens[host]
 	}
+	c.mu.Unlock()
+
+	for host, gen := range gens {
+		c.sendStopTo(host, gen)
+	}
+}
+
+// sendStopTo sends OpStop to the member of host with the start gen. It does
+// not wait.
+func (c *headCapture) sendStopTo(host string, gen uint64) {
+	go func() {
+		ctrl := nscapture.Control{Op: nscapture.OpStop, Namespace: c.ns, Head: hostname, ID: c.id, Token: c.token, Gen: gen}
+		if err := (nsSender{}).Send(host, ctrl); err != nil {
+			log.Warn("namespace capture %v: stop to %v: %v", c.id, host, err)
+		}
+	}()
 }
 
 func (c *headCapture) snapshot() {
@@ -596,13 +672,22 @@ func (c *headCapture) snapshot() {
 
 // requestStop tells the capture to stop and waits at most wait.
 func (c *headCapture) requestStop(wait time.Duration) {
+	c.signalStop()
+	c.waitStop(time.Now().Add(wait))
+}
+
+// signalStop tells the capture to stop. It does not wait.
+func (c *headCapture) signalStop() {
 	c.setState(nscapture.StateStopping, "")
 	c.stopOnce.Do(func() { close(c.stop) })
+}
 
+// waitStop waits until the capture stops, at most until deadline.
+func (c *headCapture) waitStop(deadline time.Time) {
 	select {
 	case <-c.done:
-	case <-time.After(wait):
-		log.Warn("namespace capture %v of %v did not stop in %v", c.id, c.ns, wait)
+	case <-time.After(time.Until(deadline)):
+		log.Warn("namespace capture %v of %v did not stop in time", c.id, c.ns)
 	}
 }
 
@@ -658,7 +743,7 @@ func nsCaptureVersionGate() error {
 
 	if len(bad) > 0 {
 		sort.Strings(bad)
-		return fmt.Errorf("mesh nodes %v do not support namespace captures; minimega 3.4.0 or later must run on every node, relays included", strings.Join(bad, ", "))
+		return fmt.Errorf("mesh nodes %v do not support namespace captures; every node, relays included, must support them", strings.Join(bad, ", "))
 	}
 
 	return nil
@@ -689,7 +774,7 @@ func cliNSCaptureStart(ns *Namespace, c *minicli.Command, resp *minicli.Response
 		return err
 	}
 
-	if err := nsCaptureFanOut(ns, hc, hc.hosts); err != nil {
+	if err := nsCaptureFanOut(ns, hc, hc.hosts, 0); err != nil {
 		hc.setState(nscapture.StateFailed, err.Error())
 		hc.requestStop(nsCaptureStopWait)
 		return err
@@ -743,9 +828,11 @@ func newHeadCapture(ns string, hosts []string, o nsCaptureOptions, path, origina
 		file:    f,
 		release: release,
 		inbox:   make(chan *nscapture.Batch, nsCaptureInboxSize),
+		hostOps: make(chan hostOp),
 		stop:    make(chan struct{}),
 		done:    make(chan struct{}),
 		hosts:   append([]string(nil), hosts...),
+		gens:    map[string]uint64{},
 		state:   nscapture.StateStarting,
 		acks:    map[string]nscapture.Control{},
 	}
@@ -768,15 +855,18 @@ func newHeadCapture(ns string, hosts []string, o nsCaptureOptions, path, origina
 	return hc, nil
 }
 
-// nsCaptureFanOut starts the members of hc on hosts. When a host fails, it
-// returns the errors; the caller rolls back with OpStop.
-func nsCaptureFanOut(ns *Namespace, hc *headCapture, hosts []string) error {
+// nsCaptureFanOut starts the members of hc on hosts, with the start gen. When
+// a host fails, it returns the errors; the caller rolls back with OpStop.
+func nsCaptureFanOut(ns *Namespace, hc *headCapture, hosts []string, gen uint64) error {
 	if len(hosts) == 0 {
 		return nil
 	}
 
+	o := hc.opts
+	o.gen = gen
+
 	args := []string{"capture", "pcap", "namespace", quoteArg(hc.path)}
-	for _, a := range hc.opts.memberArgs() {
+	for _, a := range o.memberArgs() {
 		args = append(args, quoteArg(a))
 	}
 	original := strings.Join(args, " ")
@@ -822,27 +912,75 @@ func nsCaptureFanOut(ns *Namespace, hc *headCapture, hosts []string) error {
 // add-hosts added.
 func nsCaptureAddHosts(ns *Namespace, hosts []string) {
 	for _, hc := range nsHeads.list(ns.Name) {
+		add, gen := hc.addHosts(hosts)
+		if len(add) == 0 {
+			continue
+		}
+
+		if err := nsCaptureFanOut(ns, hc, add, gen); err != nil {
+			log.Error("namespace capture %v: start on new hosts: %v", hc.id, err)
+		}
+	}
+}
+
+// addHosts adds the hosts that a running capture does not have, with a new
+// start gen, so that the head drops the batches of a member that ns del-hosts
+// stopped on the same host. It returns the added hosts and gen.
+func (c *headCapture) addHosts(hosts []string) ([]string, uint64) {
+	c.mu.Lock()
+	if c.state != nscapture.StateRunning && c.state != nscapture.StateStalled {
+		c.mu.Unlock()
+		return nil, 0
+	}
+
+	var add []string
+	for _, h := range hosts {
+		if !slices.Contains(c.hosts, h) && !slices.Contains(add, h) {
+			add = append(add, h)
+		}
+	}
+	if len(add) == 0 {
+		c.mu.Unlock()
+		return nil, 0
+	}
+
+	c.lastGen++
+	gen := c.lastGen
+	c.hosts = append(c.hosts, add...)
+	for _, h := range add {
+		c.gens[h] = gen
+	}
+	c.mu.Unlock()
+
+	for _, h := range add {
+		c.hostOp(hostOp{host: h, add: true, gen: gen})
+	}
+
+	return add, gen
+}
+
+// nsCaptureDelHosts removes hosts that ns del-hosts removed from the captures
+// of ns: it stops their member captures, and the head does not wait for them
+// or show their streams.
+func nsCaptureDelHosts(ns string, hosts []string) {
+	for _, hc := range nsHeads.list(ns) {
 		hc.mu.Lock()
-		running := hc.state == nscapture.StateRunning || hc.state == nscapture.StateStalled
-		var add []string
-		for _, h := range hosts {
-			var known bool
-			for _, h2 := range hc.hosts {
-				known = known || h == h2
-			}
-			if !known {
-				add = append(add, h)
+		var keep, del []string
+		gens := map[string]uint64{}
+		for _, h := range hc.hosts {
+			if slices.Contains(hosts, h) {
+				del = append(del, h)
+				gens[h] = hc.gens[h]
+			} else {
+				keep = append(keep, h)
 			}
 		}
-		if running {
-			hc.hosts = append(hc.hosts, add...)
-		}
+		hc.hosts = keep
 		hc.mu.Unlock()
 
-		if running && len(add) > 0 {
-			if err := nsCaptureFanOut(ns, hc, add); err != nil {
-				log.Error("namespace capture %v: start on new hosts: %v", hc.id, err)
-			}
+		for _, h := range del {
+			hc.hostOp(hostOp{host: h})
+			hc.sendStopTo(h, gens[h])
 		}
 	}
 }
@@ -866,12 +1004,18 @@ func nsCaptureMatch(ns, target string) []*headCapture {
 }
 
 // nsCaptureStopHead stops the captures of ns that target selects and returns
-// their final rows.
+// their final rows. It stops all the captures, then waits at most wait.
 func nsCaptureStopHead(ns, target string, wait time.Duration) [][]string {
 	var rows [][]string
 
-	for _, hc := range nsCaptureMatch(ns, target) {
-		hc.requestStop(wait)
+	list := nsCaptureMatch(ns, target)
+	for _, hc := range list {
+		hc.signalStop()
+	}
+
+	deadline := time.Now().Add(wait)
+	for _, hc := range list {
+		hc.waitStop(deadline)
 		rows = append(rows, hc.rows()...)
 		nsHeads.remove(ns, hc.id)
 	}
@@ -924,10 +1068,32 @@ func cliNSCapture(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 
 // ---------------------------------------------------------------- member
 
+// memberKey identifies a member capture. The token keeps apart two captures
+// with the same ID, for example after the head restarts.
 type memberKey struct {
 	ns, head string
 	id       int
+	token    uint64
 }
+
+// edgeBridge is the part of a bridge that a member capture uses.
+type edgeBridge interface {
+	EdgeTaps(bridge.EdgeSelector) []bridge.Tap
+	StartEdgeStream(bridge.EdgeSelector, bridge.CaptureConfig, pcapfile.Writer, bridge.MirrorTags) (int, error)
+	CaptureInfo(int) (bridge.CaptureInfo, bool)
+	MirrorApplied(int) (bool, error)
+	StopCapture(int) error
+}
+
+// nsBridgeNames and nsLookupBridge give the bridges to member captures. Tests
+// replace them.
+var (
+	nsBridgeNames  = func() []string { return bridges.Names() }
+	nsLookupBridge = func(name string) (edgeBridge, bool) {
+		br, ok := bridges.Lookup(name)
+		return br, ok
+	}
+)
 
 type memberRegistry struct {
 	mu sync.Mutex
@@ -942,16 +1108,22 @@ type memberStream struct {
 	indexes *portIndexes
 	started time.Time
 	checked bool
+	failed  bool // the start failed; the stream does not start again
 }
 
 type memberCapture struct {
 	key  memberKey
 	opts nsCaptureOptions
+	ns   *Namespace // nil in tests
 
+	// mu serializes reconcile and shutdown, which wait for Open vSwitch. smu
+	// guards streams, so that acks do not wait for Open vSwitch.
 	mu       sync.Mutex
-	streams  map[string]*memberStream
 	stopped  bool
 	headSeen time.Time
+
+	smu     sync.Mutex
+	streams map[string]*memberStream
 
 	stop     chan struct{}
 	done     chan struct{}
@@ -993,7 +1165,17 @@ func cliNSCaptureMember(ns *Namespace, c *minicli.Command, resp *minicli.Respons
 		return err
 	}
 
-	k := memberKey{ns: ns.Name, head: o.head, id: o.id}
+	k := memberKey{ns: ns.Name, head: o.head, id: o.id, token: o.token}
+
+	// after ns del-hosts and add-hosts, the member of the older start can
+	// still run
+	if old := nsMembers.get(k); old != nil && old.opts.gen < o.gen {
+		old.requestStop("")
+		select {
+		case <-old.done:
+		case <-time.After(nsCaptureStopWait):
+		}
+	}
 
 	nsMembers.mu.Lock()
 	if _, ok := nsMembers.m[k]; ok {
@@ -1004,6 +1186,7 @@ func cliNSCaptureMember(ns *Namespace, c *minicli.Command, resp *minicli.Respons
 	m := &memberCapture{
 		key:      k,
 		opts:     o,
+		ns:       ns,
 		streams:  map[string]*memberStream{},
 		headSeen: time.Now(),
 		stop:     make(chan struct{}),
@@ -1020,9 +1203,9 @@ func cliNSCaptureMember(ns *Namespace, c *minicli.Command, resp *minicli.Respons
 
 	go m.loop()
 
-	m.mu.Lock()
+	m.smu.Lock()
 	resp.Response = strconv.Itoa(len(m.streams))
-	m.mu.Unlock()
+	m.smu.Unlock()
 
 	return nil
 }
@@ -1070,16 +1253,15 @@ func (p *portIndexes) index(t bridge.Tap) uint32 {
 	return p.last
 }
 
-func portTable(taps []bridge.Tap, indexes *portIndexes) []nscapture.PortInfo {
+// portTable returns the port table of taps. vmIface returns the interface of
+// a VM that uses a tap, or -1.
+func portTable(taps []bridge.Tap, indexes *portIndexes, vmIface func(vm, tap string) int) []nscapture.PortInfo {
 	var res []nscapture.PortInfo
 
 	for _, t := range taps {
-		kind := "vm"
-		switch {
-		case t.Host:
-			kind = "host"
-		case t.Container:
-			kind = "container"
+		iface := -1
+		if t.Owner != "" {
+			iface = vmIface(t.Owner, t.Name)
 		}
 
 		var addrs []string
@@ -1090,11 +1272,29 @@ func portTable(taps []bridge.Tap, indexes *portIndexes) []nscapture.PortInfo {
 		}
 
 		res = append(res, nscapture.PortInfo{
-			Index: indexes.index(t), Port: t.Name, MAC: t.MAC, VLAN: t.VLAN, Kind: kind, VM: t.Owner, Addrs: addrs,
+			Index: indexes.index(t), Port: t.Name, MAC: t.MAC, VLAN: t.VLAN, VM: t.Owner, VMIface: iface, Addrs: addrs,
 		})
 	}
 
 	return res
+}
+
+// vmIface returns the interface of the VM vm of the namespace that uses tap,
+// or -1.
+func (m *memberCapture) vmIface(vm, tap string) int {
+	if m.ns == nil {
+		return -1
+	}
+
+	if v := m.ns.FindVM(vm); v != nil {
+		for i, nic := range v.GetNetworks() {
+			if nic.Tap == tap {
+				return i
+			}
+		}
+	}
+
+	return -1
 }
 
 func samePorts(a, b []nscapture.PortInfo) bool {
@@ -1128,18 +1328,24 @@ func (m *memberCapture) reconcile() error {
 		format = nscapture.FormatNg
 	}
 
-	for _, name := range bridges.Names() {
+	for _, name := range nsBridgeNames() {
 		if !m.wantBridge(name) {
 			continue
 		}
 
-		br, ok := bridges.Lookup(name)
+		br, ok := nsLookupBridge(name)
 		if !ok {
 			continue
 		}
 
-		if s, ok := m.streams[name]; ok {
-			if ports := portTable(br.EdgeTaps(sel), s.indexes); !samePorts(ports, s.ports) {
+		m.smu.Lock()
+		s, ok := m.streams[name]
+		m.smu.Unlock()
+
+		if ok && s.failed {
+			continue
+		} else if ok {
+			if ports := portTable(br.EdgeTaps(sel), s.indexes, m.vmIface); !samePorts(ports, s.ports) {
 				s.ports = ports
 				s.stream.SetPorts(ports)
 			}
@@ -1163,12 +1369,12 @@ func (m *memberCapture) reconcile() error {
 
 		stream := nscapture.NewStream(nscapture.StreamConfig{
 			Namespace: m.key.ns, Head: m.key.head, Host: hostname, Bridge: name,
-			ID: m.key.id, Token: m.opts.token, Format: format,
+			ID: m.key.id, Token: m.opts.token, Gen: m.opts.gen, Format: format,
 		}, nsSender{}, nil)
 		stream.OnUnknown = func() { m.requestStop("head does not know the capture") }
 
 		indexes := &portIndexes{}
-		ports := portTable(taps, indexes)
+		ports := portTable(taps, indexes, m.vmIface)
 		stream.SetPorts(ports)
 
 		tags := bridge.MirrorTags{
@@ -1180,17 +1386,23 @@ func (m *memberCapture) reconcile() error {
 
 		id, err := br.StartEdgeStream(sel, config, stream, tags)
 		if errors.Is(err, bridge.ErrNoEdgePorts) {
-			stream.Fail("no edge ports")
-			stream.Close()
+			// the stream sent nothing, so a new stream can start later
+			stream.Discard()
 			continue
 		} else if err != nil {
+			// keep the stream: a new stream would send its sequence numbers again
 			stream.Fail(err.Error())
 			stream.Close()
+			m.smu.Lock()
+			m.streams[name] = &memberStream{bridge: name, stream: stream, failed: true}
+			m.smu.Unlock()
 			errs = append(errs, fmt.Sprintf("bridge %v: %v", name, err))
 			continue
 		}
 
+		m.smu.Lock()
 		m.streams[name] = &memberStream{bridge: name, capID: id, stream: stream, ports: ports, indexes: indexes, started: time.Now()}
+		m.smu.Unlock()
 	}
 
 	if len(errs) > 0 {
@@ -1236,8 +1448,9 @@ func (m *memberCapture) loop() {
 	}
 }
 
-// requestStop stops all streams, sends the host-level final batch and removes
-// the member. It does not wait.
+// requestStop stops all streams, removes the member and sends the host-level
+// final batch. It does not wait. done is closed when the member is removed,
+// before the final batch is sent.
 func (m *memberCapture) requestStop(reason string) {
 	m.stopOnce.Do(func() {
 		close(m.stop)
@@ -1246,12 +1459,15 @@ func (m *memberCapture) requestStop(reason string) {
 }
 
 func (m *memberCapture) shutdown(reason string) {
-	defer close(m.done)
+	sender := nsCaptureSender
 
 	m.mu.Lock()
 	m.stopped = true
-	streams := m.streams
 	m.mu.Unlock()
+
+	m.smu.Lock()
+	streams := m.streams
+	m.smu.Unlock()
 
 	var wg sync.WaitGroup
 	var finalsLock sync.Mutex
@@ -1262,7 +1478,7 @@ func (m *memberCapture) shutdown(reason string) {
 		go func(s *memberStream) {
 			defer wg.Done()
 
-			if br, ok := bridges.Lookup(s.bridge); ok {
+			if br, ok := nsLookupBridge(s.bridge); ok && !s.failed {
 				br.StopCapture(s.capID)
 			}
 			// the engine closes the stream; close it here when the engine ended
@@ -1278,16 +1494,38 @@ func (m *memberCapture) shutdown(reason string) {
 	// the head waits for the final batch of each stream, and marks a stream
 	// failed when its last batches do not arrive
 	final := nscapture.Batch{
-		Namespace: m.key.ns, Head: m.key.head, ID: m.key.id, Token: m.opts.token, Host: hostname,
+		Namespace: m.key.ns, Head: m.key.head, ID: m.key.id, Token: m.opts.token, Gen: m.opts.gen, Host: hostname,
 		Final: true, Err: reasonErr(reason), Finals: finals,
-	}
-	if err := (nsSender{}).Send(m.key.head, final); err != nil {
-		log.Warn("namespace capture %v: final batch to %v: %v", m.key.id, m.key.head, err)
 	}
 
 	nsMembers.mu.Lock()
-	delete(nsMembers.m, m.key)
+	if nsMembers.m[m.key] == m {
+		delete(nsMembers.m, m.key)
+	}
 	nsMembers.mu.Unlock()
+
+	close(m.done)
+
+	if err := nsSendRetry(sender, m.key.head, final, nsCaptureStopWait); err != nil {
+		log.Warn("namespace capture %v: final batch to %v: %v", m.key.id, m.key.head, err)
+	}
+}
+
+// nsSendRetry sends body to host with sender. It tries again until the send
+// succeeds or limit passes.
+func nsSendRetry(sender nscapture.Sender, host string, body interface{}, limit time.Duration) error {
+	deadline := time.Now().Add(limit)
+	backoff := 100 * time.Millisecond
+
+	for {
+		err := sender.Send(host, body)
+		if err == nil || time.Now().Add(backoff).After(deadline) {
+			return err
+		}
+
+		time.Sleep(backoff)
+		backoff = min(2*backoff, 2*time.Second)
+	}
 }
 
 func reasonErr(reason string) string {
@@ -1300,8 +1538,14 @@ func reasonErr(reason string) string {
 // nsCaptureControlLoop gives acks and stops to the member streams.
 func nsCaptureControlLoop() {
 	for c := range nsCaptureControls {
-		m := nsMembers.get(memberKey{ns: c.Namespace, head: c.Head, id: c.ID})
-		if m == nil || m.opts.token != c.Token {
+		m := nsMembers.get(memberKey{ns: c.Namespace, head: c.Head, id: c.ID, token: c.Token})
+		if m == nil {
+			continue
+		}
+
+		// a message for an older start of the member, after ns del-hosts and
+		// add-hosts
+		if c.Gen != m.opts.gen {
 			continue
 		}
 
@@ -1309,9 +1553,9 @@ func nsCaptureControlLoop() {
 		case nscapture.OpStop:
 			m.requestStop("")
 		case nscapture.OpAck:
-			m.mu.Lock()
+			m.smu.Lock()
 			s := m.streams[c.Bridge]
-			m.mu.Unlock()
+			m.smu.Unlock()
 
 			if s != nil {
 				s.stream.Ack(c)

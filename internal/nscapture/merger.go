@@ -20,7 +20,6 @@ const (
 	MinWindow       = 100 * time.Millisecond
 	MaxWindow       = 10 * time.Second
 	StallTimeout    = 10 * time.Second
-	GapTimeout      = 5 * time.Second
 	StatsInterval   = 10 * time.Second
 	FlushInterval   = 100 * time.Millisecond
 	MemoryCap       = 256 << 20
@@ -87,7 +86,6 @@ type StreamStatus struct {
 	Dup          uint64
 	Lag          time.Duration
 	Skew         time.Duration
-	HasSkew      bool
 }
 
 type mstream struct {
@@ -96,11 +94,14 @@ type mstream struct {
 	nextSeq      uint64
 	pending      map[uint64]*Batch
 	gapSince     time.Time
-	through      int64
+	through      int64 // on the head clock
+	lastRaw      int64 // time of the newest record
+	lastKey      int64 // lastRaw on the head clock
 	lastRecv     time.Time
 	final        bool
 	err          string
 	last         Batch // counters of the last batch
+	base         Batch // counters of the members before the last resetHost
 	recv         uint64
 	bytes        uint64
 	late, dup    uint64
@@ -111,8 +112,8 @@ type mstream struct {
 	ports        map[uint32]PortInfo
 	portIfaces   map[uint32]uint32
 	startTime    time.Time
-	stalledState bool
 	finalSeq     uint64 // from the host-level final batch; 0 when unknown
+	idle         bool   // no batch since resetHost
 }
 
 // complete reports whether the head has every batch up to the final batch
@@ -168,6 +169,8 @@ type Merger struct {
 	order     []*mstream
 	hostFinal map[string]bool
 	hostErr   map[string]string
+	removed   map[string]bool   // hosts that ForgetHost removed
+	minGen    map[string]uint64 // the batches of an older start are dropped
 
 	h           recHeap
 	heapBytes   int
@@ -202,6 +205,8 @@ func NewMerger(cfg MergerConfig, w pcapfile.Writer, clock Clock) *Merger {
 		streams:     map[string]*mstream{},
 		hostFinal:   map[string]bool{},
 		hostErr:     map[string]string{},
+		removed:     map[string]bool{},
+		minGen:      map[string]uint64{},
 		lastWritten: math.MinInt64,
 		lastFlush:   clock.Now(),
 		names:       map[string]bool{},
@@ -247,7 +252,7 @@ func (m *Merger) stream(host, bridge string) *mstream {
 // Add takes a batch. It returns the highest in-order sequence number of the
 // stream, for the ack, and false when the batch is not for this capture.
 func (m *Merger) Add(b *Batch) (uint64, bool) {
-	if b.Token != m.cfg.Token {
+	if b.Token != m.cfg.Token || m.removed[b.Host] || b.Gen < m.minGen[b.Host] {
 		return 0, false
 	}
 
@@ -269,6 +274,7 @@ func (m *Merger) Add(b *Batch) (uint64, bool) {
 
 	s := m.stream(b.Host, b.Bridge)
 	s.lastRecv = now
+	s.idle = false
 
 	if b.Seq < s.nextSeq || s.pending[b.Seq] != nil {
 		s.dup++
@@ -279,6 +285,65 @@ func (m *Merger) Add(b *Batch) (uint64, bool) {
 	m.drain(s)
 
 	return s.nextSeq - 1, true
+}
+
+// Stale reports whether the merger drops b because ForgetHost removed its
+// host, or because b is from an older start of the member of its host.
+func (m *Merger) Stale(b *Batch) bool {
+	return b.Token == m.cfg.Token && (m.removed[b.Host] || b.Gen < m.minGen[b.Host])
+}
+
+// ForgetHost removes host from the capture: the merger drops its batches,
+// and its streams do not show in the status or hold back the watermark.
+func (m *Merger) ForgetHost(host string) {
+	m.removed[host] = true
+	m.resetHost(host)
+}
+
+// AddHost adds host again, for a new start gen of its member. The merger
+// drops the batches of the older starts.
+func (m *Merger) AddHost(host string, gen uint64) {
+	delete(m.removed, host)
+	m.minGen[host] = gen
+	m.resetHost(host)
+}
+
+// resetHost clears the state that the member of host sent, so that a new
+// member can start its streams from Seq 1 and its own port indexes. The
+// records that wait stay, with their interfaces, and the counters of the old
+// member stay in the totals.
+func (m *Merger) resetHost(host string) {
+	delete(m.hostFinal, host)
+	delete(m.hostErr, host)
+
+	for _, s := range m.order {
+		if s.host != host {
+			continue
+		}
+
+		s.nextSeq = 1
+		s.pending = map[uint64]*Batch{}
+		s.gapSince = time.Time{}
+		s.through, s.lastRaw, s.lastKey = 0, 0, 0
+		s.final, s.err, s.finalSeq = false, "", 0
+		s.base = s.counters()
+		s.last = Batch{}
+		s.ports = map[uint32]PortInfo{}
+		s.portIfaces = map[uint32]uint32{}
+		s.idle = true
+	}
+}
+
+// counters returns the cumulative member counters of s, for all its members.
+func (s *mstream) counters() Batch {
+	return Batch{
+		Captured:    s.base.Captured + s.last.Captured,
+		KernelDrops: s.base.KernelDrops + s.last.KernelDrops,
+		IfDrops:     s.base.IfDrops + s.last.IfDrops,
+		PathDrops:   s.base.PathDrops + s.last.PathDrops,
+		QueueDrops:  s.base.QueueDrops + s.last.QueueDrops,
+		SendDrops:   s.base.SendDrops + s.last.SendDrops,
+	}
 }
 
 // drain processes the pending batches of s in sequence order.
@@ -330,7 +395,14 @@ func (m *Merger) process(s *mstream, b *Batch) {
 			iface := m.iface(s, r.port)
 			opts := pcapfile.RecordOptions{Inbound: true, DropsBefore: uint64(r.dropsB4)}
 
-			if r.ts < m.lastWritten {
+			// order on the head clock; a smaller skew does not reorder s
+			ts := r.ts + b.SkewNS
+			if r.ts >= s.lastRaw {
+				ts = max(ts, s.lastKey)
+				s.lastRaw, s.lastKey = r.ts, ts
+			}
+
+			if ts < m.lastWritten {
 				// late: write at once, out of order
 				s.late++
 				opts.Comment = "late: after the reorder window"
@@ -338,13 +410,13 @@ func (m *Merger) process(s *mstream, b *Batch) {
 				continue
 			}
 
-			heap.Push(&m.h, heapItem{ts: r.ts, stream: s.idx, seq: b.Seq, off: off, rec: r.rec, iface: iface, opts: opts})
+			heap.Push(&m.h, heapItem{ts: ts, stream: s.idx, seq: b.Seq, off: off, rec: r.rec, iface: iface, opts: opts})
 			m.heapBytes += len(r.rec)
 		}
 	}
 
-	if b.Through > s.through {
-		s.through = b.Through
+	if t := b.Through + b.SkewNS; t > s.through {
+		s.through = t
 	}
 
 	s.last = *b
@@ -375,7 +447,7 @@ func (m *Merger) iface(s *mstream, port uint32) uint32 {
 
 		if p, ok := s.ports[port]; ok {
 			desc := fmt.Sprintf("%v port %v, VLAN %v", s.host, p.Port, p.VLAN)
-			if p.VM != "" {
+			if p.VM != "" && p.VMIface >= 0 {
 				desc = fmt.Sprintf("%v interface %v, VLAN %v", p.VM, p.VMIface, p.VLAN)
 			}
 
@@ -484,7 +556,7 @@ func (m *Merger) popUntil(done func() bool) {
 
 // live reports whether s holds back the watermark.
 func (m *Merger) live(s *mstream, now time.Time) bool {
-	return !s.final && !m.hostFinal[s.host] && now.Sub(s.lastRecv) < StallTimeout
+	return !s.idle && !s.final && !m.hostFinal[s.host] && now.Sub(s.lastRecv) < StallTimeout
 }
 
 // Watermark returns the time up to which the merger writes records.
@@ -505,13 +577,19 @@ func (m *Merger) Watermark() int64 {
 	return w
 }
 
+// gapTimeout is the time after which Tick skips a sequence gap. It is half the
+// window, so that the batches after the gap are still in the window.
+func (m *Merger) gapTimeout() time.Duration {
+	return m.cfg.Window / 2
+}
+
 // Tick writes the records up to the watermark, skips sequence gaps that are
-// older than GapTimeout, writes statistics and flushes the file.
+// older than the gap timeout, writes statistics and flushes the file.
 func (m *Merger) Tick() {
 	now := m.clock.Now()
 
 	for _, s := range m.order {
-		if !s.gapSince.IsZero() && now.Sub(s.gapSince) >= GapTimeout {
+		if !s.gapSince.IsZero() && now.Sub(s.gapSince) >= m.gapTimeout() {
 			// skip to the lowest pending batch
 			min := uint64(math.MaxUint64)
 			for seq := range s.pending {
@@ -549,7 +627,7 @@ func (m *Merger) writeStats(s *mstream, now time.Time, comment string) {
 	m.setErr(m.w.WriteStats(s.ifaceStream, pcapfile.Stats{
 		Start:     s.startTime,
 		End:       now,
-		Received:  s.last.Captured,
+		Received:  s.counters().Captured,
 		IfDrop:    st.KDrops + st.PDrops,
 		OSDrop:    st.QDrops + st.Lost,
 		Delivered: st.Packets,
@@ -607,6 +685,7 @@ func (m *Merger) Finish(hosts []string) error {
 }
 
 func (m *Merger) status(s *mstream, now time.Time) StreamStatus {
+	c := s.counters()
 	st := StreamStatus{
 		Host:    s.host,
 		Bridge:  s.bridge,
@@ -615,20 +694,19 @@ func (m *Merger) status(s *mstream, now time.Time) StreamStatus {
 		Ports:   s.last.Ports,
 		Packets: s.recv,
 		Bytes:   s.bytes,
-		KDrops:  s.last.KernelDrops + s.last.IfDrops,
-		PDrops:  s.last.PathDrops,
-		QDrops:  s.last.QueueDrops + s.last.SendDrops,
+		KDrops:  c.KernelDrops + c.IfDrops,
+		PDrops:  c.PathDrops,
+		QDrops:  c.QueueDrops + c.SendDrops,
 		Late:    s.late,
 		Dup:     s.dup,
 		Skew:    time.Duration(s.last.SkewNS),
-		HasSkew: true,
 	}
 
 	// lost: frames that the member read but the head never got. Before the
 	// final batch, frames in flight would count, so only lost batches show.
 	if s.final || m.hostFinal[s.host] {
 		got := s.recv + uint64(m.h.countStream(s.idx))
-		if sent := s.last.Captured; sent > st.QDrops+got {
+		if sent := c.Captured; sent > st.QDrops+got {
 			st.Lost = sent - st.QDrops - got
 		}
 	}
@@ -674,7 +752,11 @@ func (m *Merger) Status() ([]StreamStatus, StreamStatus) {
 
 	for _, s := range m.order {
 		st := m.status(s, now)
-		res = append(res, st)
+
+		// the records of a removed host stay in the totals
+		if !s.idle {
+			res = append(res, st)
+		}
 
 		sum.Ports += st.Ports
 		sum.Packets += st.Packets
