@@ -36,6 +36,11 @@ the mesh but with different content. When `file get` is called on such a file,
 minimega examines the timestamps of each copy of the file on the mesh; minimega
 will then transfer the file with the newest timestamp.
 
+A file is hashed once it has gone a couple of seconds without changing, so a
+large file being copied into the `filepath` directory is hashed once, when the
+copy finishes. Until then the file has no hash (the `hash` column of `file list`
+is empty).
+
 Another option for preventing this undefined behavior is to set the `-headnode`
 option when starting minimega. When all the nodes in a mesh are configured to
 use a single node as the head node, files on the head node will always be the

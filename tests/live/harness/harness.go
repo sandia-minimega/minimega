@@ -405,6 +405,25 @@ func InContainer(t testing.TB, args ...string) (string, error) {
 	return out.String(), err
 }
 
+// MinimegaCPU returns the CPU time the minimega process has used so far.
+func MinimegaCPU(t testing.TB) time.Duration {
+	t.Helper()
+	// the PID file holds minimega's PID inside the container
+	pid, err := os.ReadFile(filepath.Join(mmBase, "minimega.pid"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := InContainer(t, "cat", "/proc/"+strings.TrimSpace(string(pid))+"/stat")
+	if err != nil {
+		t.Fatalf("reading minimega's CPU time: %v: %v", err, out)
+	}
+	d, err := ProcCPU(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d
+}
+
 // Artifact returns a path for a file worth keeping, creating its directory.
 // The second return value is the same path as seen from inside minimega, for
 // commands that write files (screenshots, captures).

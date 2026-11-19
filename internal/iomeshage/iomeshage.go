@@ -73,6 +73,11 @@ var (
 func New(base string, node *meshage.Node, head string, hash bool) (*IOMeshage, error) {
 	base = filepath.Clean(base)
 
+	// hashes are keyed by absolute path, which a relative base would break
+	if abs, err := filepath.Abs(base); err == nil {
+		base = abs
+	}
+
 	log.Debug("new iomeshage node on base %v", base)
 
 	if err := os.MkdirAll(base, 0755); err != nil {

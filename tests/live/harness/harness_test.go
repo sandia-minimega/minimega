@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/gopacket/gopacket"
 	"github.com/gopacket/gopacket/layers"
@@ -192,6 +193,18 @@ func TestExecResult(t *testing.T) {
 	for _, vm := range []string{"none", "missing"} {
 		if _, err := execResult(res, vm); err == nil {
 			t.Errorf("%v: want an error", vm)
+		}
+	}
+}
+
+func TestProcCPU(t *testing.T) {
+	stat := "1234 (mini mega) S 1 1234 1234 0 -1 4194560 2526 0 0 0 150 50 0 0 20 0 9 0 5182 1270 4 18"
+	if d, err := ProcCPU(stat); err != nil || d != 2*time.Second {
+		t.Errorf("ProcCPU = %v, %v; want 2s", d, err)
+	}
+	for _, bad := range []string{"", "1234 (minimega) S 1", "1 (x) S 1 1 1 0 -1 0 0 0 0 0 a b 0 0"} {
+		if _, err := ProcCPU(bad); err == nil {
+			t.Errorf("ProcCPU(%q): want an error", bad)
 		}
 	}
 }
