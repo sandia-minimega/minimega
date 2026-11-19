@@ -68,6 +68,8 @@ Additional fields are available for KVM-based VMs:
 - tpm-socket	: path of emulated tpm socket
 - bidirectional-copy-paste : true if VNC clipboard text goes to qemu-vdagent
 - vga           : graphics card that QEMU emulates (for example, std or virtio)
+- machine       : machine type from vm config machine, or from the state
+                  file when the VM launched from a saved state
 
 Additional fields are available for container-based VMs:
 

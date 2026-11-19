@@ -583,6 +583,20 @@ cdrom. The state often does not make sense without the corresponding disk
 file and using it with an unrelated disk (or cdrom) is discouraged.
 Use 'vm save' to generate state images from running VMs.
 
+QEMU loads a state image only with the machine type that saved it. At
+launch, minimega reads that machine type from the state image. If
+'vm config machine' is empty, or is 'pc' or 'q35' for a machine type of
+that family, minimega uses the machine type of the state image. Other
+values go to QEMU with no change. If 'vm config qemu-append' sets a
+machine type, QEMU uses that type. minimega then does not use the machine
+type of the state image.
+
+If QEMU does not have the Ubuntu machine type of a state image, minimega
+uses the upstream machine type that corresponds to it, when minimega
+knows one. Then 'vm config machine' must be empty, that upstream machine
+type, or 'pc' or 'q35' for a machine type of that family. The 'machine'
+column of 'vm info' shows the machine type in use.
+
 Note: this configuration only applies to KVM-based VMs.
 `,
 		Patterns: []string{
