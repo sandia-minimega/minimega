@@ -153,6 +153,28 @@ RUN ./configure \
 RUN make -j"$(nproc)" \
   && make install DESTDIR=/out
 
+# Replace the bundled iPXE ROMs with the ROMs that Ubuntu's QEMU loads. A saved
+# VM state loads only when each ROM has the same size: 512 KiB for the EFI ROMs.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ipxe-qemu \
+  && rm -rf /var/lib/apt/lists/* \
+  && rom_dir=/out/usr/local/share/qemu \
+  && pkg_dir=/usr/lib/ipxe/qemu \
+  && printf '%-20s %10s %10s\n' ROM bundled new \
+  && for rom in "${rom_dir}"/efi-*.rom "${rom_dir}"/pxe-*.rom; do \
+       name="$(basename "${rom}")"; \
+       [ -f "${pkg_dir}/${name}" ] || { echo "ipxe-qemu has no ${name}" >&2; exit 1; }; \
+       old="$(stat -c %s "${rom}")"; \
+       cp -L "${pkg_dir}/${name}" "${rom}" || exit 1; \
+       printf '%-20s %10s %10s\n' "${name}" "${old}" "$(stat -c %s "${rom}")"; \
+     done \
+  && for name in efi-e1000.rom efi-virtio.rom; do \
+       size="$(stat -c %s "${rom_dir}/${name}")"; \
+       [ "${size}" = 524288 ] || { echo "${name} is ${size:-no} bytes, expected 524288" >&2; exit 1; }; \
+     done \
+  && dpkg-query -W ipxe-qemu > "${rom_dir}/ipxe-qemu.version" \
+  && install -D -m 0644 /usr/share/doc/ipxe-qemu/copyright /out/usr/local/share/doc/ipxe-qemu/copyright
+
 # Map each shared library that an installed program or module loads to its
 # Ubuntu package, and fail when the result differs from the reviewed list.
 RUN find /out/usr/local/bin /out/usr/local/libexec /out/usr/local/lib/qemu -type f -print0 \
