@@ -7,15 +7,43 @@ package main
 import (
 	"errors"
 	"fmt"
+	"sort"
+	"strconv"
+	"time"
 
 	"github.com/sandia-minimega/minimega/v2/internal/bridge"
 	"github.com/sandia-minimega/minimega/v2/internal/gonetflow"
+	"github.com/sandia-minimega/minimega/v2/internal/pcapfile"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
+
+// captureHeader is the header of the capture listing. path stays last because
+// some tools read it by position.
+var captureHeader = []string{
+	"bridge",
+	"type",
+	"interface",
+	"mode",
+	"compress",
+	"id",
+	"state",
+	"format",
+	"snaplen",
+	"filter",
+	"packets",
+	"bytes",
+	"kdrops",
+	"size",
+	"start",
+	"error",
+	"path",
+}
 
 type capture interface {
 	Type() string
 	Stop() error
+	// Row returns the listing row of the capture with the given ID.
+	Row(id int) []string
 }
 
 type netflowConfig struct {
@@ -25,8 +53,6 @@ type netflowConfig struct {
 }
 
 type pcapCapture struct {
-	bridge.CaptureConfig // embed
-
 	// Bridge that is doing the capture
 	Bridge string
 
@@ -71,27 +97,111 @@ type captures struct {
 // vSwitch, this has to be shared across namespaces.
 var captureNFTimeout = 10
 
+// lookupBridge for tests
+var lookupBridge = func(name string) (*bridge.Bridge, bool) {
+	return bridges.Lookup(name)
+}
+
 func (c *pcapCapture) Type() string {
 	return "pcap"
 }
 
+// Stop stops the capture. A missing bridge or capture means that the capture
+// already ended, so Stop does not create the bridge again.
 func (c *pcapCapture) Stop() error {
-	br, err := getBridge(c.Bridge)
-	if err != nil {
-		return err
+	br, ok := lookupBridge(c.Bridge)
+	if !ok {
+		return nil
 	}
 
-	return br.StopCapture(c.ID)
+	if err := br.StopCapture(c.ID); err != nil {
+		log.Debug("capture %v on %v already ended: %v", c.ID, c.Bridge, err)
+	}
+
+	return nil
+}
+
+// info returns the state of the capture from its bridge.
+func (c *pcapCapture) info() bridge.CaptureInfo {
+	if br, ok := lookupBridge(c.Bridge); ok {
+		if info, ok := br.CaptureInfo(c.ID); ok {
+			return info
+		}
+	}
+
+	return bridge.CaptureInfo{
+		Path:  c.Path,
+		State: bridge.CaptureFailed,
+		Error: fmt.Sprintf("bridge %v is gone", c.Bridge),
+	}
+}
+
+func pcapRow(id int, br, iface string, info bridge.CaptureInfo) []string {
+	var snaplen, start, packets, bytes, kdrops, size string
+
+	if info.Config.SnapLen != 0 {
+		snaplen = strconv.FormatUint(uint64(info.Config.SnapLen), 10)
+	}
+	if !info.Start.IsZero() {
+		start = info.Start.UTC().Format(time.RFC3339)
+		packets = strconv.FormatUint(info.Packets, 10)
+		bytes = strconv.FormatUint(info.Bytes, 10)
+		kdrops = strconv.FormatUint(info.KernelDrops, 10)
+		size = strconv.FormatInt(info.Size, 10)
+	}
+
+	return []string{
+		br,
+		"pcap",
+		iface,
+		"", "",
+		strconv.Itoa(id),
+		string(info.State),
+		info.Format,
+		snaplen,
+		info.Config.Filter,
+		packets,
+		bytes,
+		kdrops,
+		size,
+		start,
+		info.Error,
+		info.Path,
+	}
+}
+
+func (c *pcapVMCapture) Row(id int) []string {
+	iface := fmt.Sprintf("%v:%v", c.VM.GetName(), c.Interface)
+
+	return pcapRow(id, c.Bridge, iface, c.info())
+}
+
+func (c *pcapBridgeCapture) Row(id int) []string {
+	return pcapRow(id, c.Bridge, "", c.info())
 }
 
 func (c *netflowCapture) Type() string {
 	return "netflow"
 }
 
+func (c *netflowCapture) Row(id int) []string {
+	row := make([]string, len(captureHeader))
+
+	row[0] = c.Bridge
+	row[1] = c.Type()
+	row[3] = c.Mode.String()
+	row[4] = strconv.FormatBool(c.Compress)
+	row[5] = strconv.Itoa(id)
+	row[6] = string(bridge.CaptureRunning)
+	row[len(row)-1] = c.Path
+
+	return row
+}
+
 func (c *netflowCapture) Stop() error {
-	br, err := getBridge(c.Bridge)
-	if err != nil {
-		return err
+	br, ok := lookupBridge(c.Bridge)
+	if !ok {
+		return nil
 	}
 
 	// get the netflow object associated with this bridge
@@ -112,60 +222,87 @@ func (c *netflowCapture) Stop() error {
 	return nil
 }
 
+// Rows returns the listing rows of all captures, sorted by ID.
+func (c *captures) Rows() [][]string {
+	ids := make([]int, 0, len(c.m))
+	for id := range c.m {
+		ids = append(ids, id)
+	}
+	sort.Ints(ids)
+
+	res := [][]string{}
+	for _, id := range ids {
+		res = append(res, c.m[id].Row(id))
+	}
+
+	return res
+}
+
 // CaptureVM starts a new capture for a specified interface on a VM, writing
 // the packets to the specified file in PCAP format.
-func (c *captures) CaptureVM(vm VM, iface int, fname string) error {
+func (c *captures) CaptureVM(vm VM, iface int, fname string, config bridge.CaptureConfig) (int, error) {
 	nic, err := vm.GetNetwork(iface)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	bridge := nic.Bridge
-	tap := nic.Tap
-
-	br, err := getBridge(bridge)
-	if err != nil {
-		return err
+	if nic.VLAN == DisconnectedVLAN || nic.Bridge == "" {
+		return 0, fmt.Errorf("interface %v of %v is disconnected", iface, vm.GetName())
 	}
 
-	id, err := br.CaptureTap(tap, fname, c.CaptureConfig)
+	br, err := getBridge(nic.Bridge)
 	if err != nil {
-		return err
+		return 0, err
+	}
+
+	config.Description = fmt.Sprintf("%v interface %v, VLAN %v", vm.GetName(), iface, nic.VLAN)
+	if nic.Alias != "" {
+		config.Description = fmt.Sprintf("%v interface %v, VLAN %v (%v)", vm.GetName(), iface, nic.Alias, nic.VLAN)
+	}
+	config.Comment = fmt.Sprintf("minimega capture of VM %v in namespace %v", vm.GetName(), vm.GetNamespace())
+
+	for _, ip := range []string{nic.IP4, nic.IP6} {
+		if ip != "" {
+			config.Names = append(config.Names, pcapfile.Name{Addr: ip, Names: []string{vm.GetName()}})
+		}
+	}
+
+	id, err := br.CaptureTap(nic.Tap, fname, config)
+	if err != nil {
+		return 0, err
 	}
 
 	return c.addCapture(&pcapVMCapture{
 		pcapCapture: pcapCapture{
-			CaptureConfig: c.CaptureConfig,
-			Bridge:        bridge,
-			Path:          fname,
-			ID:            id,
+			Bridge: nic.Bridge,
+			Path:   fname,
+			ID:     id,
 		},
 		VM:        vm,
 		Interface: iface,
-	})
+	}), nil
 }
 
 // CaptureBridge starts a new capture for all the traffic on the specified
 // bridge, writing all packets to the specified filename in PCAP format.
-func (c *captures) CaptureBridge(bridge, fname string) error {
-	br, err := getBridge(bridge)
+func (c *captures) CaptureBridge(b, fname string, config bridge.CaptureConfig) (int, error) {
+	br, err := getBridge(b)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	id, err := br.Capture(fname, c.CaptureConfig)
+	id, err := br.Capture(fname, config)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	return c.addCapture(&pcapBridgeCapture{
 		pcapCapture: pcapCapture{
-			CaptureConfig: c.CaptureConfig,
-			Bridge:        bridge,
-			Path:          fname,
-			ID:            id,
+			Bridge: br.Name,
+			Path:   fname,
+			ID:     id,
 		},
-	})
+	}), nil
 }
 
 // CaptureNetflowFile starts a new netflow recorder for all the traffic on the
@@ -180,11 +317,13 @@ func (c *captures) CaptureNetflowFile(bridge, fname string) error {
 		return err
 	}
 
-	return c.addCapture(&netflowCapture{
+	c.addCapture(&netflowCapture{
 		netflowConfig: c.netflowConfig,
 		Bridge:        bridge,
 		Path:          fname,
 	})
+
+	return nil
 }
 
 // CaptureNetflowSocket starts a new netflow recorder for all the traffic on
@@ -200,18 +339,22 @@ func (c *captures) CaptureNetflowSocket(bridge, transport, host string) error {
 		return err
 	}
 
-	return c.addCapture(&netflowCapture{
+	c.addCapture(&netflowCapture{
 		netflowConfig: c.netflowConfig,
 		Bridge:        bridge,
 		Path:          fmt.Sprintf("%v:%v", transport, host),
 	})
-}
-
-// addCapture generates an ID for the capture and adds it to the map.
-func (c *captures) addCapture(v capture) error {
-	c.m[c.counter.Next()] = v
 
 	return nil
+}
+
+// addCapture generates an ID for the capture, adds it to the map and returns
+// the ID.
+func (c *captures) addCapture(v capture) int {
+	id := c.counter.Next()
+	c.m[id] = v
+
+	return id
 }
 
 // StopAll stops all captures.
@@ -221,10 +364,34 @@ func (c *captures) StopAll() error {
 	})
 }
 
+// StopType stops all captures of one type, pcap or netflow.
+func (c *captures) StopType(typ string) error {
+	return c.stop(func(v capture) bool {
+		return v.Type() == typ
+	})
+}
+
+// StopID stops the pcap capture with the given ID.
+func (c *captures) StopID(id int) error {
+	v, ok := c.m[id]
+	if !ok {
+		return fmt.Errorf("no capture with ID %v", id)
+	}
+
+	if v.Type() != "pcap" {
+		return fmt.Errorf("capture %v is not a pcap capture", id)
+	}
+
+	return c.stop(func(v2 capture) bool {
+		return v2 == v
+	})
+}
+
 // StopVM stops captures for a VM (wildcard supported for VM name). If iface
 // is non-nil, only the capture for that interface index is stopped; otherwise
-// all captures for the VM are stopped.
-func (c *captures) StopVM(s string, iface *int) error {
+// all captures for the VM are stopped. vmExists reports whether a VM name is
+// in the namespace, for the error when nothing matched.
+func (c *captures) StopVM(s string, iface *int, vmExists func(string) bool) error {
 	var found bool
 
 	err := c.stop(func(v capture) bool {
@@ -241,28 +408,45 @@ func (c *captures) StopVM(s string, iface *int) error {
 		return false
 	})
 
-	if err == nil && !found {
+	switch {
+	case err != nil || found || s == Wildcard:
+		return err
+	case !vmExists(s):
 		return vmNotFound(s)
+	case iface != nil:
+		return fmt.Errorf("no capture on interface %v of VM %v", *iface, s)
+	default:
+		return fmt.Errorf("no capture for VM %v", s)
 	}
-	return err
 }
 
 // StopBridge stops capture for bridge (wildcard supported).
 func (c *captures) StopBridge(s, typ string) error {
-	return c.stop(func(v capture) bool {
+	var found bool
+
+	err := c.stop(func(v capture) bool {
 		if v.Type() != typ {
 			return false
 		}
 
+		var r bool
+
 		switch v := v.(type) {
 		case *pcapBridgeCapture:
-			return v.Bridge == s || s == Wildcard
+			r = v.Bridge == s || s == Wildcard
 		case *netflowCapture:
-			return v.Bridge == s || s == Wildcard
+			r = v.Bridge == s || s == Wildcard
 		}
 
-		return false
+		found = found || r
+		return r
 	})
+
+	if err == nil && !found && s != Wildcard {
+		return fmt.Errorf("no %v capture on bridge %v", typ, s)
+	}
+
+	return err
 }
 
 // stop stops all captures that fn returns true for. Captures are always

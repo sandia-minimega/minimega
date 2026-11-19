@@ -430,3 +430,16 @@ captured on the node that runs the VM and can be retrieved with `file get` when
 the capture completes. Capturing traffic on a bridge (PCAP or netflow) is not
 advised -- it may contain traffic from other experiments. See `help capture`
 for more details.
+
+VM and bridge captures accept options after the file name, such as
+`snaplen=128` or `filter="tcp port 80"`. These options apply to one capture
+only, so you do not have to change the namespace settings around a capture.
+
+To capture all the traffic of a namespace on all its hosts into one file, use
+`capture pcap namespace <filename>`. Each host mirrors the edge ports of the
+namespace, that is, its VM, container and host taps, and sends the frames to
+the node that runs the command. That node merges the frames in timestamp order.
+Each frame is in the file once, also when it crosses a GRE or VXLAN tunnel.
+Keep the clocks of the hosts synchronized with chrony or PTP, because the
+order of frames from different hosts depends on the host clocks. Every mesh
+node must run minimega 3.4.0 or later. See `help capture pcap namespace`.

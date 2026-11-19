@@ -150,6 +150,8 @@ func (b *Bridge) addTap(tap, mac string, lan int, host bool) error {
 		return err
 	}
 
+	b.forgetEdgePort(tap)
+
 	b.taps[tap] = &Tap{
 		Name:   tap,
 		Bridge: b.Name,
@@ -196,6 +198,8 @@ func (b *Bridge) destroyTap(t string) error {
 	}
 
 	tap.Defunct = true
+
+	b.failTapCaptures(t)
 
 	if tap.Host {
 		// Tap is managed by OVS -- calling del-port will delete it for us.

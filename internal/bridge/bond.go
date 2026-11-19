@@ -67,6 +67,7 @@ func (b *Bridge) AddBond(name, mode, lacp string, fallback bool, interfaces map[
 		// add taps back to ovs since bond wasn't created
 		for iface, vid := range interfaces {
 			ovsAddPort(b.Name, iface, vid, false)
+			b.forgetEdgePort(iface)
 		}
 
 		return name, fmt.Errorf("add bond failed: %v", err)
@@ -85,6 +86,9 @@ func (b *Bridge) AddBond(name, mode, lacp string, fallback bool, interfaces map[
 	}
 
 	b.bonds[name] = interfaces
+	b.forgetEdgePort(name)
+	b.edgeHook()
+
 	return name, nil
 }
 
@@ -124,6 +128,7 @@ func (b *Bridge) deleteBond(name string) error {
 		if err := ovsAddPort(b.Name, iface, vlan, false); err != nil {
 			return fmt.Errorf("failed to recreate tap %v on bridge %v: %v", iface, b.Name, err)
 		}
+		b.forgetEdgePort(iface)
 
 		tap, ok := b.taps[iface]
 		if ok {
@@ -136,5 +141,7 @@ func (b *Bridge) deleteBond(name string) error {
 	}
 
 	delete(b.bonds, name)
+	b.edgeHook()
+
 	return nil
 }

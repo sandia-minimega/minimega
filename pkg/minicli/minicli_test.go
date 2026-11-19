@@ -281,3 +281,34 @@ func TestQuotes(t *testing.T) {
 		}
 	}
 }
+
+func TestEmptyArgInNestedCommand(t *testing.T) {
+	Reset()
+	Register(&Handler{
+		Patterns: []string{"echo <arg>"},
+		Call: func(c *Command, out chan<- Responses) {
+			out <- Responses{&Response{Response: c.StringArgs["arg"]}}
+		},
+	})
+
+	var got string
+
+	Register(&Handler{
+		Patterns: []string{"nest (command)"},
+		Call: func(c *Command, out chan<- Responses) {
+			got = c.Subcommand.Original
+			out <- Responses{&Response{}}
+		},
+	})
+
+	out, err := ProcessString(`nest echo ""`, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range out {
+	}
+
+	if got != `echo ""` {
+		t.Errorf("got subcommand %q, want %q", got, `echo ""`)
+	}
+}

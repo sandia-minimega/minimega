@@ -14,7 +14,7 @@ import (
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 
-	"github.com/google/gopacket/macs"
+	"github.com/gopacket/gopacket/macs"
 )
 
 var validMACPrefix [][3]byte
