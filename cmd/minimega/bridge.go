@@ -239,6 +239,38 @@ func recoverHostTaps() error {
 	return nil
 }
 
+// cleanKeep returns the mirror kinds that the clean-up at start keeps. With
+// -recover, it keeps the tap mirrors, which recoverMirrors takes back.
+func cleanKeep(recovering bool) []string {
+	if recovering {
+		return []string{bridge.MirrorKindTap}
+	}
+
+	return nil
+}
+
+// recoverMirrors takes back the tap mirrors of the recovered taps and adds
+// them to the mirrors of their namespaces. Run it after the taps are
+// recovered.
+func recoverMirrors() {
+	infos, err := bridges.RecoverMirrors()
+	if err != nil {
+		log.Warn("unable to recover tap mirrors: %v", err)
+	}
+
+	adoptMirrors(infos, GetOrCreateNamespace)
+}
+
+// adoptMirrors adds the recovered mirrors to the mirrors of the namespaces
+// that get returns.
+func adoptMirrors(infos []bridge.MirrorInfo, get func(string) *Namespace) {
+	for _, m := range infos {
+		if m.Namespace != "" {
+			get(m.Namespace).Mirrors[m.Output] = true
+		}
+	}
+}
+
 // hostTapRecord is one line of the host taps recovery file.
 type hostTapRecord struct {
 	bridge, tap, alias, namespace string
@@ -313,13 +345,15 @@ func mirrorDelete(ns *Namespace, name string) error {
 	}
 
 	if name == Wildcard || name == "" {
+		// try every mirror, so that one error does not keep the others
+		var errs []error
 		for mirror := range ns.Mirrors {
 			if err := delMirror(mirror); err != nil {
-				return err
+				errs = append(errs, fmt.Errorf("%v: %w", mirror, err))
 			}
 		}
 
-		return nil
+		return errors.Join(errs...)
 	}
 
 	return delMirror(name)

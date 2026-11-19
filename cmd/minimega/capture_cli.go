@@ -69,8 +69,10 @@ or file format for new PCAP captures in the namespace, use:
 A pcapng file also records the interface, its description, the filter, the
 snaplen, the drop counts and the known VM addresses.
 
-The snaplen must be from 14 to 262144. minimega compiles the filter to check
-it. Give an empty filter, "", to remove the filter.
+The snaplen must be from 14 to 262144. "capture pcap snaplen 0" sets the
+default (1600). Namespace captures accept a snaplen of at most 65535. minimega
+compiles the filter to check it. Give an empty filter, "", to remove the
+filter.
 
 You can give options as key=value items after the file name. The options
 override the namespace settings for one capture:
@@ -87,7 +89,8 @@ override the namespace settings for one capture:
 	vlans=<vlans>       bridge captures only: limit the mirror to these VLANs,
 	                    as a comma-separated list of aliases or IDs
 	vms=<vms>           bridge captures with ports=edge only: limit the mirror
-	                    to the taps of these VMs, as a comma-separated list
+	                    to the taps of these VMs, as a comma-separated list of
+	                    names. Each VM must be in the namespace on this host.
 	direction=<dir>     VM captures only: in, out or both (the default). in
 	                    captures the frames that the host receives on the tap,
 	                    which are the frames that the VM sends.
@@ -97,6 +100,7 @@ bridge. It does not record frames from trunks, tunnels or other ports that
 minimega did not make.
 
 Put a filter that contains spaces in quotes, for example filter="tcp port 80".
+Each option except filter= needs a value.
 
 minimega makes the directory of the file. A relative file name is relative to
 the -filepath directory. minimega refuses a file that another running capture
@@ -118,10 +122,11 @@ Examples:
 
 When run without arguments, capture prints all captures. Each capture has an
 ID and a state. The states are running, failed and full. A failed capture shows
-its error, for example when its VM is flushed. A capture of a VM that is killed
-stays running, with no new packets, until the VM starts again or you flush it.
-minimega closes the file of a failed or full capture, and keeps the capture in
-the list until you delete it.
+its error, for example when its VM is flushed. A capture of a container that
+is killed fails, because minimega removes the taps of the container. A capture
+of another VM that is killed stays running, with no new packets, until the VM
+starts again or you flush it. minimega closes the file of a failed or full
+capture, and keeps the capture in the list until you delete it.
 The list also shows the format, snaplen, filter, packets, bytes, kernel drops
 (kdrops), file size and start time of each PCAP capture. The path is always
 the last column. To stop a capture, use the delete commands:
@@ -138,7 +143,9 @@ calling "capture pcap delete vm <name>" stops all the captures for that VM. To
 stop only the capture for a single interface, specify the interface index,
 e.g. "capture pcap delete vm <name> 0" stops the capture for interface 0
 without affecting captures on other interfaces of the same VM. A delete that
-matches no capture returns an error. Capture IDs are local to each host. To
+matches no capture returns an error. Capture IDs are local to each host, and
+"capture pcap delete id" stops only a capture on the local host. To stop the
+capture of a VM on another host, use "capture pcap delete vm <name>". To
 stop all captures of all types, use "clear capture". To stop all captures of
 one type, use "clear capture pcap" or "clear capture netflow".
 
@@ -211,6 +218,9 @@ as key=value items after the file name:
 	window=<duration>       reorder window, 100ms to 10s (default 1s)
 	maxsize=<size>          stop the capture as full at this file size
 
+Each option except filter= needs a value. minimega does not check the vms=
+names: a name that matches no VM on any host captures nothing.
+
 To list the captures, use "capture pcap namespace". The list shows one summary
 row for each capture, with an empty member and bridge, then one row for each
 member host and bridge. The member column is the host of the stream; the host
@@ -219,7 +229,10 @@ running, stalled, stopping, stopped, failed, orphaned and full. kdrops are kerne
 the drops before the kernel, qdrops are drops in the queue of a host, lost are
 frames that did not arrive, and late are frames that arrived after the reorder
 window. Late frames are in the file, out of order. skew is the estimated clock
-offset of a host; keep the clocks of all hosts synchronized with chrony or PTP.
+offset of a host. minimega uses it to order the frames, but the file keeps the
+timestamps of each host. Frames that a host sends before the first
+acknowledgment from this node have no skew correction. Thus, keep the clocks
+synchronized with chrony or PTP.
 
 To stop a capture, give its ID, its file name, or all. minimega returns the
 final rows:
@@ -227,10 +240,14 @@ final rows:
 	capture pcap delete namespace 3
 	capture pcap delete namespace all
 
+When "ns del-hosts" removes a host, the capture stops on that host, and the
+list does not show its rows. The file keeps the frames that arrived from it.
+When "ns add-hosts" adds the host again, the capture starts on it again.
+
 Frames from hardware behind trunks are not captured. Every mesh node, relays
-included, must run minimega 3.4.0 or later: minimega refuses the start
-otherwise. Each capture uses one Open vSwitch mirror on each host and bridge.
-A bridge has at most 32 mirrors. See "bridge mirrors".`,
+included, must run a minimega that supports namespace captures: minimega
+refuses the start otherwise. Each capture uses one Open vSwitch mirror on
+each host and bridge. A bridge has at most 32 mirrors. See "bridge mirrors".`,
 		Patterns: []string{
 			"capture <pcap,> namespace",
 			"capture <pcap,> namespace <filename> [option]...",
@@ -269,8 +286,10 @@ func cliCaptureConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 			if err != nil {
 				return fmt.Errorf("invalid snaplen %q", v)
 			}
-			if err := bridge.ValidateSnapLen(uint32(i)); err != nil {
-				return err
+			if i != 0 {
+				if err := bridge.ValidateSnapLen(uint32(i)); err != nil {
+					return err
+				}
 			}
 
 			ns.captures.SnapLen = uint32(i)
@@ -438,6 +457,10 @@ func cliCapturePcap(ns *Namespace, c *minicli.Command, resp *minicli.Response) e
 
 	config, err := parseCaptureOptions(captureKindBridge, ns.Name, ns.captures.CaptureConfig, c.ListArgs["option"])
 	if err != nil {
+		return err
+	}
+
+	if err := checkCaptureVMs(ns, config.VMs); err != nil {
 		return err
 	}
 

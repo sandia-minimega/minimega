@@ -112,9 +112,10 @@ func (b *Bridge) edgePorts(s EdgeSelector) []string {
 }
 
 // ovsAddEdgeMirror creates a mirror on bridge that sends the frames that the
-// bridge receives from ports to dst. Assumes bridgeLock is held.
-func ovsAddEdgeMirror(bridge, dst string, ports []string, vlans []int, tags MirrorTags) error {
-	args := []string{"--", "--id=@out", "get", "Port", dst}
+// bridge receives from ports to dst. When port is set, its ovs-vsctl commands,
+// which create dst, run in the same transaction. Assumes bridgeLock is held.
+func ovsAddEdgeMirror(bridge, dst string, ports []string, vlans []int, tags MirrorTags, port []string) error {
+	args := append(append([]string{}, port...), "--", "--id=@out", "get", "Port", dst)
 
 	var refs []string
 	for i, p := range ports {
@@ -162,8 +163,9 @@ func ovsMirrorPort(mirror, port string, add bool) error {
 }
 
 // createEdgeMirror creates the edge mirror for the capture tap dst and starts
-// its reconcile loop. Assumes bridgeLock is held.
-func (b *Bridge) createEdgeMirror(dst string, sel EdgeSelector, tags MirrorTags) error {
+// its reconcile loop. port is as for ovsAddEdgeMirror. Assumes bridgeLock is
+// held.
+func (b *Bridge) createEdgeMirror(dst string, sel EdgeSelector, tags MirrorTags, port []string) error {
 	if b.mirrors[dst] {
 		return fmt.Errorf("destination tap is already a mirror")
 	}
@@ -174,7 +176,7 @@ func (b *Bridge) createEdgeMirror(dst string, sel EdgeSelector, tags MirrorTags)
 
 	ports := b.edgePorts(sel)
 
-	if err := ovsAddEdgeMirror(b.Name, dst, ports, sel.VLANs, tags); err != nil {
+	if err := ovsAddEdgeMirror(b.Name, dst, ports, sel.VLANs, tags, port); err != nil {
 		return err
 	}
 
@@ -191,7 +193,7 @@ func (b *Bridge) createEdgeMirror(dst string, sel EdgeSelector, tags MirrorTags)
 	b.mirrors[dst] = true
 	b.edgeCaptures[dst] = ec
 
-	go b.reconcileLoop(ec)
+	go b.reconcileLoop(ec, reconcileInterval)
 
 	return nil
 }
@@ -252,8 +254,10 @@ func (b *Bridge) reconcile(ec *edgeCapture) {
 	}
 }
 
-func (b *Bridge) reconcileLoop(ec *edgeCapture) {
-	t := time.NewTicker(reconcileInterval)
+// reconcileLoop reconciles ec every interval until ec.done is closed or the
+// bridge is destroyed.
+func (b *Bridge) reconcileLoop(ec *edgeCapture, interval time.Duration) {
+	t := time.NewTicker(interval)
 	defer t.Stop()
 
 	for {
@@ -264,23 +268,19 @@ func (b *Bridge) reconcileLoop(ec *edgeCapture) {
 		}
 
 		bridgeLock.Lock()
-		if !b.destroyed() {
-			select {
-			case <-ec.done:
-			default:
-				b.reconcile(ec)
-			}
+		if b.destroyed() {
+			// destroy can keep an edge mirror that Open vSwitch did not delete
+			bridgeLock.Unlock()
+			return
+		}
+
+		select {
+		case <-ec.done:
+		default:
+			b.reconcile(ec)
 		}
 		bridgeLock.Unlock()
 	}
-}
-
-// EdgePorts returns the edge ports that s selects on the bridge.
-func (b *Bridge) EdgePorts(s EdgeSelector) []string {
-	bridgeLock.Lock()
-	defer bridgeLock.Unlock()
-
-	return b.edgePorts(s)
 }
 
 // EdgeTaps returns copies of the taps that s selects, bond members included,

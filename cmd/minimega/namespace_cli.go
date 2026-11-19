@@ -70,6 +70,9 @@ Display or modify the active namespace.
 - save      : Save all supported VMs in the namespace or print save progress
 - run       : run a command on all nodes in the namespace
 
+add-hosts starts the running namespace captures on the new hosts. del-hosts
+stops them on the removed hosts. See "help capture pcap namespace".
+
 Note: namespace save records Android VM configuration so Android VMs can be
 relaunched, but it does not capture Android Emulator runtime state, AVD data
 changes, guest IP addresses, guest policy routing, or guest firewall state.
@@ -297,8 +300,10 @@ func cliNamespaceDelHost(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 	ns.configLock.Lock()
 	defer ns.configLock.Unlock()
 
+	var removed []string
 	for _, host := range hosts {
 		if host == Wildcard {
+			removed = append(removed, ns.hostSlice()...)
 			ns.Hosts = map[string]bool{}
 			break
 		}
@@ -309,8 +314,10 @@ func cliNamespaceDelHost(ns *Namespace, c *minicli.Command, resp *minicli.Respon
 		}
 
 		delete(ns.Hosts, host)
+		removed = append(removed, host)
 	}
 
+	nsCaptureDelHosts(ns.Name, removed)
 	return nil
 }
 

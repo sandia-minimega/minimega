@@ -32,11 +32,17 @@ var captureOptionKinds = map[string][]string{
 	"vms":       {captureKindBridge},
 }
 
+// nsCaptureOptionKeys lists the options of namespace captures that
+// captureOptionKinds does not have.
+var nsCaptureOptionKeys = map[string]bool{"bridges": true, "attribute": true, "names": true, "window": true}
+
 var errFilenameOption = errors.New("give the file name before the options")
 
-// checkCaptureFilename refuses a file name that looks like an option.
+// checkCaptureFilename refuses a file name that starts with a known option
+// key and "=".
 func checkCaptureFilename(fname string) error {
-	if strings.Contains(fname, "=") {
+	k, _, ok := strings.Cut(fname, "=")
+	if _, known := captureOptionKinds[k]; ok && (known || nsCaptureOptionKeys[k]) {
 		return errFilenameOption
 	}
 
@@ -69,6 +75,10 @@ func splitCaptureOptions(kind string, opts []string) (map[string]string, error) 
 
 		if _, dup := res[k]; dup {
 			return nil, fmt.Errorf("option %v is given more than once", k)
+		}
+
+		if v == "" && k != "filter" {
+			return nil, fmt.Errorf("option %v needs a value", k)
 		}
 
 		res[k] = v
@@ -164,12 +174,39 @@ func parseCaptureOptions(kind, namespace string, base bridge.CaptureConfig, opts
 	}
 
 	if v, ok := m["vms"]; ok {
-		for _, vm := range strings.Split(v, ",") {
-			if vm != "" {
-				c.VMs = append(c.VMs, vm)
-			}
+		if c.VMs, err = splitCaptureNames("vms", v); err != nil {
+			return c, err
 		}
 	}
 
 	return c, c.Validate()
+}
+
+// splitCaptureNames splits the comma-separated names of option key and
+// refuses an empty list.
+func splitCaptureNames(key, s string) ([]string, error) {
+	var res []string
+
+	for _, v := range strings.Split(s, ",") {
+		if v != "" {
+			res = append(res, v)
+		}
+	}
+
+	if len(res) == 0 {
+		return nil, fmt.Errorf("%v= needs one or more names", key)
+	}
+
+	return res, nil
+}
+
+// checkCaptureVMs checks that each name in vms is the name of a VM in ns.
+func checkCaptureVMs(ns *Namespace, vms []string) error {
+	for _, name := range vms {
+		if vm := ns.FindVM(name); vm == nil || vm.GetName() != name {
+			return fmt.Errorf("unknown VM %v in namespace %v", name, ns.Name)
+		}
+	}
+
+	return nil
 }

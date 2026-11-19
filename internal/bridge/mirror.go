@@ -22,11 +22,12 @@ func (b *Bridge) CreateMirror(src, dst, namespace string) error {
 }
 
 func (b *Bridge) createMirror(src, dst string, tags MirrorTags) error {
-	return b.createMirrorVLANs(src, dst, nil, tags)
+	return b.createMirrorVLANs(src, dst, nil, tags, nil)
 }
 
 // createMirrorVLANs is createMirror, limited to vlans when it is not empty.
-func (b *Bridge) createMirrorVLANs(src, dst string, vlans []int, tags MirrorTags) error {
+// port is as for ovsAddMirror.
+func (b *Bridge) createMirrorVLANs(src, dst string, vlans []int, tags MirrorTags, port []string) error {
 	log.Info("adding mirror on bridge: %v:%v to %v", b.Name, src, dst)
 	if src == dst {
 		return errors.New("cannot mirror tap to itself")
@@ -37,8 +38,8 @@ func (b *Bridge) createMirrorVLANs(src, dst string, vlans []int, tags MirrorTags
 		return errors.New("source tap is not on bridge")
 	}
 
-	// check destination tap exists
-	if _, ok := b.taps[dst]; !ok {
+	// check destination tap exists, unless port creates it
+	if _, ok := b.taps[dst]; !ok && port == nil {
 		return errors.New("destination tap is not on bridge")
 	}
 
@@ -51,7 +52,7 @@ func (b *Bridge) createMirrorVLANs(src, dst string, vlans []int, tags MirrorTags
 		return err
 	}
 
-	if err := ovsAddMirror(b.Name, src, dst, vlans, tags); err != nil {
+	if err := ovsAddMirror(b.Name, src, dst, vlans, tags, port); err != nil {
 		return err
 	}
 
@@ -74,12 +75,11 @@ func (b *Bridge) destroyMirror(tap string) error {
 		return fmt.Errorf("tap is not a mirror on bridge %v: %v", b.Name, tap)
 	}
 
-	b.forgetEdgeMirror(tap)
-
 	if err := ovsDelMirror(b.Name, tap); err != nil {
 		return err
 	}
 
+	b.forgetEdgeMirror(tap)
 	delete(b.mirrors, tap)
 	return nil
 }

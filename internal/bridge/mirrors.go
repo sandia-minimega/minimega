@@ -8,10 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
@@ -30,12 +33,79 @@ const (
 )
 
 // The external_ids keys that minimega sets on its mirrors and capture ports.
+// The boot ID, PID namespace, PID and start time identify the minimega
+// process that made a row.
 const (
 	tagNamespace = "minimega-namespace"
 	tagKind      = "minimega-kind"
+	tagBoot      = "minimega-boot-id"
+	tagPIDNS     = "minimega-pid-ns"
 	tagPID       = "minimega-pid"
+	tagStart     = "minimega-start-time"
 	tagCapture   = "minimega-capture"
 )
+
+// owner identifies a process on a host.
+type owner struct {
+	boot  string // boot ID of the kernel
+	pidNS string // inode of the PID namespace
+	pid   int
+	start string // start time in clock ticks after boot
+}
+
+// selfOwner returns the owner of this process.
+var selfOwner = sync.OnceValues(func() (owner, error) {
+	boot, err := os.ReadFile("/proc/sys/kernel/random/boot_id")
+	if err != nil {
+		return owner{}, err
+	}
+
+	// the link is "pid:[<inode>]"
+	link, err := os.Readlink("/proc/self/ns/pid")
+	if err != nil {
+		return owner{}, err
+	}
+	pidNS := strings.TrimSuffix(strings.TrimPrefix(link, "pid:["), "]")
+	if _, err := strconv.ParseUint(pidNS, 10, 64); err != nil {
+		return owner{}, fmt.Errorf("unexpected PID namespace %q", link)
+	}
+
+	pid := os.Getpid()
+	start, err := procStart(pid)
+	if err != nil {
+		return owner{}, err
+	}
+
+	return owner{strings.TrimSpace(string(boot)), pidNS, pid, start}, nil
+})
+
+// procStat reads /proc/<pid>/stat. Tests replace it.
+var procStat = func(pid int) ([]byte, error) {
+	return os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+}
+
+// procKill sends signal 0 to process pid. Tests replace it.
+var procKill = func(pid int) error {
+	return syscall.Kill(pid, 0)
+}
+
+// procStart returns the start time of process pid, in clock ticks after
+// boot, from /proc/<pid>/stat.
+func procStart(pid int) (string, error) {
+	data, err := procStat(pid)
+	if err != nil {
+		return "", err
+	}
+
+	// the fields after the command name start with field 3; starttime is 22
+	s := string(data)
+	fields := strings.Fields(s[strings.LastIndexByte(s, ')')+1:])
+	if len(fields) < 20 {
+		return "", fmt.Errorf("unexpected /proc/%d/stat", pid)
+	}
+
+	return fields[19], nil
+}
 
 // MirrorTags say who owns a mirror.
 type MirrorTags struct {
@@ -45,11 +115,21 @@ type MirrorTags struct {
 }
 
 // args returns the external_ids column values for an ovs-vsctl create or set.
+// When this process is unknown, it leaves out the owner, and CleanStaleMirrors
+// returns the error.
 func (t MirrorTags) args() []string {
 	res := []string{
 		fmt.Sprintf("external_ids:%v=%q", tagNamespace, t.Namespace),
 		fmt.Sprintf("external_ids:%v=%q", tagKind, t.Kind),
-		fmt.Sprintf("external_ids:%v=%q", tagPID, strconv.Itoa(os.Getpid())),
+	}
+
+	if o, err := selfOwner(); err == nil {
+		res = append(res,
+			fmt.Sprintf("external_ids:%v=%q", tagBoot, o.boot),
+			fmt.Sprintf("external_ids:%v=%q", tagPIDNS, o.pidNS),
+			fmt.Sprintf("external_ids:%v=%q", tagPID, strconv.Itoa(o.pid)),
+			fmt.Sprintf("external_ids:%v=%q", tagStart, o.start),
+		)
 	}
 
 	if t.Capture != "" {
@@ -272,45 +352,53 @@ func checkMirrorBudget(bridge string) error {
 	return nil
 }
 
-// tagCapturePort tags a capture output port, so that a later minimega can
-// remove it after a crash.
-func tagCapturePort(tap string, tags MirrorTags) error {
-	args := append([]string{"set", "Port", tap}, tags.args()...)
-
-	_, err := ovsCmdWrapper(args)
-	return err
-}
-
-// pidAlive reports whether a process with pid runs on this host.
-func pidAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	if pid == os.Getpid() {
-		return true
-	}
-
-	err := syscall.Kill(pid, 0)
-	return err == nil || errors.Is(err, syscall.EPERM)
-}
-
 // stale reports whether external_ids belong to a minimega process that no
-// longer runs.
-func stale(ids map[string]string) bool {
-	v, ok := ids[tagPID]
+// longer runs: a process of an earlier boot, or a process of the PID
+// namespace of self that is gone or has another start time. A process of
+// another PID namespace, such as another container, cannot be checked, so its
+// rows are never stale. Rows without the boot ID are not checked either, and
+// a process that this process cannot read or see, for example with hidepid,
+// is live while signal 0 to its PID does not fail with ESRCH.
+func stale(ids map[string]string, self owner) bool {
+	boot, ok := ids[tagBoot]
 	if !ok {
 		return false
 	}
+	if boot != self.boot {
+		return true
+	}
+	if ids[tagPIDNS] != self.pidNS {
+		return false
+	}
 
-	pid, err := strconv.Atoi(v)
-	return err != nil || !pidAlive(pid)
+	pid, err := strconv.Atoi(ids[tagPID])
+	if err != nil || pid <= 0 {
+		return true
+	}
+
+	start, err := procStart(pid)
+	if errors.Is(err, fs.ErrNotExist) {
+		// hidepid=2 hides the live processes of other users
+		return errors.Is(procKill(pid), syscall.ESRCH)
+	}
+	if err != nil {
+		return errors.Is(err, syscall.ESRCH)
+	}
+
+	return start != ids[tagStart]
 }
 
 // CleanStaleMirrors removes the mirrors and capture ports that a minimega
-// process made before it crashed. Run it at start and in nuke.
-func CleanStaleMirrors() error {
+// process made before it crashed, except the mirrors of the kinds in keep.
+// Run it at start and in nuke.
+func CleanStaleMirrors(keep ...string) error {
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
+
+	self, err := selfOwner()
+	if err != nil {
+		return fmt.Errorf("unable to identify this process: %v", err)
+	}
 
 	brs, err := ovsList("Bridge", "name", "mirrors", "ports")
 	if err != nil {
@@ -329,14 +417,19 @@ func CleanStaleMirrors() error {
 
 	staleMirrors := map[string]string{}
 	for _, m := range mirrors {
-		if stale(ovsMap(m["external_ids"])) {
+		ids := ovsMap(m["external_ids"])
+		if slices.Contains(keep, ids[tagKind]) {
+			continue
+		}
+
+		if stale(ids, self) {
 			staleMirrors[ovsString(m["_uuid"])] = ovsString(m["name"])
 		}
 	}
 
 	stalePorts := map[string]string{}
 	for _, p := range ports {
-		if stale(ovsMap(p["external_ids"])) {
+		if stale(ovsMap(p["external_ids"]), self) {
 			stalePorts[ovsString(p["_uuid"])] = ovsString(p["name"])
 		}
 	}
@@ -366,4 +459,86 @@ func CleanStaleMirrors() error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// RecoverMirrors takes back the tap mirrors that a minimega process made
+// before it crashed, after -recover recovered the taps. A stale tap mirror
+// to a recovered tap gets the owner tags of this process and is returned. A
+// stale tap mirror to another tap is removed.
+func (b Bridges) RecoverMirrors() ([]MirrorInfo, error) {
+	bridgeLock.Lock()
+	defer bridgeLock.Unlock()
+
+	self, err := selfOwner()
+	if err != nil {
+		return nil, fmt.Errorf("unable to identify this process: %v", err)
+	}
+
+	brs, err := ovsList("Bridge", "name", "mirrors")
+	if err != nil {
+		return nil, err
+	}
+
+	mirrors, err := ovsList("Mirror", "_uuid", "name", "output_port", "external_ids")
+	if err != nil {
+		return nil, err
+	}
+
+	ports, err := ovsList("Port", "_uuid", "name")
+	if err != nil {
+		return nil, err
+	}
+
+	portNames := map[string]string{}
+	for _, p := range ports {
+		portNames[ovsString(p["_uuid"])] = ovsString(p["name"])
+	}
+
+	byUUID := map[string]map[string]json.RawMessage{}
+	for _, m := range mirrors {
+		byUUID[ovsString(m["_uuid"])] = m
+	}
+
+	var res []MirrorInfo
+	var errs []error
+
+	for _, row := range brs {
+		name := ovsString(row["name"])
+		br := b.bridges[name]
+
+		for _, u := range ovsAtoms(row["mirrors"]) {
+			m, ok := byUUID[u]
+			if !ok {
+				continue
+			}
+
+			ids := ovsMap(m["external_ids"])
+			if ids[tagKind] != MirrorKindTap || !stale(ids, self) {
+				continue
+			}
+
+			mirror := ovsString(m["name"])
+			out := portNames[ovsString(m["output_port"])]
+
+			if br != nil && br.taps[out] != nil && !br.taps[out].Defunct && !br.mirrors[out] {
+				tags := MirrorTags{Namespace: ids[tagNamespace], Kind: MirrorKindTap}
+				if _, err := ovsCmdWrapper(append([]string{"set", "Mirror", u}, tags.args()...)); err != nil {
+					errs = append(errs, err)
+					continue
+				}
+
+				log.Info("recovered mirror %v on %v", mirror, name)
+				br.mirrors[out] = true
+				res = append(res, MirrorInfo{Bridge: name, Mirror: mirror, Output: out, Namespace: tags.Namespace, Kind: MirrorKindTap})
+				continue
+			}
+
+			log.Info("removing stale mirror %v on %v", mirror, name)
+			if _, err := ovsCmdWrapper([]string{"remove", "Bridge", name, "mirrors", u}); err != nil {
+				errs = append(errs, err)
+			}
+		}
+	}
+
+	return res, errors.Join(errs...)
 }

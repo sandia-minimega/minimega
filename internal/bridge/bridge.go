@@ -37,6 +37,9 @@ type Bridge struct {
 	// captures records the pcap captures on this bridge by ID
 	captures map[int]*capture
 
+	// stopping records the captures that StopCapture stops, by ID
+	stopping map[int]*capture
+
 	// edgeCaptures records the edge mirrors by output tap
 	edgeCaptures map[string]*edgeCapture
 
@@ -124,9 +127,7 @@ func (b *Bridge) destroy() error {
 	}
 
 	// stop the captures before their taps go away
-	for _, c := range b.captures {
-		b.stopCaptureLocked(c)
-	}
+	b.stopCapturesLocked()
 
 	// mirror rows stay in OVSDB on a pre-existing bridge unless we remove them
 	for m := range b.mirrors {

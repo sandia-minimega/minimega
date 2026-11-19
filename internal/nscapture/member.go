@@ -46,6 +46,7 @@ type StreamConfig struct {
 	Namespace, Head, Host, Bridge string
 	ID                            int
 	Token                         uint64
+	Gen                           uint64
 	Format                        uint8
 }
 
@@ -285,6 +286,23 @@ func (s *Stream) Close() error {
 	return s.drainErr
 }
 
+// Discard stops the sender of a stream without a final batch. Use it only for
+// a stream that sent no batch, for example when its capture did not start.
+func (s *Stream) Discard() {
+	s.mu.Lock()
+	if s.closed {
+		s.mu.Unlock()
+		return
+	}
+
+	s.closed = true
+	s.cond.Broadcast()
+	s.mu.Unlock()
+
+	<-s.done
+	close(s.drained)
+}
+
 // FinalSeq returns the Seq of the final batch, after Close.
 func (s *Stream) FinalSeq() uint64 {
 	s.mu.Lock()
@@ -316,6 +334,7 @@ func (s *Stream) enqueueLocked(final bool) {
 		Token:         s.cfg.Token,
 		Host:          s.cfg.Host,
 		Bridge:        s.cfg.Bridge,
+		Gen:           s.cfg.Gen,
 		Seq:           s.seq,
 		Through:       s.throughLocked(),
 		Packets:       s.curPackets,
@@ -377,7 +396,7 @@ func (s *Stream) Ack(c Control) {
 	if t1, ok := s.sentAt[c.Seq]; ok && c.HeadRecv != 0 && c.HeadSend != 0 {
 		t4 := now.UnixNano()
 		rtt := (t4 - t1) - (c.HeadSend - c.HeadRecv)
-		if s.bestRTT == 0 || rtt <= s.bestRTT || now.Sub(s.bestRTTAt) > 30*time.Second {
+		if rtt >= 0 && (s.bestRTT == 0 || rtt <= s.bestRTT || now.Sub(s.bestRTTAt) > 30*time.Second) {
 			s.bestRTT, s.bestRTTAt = rtt, now
 			s.skew = ((c.HeadRecv - t1) + (c.HeadSend - t4)) / 2
 		}

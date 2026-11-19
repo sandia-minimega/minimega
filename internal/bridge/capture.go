@@ -21,8 +21,8 @@ import (
 var openCaptureSource = openSource
 
 // disableIPv6 stops the host from sending IPv6 router solicitations and DAD
-// frames on a capture tap.
-func disableIPv6(tap string) error {
+// frames on a capture tap. Tests replace it.
+var disableIPv6 = func(tap string) error {
 	p := filepath.Join("/proc/sys/net/ipv6/conf", tap, "disable_ipv6")
 
 	err := os.WriteFile(p, []byte("1"), 0644)
@@ -34,9 +34,12 @@ func disableIPv6(tap string) error {
 	return err
 }
 
-// createCaptureTap adds a host tap with no VLAN tag that only receives mirrored
-// frames. Assumes bridgeLock is held.
-func (b *Bridge) createCaptureTap(tap string, tags MirrorTags) error {
+// createCaptureTap adds a host tap with no VLAN tag and tags. mirror creates
+// the mirror to tap with the given ovs-vsctl commands, which add tap, in the
+// same transaction: the output port of a mirror only receives mirrored
+// frames, so tap never receives the flooded frames of the bridge. Assumes
+// bridgeLock is held.
+func (b *Bridge) createCaptureTap(tap string, tags MirrorTags, mirror func(port []string) error) error {
 	log.Info("creating capture tap on bridge: %v %v", b.Name, tap)
 
 	b.reapTaps()
@@ -45,32 +48,52 @@ func (b *Bridge) createCaptureTap(tap string, tags MirrorTags) error {
 		return fmt.Errorf("tap already on bridge")
 	}
 
-	if err := b.addTap(tap, "", 0, true); err != nil {
+	port := append([]string{"add-port", b.Name, tap}, tags.args()...)
+	port = append(port, "--", "set", "Interface", tap, "type=internal")
+
+	if err := mirror(port); err != nil {
 		return err
 	}
 
-	err := tagCapturePort(tap, tags)
-	if err == nil {
-		err = disableIPv6(tap)
+	b.forgetEdgePort(tap)
+	b.taps[tap] = &Tap{
+		Name:   tap,
+		Bridge: b.Name,
+		Host:   true,
 	}
+
+	err := disableIPv6(tap)
 	if err == nil {
 		err = upInterface(tap, true)
 	}
 
 	if err != nil {
-		if err := b.destroyTap(tap); err != nil {
-			log.Error("zombie tap -- %v %v", tap, err)
-		}
+		b.removeCaptureTap(tap)
 		return err
 	}
 
 	return nil
 }
 
-// startCapture opens tap, creates the file and starts the engine. When mirror
-// is set, it creates the mirror after it opens tap so that the first frames
-// are not lost. Assumes bridgeLock is held.
-func (b *Bridge) startCapture(tap string, mirror func() error, fname string, c CaptureConfig) (int, error) {
+// removeCaptureTap removes a capture tap and its mirror after a failed start.
+// Assumes bridgeLock is held.
+func (b *Bridge) removeCaptureTap(tap string) {
+	if b.mirrors[tap] {
+		if err := b.destroyMirror(tap); err != nil {
+			log.Error("unable to remove mirror of %v: %v", tap, err)
+		}
+	}
+
+	if err := b.destroyTap(tap); err != nil {
+		log.Error("zombie tap -- %v %v", tap, err)
+	}
+
+	b.reapTaps()
+}
+
+// startCapture opens tap, creates the file and starts the engine. mirror is
+// set when tap is a capture tap with a mirror. Assumes bridgeLock is held.
+func (b *Bridge) startCapture(tap string, mirror bool, fname string, c CaptureConfig) (int, error) {
 	return b.startCaptureSink(tap, mirror, c, func() (*fileSink, error) {
 		return createFileSink(fname, tap, c)
 	})
@@ -78,7 +101,7 @@ func (b *Bridge) startCapture(tap string, mirror func() error, fname string, c C
 
 // startCaptureSink is startCapture with a sink from newSink. Assumes
 // bridgeLock is held.
-func (b *Bridge) startCaptureSink(tap string, mirror func() error, c CaptureConfig, newSink func() (*fileSink, error)) (int, error) {
+func (b *Bridge) startCaptureSink(tap string, mirror bool, c CaptureConfig, newSink func() (*fileSink, error)) (int, error) {
 	if err := c.Validate(); err != nil {
 		return 0, err
 	}
@@ -98,26 +121,18 @@ func (b *Bridge) startCaptureSink(tap string, mirror func() error, c CaptureConf
 		return 0, err
 	}
 
-	if mirror != nil {
-		if err := mirror(); err != nil {
-			src.Close()
-			sink.close()
-			return 0, err
-		}
-	}
-
 	id := *b.captureID
 	*b.captureID++
 
 	e := newEngine(src, sink, c.MaxSize)
-	if mirror == nil {
+	if !mirror {
 		e.recOpts.Inbound = c.Direction == DirectionIn
 		e.recOpts.Outbound = c.Direction == DirectionOut
 	}
 	ca := &capture{
 		id:     id,
 		tap:    tap,
-		mirror: mirror != nil,
+		mirror: mirror,
 		config: c,
 		start:  time.Now(),
 		engine: e,
@@ -173,20 +188,28 @@ func (b *Bridge) captureEnded(c *capture) {
 	b.reapTaps()
 }
 
-// stopCaptureLocked stops a capture and waits for it. Assumes bridgeLock is
-// held, so it is only for Bridge.destroy.
-func (b *Bridge) stopCaptureLocked(c *capture) {
-	if c.mirror && b.mirrors[c.tap] {
-		if err := b.destroyMirror(c.tap); err != nil {
-			log.Error("stop capture %v %v: %v", c.tap, c.id, err)
-		}
+// stopCapturesLocked stops all the captures and waits for them, also the
+// captures that StopCapture stops. It tells all of them to stop before it
+// waits, so that they drain at the same time. Assumes bridgeLock is held, so
+// it is only for Bridge.destroy.
+func (b *Bridge) stopCapturesLocked() {
+	for _, c := range b.captures {
+		c.engine.fail("bridge destroyed")
 	}
 
-	c.engine.fail("bridge destroyed")
-	<-c.engine.done
+	for id, c := range b.captures {
+		<-c.engine.done
 
-	b.release(c)
-	delete(b.captures, c.id)
+		b.release(c)
+		delete(b.captures, id)
+	}
+
+	// StopCapture does not release them after destroy
+	for _, c := range b.stopping {
+		<-c.engine.done
+
+		b.release(c)
+	}
 }
 
 // Capture traffic from a bridge to fname. Only the first config is used, if
@@ -205,25 +228,21 @@ func (b *Bridge) Capture(fname string, config ...CaptureConfig) (int, error) {
 	c.Direction = DirectionIn
 
 	tap := <-b.tapChan
-	if err := b.createCaptureTap(tap, MirrorTags{Namespace: c.Namespace, Kind: MirrorKindBridge}); err != nil {
+	tags := MirrorTags{Namespace: c.Namespace, Kind: MirrorKindBridge}
+	mirror := func(port []string) error {
+		if c.Ports == PortsEdge {
+			return b.createEdgeMirror(tap, EdgeSelector{Namespace: c.Namespace, VLANs: c.VLANs, VMs: c.VMs}, tags, port)
+		}
+		return b.createMirrorVLANs("", tap, c.VLANs, tags, port)
+	}
+
+	if err := b.createCaptureTap(tap, tags, mirror); err != nil {
 		return 0, err
 	}
 
-	tags := MirrorTags{Namespace: c.Namespace, Kind: MirrorKindBridge}
-	mirror := func() error {
-		if c.Ports == PortsEdge {
-			return b.createEdgeMirror(tap, EdgeSelector{Namespace: c.Namespace, VLANs: c.VLANs, VMs: c.VMs}, tags)
-		}
-		return b.createMirrorVLANs("", tap, c.VLANs, tags)
-	}
-
-	id, err := b.startCapture(tap, mirror, fname, c)
+	id, err := b.startCapture(tap, true, fname, c)
 	if err != nil {
-		if err := b.destroyTap(tap); err != nil {
-			log.Error("zombie tap -- %v %v", tap, err)
-		}
-		b.reapTaps()
-
+		b.removeCaptureTap(tap)
 		return 0, err
 	}
 
@@ -246,7 +265,7 @@ func (b *Bridge) CaptureTap(tap, fname string, config ...CaptureConfig) (int, er
 		c = config[0]
 	}
 
-	return b.startCapture(tap, nil, fname, c)
+	return b.startCapture(tap, false, fname, c)
 }
 
 // StopCapture stops a capture and waits until its file is closed. It holds
@@ -262,13 +281,13 @@ func (b *Bridge) StopCapture(id int) error {
 
 	delete(b.captures, id)
 
-	// remove the mirror first, so that no new frames arrive
-	if c.mirror && !c.released && b.mirrors[c.tap] {
-		if err := b.destroyMirror(c.tap); err != nil {
-			log.Error("stop capture %v %v: %v", c.tap, id, err)
-		}
+	if b.stopping == nil {
+		b.stopping = map[int]*capture{}
 	}
+	b.stopping[id] = c
 
+	// keep the mirror until the engine ends: without it, the capture tap
+	// gets the flooded frames of all VLANs
 	bridgeLock.Unlock()
 
 	log.Info("stopping capture: %v %v", c.tap, id)
@@ -276,6 +295,8 @@ func (b *Bridge) StopCapture(id int) error {
 
 	bridgeLock.Lock()
 	defer bridgeLock.Unlock()
+
+	delete(b.stopping, id)
 
 	if !b.destroyed() {
 		b.release(c)
@@ -342,23 +363,19 @@ func (b *Bridge) StartEdgeStream(sel EdgeSelector, c CaptureConfig, w pcapfile.W
 	c.Format = w.Format()
 
 	tap := <-b.tapChan
-	if err := b.createCaptureTap(tap, tags); err != nil {
+	mirror := func(port []string) error {
+		return b.createEdgeMirror(tap, sel, tags, port)
+	}
+
+	if err := b.createCaptureTap(tap, tags, mirror); err != nil {
 		return 0, err
 	}
 
-	mirror := func() error {
-		return b.createEdgeMirror(tap, sel, tags)
-	}
-
-	id, err := b.startCaptureSink(tap, mirror, c, func() (*fileSink, error) {
+	id, err := b.startCaptureSink(tap, true, c, func() (*fileSink, error) {
 		return &fileSink{w: w, path: "mesh:" + tags.Capture}, nil
 	})
 	if err != nil {
-		if err := b.destroyTap(tap); err != nil {
-			log.Error("zombie tap -- %v %v", tap, err)
-		}
-		b.reapTaps()
-
+		b.removeCaptureTap(tap)
 		return 0, err
 	}
 

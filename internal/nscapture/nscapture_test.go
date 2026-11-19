@@ -6,7 +6,6 @@ package nscapture
 
 import (
 	"bytes"
-	"encoding/gob"
 	"errors"
 	"io"
 	"net"
@@ -82,33 +81,6 @@ func readTimes(t *testing.T, data []byte) []int64 {
 			t.Fatal(err)
 		}
 		res = append(res, ci.Timestamp.UnixNano())
-	}
-}
-
-func TestWireGob(t *testing.T) {
-	gob.Register(Batch{})
-	gob.Register(Control{})
-
-	a, b := net.Pipe()
-	defer a.Close()
-	defer b.Close()
-
-	in := Batch{Namespace: "exp", Head: "head", ID: 3, Token: 9, Host: "c1", Bridge: "br", Seq: 4,
-		Data: []byte{1, 2, 3}, PortTable: []PortInfo{{Index: 1, Port: "mega_tap1", Addrs: []string{"10.0.0.1"}}}}
-
-	go func() {
-		var v interface{} = in
-		gob.NewEncoder(a).Encode(&v)
-	}()
-
-	var out interface{}
-	if err := gob.NewDecoder(b).Decode(&out); err != nil {
-		t.Fatal(err)
-	}
-
-	got, ok := out.(Batch)
-	if !ok || got.Seq != 4 || !bytes.Equal(got.Data, in.Data) || got.PortTable[0].Addrs[0] != "10.0.0.1" {
-		t.Errorf("round trip: %+v", out)
 	}
 }
 
@@ -271,7 +243,7 @@ func TestMergerGapAndWindow(t *testing.T) {
 		t.Errorf("wrote %d records, want 2 within the window", len(got))
 	}
 
-	clock.Advance(GapTimeout)
+	clock.Advance(DefaultWindow) // more than the gap timeout
 	m.Tick()
 	m.w.Flush()
 
@@ -284,9 +256,125 @@ func TestMergerGapAndWindow(t *testing.T) {
 	}
 }
 
+// TestMergerGapInOrder checks that the batches after a lost batch are written
+// in order and not late.
+func TestMergerGapInOrder(t *testing.T) {
+	clock := newFakeClock()
+	m, buf := newTestMerger(t, clock, 0)
+
+	for seq := uint64(1); seq <= 150; seq++ {
+		clock.Advance(50 * time.Millisecond)
+		now := clock.Now()
+		for _, host := range []string{"c1", "c2"} {
+			if host == "c1" && seq == 3 {
+				continue // lost
+			}
+			m.Add(batch(host, "br", seq, now.Add(-5*time.Millisecond), now.Add(-20*time.Millisecond), now.Add(-10*time.Millisecond)))
+		}
+		m.Tick()
+	}
+
+	m.Add(&Batch{Host: "c1", Final: true, Token: 7})
+	m.Add(&Batch{Host: "c2", Final: true, Token: 7})
+	if err := m.Finish([]string{"c1", "c2"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, sum := m.Status(); sum.Late != 0 {
+		t.Errorf("%d late records, want 0", sum.Late)
+	}
+
+	got := readTimes(t, buf.Bytes())
+	if len(got) != 2*(2*150-1) {
+		t.Errorf("file has %d records, want %d", len(got), 2*(2*150-1))
+	}
+	if !slices.IsSorted(got) {
+		t.Error("records out of order")
+	}
+}
+
+// TestMergerSkew checks that the records of a host whose clock lags more than
+// the window are in order on the clock of the head, and not late. The file
+// keeps the timestamps of the host.
+func TestMergerSkew(t *testing.T) {
+	clock := newFakeClock()
+	m, buf := newTestMerger(t, clock, 0)
+
+	const skew = 3 * time.Second
+	mac := net.HardwareAddr{2, 0, 0, 0, 0, 1}
+
+	t0 := clock.Now()
+	at := func(ms int) time.Time { return t0.Add(-time.Duration(ms) * time.Millisecond) }
+
+	// add adds a batch with a record for each time in ms before t0, on the
+	// head clock. The payload of a record is its time in tens of ms.
+	add := func(host string, seq uint64, through int, times ...int) {
+		var hostSkew time.Duration
+		if host == "c2" {
+			hostSkew = skew
+		}
+		b := &Batch{Host: host, Bridge: "br", Seq: seq, Through: at(through).Add(-hostSkew).UnixNano(),
+			Format: FormatClassic, Token: 7, SkewNS: int64(hostSkew)}
+		for _, ms := range times {
+			b.Data = append(b.Data, rec(at(ms).Add(-hostSkew), frame(mac, byte(ms/10)))...)
+			b.Packets++
+		}
+		m.Add(b)
+	}
+
+	add("c1", 1, 750, 900, 800)
+	add("c2", 1, 700, 850, 750)
+	m.Tick()
+
+	clock.Advance(200 * time.Millisecond)
+	add("c1", 2, 550, 600)
+	add("c2", 2, 500, 650)
+	m.Tick()
+
+	m.Add(&Batch{Host: "c1", Final: true, Token: 7})
+	m.Add(&Batch{Host: "c2", Final: true, Token: 7})
+	if err := m.Finish([]string{"c1", "c2"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, sum := m.Status(); sum.Late != 0 {
+		t.Errorf("%d late records, want 0", sum.Late)
+	}
+
+	r, err := pcapgo.NewReader(bytes.NewReader(buf.Bytes()))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var order []int
+	var c2 int64
+	for {
+		data, ci, err := r.ReadPacketData()
+		if errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		order = append(order, int(data[59]))
+		if data[59] == 85 {
+			c2 = ci.Timestamp.UnixNano()
+		}
+	}
+
+	if want := []int{90, 85, 80, 75, 65, 60}; !slices.Equal(order, want) {
+		t.Errorf("records in order %v, want %v (tens of ms before the start)", order, want)
+	}
+	if want := at(850).Add(-skew).UnixNano(); c2 != want {
+		t.Errorf("record of c2 at %v, want the host time %v", c2, want)
+	}
+}
+
+// TestMergerMaxSize checks that a classic merge stays within maxsize: two of
+// the three records fit.
 func TestMergerMaxSize(t *testing.T) {
 	clock := newFakeClock()
-	m, _ := newTestMerger(t, clock, 24+2*(16+60)+64)
+	const maxSize = 24 + 2*(16+60) + 64
+	m, buf := newTestMerger(t, clock, maxSize)
 
 	now := clock.Now()
 	m.Add(batch("c1", "br", 1, now, now.Add(-3*time.Second), now.Add(-2*time.Second), now.Add(-time.Second)))
@@ -295,6 +383,18 @@ func TestMergerMaxSize(t *testing.T) {
 
 	if !m.Full() {
 		t.Error("not full")
+	}
+
+	m.Add(&Batch{Host: "c1", Final: true, Token: 7})
+	if err := m.Finish([]string{"c1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if buf.Len() > maxSize {
+		t.Errorf("file size = %d, more than maxsize %d", buf.Len(), maxSize)
+	}
+	if got := readTimes(t, buf.Bytes()); len(got) != 2 {
+		t.Errorf("file has %d records, want 2", len(got))
 	}
 }
 
@@ -313,7 +413,7 @@ func TestMergerPcapng(t *testing.T) {
 	now := clock.Now().Add(-time.Second)
 
 	b := &Batch{Host: "c1", Bridge: "br", Seq: 1, Through: now.UnixNano(), Format: FormatNg, Token: 7, Packets: 2,
-		PortTable: []PortInfo{{Index: 1, Port: "mega_tap3", MAC: mac.String(), VLAN: 101, VM: "web01", Addrs: []string{"10.0.0.7"}}}}
+		PortTable: []PortInfo{{Index: 1, Port: "mega_tap3", MAC: mac.String(), VLAN: 101, VM: "web01", VMIface: 2, Addrs: []string{"10.0.0.7"}}}}
 	b.Data = appendNgRecord(b.Data, rec(now, frame(mac, 1)), 1, 0)
 	b.Data = appendNgRecord(b.Data, rec(now, frame(net.HardwareAddr{9, 9, 9, 9, 9, 9}, 2)), 0, 4)
 	m.Add(b)
@@ -347,6 +447,9 @@ func TestMergerPcapng(t *testing.T) {
 	i1, _ := r.Interface(ifaces[1])
 	if i0.Name != "c1/br/mega_tap3" || i1.Name != "c1/br" {
 		t.Errorf("interface names %q %q", i0.Name, i1.Name)
+	}
+	if want := "web01 interface 2, VLAN 101"; i0.Description != want {
+		t.Errorf("interface description %q, want %q", i0.Description, want)
 	}
 }
 
@@ -708,5 +811,321 @@ func TestMergerWaitsForStreamFinal(t *testing.T) {
 
 	if !m.Done([]string{"c1"}) {
 		t.Error("not Done() with every batch")
+	}
+}
+
+// TestMergerSkewThrough checks that the through time of a host with a clock
+// ahead of the head is on the head clock: the head does not write the records
+// of the other hosts before the records of that host.
+func TestMergerSkewThrough(t *testing.T) {
+	clock := newFakeClock()
+	m, buf := newTestMerger(t, clock, 0)
+
+	const ahead = 3 * time.Second
+	now := clock.Now()
+	mac := net.HardwareAddr{2, 0, 0, 0, 0, 1}
+
+	// c2 batch with records at head times, on its clock that is ahead
+	c2 := func(seq uint64, through time.Time, times ...time.Time) *Batch {
+		b := &Batch{Host: "c2", Bridge: "br", Seq: seq, Through: through.Add(ahead).UnixNano(), Format: FormatClassic,
+			Token: 7, SkewNS: -int64(ahead)}
+		for _, ts := range times {
+			b.Data = append(b.Data, rec(ts.Add(ahead), frame(mac, 2))...)
+			b.Packets++
+		}
+		return b
+	}
+
+	m.Add(batch("c1", "br", 1, now, now.Add(-100*time.Millisecond)))
+	m.Add(c2(1, now.Add(-500*time.Millisecond)))
+	m.Tick()
+
+	m.Add(c2(2, now.Add(-200*time.Millisecond), now.Add(-300*time.Millisecond)))
+	m.Tick()
+
+	m.Add(&Batch{Host: "c1", Final: true, Token: 7})
+	m.Add(&Batch{Host: "c2", Final: true, Token: 7})
+	if err := m.Finish([]string{"c1", "c2"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, sum := m.Status(); sum.Late != 0 {
+		t.Errorf("%d late records, want 0", sum.Late)
+	}
+
+	want := []int64{now.Add(-300 * time.Millisecond).Add(ahead).UnixNano(), now.Add(-100 * time.Millisecond).UnixNano()}
+	if got := readTimes(t, buf.Bytes()); !slices.Equal(got, want) {
+		t.Errorf("record times %v, want %v (c2, then c1)", got, want)
+	}
+}
+
+// TestMergerSkewSmaller checks that a smaller skew estimate does not put the
+// records of a stream out of order.
+func TestMergerSkewSmaller(t *testing.T) {
+	clock := newFakeClock()
+	m, buf := newTestMerger(t, clock, 0)
+
+	now := clock.Now()
+	low := now.Add(-5 * time.Second)
+
+	b1 := batch("c1", "br", 1, low, now.Add(-500*time.Millisecond))
+	b2 := batch("c1", "br", 2, low, now.Add(-400*time.Millisecond))
+	b2.SkewNS = -int64(200 * time.Millisecond)
+	m.Add(b1)
+	m.Add(b2)
+
+	m.Add(&Batch{Host: "c1", Final: true, Token: 7})
+	if err := m.Finish([]string{"c1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	want := []int64{now.Add(-500 * time.Millisecond).UnixNano(), now.Add(-400 * time.Millisecond).UnixNano()}
+	if got := readTimes(t, buf.Bytes()); !slices.Equal(got, want) {
+		t.Errorf("record times %v, want %v", got, want)
+	}
+}
+
+// TestStreamAckNegativeRTT checks that an ack with a negative round trip, for
+// example from a head clock step, does not change the skew.
+func TestStreamAckNegativeRTT(t *testing.T) {
+	clock := newFakeClock()
+	sender := &fakeSender{}
+	s := NewStream(StreamConfig{Head: "head", Host: "c1", Bridge: "br", Token: 7}, sender, clock)
+	defer s.Close()
+
+	s.WriteRecord(0, rec(clock.Now(), make([]byte, 60)), pcapfile.RecordOptions{})
+	clock.Advance(BatchAge)
+	s.Flush()
+	waitFor(t, "first batch", func() bool { return len(sender.get()) == 1 })
+
+	t1 := sender.get()[0].SentAt
+	recv := t1 + int64(time.Second)
+	s.Ack(Control{Op: OpAck, Seq: 1, HeadRecv: recv, HeadSend: recv + int64(10*time.Millisecond)})
+
+	s.mu.Lock()
+	skew := s.skew
+	s.mu.Unlock()
+	if skew != 0 {
+		t.Errorf("skew %v after an ack with a negative round trip, want 0", time.Duration(skew))
+	}
+}
+
+// TestMergerForgetAndAddHost checks that a host that ns del-hosts removes
+// does not show or stall the capture, and that a new member of the host
+// starts its streams again from Seq 1 while the merger drops the batches of
+// the old member.
+func TestMergerForgetAndAddHost(t *testing.T) {
+	clock := newFakeClock()
+	m, buf := newTestMerger(t, clock, 0)
+
+	now := clock.Now()
+	m.Add(batch("c1", "br", 1, now, now.Add(-3*time.Second)))
+	m.Add(batch("c1", "br", 2, now, now.Add(-2900*time.Millisecond)))
+	m.Add(batch("c2", "br", 1, now, now.Add(-2800*time.Millisecond)))
+
+	// c2 is gone; c1 still sends
+	clock.Advance(StallTimeout)
+	now = clock.Now()
+	m.Add(batch("c1", "br", 3, now))
+
+	states := func() map[string]string {
+		res := map[string]string{}
+		streams, _ := m.Status()
+		for _, s := range streams {
+			res[s.Host] = s.State
+		}
+		return res
+	}
+
+	if got := states(); got["c2"] != StateStalled {
+		t.Fatalf("states %v, want c2 stalled", got)
+	}
+
+	m.ForgetHost("c2")
+	if got := states(); len(got) != 1 || got["c1"] != StateRunning {
+		t.Errorf("states %v after c2 is removed, want only c1 running", got)
+	}
+
+	// c1 is removed and added again with a new member
+	m.ForgetHost("c1")
+	if _, ok := m.Add(batch("c1", "br", 4, now)); ok {
+		t.Error("batch of a removed host accepted")
+	}
+
+	m.AddHost("c1", 1)
+
+	if _, ok := m.Add(batch("c1", "br", 5, now, now.Add(-time.Second))); ok {
+		t.Error("late batch of the old member accepted")
+	}
+	if _, ok := m.Add(&Batch{Host: "c1", Final: true, Token: 7}); ok {
+		t.Error("late final batch of the old member accepted")
+	}
+
+	b := batch("c1", "br", 1, now, now.Add(-500*time.Millisecond))
+	b.Gen = 1
+	if seq, ok := m.Add(b); !ok || seq != 1 {
+		t.Errorf("first batch of the new member: ack %v %v, want 1", seq, ok)
+	}
+
+	if got := states(); len(got) != 1 || got["c1"] != StateRunning {
+		t.Errorf("states %v, want c1 running", got)
+	}
+	if m.Done([]string{"c1"}) {
+		t.Error("Done() before the final batch of the new member")
+	}
+
+	m.Add(&Batch{Host: "c1", Final: true, Token: 7, Gen: 1})
+	if !m.Done([]string{"c1"}) {
+		t.Error("not Done() after the final batch of the new member")
+	}
+	if err := m.Finish([]string{"c1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := readTimes(t, buf.Bytes()); len(got) != 4 {
+		t.Errorf("file has %d records, want 4", len(got))
+	}
+	if _, sum := m.Status(); sum.Packets != 4 {
+		t.Errorf("total packets %v, want 4", sum.Packets)
+	}
+}
+
+// TestMergerPcapngNoVMIface checks that a port of a VM without a known
+// interface gets the port description.
+func TestMergerPcapngNoVMIface(t *testing.T) {
+	clock := newFakeClock()
+
+	var buf bytes.Buffer
+	w, err := pcapfile.NewNg(&buf, pcapfile.Section{UserAppl: "minimega test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m := NewMerger(MergerConfig{Namespace: "exp", Token: 7, SnapLen: 1600}, w, clock)
+
+	mac := net.HardwareAddr{2, 0, 0, 0, 0, 1}
+	now := clock.Now().Add(-time.Second)
+
+	b := &Batch{Host: "c1", Bridge: "br", Seq: 1, Through: now.UnixNano(), Format: FormatNg, Token: 7, Packets: 1,
+		PortTable: []PortInfo{{Index: 1, Port: "mega_tap3", MAC: mac.String(), VLAN: 101, VM: "web01", VMIface: -1}}}
+	b.Data = appendNgRecord(b.Data, rec(now, frame(mac, 1)), 1, 0)
+	m.Add(b)
+	m.Add(&Batch{Host: "c1", Final: true, Token: 7})
+
+	if err := m.Finish([]string{"c1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	r, err := pcapgo.NewNgReader(bytes.NewReader(buf.Bytes()), pcapgo.DefaultNgReaderOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, ci, err := r.ReadPacketData()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	i, _ := r.Interface(ci.InterfaceIndex)
+	if want := "c1 port mega_tap3, VLAN 101"; i.Description != want {
+		t.Errorf("interface description %q, want %q", i.Description, want)
+	}
+}
+
+// TestMergerAddHostPorts checks that the new member of a host that ns
+// add-hosts added again gets new port interfaces, because its port indexes
+// start again from 1, and that the records of the old member keep theirs.
+func TestMergerAddHostPorts(t *testing.T) {
+	clock := newFakeClock()
+
+	var buf bytes.Buffer
+	w, err := pcapfile.NewNg(&buf, pcapfile.Section{UserAppl: "minimega test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m := NewMerger(MergerConfig{Namespace: "exp", Token: 7, SnapLen: 1600}, w, clock)
+
+	now := clock.Now().Add(-time.Second)
+	portBatch := func(gen uint64, p PortInfo, ts time.Time) *Batch {
+		b := &Batch{Host: "c1", Bridge: "br", Gen: gen, Seq: 1, Through: ts.UnixNano(), Format: FormatNg, Token: 7,
+			Packets: 1, PortTable: []PortInfo{p}}
+		b.Data = appendNgRecord(nil, rec(ts, frame(net.HardwareAddr{2, 0, 0, 0, 0, byte(gen)}, 1)), 1, 0)
+		return b
+	}
+
+	m.Add(portBatch(0, PortInfo{Index: 1, Port: "mega_tap3", VLAN: 101, VM: "web01", VMIface: 0}, now))
+	m.ForgetHost("c1")
+	m.AddHost("c1", 1)
+	m.Add(portBatch(1, PortInfo{Index: 1, Port: "mega_tap7", VLAN: 102, VM: "db01", VMIface: 1}, now.Add(time.Millisecond)))
+	m.Add(&Batch{Host: "c1", Final: true, Token: 7, Gen: 1})
+
+	if err := m.Finish([]string{"c1"}); err != nil {
+		t.Fatal(err)
+	}
+
+	r, err := pcapgo.NewNgReader(bytes.NewReader(buf.Bytes()), pcapgo.DefaultNgReaderOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var got []string
+	for {
+		_, ci, err := r.ReadPacketData()
+		if errors.Is(err, io.EOF) {
+			break
+		} else if err != nil {
+			t.Fatal(err)
+		}
+		i, _ := r.Interface(ci.InterfaceIndex)
+		got = append(got, i.Name+": "+i.Description)
+	}
+
+	want := []string{"c1/br/mega_tap3: web01 interface 0, VLAN 101", "c1/br/mega_tap7: db01 interface 1, VLAN 102"}
+	if !slices.Equal(got, want) {
+		t.Errorf("record interfaces %q, want %q", got, want)
+	}
+}
+
+// TestMergerAddHostCounters checks that the counters of the old member of a
+// host that ns add-hosts added again stay in the drops, and that the lost
+// count compares the frames that all members read with all records.
+func TestMergerAddHostCounters(t *testing.T) {
+	clock := newFakeClock()
+	m, _ := newTestMerger(t, clock, 0)
+
+	now := clock.Now()
+	times := func(n int) []time.Time {
+		var res []time.Time
+		for i := 0; i < n; i++ {
+			res = append(res, now.Add(-3*time.Second+time.Duration(i)*time.Millisecond))
+		}
+		return res
+	}
+
+	b := batch("c1", "br", 1, now, times(100)...)
+	b.Captured = 102
+	b.KernelDrops, b.IfDrops, b.PathDrops, b.QueueDrops, b.SendDrops = 3, 1, 2, 1, 1
+	m.Add(b)
+
+	m.ForgetHost("c1")
+	m.AddHost("c1", 1)
+
+	b = batch("c1", "br", 1, now, times(5)...)
+	b.Gen, b.Captured, b.KernelDrops = 1, 10, 4
+	m.Add(b)
+	m.Add(&Batch{Host: "c1", Final: true, Token: 7, Gen: 1})
+	m.Tick()
+
+	streams, sum := m.Status()
+	if len(streams) != 1 {
+		t.Fatalf("streams %+v, want one", streams)
+	}
+
+	want := StreamStatus{Packets: 105, KDrops: 8, PDrops: 2, QDrops: 2, Lost: 5}
+	for _, st := range []StreamStatus{streams[0], sum} {
+		got := StreamStatus{Packets: st.Packets, KDrops: st.KDrops, PDrops: st.PDrops, QDrops: st.QDrops, Lost: st.Lost}
+		if got != want {
+			t.Errorf("counters %+v, want %+v", got, want)
+		}
 	}
 }

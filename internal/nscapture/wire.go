@@ -37,6 +37,7 @@ type Batch struct {
 	ID              int    // capture ID on the head
 	Token           uint64 // random per capture start
 	Host, Bridge    string // Bridge "" for the host-level final batch
+	Gen             uint64 // start of the member on Host; 0 for the first start
 	Seq             uint64 // per (Host, Bridge), from 1
 	Through         int64  // unix ns: all records at or before it are sent
 	SentAt          int64  // member clock at send
@@ -67,9 +68,8 @@ type PortInfo struct {
 	Port    string // OVS port name
 	MAC     string
 	VLAN    int
-	Kind    string // vm, container or host
 	VM      string // empty for host taps
-	VMIface int
+	VMIface int    // interface of VM; -1 when not known
 	Addrs   []string
 }
 
@@ -87,6 +87,7 @@ type Control struct {
 	Namespace, Head    string
 	ID                 int
 	Token              uint64
+	Gen                uint64 // start of the member
 	Bridge             string // OpAck
 	Seq                uint64 // OpAck: highest seq received in order
 	Window             int    // OpAck: batches allowed in flight
