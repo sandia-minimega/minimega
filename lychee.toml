@@ -5,7 +5,7 @@ exclude_loopback = true
 # Historical records intentionally retain obsolete and archived external links.
 exclude_path = [
     "^doc/content/releases/",
-    "^doc/content/training/miniclass/",
+    "^doc/content/legacy/miniclass/",
 ]
 
 # Generated self-links are covered by the strict Zensical build.

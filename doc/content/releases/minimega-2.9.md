@@ -15,7 +15,7 @@ By default all VMs will support "primitive paste". Any ASCII text put into the n
 Bidirectional copy and paste can be enabled on a per-vm basis which allows use of ctrl+c and ctrl+v inside the VM. The noVNC clipboard mirrors the VM's clipboard. Bidirectional copy and paste requires 1) QEMU 6.1+ with the `qemu-vdagent` and 2) The spice agent installed in the VM.
 
 Learn more in the recovered
-[copy and paste miniclass lesson](../training/miniclass/module-46.md).
+[copy and paste miniclass lesson](../articles/vmtypes.md#copy-and-paste).
 
 ### [minitunnel] track tunneled ports for listing and closing (#1509)
 

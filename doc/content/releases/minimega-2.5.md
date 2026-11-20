@@ -40,7 +40,7 @@ Extended miniccc to expose the guest filesystem to the host over the miniccc
 connection. This allows the filesystem to be mounted on the host or across the
 network on the head node.
 
-The [command and control](../articles/tutorials/cc.md) article has been
+The [command and control](../articles/cc.md) article has been
 updated to show its use.
 
 PR [#1108](https://github.com/sandia-minimega/minimega/v2/pull/1108).
@@ -90,7 +90,7 @@ PR [#970](https://github.com/sandia-minimega/minimega/v2/pull/970).
 
 Added `tap mirror` API to create a mirror of a tap. This allows another VM to
 inspect the traffic from an experiment. See the
-[article](../articles/mirror.md) for an example.
+[article](../articles/capture.md) for an example.
 
 PR [#1118](https://github.com/sandia-minimega/minimega/v2/pull/1118).
 
@@ -176,7 +176,7 @@ PR [#1110](https://github.com/sandia-minimega/minimega/v2/pull/1110).
 
 Added several new articles:
 
-- [Connecting to the Internet](../articles/nat.md)
+- [Connecting to the Internet](../articles/networking.md)
 - [Building a new VM](../articles/newvm.md)
 - [Python bindings](../articles/python.md)
 - [Network Troubleshooting](../articles/troubleshooting.md)
