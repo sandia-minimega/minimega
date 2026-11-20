@@ -58,6 +58,9 @@ func parsePasswords(fname string) error {
 }
 
 func mustAuth(f http.HandlerFunc) http.HandlerFunc {
+	// every authenticated route also refuses namespaces that don't exist
+	f = requireNamespace(f)
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		// check if URL is password protected
 		var matches []PasswordEntry
