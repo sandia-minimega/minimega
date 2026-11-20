@@ -252,20 +252,8 @@ func (n *Namespace) Destroy() error {
 	n.ccServer.Destroy()
 
 	// Delete any Taps associated with the namespace
-	for t := range n.Taps {
-		tap, err := bridges.FindTap(t)
-		if err != nil {
-			return err
-		}
-
-		br, err := getBridge(tap.Bridge)
-		if err != nil {
-			return err
-		}
-
-		if err := br.DestroyTap(tap.Name); err != nil {
-			return err
-		}
+	if err := hostTapDelete(n, Wildcard); err != nil {
+		return err
 	}
 
 	// Free up any VLANs associated with the namespace

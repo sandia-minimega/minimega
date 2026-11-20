@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -93,6 +94,7 @@ func TestLive(t *testing.T) {
 		p("HTTPProtonuke", testHTTPProtonuke, network),
 		p("Firewall", testFirewall, network),
 		p("HostTap", testHostTap, network),
+		p("HostTapCreate", testHostTapCreate, inv),
 		p("QoS", testQoS, network),
 		p("CapturePcap", testCapturePcap, network),
 
@@ -992,6 +994,106 @@ func testHostTap(t *testing.T) {
 		}
 		return nil
 	})
+}
+
+// hostTaps returns the host taps listed in the test namespace, by name.
+func hostTaps(t *testing.T) map[string]harness.Row {
+	t.Helper()
+	taps := map[string]harness.Row{}
+	for _, r := range harness.MustTable(t, "tap") {
+		taps[r["tap"]] = r
+	}
+	return taps
+}
+
+// ovsPorts returns the ports on mega_bridge.
+func ovsPorts(t *testing.T) []string {
+	t.Helper()
+	out, err := harness.InContainer(t, "ovs-vsctl", "list-ports", "mega_bridge")
+	if err != nil {
+		t.Fatalf("ovs-vsctl: %v: %s", err, out)
+	}
+	return strings.Fields(out)
+}
+
+// testHostTapCreate creates host taps back to back, as in
+// sandia-minimega/minimega#1270, and checks that a tap whose address cannot
+// be set is reported and removed rather than silently deleted.
+func testHostTapCreate(t *testing.T) {
+	taps := []struct{ name, vlan, ip string }{
+		{"live-tap-a", "tap-a", "192.0.2.1/24"},
+		{"live-tap-b", "tap-b", "198.51.100.1/24"},
+	}
+	defer func() {
+		for _, tap := range taps {
+			harness.Run("tap delete " + tap.name)
+		}
+	}()
+
+	for _, tap := range taps {
+		got := harness.MustText(t, fmt.Sprintf("tap create %v ip %v %v", tap.vlan, tap.ip, tap.name))
+		if got != tap.name {
+			t.Errorf("tap create returned %q, want %q", got, tap.name)
+		}
+	}
+
+	listed := hostTaps(t)
+	ports := ovsPorts(t)
+	for _, tap := range taps {
+		if r, ok := listed[tap.name]; !ok || !strings.HasPrefix(r["vlan"], tap.vlan+" ") {
+			t.Errorf("tap %v on VLAN %v not listed: %v", tap.name, tap.vlan, listed)
+		}
+		if !slices.Contains(ports, tap.name) {
+			t.Errorf("tap %v is not a port on mega_bridge: %v", tap.name, ports)
+		}
+		out, err := harness.InContainer(t, "ip", "-o", "-4", "addr", "show", "dev", tap.name)
+		if err != nil || !strings.Contains(out, tap.ip) {
+			t.Errorf("tap %v does not have address %v: %v: %s", tap.name, tap.ip, err, out)
+		}
+	}
+
+	// an address that cannot be set fails the command and leaves no tap behind
+	if _, err := harness.Run("tap create tap-a ip not-an-address live-tap-bad"); err == nil {
+		t.Errorf("tap create with an invalid address reported success")
+	} else if !strings.Contains(err.Error(), "ip error") {
+		t.Errorf("tap create with an invalid address: unexpected error: %v", err)
+	}
+	if _, ok := hostTaps(t)["live-tap-bad"]; ok {
+		t.Errorf("tap live-tap-bad listed after it failed to create")
+	}
+	harness.Eventually(t, 30*time.Second, time.Second, func() error {
+		if slices.Contains(ovsPorts(t), "live-tap-bad") {
+			return fmt.Errorf("port live-tap-bad still on mega_bridge")
+		}
+		return nil
+	})
+
+	// the name is taken until the tap is deleted
+	if _, err := harness.Run("tap create tap-a name " + taps[0].name); err == nil {
+		t.Errorf("creating tap %v twice reported success", taps[0].name)
+	}
+
+	for _, tap := range taps {
+		harness.MustRun(t, "tap delete "+tap.name)
+	}
+	listed = hostTaps(t)
+	for _, tap := range taps {
+		if _, ok := listed[tap.name]; ok {
+			t.Errorf("tap %v listed after delete", tap.name)
+		}
+	}
+	harness.Eventually(t, 30*time.Second, time.Second, func() error {
+		ports := ovsPorts(t)
+		for _, tap := range taps {
+			if slices.Contains(ports, tap.name) {
+				return fmt.Errorf("port %v still on mega_bridge", tap.name)
+			}
+		}
+		return nil
+	})
+	if _, ok := hostTaps(t)["live-mgmt"]; !ok {
+		t.Errorf("tap live-mgmt gone after deleting other taps")
+	}
 }
 
 var rttRe = regexp.MustCompile(`= [\d.]+/([\d.]+)/`)
