@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -78,6 +79,12 @@ func (s *fakeSource) isClosed() bool {
 	return s.closed
 }
 
+// ovsReaper runs the ovs-vsctl commands of systemReaper but does not delete
+// devices.
+type ovsReaper struct{ systemReaper }
+
+func (ovsReaper) delLinks(names []string) ([]string, error) { return names, nil }
+
 func testBridge() *Bridge {
 	return &Bridge{
 		Name:         "test_bridge",
@@ -90,6 +97,7 @@ func testBridge() *Bridge {
 		edgeCaptures: map[string]*edgeCapture{},
 		captureID:    new(int),
 		config:       map[string]string{},
+		reaper:       ovsReaper{},
 	}
 }
 
@@ -463,8 +471,8 @@ func useFakeCommands(t *testing.T) *fakeCommands {
 	t.Helper()
 
 	f := &fakeCommands{}
-	oldOVS, oldProc := ovsExec, processExec
-	t.Cleanup(func() { ovsExec, processExec = oldOVS, oldProc })
+	oldOVS, oldProc, oldUp := ovsExec, processExec, upInterface
+	t.Cleanup(func() { ovsExec, processExec, upInterface = oldOVS, oldProc, oldUp })
 
 	ovsExec = func(args []string) (string, error) {
 		f.add("ovs-vsctl " + strings.Join(args, " "))
@@ -473,6 +481,10 @@ func useFakeCommands(t *testing.T) *fakeCommands {
 	processExec = func(args []string) (string, error) {
 		f.add(strings.Join(args, " "))
 		return "", nil
+	}
+	upInterface = func(name string, promisc bool) error {
+		f.add(fmt.Sprintf("up interface %v promisc=%v", name, promisc))
+		return nil
 	}
 
 	return f
@@ -530,7 +542,7 @@ func TestBridgeCaptureRemovesTap(t *testing.T) {
 
 	for _, want := range []string{
 		"ovs-vsctl add-port test_bridge mega_tap42 -- set Interface mega_tap42 type=internal",
-		"ip link set mega_tap42 up promisc on",
+		"up interface mega_tap42 promisc=true",
 		"name=mirror-mega_tap42",
 		"select-all=true",
 	} {
