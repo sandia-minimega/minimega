@@ -1,6 +1,6 @@
 # To specify an alternate base image: --build-arg BASE_IMAGE="some/other/base_image:tag"
 # To specify an alternate Go image: --build-arg GO_IMAGE="some/other/go_image:tag"
-ARG BASE_IMAGE="ubuntu:22.04"
+ARG BASE_IMAGE="ubuntu:24.04"
 ARG GO_IMAGE="golang:1.24.13"
 ARG PYTHON_IMAGE="python:3.13-slim"
 
@@ -54,7 +54,7 @@ RUN apt-get update \
   && apt-get install -y \
     bash-completion dnsmasq iproute2 isc-dhcp-client \
     cpio less libpcap-dev ntfs-3g openssh-client \
-    openvswitch-switch qemu-kvm qemu-utils \
+    openvswitch-switch qemu-system-x86 qemu-utils \
     iptables ffmpeg \
     libxkbfile1 \
   && apt-get autoremove -y \

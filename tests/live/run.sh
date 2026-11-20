@@ -122,18 +122,10 @@ else
     docker run --rm --privileged -v "${BUILD_DIR}:/build" -w /build "${IMAGE}" bash -euxc '
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -qq
-        apt-get install -y -qq --no-install-recommends debootstrap ca-certificates wget cpio gzip xz-utils >/dev/null
-        # The image is Ubuntu 22.04, whose debian-archive-keyring predates the
-        # bookworm signing keys, so fetch the Debian keyring, pinned by hash.
-        # ponytail: pinned to the current pool version; bump both lines when
-        # Debian replaces it (the download then 404s).
-        K=debian-archive-keyring_2023.3+deb12u2_all.deb
-        wget -q "https://deb.debian.org/debian/pool/main/d/debian-archive-keyring/$K"
-        echo "f699e2f88dca05212f2a452b58475f2993cb6993dfbafb1d0205a3291eb8b4b8  $K" | sha256sum -c -
-        dpkg-deb -x "$K" /keyring
+        apt-get install -y -qq --no-install-recommends debootstrap debian-archive-keyring ca-certificates cpio gzip xz-utils >/dev/null
         mkdir -p overlay/usr/bin
         cp /opt/minimega/bin/miniccc /opt/minimega/bin/minirouter /opt/minimega/bin/protonuke overlay/usr/bin/
-        /opt/minimega/bin/vmbetter -branch bookworm -mirror https://deb.debian.org/debian -debootstrap-append=--keyring=/keyring/usr/share/keyrings/debian-archive-keyring.gpg -O live live.conf
+        /opt/minimega/bin/vmbetter -branch bookworm -mirror https://deb.debian.org/debian -debootstrap-append=--keyring=/usr/share/keyrings/debian-archive-keyring.gpg -O live live.conf
     ' > "${ARTIFACTS}/logs/guest-build.log" 2>&1 \
         || { tail -50 "${ARTIFACTS}/logs/guest-build.log"; rm -rf "${BUILD_DIR}"; die "guest image build failed"; }
     mv "${BUILD_DIR}/live.kernel" "${BUILD_DIR}/live.initrd" "${STAGE}/" || die "vmbetter produced no live.kernel/live.initrd"
