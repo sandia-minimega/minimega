@@ -45,7 +45,7 @@ capture <pcap,> vm <vm id or name> <interface index> <filename>
 capture <pcap,> <delete,> <id or all>
 ```
 
-To capture pcap on bridge 'foo' to file 'foo.pcap':
+To capture pcap on bridge 'foo' to file 'foo.pcap' (the bridge must already exist; a capture never creates one):
 
 ```text
 capture pcap bridge foo foo.pcap

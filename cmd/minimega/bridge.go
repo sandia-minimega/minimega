@@ -81,6 +81,19 @@ func getBridge(b string) (*bridge.Bridge, error) {
 	return br, nil
 }
 
+// getExistingBridge is like getBridge but returns an error rather than
+// creating a bridge that does not exist.
+func getExistingBridge(b string) (*bridge.Bridge, error) {
+	br, err := bridges.GetExisting(b)
+	if err != nil {
+		return nil, err
+	}
+
+	mustWrite(filepath.Join(*f_base, "bridges"), bridgeInfo())
+
+	return br, nil
+}
+
 // bridgeInfo returns formatted information about all the bridges.
 func bridgeInfo() string {
 	info := bridges.Info()

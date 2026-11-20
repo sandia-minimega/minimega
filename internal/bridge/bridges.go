@@ -220,6 +220,21 @@ func (b Bridges) Get(name string) (*Bridge, error) {
 	return b.bridges[name], nil
 }
 
+// GetExisting is like Get but refuses to create a bridge: the bridge must
+// already be managed or already exist in Open vSwitch (in which case it is
+// adopted, like Get does). Otherwise it returns an error naming the bridge.
+func (b Bridges) GetExisting(name string) (*Bridge, error) {
+	if name == "" {
+		name = b.Default
+	}
+
+	if _, ok := b.Lookup(name); !ok && !ovsBridgeExists(name) {
+		return nil, fmt.Errorf("bridge %q does not exist", name)
+	}
+
+	return b.Get(name)
+}
+
 // HostTaps returns a list of taps that are marked as host taps.
 func (b Bridges) HostTaps() []Tap {
 	bridgeLock.Lock()

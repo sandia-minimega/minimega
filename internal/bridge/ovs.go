@@ -51,6 +51,11 @@ func ovsAddBridge(name string) (bool, error) {
 	return true, nil
 }
 
+// ovsBridgeExists reports whether an openvswitch bridge with this name exists.
+func ovsBridgeExists(name string) bool {
+	return exec.Command("ovs-vsctl", "br-exists", name).Run() == nil
+}
+
 // ovsDelBridge deletes a openvswitch bridge.
 func ovsDelBridge(name string) error {
 	args := []string{

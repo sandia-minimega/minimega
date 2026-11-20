@@ -56,6 +56,9 @@ configured. There are several APIs to configure new netflow captures:
 	capture netflow gzip [true,false]
 	capture netflow timeout [timeout]
 
+A bridge capture (PCAP or netflow) fails if the bridge does not exist; it never
+creates one.
+
 PCAP capture can be from a bridge or VM interface. To set the snaplen or filter
 for new PCAP captures, use:
 

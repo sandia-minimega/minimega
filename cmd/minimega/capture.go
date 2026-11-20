@@ -148,7 +148,7 @@ func (c *captures) CaptureVM(vm VM, iface int, fname string) error {
 // CaptureBridge starts a new capture for all the traffic on the specified
 // bridge, writing all packets to the specified filename in PCAP format.
 func (c *captures) CaptureBridge(bridge, fname string) error {
-	br, err := getBridge(bridge)
+	br, err := getExistingBridge(bridge)
 	if err != nil {
 		return err
 	}
@@ -286,12 +286,12 @@ func (c *captures) stop(fn func(capture) bool) error {
 }
 
 // getOrCreateNetflow wraps calls to getBridge and getNetflowFromBridge,
-// creating each, if needed.
+// creating the netflow object if needed. The bridge itself must already exist.
 //
 // Note that we cannot have a separate netflow object per namespace because OVS
 // doesn't support more than one netflow object per bridge.
 func getOrCreateNetflow(b string) (*gonetflow.Netflow, error) {
-	br, err := getBridge(b)
+	br, err := getExistingBridge(b)
 	if err != nil {
 		return nil, err
 	}

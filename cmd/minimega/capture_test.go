@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -41,5 +42,21 @@ func TestCapturesStopContinuesAfterError(t *testing.T) {
 	}
 	if len(captures.m) != 0 {
 		t.Fatalf("expected all stopped captures to be removed, got %d entries", len(captures.m))
+	}
+}
+
+func TestCaptureBridgeRefusesMissingBridge(t *testing.T) {
+	const name = "mm_no_such_bridge"
+	for _, f := range []func() error{
+		func() error { return (&captures{}).CaptureBridge(name, "x.pcap") },
+		func() error { return (&captures{}).CaptureNetflowFile(name, "x.nf") },
+	} {
+		err := f()
+		if err == nil || !strings.Contains(err.Error(), `bridge "`+name+`" does not exist`) {
+			t.Fatalf("expected missing bridge error, got %v", err)
+		}
+	}
+	if _, ok := bridges.Lookup(name); ok {
+		t.Fatal("bridge was created")
 	}
 }
