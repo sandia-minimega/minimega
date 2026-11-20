@@ -131,9 +131,11 @@ and drives them over the command socket; CI runs it after the Docker workflow
 publishes an image. It needs root, Docker, `/dev/kvm`, and the `openvswitch`
 module. Each test group is a sub-folder (a `topology.mm` plus its `//go:build
 live` Go tests); `tests/live/harness/` is the shared helper package, and
-`tests/live/core/` is the 22-VM group; the guest image is built by the
-image's own `vmbetter` from `tests/live/image/live.conf`. See
-[`tests/live/README.md`](tests/live/README.md).
+`tests/live/core/` is the 22-VM group and `tests/live/containers/` the
+container group; the guest image is built by the
+image's own `vmbetter` from `tests/live/image/live.conf`.
+`tests/live/stop.sh` checks that containers stop with minimega in Docker and
+under systemd. See [`tests/live/README.md`](tests/live/README.md).
 
 ```bash
 sudo LIVE_PULL=0 tests/live/run.sh minimega:dev
@@ -143,7 +145,7 @@ go vet -tags live ./tests/live/...
 Keep each group's `topology.mm` and `topology_test.go` in sync (for example
 `tests/live/core/topology.mm` and `tests/live/core/topology_test.go`), and
 extend the live tests when a change affects VM lifecycle, networking,
-minirouter, or miniccc behavior.
+minirouter, miniccc, or container behavior.
 
 ## Change conventions
 

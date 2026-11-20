@@ -10,13 +10,15 @@
 # Steps:
 #   1. pull the image (the one CI published, by default)
 #   2. build the KVM guest kernel/initrd with the image's vmbetter (tests/live/image/live.conf)
-#   3. start minimega from the image exactly as docker/README.md documents
-#   4. load tests/live/$LIVE_GROUP/topology.mm with "mm read" (the CLI path)
-#   5. run the Go tests in tests/live/$LIVE_GROUP over the command socket (the phenix path)
-#   6. collect diagnostics, tear the experiment down, and stop the container
+#   3. unpack the initrd as the filesystem of the containers, if the group has any
+#   4. start minimega from the image exactly as docker/README.md documents
+#   5. load tests/live/$LIVE_GROUP/topology.mm with "mm read" (the CLI path)
+#   6. run the Go tests in tests/live/$LIVE_GROUP over the command socket (the phenix path)
+#   7. collect diagnostics, tear the experiment down, and stop the container
 #
 # Requirements: Linux, root, Docker, /dev/kvm (not with LIVE_QEMU), the
 # openvswitch kernel module, and Go (unless LIVE_TEST_BIN points at a prebuilt test binary).
+# A group with containers also needs cpio and gzip.
 #
 # Environment:
 #   LIVE_GROUP            test group, a directory under tests/live with a
@@ -30,6 +32,8 @@
 #   LIVE_ARTIFACTS        output directory (default: ./live-artifacts)
 #   LIVE_TEST_BIN         prebuilt "go test -c -tags live" binary
 #   LIVE_TEST_ARGS        extra arguments for the test binary (e.g. -test.run)
+#   LIVE_LOGLEVEL         minimega log level (default: info, or debug for a
+#                         group with containers)
 #   LIVE_KEEP=1           leave the experiment and container running
 #   LIVE_FORCE=1          replace an existing container and delete a non-empty
 #                         base directory
@@ -68,6 +72,14 @@ GROUP="${LIVE_GROUP:-core}"
 command -v docker >/dev/null || die "docker not found"
 # an explicit QEMU override (e.g. TCG guests) does not need the KVM device
 [[ -n "${LIVE_QEMU:-}" || -c /dev/kvm ]] || die "/dev/kvm not found; KVM is required (or set LIVE_QEMU to run without it)"
+# a group with containers ("vm config filesystem") unpacks the initrd for them
+CONTAINERS=0
+if grep -q '^vm config filesystem ' "${SCRIPT_DIR}/${GROUP}/topology.mm"; then
+    CONTAINERS=1
+    command -v cpio >/dev/null && command -v gzip >/dev/null || die "cpio and gzip are required for the containers of group ${GROUP}"
+fi
+# minimega logs why a container failed to launch at the debug level only
+LOGLEVEL="${LIVE_LOGLEVEL:-$([[ "${CONTAINERS}" == "1" ]] && echo debug || echo info)}"
 
 # The script runs as root and deletes MM_BASE, so never accept a path that
 # could be a system or home directory.
@@ -144,6 +156,14 @@ else
     log "guest image built in $(( $(date +%s) - build_start ))s: $(du -h "${STAGE}/live.initrd" | cut -f1) initrd, $(du -h "${STAGE}/live.kernel" | cut -f1) kernel"
 fi
 
+# The containers run the guest image too: its initrd, unpacked, is their
+# filesystem (live/rootfs in the files directory).
+if [[ "${CONTAINERS}" == "1" ]]; then
+    log "unpacking the guest image for containers"
+    mkdir -p "${STAGE}/rootfs"
+    gzip -dc "${STAGE}/live.initrd" | (cd "${STAGE}/rootfs" && cpio -idm --no-absolute-filenames --quiet) || die "unable to unpack ${STAGE}/live.initrd"
+fi
+
 # Host overrides go into the common VM configuration, right after the first
 # "clear vm config", so every VM inherits them.
 overrides=""
@@ -196,7 +216,7 @@ docker run -d \
     -e MM_BASE="${MM_BASE}" \
     -e MM_FILEPATH="${MM_FILES}" \
     -e MM_LOGFILE=/var/log/minimega/minimega.log \
-    -e MM_LOGLEVEL="${LIVE_LOGLEVEL:-info}" \
+    -e MM_LOGLEVEL="${LOGLEVEL}" \
     -e MM_APPEND="-hashfiles" \
     --health-cmd "mm version" \
     "${IMAGE}" >/dev/null || die "unable to start container"
@@ -239,10 +259,15 @@ MM_TIMEOUT=30
     echo "## cc clients"; mm namespace "${NAMESPACE}" cc clients
     echo "## vlans"; mm namespace "${NAMESPACE}" vlans
     echo "## taps"; mm namespace "${NAMESPACE}" tap
-    echo "## router rtr-ab"; mm namespace "${NAMESPACE}" router rtr-ab
-    echo "## router rtr-cd"; mm namespace "${NAMESPACE}" router rtr-cd
+    for router in $(awk '$1 == "router" { print $2 }' "${STAGE}/topology.mm" | sort -u); do
+        echo "## router ${router}"; mm namespace "${NAMESPACE}" router "${router}"
+    done
     echo "## host"; mm host
     echo "## ovs"; timeout 30 docker exec "${CONTAINER}" ovs-vsctl show
+    if [[ "${CONTAINERS}" == "1" ]]; then
+        echo "## cgroups"; timeout 30 docker exec "${CONTAINER}" sh -c \
+            'stat -f -c %T /sys/fs/cgroup; cat /proc/self/cgroup; find /sys/fs/cgroup -type d -path "*/minimega*"'
+    fi
 } > "${ARTIFACTS}/diagnostics.txt" 2>&1
 cp -r "${MM_FILES}/${NAMESPACE}/miniccc_responses" "${ARTIFACTS}/" 2>/dev/null || true
 

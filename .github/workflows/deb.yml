@@ -38,6 +38,22 @@ jobs:
         sudo apt-get install -y ./minimega_*.deb
         minimega -version
 
+    - name: Check that systemd stops containers with the service
+      run: sudo LIVE_ARTIFACTS="$RUNNER_TEMP/live-artifacts" tests/live/stop.sh systemd
+
+    # minimega runs as root and writes its log with mode 0660
+    - name: Fix stop check log permissions
+      if: failure()
+      run: sudo chown -R "$(id -u):$(id -g)" "$RUNNER_TEMP/live-artifacts" || true
+
+    - name: Upload stop check logs
+      if: failure()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: stop-systemd
+        path: ${{ runner.temp }}/live-artifacts
+        retention-days: 14
+
     - name: Check bash completion
       shell: bash
       run: |

@@ -172,6 +172,10 @@ openvswitch-switch qemu-kvm qemu-utils dnsmasq ntfs-3g iproute
 
 #### Grub note
 
+minimega runs Linux containers on hosts with cgroup v1 or cgroup v2. See the
+notes on containers in the [VM types article](vmtypes.md) for what each
+requires.
+
 If you intend to run Linux containers, you need to have the `memory` cgroup
 enabled, but Debian (and some other distros) do not enable it by default. If
 you try to start a container and get an error, you may need to enable the
