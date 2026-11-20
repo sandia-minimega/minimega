@@ -157,6 +157,26 @@ All of these DHCP options can be used together in a single DHCP specification,
 and multiple DHCP servers can be specified on a single `minirouter` instance
 (for serving DHCP on multiple interfaces/networks).
 
+`minirouter` can also act as a DHCP relay, forwarding requests that arrive on
+one of its addresses to one or more DHCP servers elsewhere in the experiment.
+Relaying takes precedence over serving DHCP on the same address. To relay
+requests arriving on `10.0.1.1` to a DHCP server at `10.0.0.1`:
+
+```text
+minimega$ router foo dhcp 10.0.1.1 relay 10.0.0.1
+```
+
+The DHCP server needs a route back to the relay address. When the server is
+another `minirouter` with no interface on the relayed subnet, set the subnet's
+netmask explicitly, since dnsmasq otherwise assumes the classful netmask (for
+example, `/8` for `10.0.0.0`):
+
+```text
+minimega$ router bar dhcp 10.0.1.1 range 10.0.1.100 10.0.1.200
+minimega$ router bar dhcp 10.0.1.1 netmask 255.255.255.0
+minimega$ router bar dhcp 10.0.1.1 router 10.0.1.1
+```
+
 <a id="TOC_5.2."></a>
 
 ### IPv6 Router Advertisements

@@ -1,7 +1,7 @@
 name: Live Tests
 
 # End-to-end tests that run a real minimega deployment from a Docker image,
-# boot a 22-VM KVM topology (tests/live/core/topology.mm), and exercise it over the
+# boot a 23-VM KVM topology (tests/live/core/topology.mm), and exercise it over the
 # command socket. See tests/live/README.md.
 #
 # Called by the Docker workflow: on master with the image it just pushed, on
@@ -54,7 +54,7 @@ jobs:
 
       - name: Free disk space
         run: |
-          # the image, its guest build and 22 VMs need room; drop preinstalled
+          # the image, its guest build and 23 VMs need room; drop preinstalled
           # toolchains we do not use
           sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup || true
           df -h /

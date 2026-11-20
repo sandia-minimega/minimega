@@ -21,12 +21,14 @@ type Dnsmasq struct {
 }
 
 type Dhcp struct {
-	Addr   string
-	Low    string
-	High   string
-	Router string
-	DNS    string
-	Static map[string]string
+	Addr    string
+	Low     string
+	High    string
+	Netmask string
+	Router  string
+	DNS     string
+	Static  map[string]string
+	Relay   []string
 }
 
 var (
@@ -43,6 +45,8 @@ func init() {
 			"dnsmasq <dhcp,> option <router,> <addr> <server>",
 			"dnsmasq <dhcp,> option <dns,> <addr> <server>",
 			"dnsmasq <dhcp,> <static,> <addr> <mac> <ip>",
+			"dnsmasq <dhcp,> <netmask,> <addr> <mask>",
+			"dnsmasq <dhcp,> <relay,> <addr> <server>",
 			"dnsmasq <dns,> <ip> <host>",
 			"dnsmasq <upstream,> <ip>",
 			"dnsmasq <ra,> <subnet>",
@@ -95,6 +99,12 @@ func handleDnsmasq(c *minicli.Command, r chan<- minicli.Responses) {
 			ip := c.StringArgs["ip"]
 			d := DHCPFindOrCreate(addr)
 			d.Static[mac] = ip
+		} else if c.BoolArgs["netmask"] {
+			d := DHCPFindOrCreate(c.StringArgs["addr"])
+			d.Netmask = c.StringArgs["mask"]
+		} else if c.BoolArgs["relay"] {
+			d := DHCPFindOrCreate(c.StringArgs["addr"])
+			d.Relay = append(d.Relay, c.StringArgs["server"])
 		}
 	} else if c.BoolArgs["dns"] {
 		ip := c.StringArgs["ip"]
@@ -181,10 +191,15 @@ no-resolv
 dhcp-lease-max=4294967295
 {{ range $v := .DHCP }}
 # {{ $v.Addr }}
-{{ if ne $v.Low "" }}
-	dhcp-range=set:{{ $v.Addr }},{{ $v.Low }},{{ $v.High }}
+{{ if $v.Relay }}
+{{ range $server := $v.Relay }}
+	dhcp-relay={{ $v.Addr }},{{ $server }}
+{{ end }}
 {{ else }}
-	dhcp-range=set:{{ $v.Addr }},{{ $v.Addr }},static
+{{ if ne $v.Low "" }}
+	dhcp-range=set:{{ $v.Addr }},{{ $v.Low }},{{ $v.High }}{{ if ne $v.Netmask "" }},{{ $v.Netmask }}{{ end }}
+{{ else }}
+	dhcp-range=set:{{ $v.Addr }},{{ $v.Addr }},static{{ if ne $v.Netmask "" }},{{ $v.Netmask }}{{ end }}
 {{ end }}
 {{ range $mac, $ip := $v.Static }}
 	dhcp-host=set:{{ $v.Addr }},{{ $mac }},{{ $ip }}
@@ -194,6 +209,7 @@ dhcp-lease-max=4294967295
 {{ end }}
 {{ if ne $v.DNS "" }}
 	dhcp-option = tag:{{ $v.Addr }}, option:dns-server, {{ $v.DNS }}
+{{ end }}
 {{ end }}
 {{ end }}
 {{ range $host, $ips := .DNS }}
