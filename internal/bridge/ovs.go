@@ -226,8 +226,8 @@ func ovsDelMirror(bridge, tap string) error {
 }
 
 // ovsCmdWrapper wraps `ovs-vsctl` commands, returning stdout, stderr, and any
-// error produced running the command.
-func ovsCmdWrapper(args []string) (string, error) {
+// error produced running the command. Tests replace it.
+var ovsCmdWrapper = func(args []string) (string, error) {
 	out, err := ovsExec(args)
 	if err == nil {
 		return out, nil

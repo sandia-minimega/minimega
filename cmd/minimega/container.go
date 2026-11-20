@@ -783,25 +783,31 @@ func (vm *ContainerVM) Info(field string) (string, error) {
 }
 
 func (vm *ContainerVM) Conflicts(vm2 VM) error {
+	vm.lock.Lock()
+	defer vm.lock.Unlock()
+
+	return vm.conflictsNoLock(vm2)
+}
+
+func (vm *ContainerVM) conflictsNoLock(vm2 VM) error {
 	switch vm2 := vm2.(type) {
 	case *ContainerVM:
-		return vm.ConflictsContainer(vm2)
+		return vm.conflictsContainer(vm2)
 	case *KvmVM:
 		return vm.BaseVM.conflicts(vm2.BaseVM)
 	case *AndroidVM:
+		return vm.BaseVM.conflicts(vm2.BaseVM)
+	case *FirecrackerVM:
 		return vm.BaseVM.conflicts(vm2.BaseVM)
 	}
 
 	return errors.New("unknown VM type")
 }
 
-// ConflictsContainer tests whether vm and vm2 share a filesystem and
+// conflictsContainer tests whether vm and vm2 share a filesystem and
 // returns an error if one of them is not running in snapshot mode. Also
 // checks whether the BaseVMs conflict.
-func (vm *ContainerVM) ConflictsContainer(vm2 *ContainerVM) error {
-	vm.lock.Lock()
-	defer vm.lock.Unlock()
-
+func (vm *ContainerVM) conflictsContainer(vm2 *ContainerVM) error {
 	if vm.FilesystemPath == vm2.FilesystemPath && (!vm.Snapshot || !vm2.Snapshot) {
 		return fmt.Errorf("filesystem conflict with vm %v: %v", vm.Name, vm.FilesystemPath)
 	}

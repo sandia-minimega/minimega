@@ -45,6 +45,74 @@ type Tunnel struct {
 	reverseLock sync.Mutex
 
 	sendLock sync.Mutex
+
+	policy Policy
+	limit  *limitReader
+}
+
+// Policy limits what the remote end of a Tunnel may ask this end to do. The
+// zero Policy allows every request.
+type Policy struct {
+	// AllowConnect, when set, reports whether a CONNECT from the remote end
+	// may dial host:port from this end.
+	AllowConnect func(host string, port int) bool
+
+	// DenyForward refuses FORWARD requests, which make this end listen.
+	DenyForward bool
+
+	// MaxStreams caps the number of open streams. Zero means no cap.
+	MaxStreams int
+
+	// MaxMessage caps the encoded size of one message from the remote end.
+	// Zero means no cap.
+	MaxMessage int64
+
+	// OnRefuse, when set, receives the reason for each refused request
+	// instead of the log.
+	OnRefuse func(reason string)
+}
+
+var errMessageTooLarge = errors.New("tunnel message too large")
+
+// limitReader returns an error when more than limit bytes are read between
+// two calls to reset.
+type limitReader struct {
+	r     io.Reader
+	limit int64
+	n     int64
+}
+
+func (l *limitReader) Read(p []byte) (int, error) {
+	if l.n <= 0 {
+		return 0, errMessageTooLarge
+	}
+	if int64(len(p)) > l.n {
+		p = p[:l.n]
+	}
+	n, err := l.r.Read(p)
+	l.n -= int64(n)
+	return n, err
+}
+
+func (l *limitReader) reset() {
+	l.n = l.limit
+}
+
+func (t *Tunnel) decode(m *tunnelMessage) error {
+	if t.limit != nil {
+		t.limit.reset()
+	}
+
+	return t.dec.Decode(m)
+}
+
+func (t *Tunnel) refused(reason string) {
+	if t.policy.OnRefuse != nil {
+		t.policy.OnRefuse(reason)
+		return
+	}
+
+	log.Warn("minitunnel: %v", reason)
 }
 
 type tunnelMessage struct {
@@ -106,15 +174,31 @@ func ListenAndServe(transport io.ReadWriteCloser) error {
 // Dial a listening minitunnel. Only one tunnel connection is permitted per
 // transport.
 func Dial(transport io.ReadWriteCloser) (*Tunnel, error) {
+	return DialWithPolicy(transport, Policy{})
+}
+
+// DialWithPolicy is like Dial, but applies p to the requests that the remote
+// end sends.
+func DialWithPolicy(transport io.ReadWriteCloser, p Policy) (*Tunnel, error) {
 	t := &Tunnel{
 		transport: transport,
 
 		enc:   gob.NewEncoder(transport),
-		dec:   gob.NewDecoder(transport),
 		quit:  make(chan bool),
 		chans: makeChans(),
 
 		forwards: make(map[int]*forward),
+
+		policy: p,
+	}
+
+	t.chans.max = p.MaxStreams
+
+	if p.MaxMessage > 0 {
+		t.limit = &limitReader{r: transport, limit: p.MaxMessage}
+		t.dec = gob.NewDecoder(t.limit)
+	} else {
+		t.dec = gob.NewDecoder(transport)
 	}
 
 	handshake := &tunnelMessage{
@@ -126,7 +210,7 @@ func Dial(transport io.ReadWriteCloser) (*Tunnel, error) {
 		return nil, err
 	}
 
-	err = t.dec.Decode(handshake)
+	err = t.decode(handshake)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +245,10 @@ func (t *Tunnel) Forward(source int, host string, dest int) error {
 func (t *Tunnel) Reverse(source int, host string, dest int) error {
 	// create a temporary TID registration in order to get an ACK back
 	TID := rand.Int()
-	in := t.chans.add(TID)
+	in, err := t.chans.add(TID)
+	if err != nil {
+		return err
+	}
 	defer t.chans.remove(TID)
 
 	// send a message to invoke Forward() on the remote side
@@ -215,14 +302,23 @@ func (t *Tunnel) forward(ln net.Listener, source int, host string, dest int) {
 			return
 		}
 
-		f.addConnection(conn)
+		if !f.addConnection(conn) {
+			conn.Close()
+			return
+		}
+
 		go t.createTunnel(conn, host, dest)
 	}
 }
 
 func (t *Tunnel) createTunnel(conn net.Conn, host string, dest int) {
 	TID := rand.Int()
-	in := t.chans.add(TID)
+	in, err := t.chans.add(TID)
+	if err != nil {
+		t.refused(fmt.Sprintf("tunnel to %v:%v: %v", host, dest, err))
+		conn.Close()
+		return
+	}
 
 	log.Debug("create tunnel for %v:%v: %v", host, dest, TID)
 

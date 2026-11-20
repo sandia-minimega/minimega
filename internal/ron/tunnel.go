@@ -106,7 +106,9 @@ func (s *Server) ListReverses(uuid string) ([]minitunnel.ReverseTunnel, error) {
 // same way as commands do. Reverse returns an error when no client matches
 // filter. Otherwise, it tries every matching client and returns one error that
 // names each client that failed. A client whose previous reverse request has
-// not finished is skipped and named in the error.
+// not finished is skipped and named in the error. Under the strict cc policy,
+// the host connects only to the destinations of reverse tunnels that were
+// created here for that client.
 func (s *Server) Reverse(filter *Filter, source int, host string, dest int) error {
 	type pending struct {
 		c      *client
@@ -136,6 +138,9 @@ func (s *Server) Reverse(filter *Filter, source int, host string, dest int) erro
 			continue
 		}
 
+		// the strict policy accepts the CONNECT requests for this tunnel
+		c.allowReverse(host, dest)
+
 		c.reversePending = true
 		tunnels[uuid] = pending{c, c.tunnel}
 	}
@@ -156,7 +161,11 @@ func (s *Server) Reverse(filter *Filter, source int, host string, dest int) erro
 
 	results := make(chan result, len(tunnels))
 	for uuid, p := range tunnels {
-		done := func() {
+		done := func(err error) {
+			if err != nil {
+				p.c.disallowReverse(host, dest)
+			}
+
 			s.clientLock.Lock()
 			defer s.clientLock.Unlock()
 
@@ -190,13 +199,13 @@ func (s *Server) Reverse(filter *Filter, source int, host string, dest int) erro
 
 // reverse calls tunnel.Reverse and stops waiting after timeout, so a client
 // that never answers cannot block the caller. The client can still open the
-// listener after the timeout. reverse calls finished when tunnel.Reverse
-// returns, which can be after reverse returns.
-func reverse(tunnel *minitunnel.Tunnel, source int, host string, dest int, timeout time.Duration, finished func()) error {
+// listener after the timeout. reverse calls finished with the result of
+// tunnel.Reverse when it returns, which can be after reverse returns.
+func reverse(tunnel *minitunnel.Tunnel, source int, host string, dest int, timeout time.Duration, finished func(error)) error {
 	done := make(chan error, 1)
 	go func() {
 		err := tunnel.Reverse(source, host, dest)
-		finished()
+		finished(err)
 		done <- err
 	}()
 

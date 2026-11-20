@@ -25,6 +25,12 @@ const (
 
 var (
 	iom *iomeshage.IOMeshage
+
+	// iomDiskInfo is diskInfo. Tests replace it.
+	iomDiskInfo = diskInfo
+
+	// iomBackings keeps the backing file of each file that iomHelper read.
+	iomBackings = newStatCache[string]()
 )
 
 var ioCLIHandlers = []minicli.Handler{
@@ -205,16 +211,16 @@ func iomHelper(file, updatee string) (string, error) {
 
 	dst := filepath.Join(*f_iomBase, file)
 
-	info, err := diskInfo(dst)
-	if err == nil && info.BackingFile != "" {
+	backing, ok := iomBackingFile(dst)
+	if ok && backing != "" {
 		// try to fetch backing image too
-		file := filepath.Clean(info.BackingFile)
+		file := filepath.Clean(backing)
 
 		if !strings.HasPrefix(file, *f_iomBase) {
 			file = filepath.Join(filepath.Dir(dst), file)
 		}
 
-		file, err = filepath.Rel(*f_iomBase, file)
+		file, err := filepath.Rel(*f_iomBase, file)
 		if err != nil {
 			return "", err
 		}
@@ -227,6 +233,27 @@ func iomHelper(file, updatee string) (string, error) {
 	}
 
 	return dst, nil
+}
+
+// iomBackingFile returns the backing file of dst, and false when qemu-img
+// cannot read dst. It runs qemu-img again only when dst changes.
+func iomBackingFile(dst string) (string, bool) {
+	if backing, ok := iomBackings.get(dst); ok {
+		return backing, true
+	}
+
+	before, statErr := fcStatSource(dst)
+
+	info, err := iomDiskInfo(dst)
+	if err != nil {
+		return "", false
+	}
+
+	if statErr == nil {
+		iomBackings.put(dst, before, info.BackingFile)
+	}
+
+	return info.BackingFile, true
 }
 
 // iomWait polls until the file transfer is completed, optionally periodically

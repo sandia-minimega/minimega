@@ -63,7 +63,13 @@ To view current CPU affinity mappings (by PID):
 To disable all optimizations, use "clear optimize".
 
 Note: affinity and hugepages can be selectively enabled in particular
-namespaces. KSM affects VMs across all namespaces.`,
+namespaces. KSM affects VMs across all namespaces.
+
+Note: for Firecracker VMs, affinity applies to all threads of the VMM process.
+The vCPU threads start when the VM starts, and they get the same affinity.
+Firecracker VMs do not use hugepages: when hugepages are on, minimega logs a
+warning at launch. KSM has no effect on Firecracker VMs, because Firecracker
+does not mark guest memory as mergeable.`,
 		Patterns: []string{
 			"optimize",
 			"optimize <affinity,> <filter,> <filter>",

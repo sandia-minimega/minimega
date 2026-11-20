@@ -231,7 +231,7 @@ func screenshotHandler(w http.ResponseWriter, r *http.Request, name string) {
 		}
 		screenshot = data
 
-	case "container":
+	case "container", "firecracker":
 		http.NotFound(w, r)
 		return
 
@@ -308,6 +308,8 @@ func connectHandler(w http.ResponseWriter, r *http.Request, name string) {
 			// Android VMs do not require a VNC/terminal port for the
 			// placeholder connect page. Android API routes are handled
 			// under /vm/<name>/android/...
+		case "firecracker":
+			// Firecracker VMs have no console port.
 		default:
 			log.Info("unknown VM type: %v", vmType)
 			http.NotFound(w, r)
@@ -317,6 +319,11 @@ func connectHandler(w http.ResponseWriter, r *http.Request, name string) {
 
 	if vmType == "" || host == "" {
 		http.NotFound(w, r)
+		return
+	}
+
+	if vmType == "firecracker" {
+		http.Error(w, "no console for firecracker VMs", http.StatusNotFound)
 		return
 	}
 
@@ -349,6 +356,8 @@ func connectHandler(w http.ResponseWriter, r *http.Request, name string) {
 		http.ServeFile(w, r, filepath.Join(*f_root, "terminal.html"))
 	case "android":
 		http.ServeFile(w, r, filepath.Join(*f_root, "android.html"))
+	default:
+		http.NotFound(w, r)
 	}
 }
 

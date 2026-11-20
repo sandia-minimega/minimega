@@ -478,32 +478,6 @@ func TestReverseSkipsClientWithPendingRequest(t *testing.T) {
 	}
 }
 
-type fakeVM struct {
-	uuid string
-	name string
-	tags map[string]string
-}
-
-func (vm *fakeVM) GetNamespace() string { return "" }
-func (vm *fakeVM) GetUUID() string      { return vm.uuid }
-func (vm *fakeVM) SetCCActive(bool)     {}
-func (vm *fakeVM) SetTag(k, v string)   { vm.tags[k] = v }
-
-func (vm *fakeVM) GetTags() map[string]string {
-	res := map[string]string{}
-	for k, v := range vm.tags {
-		res[k] = v
-	}
-	return res
-}
-
-func (vm *fakeVM) Info(k string) (string, error) {
-	if k == "name" {
-		return vm.name, nil
-	}
-	return "", fmt.Errorf("invalid info field: %v", k)
-}
-
 func TestReverseMatchesVMNameAndTags(t *testing.T) {
 	dst, served := serveOnce(t)
 

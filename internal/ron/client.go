@@ -6,9 +6,11 @@ package ron
 
 import (
 	"encoding/gob"
+	"errors"
 	"fmt"
 	"io"
 	"net"
+	"os"
 	"slices"
 	"strings"
 	"sync"
@@ -79,9 +81,10 @@ type client struct {
 	// writeMu serializes calls to enc.Encode
 	writeMu sync.Mutex
 
-	conn io.ReadWriteCloser
-	enc  *gob.Encoder
-	dec  *gob.Decoder
+	conn  io.ReadWriteCloser
+	enc   *gob.Encoder
+	dec   *gob.Decoder
+	limit *limitReader // caps the size of each message read by dec
 
 	// maxCommandID is the highest command ID that we have processed for this
 	// client. Should be reset if the command counter is reset.
@@ -93,10 +96,26 @@ type client struct {
 	// Namespace for the VM, set during handshake
 	Namespace string
 
+	// uuid is the UUID bound to the connection, set during handshake. Unlike
+	// Client.UUID, it can be read without clientLock.
+	uuid string
+
+	// policy is the cc policy of the client's VM, set during handshake
+	policy string
+
+	// reverse tunnel destinations that the operator created for this client
+	reverseLock sync.Mutex
+	reverses    map[string]int
+
 	// pipe readers and writers
 	pipeLock    sync.Mutex
 	pipeReaders map[string]*miniplumber.Reader
 	pipeWriters map[string]chan<- string
+	pipesClosed bool
+
+	// pipesDone is closed by shutdown before it takes pipeLock. It stops a
+	// PIPE_DATA write that a slow pipe reader blocks.
+	pipesDone chan struct{}
 
 	ufsListener net.Listener
 	ufsConn     net.Conn
@@ -107,13 +126,72 @@ type client struct {
 	// updating is true while the server holds commands for the client during
 	// an auto-update. Protected by Server.clientLock.
 	updating bool
+
+	shutdownOnce sync.Once
 }
 
 func (c *client) sendMessage(m *Message) error {
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
 
-	return c.enc.Encode(m)
+	return c.encode(m)
+}
+
+// encode writes m to the client in writeTimeout, and closes the connection
+// when the write times out. The caller must hold writeMu.
+func (c *client) encode(m *Message) error {
+	d, ok := c.conn.(interface{ SetWriteDeadline(time.Time) error })
+	if ok {
+		d.SetWriteDeadline(time.Now().Add(time.Duration(writeTimeout.Load())))
+	}
+
+	err := c.enc.Encode(m)
+	if errors.Is(err, os.ErrDeadlineExceeded) {
+		warnLimited(c.uuid+":write", "closing cc client %v: write timed out", c.uuid)
+		c.conn.Close()
+	} else if ok {
+		d.SetWriteDeadline(time.Time{})
+	}
+
+	return err
+}
+
+// decode reads the next message from the client, enforcing the size limits
+// of limit.
+func (c *client) decode(m *Message) error {
+	if c.limit != nil {
+		c.limit.reset()
+		defer c.limit.release()
+	}
+
+	return c.dec.Decode(m)
+}
+
+// shutdown closes the connection, the pipes, and the heartbeat of the
+// client. It is safe to call more than once.
+func (c *client) shutdown() {
+	c.shutdownOnce.Do(func() {
+		c.conn.Close()
+
+		if c.pipesDone != nil {
+			close(c.pipesDone)
+		}
+
+		c.pipeLock.Lock()
+		for _, p := range c.pipeReaders {
+			p.Close()
+		}
+		for _, p := range c.pipeWriters {
+			close(p)
+		}
+		c.pipeWriters = map[string]chan<- string{}
+		c.pipesClosed = true
+		c.pipeLock.Unlock()
+
+		if c.cancelHeartbeat != nil {
+			close(c.cancelHeartbeat)
+		}
+	})
 }
 
 // HasCapability reports whether the client advertises the capability.
@@ -213,20 +291,45 @@ func (c *Client) matchesMAC(f *Filter) bool {
 	return false
 }
 
-func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
+// pipeHandler handles a pipe message from the client. It returns an error
+// only for a malformed message.
+func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) error {
+	if !validPipeName(m.Pipe) {
+		return invalidf("pipe name %q", truncate(m.Pipe, maxErrorLog))
+	}
+	if m.PipeMode < PIPE_NEW_READER || m.PipeMode > PIPE_DATA {
+		return invalidf("pipe mode %v", m.PipeMode)
+	}
+	if plumber == nil {
+		warnLimited(c.uuid+":pipe", "cc client %v: pipes are not available", c.uuid)
+		return nil
+	}
+
 	c.pipeLock.Lock()
 	defer c.pipeLock.Unlock()
+
+	if c.pipesClosed {
+		return nil
+	}
 
 	pipe := m.Pipe
 	if c.Namespace != "" {
 		pipe = fmt.Sprintf("%v//%v", c.Namespace, m.Pipe)
 	}
 
+	full := func() bool {
+		if len(c.pipeReaders)+len(c.pipeWriters) < MaxPipes {
+			return false
+		}
+		warnLimited(c.uuid+":pipe", "cc client %v: refused pipe %v: more than %d open pipes", c.uuid, m.Pipe, MaxPipes)
+		return true
+	}
+
 	switch m.PipeMode {
 	case PIPE_NEW_READER:
 		// register a new reader, if the client doesn't already have a
 		// reader on this pipe
-		if _, ok := c.pipeReaders[pipe]; !ok {
+		if _, ok := c.pipeReaders[pipe]; !ok && !full() {
 			p := plumber.NewReader(pipe)
 			c.pipeReaders[pipe] = p
 			go func() {
@@ -257,7 +360,7 @@ func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 			}()
 		}
 	case PIPE_NEW_WRITER:
-		if _, ok := c.pipeWriters[pipe]; !ok {
+		if _, ok := c.pipeWriters[pipe]; !ok && !full() {
 			p := plumber.NewWriter(pipe)
 			c.pipeWriters[pipe] = p
 		}
@@ -278,12 +381,14 @@ func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 		// incoming data to the server is a write. The corresponding
 		// data message in the miniccc client is a read.
 		if p, ok := c.pipeWriters[pipe]; ok {
-			p <- m.PipeData
+			select {
+			case p <- m.PipeData:
+			case <-c.pipesDone:
+			}
 		} else {
-			log.Error("no such pipe: %v", pipe)
+			warnLimited(c.uuid+":nopipe", "no such pipe: %v", pipe)
 		}
-	default:
-		log.Error("unknown message type: %v", m.PipeMode)
-		return
 	}
+
+	return nil
 }

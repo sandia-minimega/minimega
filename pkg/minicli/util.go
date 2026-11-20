@@ -25,7 +25,21 @@ func identicalHelp(handlers []*Handler) bool {
 	return true
 }
 
+// visibleHandlers returns the handlers that are not hidden.
+func visibleHandlers(handlers []*Handler) []*Handler {
+	res := []*Handler{}
+	for _, h := range handlers {
+		if !h.Hidden {
+			res = append(res, h)
+		}
+	}
+
+	return res
+}
+
 func printHelpShort(handlers []*Handler) string {
+	handlers = visibleHandlers(handlers)
+
 	sort.Slice(handlers, func(i, j int) bool {
 		return strings.Compare(handlers[i].SharedPrefix, handlers[j].SharedPrefix) <= 0
 	})

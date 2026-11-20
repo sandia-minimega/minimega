@@ -3,6 +3,7 @@ package minitunnel
 import (
 	"fmt"
 	"net"
+	"sync"
 )
 
 type forward struct {
@@ -11,20 +12,39 @@ type forward struct {
 	host string
 	dst  int
 
-	listener    net.Listener
+	listener net.Listener
+
+	mu          sync.Mutex // guards closed and connections
+	closed      bool
 	connections []net.Conn
 }
 
-func (f *forward) addConnection(c net.Conn) {
+// addConnection adds c to the connections that close closes. It returns false
+// if the forward is closed, and then the caller must close c.
+func (f *forward) addConnection(c net.Conn) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	if f.closed {
+		return false
+	}
+
 	f.connections = append(f.connections, c)
+
+	return true
 }
 
 func (f *forward) close() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.closed = true
 	f.listener.Close()
 
 	for _, conn := range f.connections {
 		conn.Close()
 	}
+	f.connections = nil
 }
 
 func (f *forward) String() string {
@@ -56,17 +76,17 @@ func (t *Tunnel) ListForwards() map[int]string {
 }
 
 func (t *Tunnel) CloseForward(id int) error {
+	t.sendLock.Lock()
 	f, ok := t.forwards[id]
+	delete(t.forwards, id)
+	t.sendLock.Unlock()
+
 	if !ok {
 		return fmt.Errorf("forwarder with ID %d not found", id)
 	}
 
 	f.close()
 
-	t.sendLock.Lock()
-	defer t.sendLock.Unlock()
-
-	delete(t.forwards, f.fid)
 	return nil
 }
 
