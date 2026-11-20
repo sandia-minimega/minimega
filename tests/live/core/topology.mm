@@ -170,9 +170,12 @@ vm config append live.role=host live.hostname=host-d2
 vm config net lan-d,00:1f:53:00:04:12,virtio-net-pci
 vm launch kvm host-d2
 
+# host-d3: a fixed VNC shim port.
+vm config vnc-port 5903
 vm config append live.role=host live.hostname=host-d3
 vm config net lan-d,00:1f:53:00:04:13,virtio-net-pci
 vm launch kvm host-d3
+clear vm config vnc-port
 
 # host-d4: no miniccc backchannel; only reachable over the network.
 vm config backchannel false

@@ -113,6 +113,7 @@ func TestLive(t *testing.T) {
 		p("Hotplug", testHotplug, cc),
 		p("Save", testSave, cc),
 		p("KillFlushRelaunch", testKillFlushRelaunch, cc),
+		p("VNCFixedPort", testVNCFixedPort, inv),
 
 		// tools shipped in the image
 		p("Passwordify", testPasswordify, cc),
@@ -272,6 +273,7 @@ func testVMConfig(t *testing.T) {
 	check("host-c2", "disks", "writeback")
 	check("host-c5", "usb-use-xhci", "true")
 	check("host-d5", "uuid", d5UUID)
+	check("host-d3", "vnc_port", d3VNCPort)
 	for i := 1; i <= 5; i++ {
 		check("host-b"+itoa(i), "mac", "00:1f:53:00:02:1"+itoa(i))
 	}
@@ -1244,6 +1246,98 @@ func testKillFlushRelaunch(t *testing.T) {
 	if r["uuid"] == harness.VMInfo(t)["host-a4"]["uuid"] {
 		t.Errorf("clone kept the source UUID")
 	}
+}
+
+// testVNCFixedPort checks "vm config vnc-port": the shim listens on the
+// configured port, conflicting launches (Android, other namespaces) are
+// refused, and a restart rebinds it.
+func testVNCFixedPort(t *testing.T) {
+	banner := func() error {
+		out, err := harness.InContainer(t, "bash", "-c",
+			"exec 3<>/dev/tcp/127.0.0.1/"+d3VNCPort+" && timeout 5 head -c 12 <&3")
+		if err != nil || !strings.HasPrefix(out, "RFB ") {
+			return fmt.Errorf("no RFB banner on port %v: %q %v", d3VNCPort, out, err)
+		}
+		return nil
+	}
+
+	if got := harness.VMInfo(t)["host-d3"]["vnc_port"]; got != d3VNCPort {
+		t.Fatalf("host-d3 vnc_port = %q, want %v", got, d3VNCPort)
+	}
+	harness.Eventually(t, 30*time.Second, 2*time.Second, banner)
+
+	defer harness.MustRun(t, "clear vm config")
+	harness.MustRun(t, "vm config restore live-base")
+	harness.MustRun(t, "vm config vnc-port "+d3VNCPort)
+	if got := harness.MustText(t, "vm config vnc-port"); got != d3VNCPort {
+		t.Errorf("vm config vnc-port = %q, want %v", got, d3VNCPort)
+	}
+
+	// a range cannot share one port
+	if _, err := harness.Raw("namespace " + harness.Namespace + " vm launch kvm vnc-dup[1-2]"); err == nil || !strings.Contains(err.Error(), "VNC port") {
+		t.Errorf("range launch with vnc-port: err = %v, want a VNC port error", err)
+	}
+
+	// Android VMs have no VNC shim, so they refuse a fixed port up front
+	if _, err := harness.Raw("namespace " + harness.Namespace + " vm launch android vnc-droid"); err == nil || !strings.Contains(err.Error(), "android VMs do not support vnc-port") {
+		t.Errorf("android launch with vnc-port: err = %v, want an android error", err)
+	}
+
+	// a second VM with the same port is refused on this host, in this namespace
+	// or another; the scheduler only logs and counts launch errors
+	const otherNS = "live-vnc"
+	defer harness.Raw("clear namespace " + otherNS)
+	for _, ns := range []string{harness.Namespace, otherNS} {
+		run := func(cmd string) {
+			t.Helper()
+			if _, err := harness.Raw("namespace " + ns + " " + cmd); err != nil {
+				t.Fatalf("%v: %v", ns, err)
+			}
+		}
+		if ns == otherNS {
+			run("vm config kernel live/live.kernel")
+			run("vm config initrd live/live.initrd")
+			run("vm config memory 352")
+			run("vm config vnc-port " + d3VNCPort)
+		}
+		run("vm launch kvm vnc-dup")
+		if ns == harness.Namespace {
+			run("vm launch")
+		}
+
+		resps, err := harness.Raw("namespace " + ns + " ns schedule status")
+		if rows := harness.ToRows(resps); err != nil || len(rows) == 0 || rows[len(rows)-1]["failures"] != "1" {
+			t.Errorf("%v: duplicate vnc-port launch was not counted as a failure: %v %v", ns, rows, err)
+		}
+		resps, _ = harness.Raw("namespace " + ns + " vm info")
+		for _, r := range harness.ToRows(resps) {
+			if r["name"] == "vnc-dup" {
+				t.Errorf("%v: vnc-dup was created despite the port conflict", ns)
+			}
+		}
+	}
+	out, _ := harness.InContainer(t, "grep", "-c", "vnc port "+d3VNCPort+" already reserved by vm host-d3 in namespace "+harness.Namespace, "/var/log/minimega/minimega.log")
+	if n, _ := strconv.Atoi(strings.TrimSpace(out)); n < 2 {
+		t.Errorf("minimega log has %q reservation errors, want one per namespace", strings.TrimSpace(out))
+	}
+
+	// a restarted VM gets the same port back
+	harness.MustRun(t, "vm kill host-d3")
+	harness.Eventually(t, 30*time.Second, 2*time.Second, func() error {
+		if s := harness.VMInfo(t)["host-d3"]["state"]; s != "QUIT" {
+			return fmt.Errorf("state = %v", s)
+		}
+		return nil
+	})
+	harness.MustRun(t, "vm start host-d3")
+	harness.Eventually(t, 30*time.Second, 2*time.Second, func() error {
+		r := harness.VMInfo(t)["host-d3"]
+		if r["state"] != "RUNNING" || r["vnc_port"] != d3VNCPort {
+			return fmt.Errorf("state = %v vnc_port = %v", r["state"], r["vnc_port"])
+		}
+		return nil
+	})
+	harness.Eventually(t, 30*time.Second, 2*time.Second, banner)
 }
 
 // --- tools -------------------------------------------------------------------
