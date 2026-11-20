@@ -25,7 +25,7 @@ minimega:/tmp/minimega/minimega$ nuke
 minimega:/tmp/minimega/minimega$ vm config disk /home/ubuntu/tinycore.qcow
 minimega:/tmp/minimega/minimega$ vm config memory 128
 minimega:/tmp/minimega/minimega$ vm config net 100
-minimega:/tmp/minimega/minimega$ vm launch kvm a,b
+minimega:/tmp/minimega/minimega$ vm launch kvm vm-a,vm-b
 minimega:/tmp/minimega/minimega$ vm start all
 ```
 

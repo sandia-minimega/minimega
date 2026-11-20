@@ -1,16 +1,16 @@
 vm config net LAN
-vm launch kvm a,b
+vm launch kvm vm-a,vm-b
 
 # do some obviously wrong things
-tap mirror a 1 b 0
-tap mirror a 0 b 1
-tap mirror a 0 c 0
+tap mirror vm-a 1 vm-b 0
+tap mirror vm-a 0 vm-b 1
+tap mirror vm-a 0 vm-c 0
 
 # should work
-tap mirror a 0 b 0
+tap mirror vm-a 0 vm-b 0
 
 # clear by destination
-clear tap mirror b 0
+clear tap mirror vm-b 0
 
 # already cleared, should have error
-clear tap mirror b 0
+clear tap mirror vm-b 0

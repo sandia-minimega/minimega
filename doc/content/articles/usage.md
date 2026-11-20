@@ -577,11 +577,11 @@ minimega$ vm config snapshot true
 minimega$ vm config memory 2048
 ```
 
-From here, let's launch a single virtual machine with the name `foo_1`. We do
+From here, let's launch a single virtual machine with the name `foo-1`. We do
 this with the `vm launch` command:
 
 ```text
-minimega$ vm launch kvm foo_1
+minimega$ vm launch kvm foo-1
 ```
 
 To check on our VM, we can use the `vm info` command, which, with no arguments,
@@ -590,7 +590,7 @@ will tell us about all VMs minimega has on this node:
 ```text
 minimega$ vm info
 host | id | host | name  | state    | memory | vcpus | disk                      | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | VLAN | uuid                                 | cc_active
-foo  | 0  | foo  | foo_1 | BUILDING | 2048   | 1     | [/tmp/foo.qc2] [snapshot] |        |        |       |        | []     | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
+foo  | 0  | foo  | foo-1 | BUILDING | 2048   | 1     | [/tmp/foo.qc2] [snapshot] |        |        |       |        | []     | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
 ```
 
 You'll notice that the state of the VM from the above `vm info` command is
@@ -598,10 +598,10 @@ You'll notice that the state of the VM from the above `vm info` command is
 name or ID with the `vm start` command:
 
 ```text
-minimega$ vm start foo_1
+minimega$ vm start foo-1
 minimega$ vm info
 host | id | host | name  | state   | memory | vcpus | disk                      | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | VLAN | uuid                                 | cc_active
-foo  | 0  | foo  | foo_1 | RUNNING | 2048   | 1     | [/tmp/foo.qc2] [snapshot] |        |        |       |        | []     | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
+foo  | 0  | foo  | foo-1 | RUNNING | 2048   | 1     | [/tmp/foo.qc2] [snapshot] |        |        |       |        | []     | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
 ```
 
 Now we see that the VM is in the running state. You can also just call
@@ -609,16 +609,16 @@ Now we see that the VM is in the running state. You can also just call
 `BUILDING` state.
 
 Let's kill this VM and try a different approach. We'll use the `vm kill`
-command to kill foo_1:
+command to kill foo-1:
 
 ```text
-minimega$ vm kill foo_1
+minimega$ vm kill foo-1
 minimega$ vm info
 host | id | host | name  | state | memory | vcpus | disk                      | initrd | kernel | cdrom | append | bridge | tap | mac | ip | ip6 | VLAN | uuid                                 | cc_active
-foo  | 0  | foo  | foo_1 | QUIT  | 2048   | 1     | [/tmp/foo.qc2] [snapshot] |        |        |       |        | []     | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
+foo  | 0  | foo  | foo-1 | QUIT  | 2048   | 1     | [/tmp/foo.qc2] [snapshot] |        |        |       |        | []     | []  | []  | [] | []  | []   | 64b94cc6-925b-403a-a975-a7723079e74d | false
 ```
 
-foo_1 is now in the `QUIT` state. Now let's use `vm launch` to launch 5 VMs at
+foo-1 is now in the `QUIT` state. Now let's use `vm launch` to launch 5 VMs at
 the same time, all using the configuration we described earlier. To do that, we
 simply call `vm launch` with a number instead of a name:
 
@@ -634,7 +634,7 @@ If we check `vm info` again, we'll notice two things:
 ```text
 minimega$ .columns id,name,state,uuid vm info
 id   | name  | state    | uuid
-0    | foo_1 | QUIT     | 64b94cc6-925b-403a-a975-a7723079e74d
+0    | foo-1 | QUIT     | 64b94cc6-925b-403a-a975-a7723079e74d
 1    | vm-1  | BUILDING | a144622f-f0e9-4f28-aaa9-5918e4083e4e
 2    | vm-2  | BUILDING | f6a03b73-40ca-4d7d-ae5e-8e07bb0ef9d4
 3    | vm-3  | BUILDING | f33fe9c5-2333-47a7-81b8-6ed6ab7beca6
@@ -642,7 +642,7 @@ id   | name  | state    | uuid
 5    | vm-5  | BUILDING | 6baa17b2-59a3-4b4c-b90a-3210bb4449c2
 ```
 
-First, the VM foo_1 that we killed earlier is still hanging around in our info
+First, the VM foo-1 that we killed earlier is still hanging around in our info
 table, even though it was killed a while back. We can clear that with a
 `vm flush` command, which will remove any VMs that are in the `QUIT` or `ERROR`
 state.
@@ -718,10 +718,10 @@ tags with the `vm config net` command, separated by spaces:
 
 ```text
 minimega$ vm config net net1 net2 net3
-minimega$ vm launch kvm many_interfaces
+minimega$ vm launch kvm many-interfaces
 minimega$ .columns name,mac,VLAN .filter name=many_interface vm info
 name            | mac                                                     | VLAN
-many_interfaces | [00:db:30:d0:b0:a3 00:2a:53:1d:28:08 00:0a:8d:70:8c:f2] | [net1 (102), net2 (103), net3 (104)]
+many-interfaces | [00:db:30:d0:b0:a3 00:2a:53:1d:28:08 00:0a:8d:70:8c:f2] | [net1 (102), net2 (103), net3 (104)]
 ```
 
 Note that minimega has selected VLANs 102, 103, and 104 for the new
