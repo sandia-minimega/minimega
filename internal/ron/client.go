@@ -230,14 +230,14 @@ func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 			p := plumber.NewReader(pipe)
 			c.pipeReaders[pipe] = p
 			go func() {
-				defer func() {
-					c.pipeLock.Lock()
-					defer c.pipeLock.Unlock()
-					delete(c.pipeReaders, pipe)
-				}()
-				for {
+				for open := true; open; {
 					select {
-					case v := <-p.C:
+					case v, ok := <-p.C:
+						if !ok {
+							open = false
+							break
+						}
+
 						c.sendMessage(&Message{
 							Type:     MESSAGE_PIPE,
 							Pipe:     m.Pipe, // use the non-namespace pipe name for downstream
@@ -245,14 +245,29 @@ func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 							PipeData: v,
 						})
 					case <-p.Done:
-						// signal the close downstream
-						c.sendMessage(&Message{
-							Type:     MESSAGE_PIPE,
-							Pipe:     m.Pipe, // use the non-namespace pipe name for downstream
-							PipeMode: PIPE_CLOSE_READER,
-						})
-						return
+						open = false
 					}
+				}
+
+				// miniplumber closed the reader if it is still the
+				// client's reader for this pipe, and then the client
+				// has to know. The client closed it otherwise, and may
+				// have a new reader on the pipe by now, which a close
+				// from here would end.
+				c.pipeLock.Lock()
+				closedHere := c.pipeReaders[pipe] == p
+				if closedHere {
+					delete(c.pipeReaders, pipe)
+				}
+				c.pipeLock.Unlock()
+
+				if closedHere {
+					// signal the close downstream
+					c.sendMessage(&Message{
+						Type:     MESSAGE_PIPE,
+						Pipe:     m.Pipe, // use the non-namespace pipe name for downstream
+						PipeMode: PIPE_CLOSE_READER,
+					})
 				}
 			}()
 		}
@@ -263,10 +278,10 @@ func (c *client) pipeHandler(plumber *miniplumber.Plumber, m *Message) {
 		}
 	case PIPE_CLOSE_READER:
 		if p, ok := c.pipeReaders[pipe]; ok {
-			// the reader goroutine will delete the reader from the
-			// map. We do this because miniplumber can close the
-			// reader for us asynchronously, and we want to clean
-			// up accordingly.
+			// Forget the reader now, and not when its goroutine ends,
+			// so that the client can make a new reader on this pipe
+			// right away.
+			delete(c.pipeReaders, pipe)
 			p.Close()
 		}
 	case PIPE_CLOSE_WRITER:

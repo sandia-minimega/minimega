@@ -6,8 +6,10 @@ package main
 
 import (
 	"encoding/gob"
+	"errors"
 	"io"
 	"net"
+	"syscall"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
@@ -96,30 +98,43 @@ func pipeConn(enc *gob.Encoder, dec *gob.Decoder) {
 	}
 	writer, err := NewPlumberWriter(pipe)
 	if err != nil {
+		reader.Close()
 		log.Errorln(err)
 		return
 	}
 
+	// Send lines written to the pipe to the client, until the reader is
+	// closed or the client is gone.
+	sent := make(chan struct{})
 	go func() {
+		defer close(sent)
+		// stop the plumber from delivering to a client that is gone
+		defer reader.Close()
+
 		for {
 			select {
 			case <-reader.Done:
 				return
-			case line := <-reader.C:
+			case line, ok := <-reader.C:
+				if !ok {
+					return
+				}
+
 				if err := enc.Encode(line); err != nil {
-					log.Errorln(err)
-					break
+					if !isClientGone(err) {
+						log.Errorln(err)
+					}
+					return
 				}
 			}
 		}
-
 	}()
 
-	for err == nil {
+	for {
 		var line string
 		err = dec.Decode(&line)
 		if err != nil {
-			if err != io.EOF {
+			if err != io.EOF && !isClientGone(err) {
 				log.Errorln(err)
 			}
 			break
@@ -130,7 +145,17 @@ func pipeConn(enc *gob.Encoder, dec *gob.Decoder) {
 		}
 	}
 
-	// stop the reader
+	// stop the reader, and wait for it so that nothing is sent to the client
+	// after the caller closes the connection
 	reader.Close()
+	<-sent
+
 	close(writer)
+}
+
+// isClientGone reports whether err is how a write to, or a read from, the
+// command socket fails when the client disconnected early: EPIPE on a write
+// and, if the client left data it was sent unread, ECONNRESET on a read.
+func isClientGone(err error) bool {
+	return errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET)
 }
