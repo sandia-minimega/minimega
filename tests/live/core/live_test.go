@@ -75,6 +75,7 @@ func TestLive(t *testing.T) {
 		p("CCSendRecv", testCCSendRecv, cc),
 		p("CCBackgroundProcess", testCCBackgroundProcess, cc),
 		p("CCResponses", testCCResponses, cc),
+		p("CCPipeOrder", testCCPipeOrder, cc),
 
 		// what the guest sees of its VM configuration
 		p("GuestQemuAppend", testGuestQemuAppend, cc),
@@ -773,6 +774,71 @@ func testCCResponses(t *testing.T) {
 		t.Errorf("cc responses %d = %q", id, out)
 	}
 	harness.MustRun(t, fmt.Sprintf("cc delete response %d", id))
+}
+
+// testCCPipeOrder writes numbered lines to a named pipe, first from minimega
+// and then from another VM through miniccc, and checks that a reader in a VM
+// receives them in order.
+func testCCPipeOrder(t *testing.T) {
+	const (
+		pipe   = "live-order"
+		reader = "host-c4"
+		writer = "host-d3"
+		count  = 300
+		out    = "/tmp/pipe-order" // .in and .txt files
+	)
+
+	// A FIFO held open on stdin keeps the reader's "miniccc -pipe" from
+	// exiting on EOF. tee writes each line to the file without a buffer, head
+	// exits once it has every line, and timeout bounds the reader if it never
+	// does. minimega expands $VAR in commands, so these scripts cannot use
+	// shell variables.
+	harness.CCRun(t, "name="+reader, fmt.Sprintf(`background sh -c "rm -f %[1]v.in; mkfifo %[1]v.in; exec 3<>%[1]v.in; timeout 180 miniccc -pipe %[2]v <&3 | tee %[1]v.txt | head -n %[3]d > /dev/null"`, out, pipe, 2*count), 1, time.Minute)
+	defer func() {
+		// more values hit head's closed stdin, so tee and then the reader
+		// exit, and the reader closes its end of the pipe
+		harness.Eventually(t, 4*time.Minute, 3*time.Second, func() error {
+			if _, err := harness.Run("pipe " + pipe + " done"); err != nil {
+				return err
+			}
+			_, err := harness.Run("clear pipe " + pipe)
+			return err
+		})
+	}()
+
+	harness.Eventually(t, time.Minute, 2*time.Second, func() error {
+		for _, r := range harness.MustTable(t, "pipe") {
+			if r["name"] == harness.Namespace+"//"+pipe && r["readers"] != "0" {
+				return nil
+			}
+		}
+		return fmt.Errorf("no reader on pipe %v", pipe)
+	})
+
+	for i := 1; i <= count; i++ {
+		harness.MustRun(t, fmt.Sprintf("pipe %v %d", pipe, i))
+	}
+	// "pipe" returns once a value is queued, and the two writers are not
+	// ordered against each other: let these reach the guest first
+	harness.CCEventually(t, reader, fmt.Sprintf("test $(wc -l < %v.txt) -ge %d", out, count), time.Minute)
+	harness.CCOK(t, writer, fmt.Sprintf("seq %d %d | miniccc -pipe %v > /dev/null", count+1, 2*count, pipe))
+
+	harness.CCEventually(t, reader, fmt.Sprintf("test $(wc -l < %v.txt) -ge %d", out, 2*count), 2*time.Minute)
+	got := strings.Fields(harness.CCOK(t, reader, "cat "+out+".txt"))
+	if len(got) != 2*count {
+		t.Fatalf("reader received %d lines, want %d", len(got), 2*count)
+	}
+	for i, v := range got {
+		if v != strconv.Itoa(i+1) {
+			t.Fatalf("line %d is %q, want %d (first %d lines: %v)", i+1, v, i+1, min(len(got), 20), got[:min(len(got), 20)])
+		}
+	}
+
+	for _, r := range harness.MustTable(t, "pipe") {
+		if r["name"] == harness.Namespace+"//"+pipe && r["previous"] != strconv.Itoa(2*count) {
+			t.Errorf("pipe %v previous = %q, want %d", pipe, r["previous"], 2*count)
+		}
+	}
 }
 
 // --- guest view of VM configuration ----------------------------------------
