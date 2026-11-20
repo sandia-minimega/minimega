@@ -90,6 +90,7 @@ func TestLive(t *testing.T) {
 		p("PingAcrossRouters", testPingAcrossRouters, network),
 		p("NoBackchannelHostReachable", testNoBackchannelHost, network),
 		p("DNS", testDNS, network),
+		p("DNSCustom", testDNSCustom, network),
 		p("HTTPProtonuke", testHTTPProtonuke, network),
 		p("Firewall", testFirewall, network),
 		p("HostTap", testHostTap, network),
@@ -940,6 +941,33 @@ func testDNS(t *testing.T) {
 	harness.CCEventually(t, "host-c2", "nslookup fw.live 2>&1 | grep -q 10.10.4.11", time.Minute)
 	if out := harness.CCOK(t, "host-a1", "cat /etc/resolv.conf"); !strings.Contains(out, "10.10.1.1") {
 		t.Errorf("DHCP did not hand out the router as DNS server:\n%s", out)
+	}
+}
+
+func testDNSCustom(t *testing.T) {
+	// lines from "router rtr-ab dnsmasq" in topology.mm
+	harness.CCEventually(t, "host-a1", "nslookup any.wild.live 2>&1 | grep -q 10.10.3.11", time.Minute)
+	harness.CCEventually(t, "host-a2", "nslookup www.web.live 2>&1 | grep -q 10.10.3.11", time.Minute)
+
+	conf := harness.CCOK(t, "rtr-ab", "cat /etc/dnsmasq.conf")
+	for _, line := range []string{"address=/wild.live/10.10.3.11", "cname=www.web.live,web.live", "# live custom dnsmasq"} {
+		if !strings.Contains(conf, "\n"+line+"\n") {
+			t.Errorf("rtr-ab dnsmasq.conf missing %q:\n%s", line, conf)
+		}
+	}
+
+	// clear and re-add one line without a commit, so the guest is untouched
+	cname := "cname=www.web.live,web.live"
+	if out := harness.MustText(t, "router rtr-ab"); !strings.Contains(out, cname) {
+		t.Fatalf("router rtr-ab missing %q:\n%s", cname, out)
+	}
+	harness.MustRun(t, "clear router rtr-ab dnsmasq "+cname)
+	if out := harness.MustText(t, "router rtr-ab"); strings.Contains(out, cname) {
+		t.Errorf("clear router dnsmasq left %q:\n%s", cname, out)
+	}
+	harness.MustRun(t, "router rtr-ab dnsmasq "+cname)
+	if _, err := harness.Run("router rtr-ab dnsmasq \"a=1\\nb=2\""); err == nil {
+		t.Errorf("multi-line dnsmasq config was accepted")
 	}
 }
 
