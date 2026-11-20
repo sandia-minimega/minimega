@@ -13,24 +13,28 @@ are. These tests sit on top and need a Linux host with KVM.
 ```mermaid
 flowchart LR
   subgraph CI["GitHub Actions"]
-    D["Docker workflow<br/>build + push image (master)"] --> L["Live Tests workflow<br/>(live.yml; builds the image on pull requests)"]
+    D["Docker workflow<br/>build + push images (master)"] --> L["Live Tests workflow<br/>(live.yml; builds the images on pull requests)"]
   end
   L --> R["tests/live/run.sh"]
-  R -->|1. pull or local build| I[("minimega image")]
+  R -->|1. pull or local build| I[("minimega and miniweb images")]
   R -->|2. build guest in image| G["live.kernel + live.initrd"]
-  R -->|3. docker run| C["minimega container<br/>OVS · miniweb · minimega"]
+  R -->|3. docker run| C["minimega container<br/>OVS · minimega"]
+  R -->|3. docker run| W["miniweb container<br/>network of the minimega container"]
+  W --> C
   R -->|4. mm read topology.mm| C
   R -->|5. go test -tags live| T["Go tests (one group)<br/>pkg/miniclient over /tmp/minimega/minimega"]
   T --> C
   C --> V["22 KVM VMs · 4 VLANs"]
 ```
 
-1. **Image** — on master, CI tests the exact image the Docker workflow just
-   pushed (its immutable short-SHA tag). A pull request cannot push, so the
-   live job builds the pull request's code from `docker/Dockerfile` and tests
-   that image in the same job. Run by hand (`gh workflow run live.yml --ref
+1. **Image** — on master, CI tests the exact minimega and miniweb images the
+   Docker workflow just pushed (their immutable short-SHA tags). A pull request
+   cannot push, so the live job builds both targets of the pull request's code
+   from `docker/Dockerfile` and tests those images in the same job. Run by hand (`gh workflow run live.yml --ref
    <branch>`, also on a fork) the workflow builds the dispatched branch the
-   same way; its optional `image` input tests an existing image instead.
+   same way; its optional `image` input tests an existing image instead, and
+   `miniweb-image` (default: `image` with the name `miniweb`) sets the miniweb
+   image.
 2. **Guest image** — `run.sh` runs the `vmbetter` shipped *in that image*
    (in a privileged container with `debootstrap`) on `image/live.conf`: a
    Debian bookworm kernel plus a busybox initramfs with `bird`, `dnsmasq`, and
@@ -40,8 +44,10 @@ flowchart LR
    scripts are in `image/overlay/`. The unpacked rootfs is ~100 MiB and an
    initramfs lives in RAM (it may use about half of it), so the guests get
    352–448 MB each: 22 VMs take ~8.5 GB of a standard runner's 16 GB.
-3. **Deployment** — the container starts with the flags from
-   `docker/README.md` (privileged, `/dev`, `/lib/modules`, `/tmp/minimega`).
+3. **Deployment** — the containers start with the flags from
+   `docker/README.md`: minimega is privileged with `/dev`, `/lib/modules`, and
+   `/tmp/minimega`, and miniweb shares its network namespace and
+   `/tmp/minimega`.
 4. **Topology** — the group's `topology.mm` is loaded with `mm read`, exercising the CLI
    and script path used by people and FIREWHEEL.
 5. **Tests** — the group's Go tests (`//go:build live`) talk to the bind-mounted socket
@@ -143,11 +149,12 @@ Out of scope: containers, Android, bare-metal VMs, and multi-node meshes.
 Needs Linux, root, Docker, `/dev/kvm`, the `openvswitch` kernel module, and Go.
 
 ```bash
-# test the image CI publishes for master
+# test the images CI publishes for master (miniweb: ghcr.io/sandia-minimega/miniweb:master)
 sudo tests/live/run.sh ghcr.io/sandia-minimega/minimega:master
 
-# test a local build
-docker build -t minimega:dev -f docker/Dockerfile .
+# test a local build (miniweb: miniweb:dev)
+docker build --target minimega -t minimega:dev -f docker/Dockerfile .
+docker build --target miniweb -t miniweb:dev -f docker/Dockerfile .
 sudo LIVE_PULL=0 tests/live/run.sh minimega:dev
 
 # run a subset and keep the experiment up to poke at it
@@ -156,7 +163,9 @@ sudo LIVE_KEEP=1 LIVE_TEST_ARGS='-test.run TestLive/(Version|Namespace|Inventory
 docker exec minimega mm namespace live vm info
 ```
 
-`run.sh` refuses to replace an existing `minimega` container, or to delete a
+`run.sh` uses the minimega image with the name `miniweb` as the miniweb image;
+set `LIVE_MINIWEB_IMAGE` to use a different one.
+`run.sh` refuses to replace an existing `minimega` or `minimega-miniweb` container, or to delete a
 non-empty `/tmp/minimega` (`LIVE_MM_BASE`), unless `LIVE_FORCE=1` is set, and
 always refuses a base directory that is not an absolute, normalized path at
 least two levels deep or that is a home or system directory; a finished run removes both

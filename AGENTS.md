@@ -126,8 +126,8 @@ fields, and never accept `.got` without reviewing it.
 
 ### Live integration tests
 
-[`tests/live/`](tests/live/) boots KVM topologies from a minimega Docker image
-and drives them over the command socket; CI runs it after the Docker workflow
+[`tests/live/`](tests/live/) boots KVM topologies from the minimega and miniweb
+Docker images and drives them over the command socket; CI runs it after the Docker workflow
 publishes an image. It needs root, Docker, `/dev/kvm`, and the `openvswitch`
 module. Each test group is a sub-folder (a `topology.mm` plus its `//go:build
 live` Go tests); `tests/live/harness/` is the shared helper package, and
@@ -136,6 +136,8 @@ image's own `vmbetter` from `tests/live/image/live.conf`. See
 [`tests/live/README.md`](tests/live/README.md).
 
 ```bash
+docker build --target minimega -t minimega:dev -f docker/Dockerfile .
+docker build --target miniweb -t miniweb:dev -f docker/Dockerfile .
 sudo LIVE_PULL=0 tests/live/run.sh minimega:dev
 go vet -tags live ./tests/live/...
 ```
