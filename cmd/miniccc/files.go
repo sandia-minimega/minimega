@@ -43,14 +43,15 @@ func sendFile(ID int, filename string) error {
 
 // recvFiles retrieves a list of files from the ron server by requesting each
 // one individually.
-func recvFiles(files []string) {
+func recvFiles(files []string, destination string) {
 	start := time.Now()
 	var size int64
+	destDir := recvDir(*f_path, destination)
 
 	for _, v := range files {
 		log.Info("requesting file %v", v)
 
-		dst := filepath.Join(*f_path, "files", v)
+		dst := filepath.Join(destDir, v)
 
 		if _, err := os.Stat(dst); err == nil {
 			// file exists (TODO: overwrite?)
@@ -71,31 +72,7 @@ func recvFiles(files []string) {
 			return
 		}
 
-		// recv all parts of this file
-		for {
-			resp := <-client.fileChan
-			if resp.File.Name != v {
-				log.Error("filename mismatch: %v != %v", resp.File.Name, v)
-				break
-			}
-
-			// unable to retrieve this file
-			if resp.Error != "" {
-				log.Error("%v", resp.Error)
-				break
-			}
-
-			if err := resp.File.Recv(dst); err != nil {
-				log.Errorln(err)
-				break
-			}
-
-			size += int64(len(resp.File.Data))
-
-			if resp.File.EOF {
-				break
-			}
-		}
+		size += recvParts(client.fileChan, v, dst)
 	}
 
 	d := time.Since(start)
@@ -104,4 +81,57 @@ func recvFiles(files []string) {
 	log.Debug("received %v bytes in %v (%v KBps)", size, d, rate)
 
 	return
+}
+
+// recvDir returns the client directory that receives sent files. A relative
+// destination is below the files directory in base.
+func recvDir(base, destination string) string {
+	dir := filepath.Join(base, "files")
+
+	if destination == "" {
+		return dir
+	}
+
+	// On Windows, IsAbs is false for a path such as \opt that has no drive.
+	if filepath.IsAbs(destination) || os.IsPathSeparator(destination[0]) {
+		return filepath.Clean(destination)
+	}
+
+	return filepath.Join(dir, destination)
+}
+
+// recvParts writes the parts of file name from parts to dst and returns the
+// number of bytes written. It reads parts until the final part or an error
+// from the server, also after a write fails, so that the parts of this file
+// do not reach the next transfer.
+func recvParts(parts <-chan *ron.Message, name, dst string) int64 {
+	var size int64
+	var failed bool
+
+	for {
+		resp := <-parts
+		if resp.File.Name != name {
+			log.Error("filename mismatch: %v != %v", resp.File.Name, name)
+			return size
+		}
+
+		// unable to retrieve this file
+		if resp.Error != "" {
+			log.Error("%v", resp.Error)
+			return size
+		}
+
+		if !failed {
+			if err := resp.File.Recv(dst); err != nil {
+				log.Errorln(err)
+				failed = true
+			} else {
+				size += int64(len(resp.File.Data))
+			}
+		}
+
+		if resp.File.EOF {
+			return size
+		}
+	}
 }
