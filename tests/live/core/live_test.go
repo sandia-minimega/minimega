@@ -154,6 +154,9 @@ func testHost(t *testing.T) {
 	if mem, _ := strconv.Atoi(h["memused"]); mem <= 0 {
 		t.Errorf("host memused = %q", h["memused"])
 	}
+	if h["qemu"] == "" {
+		t.Error("host qemu is empty")
+	}
 }
 
 func testNamespace(t *testing.T) {
