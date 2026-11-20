@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sandia-minimega/minimega/v2/internal/qemu"
 	"github.com/sandia-minimega/minimega/v2/tests/live/harness"
 	"github.com/twmb/murmur3"
 )
@@ -113,6 +114,9 @@ func TestLive(t *testing.T) {
 		p("Hotplug", testHotplug, cc),
 		p("Save", testSave, cc),
 		p("KillFlushRelaunch", testKillFlushRelaunch, cc),
+		p("StateMachine", testStateMachine, inv),
+		// last VM operation: it replaces host-c2 with its restored copy
+		p("SaveRestore", testSaveRestore, cc),
 
 		// tools shipped in the image
 		p("Passwordify", testPasswordify, cc),
@@ -1243,6 +1247,266 @@ func testKillFlushRelaunch(t *testing.T) {
 	}
 	if r["uuid"] == harness.VMInfo(t)["host-a4"]["uuid"] {
 		t.Errorf("clone kept the source UUID")
+	}
+}
+
+// launched fails the test when a VM that "vm launch" took from the queue is
+// missing or in the ERROR state. The scheduler logs launch errors and does not
+// return them to the caller.
+func launched(t *testing.T, vm string) {
+	t.Helper()
+	r, ok := harness.VMInfo(t)[vm]
+	if !ok {
+		t.Fatalf("%v not launched from the queue (ns queue: %q)", vm, harness.MustText(t, "ns queue"))
+	}
+	if r["state"] == "ERROR" {
+		t.Fatalf("%v launch failed: state ERROR, tags %v", vm, r["tags"])
+	}
+}
+
+// waitSaved waits until QEMU reports that the migration of "vm save" is
+// complete. It asks QMP: the status list of "vm save" can stop the daemon when
+// a VM is in a transient migration status.
+func waitSaved(t *testing.T, vm string) {
+	t.Helper()
+	harness.Eventually(t, 3*time.Minute, 3*time.Second, func() error {
+		out, err := harness.Text("vm qmp " + vm + ` '{ "execute": "query-migrate" }'`)
+		if err != nil {
+			return err
+		}
+		var r struct {
+			Return struct {
+				Status string `json:"status"`
+			} `json:"return"`
+		}
+		if i := strings.Index(out, "{"); i < 0 {
+			return fmt.Errorf("query-migrate: %q", out)
+		} else if err := json.Unmarshal([]byte(out[i:]), &r); err != nil {
+			return fmt.Errorf("query-migrate: %q: %v", out, err)
+		}
+		if r.Return.Status != "completed" {
+			return fmt.Errorf("migration status %q", r.Return.Status)
+		}
+		return nil
+	})
+}
+
+func testSaveRestore(t *testing.T) {
+	// host-c2 has an IDE disk, miniccc, and a static MAC; the Save phase
+	// already showed that it saves
+	const vm, name = "host-c2", "live/restore-c2"
+	// skip or fail now when there is no container, not after the VM is gone
+	if out, err := harness.InContainer(t, "true"); err != nil {
+		t.Fatalf("docker exec in the minimega container: %v\n%s", err, out)
+	}
+	state := harness.MMFiles + "/" + name + ".state"
+	disk := harness.MMFiles + "/" + name + ".hdd"
+	before := harness.VMInfo(t)[vm]
+
+	// clone needs a launched VM, so take the configuration now
+	harness.MustRun(t, "vm config clone "+vm)
+	defer harness.Run("clear vm config")
+	// a file in the guest tmpfs survives a restore but not a reboot
+	const markerFile = "/tmp/live-save-restore"
+	marker := fmt.Sprintf("restore-%d", time.Now().UnixNano())
+	harness.CCOK(t, vm, "echo "+marker+" > "+markerFile)
+
+	harness.MustRun(t, "vm save "+vm+" "+name)
+	waitSaved(t, vm)
+	for _, f := range []string{state, disk} {
+		if fi, err := os.Stat(f); err != nil || fi.Size() == 0 {
+			t.Fatalf("saved file %v: %v", f, err)
+		}
+	}
+	machine := stateMachineOf(t, state)
+
+	harness.MustRun(t, "vm kill "+vm)
+	harness.Eventually(t, 30*time.Second, 2*time.Second, func() error {
+		if s := harness.VMInfo(t)[vm]["state"]; s != "QUIT" {
+			return fmt.Errorf("state = %v", s)
+		}
+		return nil
+	})
+	harness.MustRun(t, "vm flush")
+
+	// the saved disk must not depend on the flushed VM's instance directory
+	if out, err := harness.InContainer(t, "qemu-img", "info", "--backing-chain", disk); err != nil {
+		t.Fatalf("saved disk %v is not usable after vm flush: %v\n%s", disk, err, out)
+	}
+
+	// the same VM again: clone keeps the MAC and clears the UUID
+	for _, cmd := range []string{
+		"vm config uuid " + before["uuid"],
+		"vm config state " + state,
+		"vm config disks " + disk + ",ide,writeback",
+		"vm launch kvm " + vm,
+		"vm launch",
+	} {
+		harness.MustRun(t, cmd)
+	}
+	launched(t, vm)
+	harness.MustRun(t, "vm start "+vm)
+
+	harness.Eventually(t, 3*time.Minute, 5*time.Second, func() error {
+		r := harness.VMInfo(t)[vm]
+		if r["state"] != "RUNNING" || r["cc_active"] != "true" {
+			return fmt.Errorf("%v state=%v cc=%v", vm, r["state"], r["cc_active"])
+		}
+		return nil
+	})
+	after := harness.VMInfo(t)[vm]
+	if after["uuid"] != before["uuid"] || after["mac"] != before["mac"] {
+		t.Errorf("restored %v uuid/mac = %v/%v, want %v/%v", vm, after["uuid"], after["mac"], before["uuid"], before["mac"])
+	}
+	if r := harness.CCExec(t, vm, "cat "+markerFile); strings.TrimSpace(r.Stdout) != marker {
+		t.Errorf("%v %v after restore = %q (exit %d), want %q: the guest rebooted", vm, markerFile, r.Stdout, r.ExitCode, marker)
+	}
+	if after["machine"] != machine {
+		t.Errorf("restored %v vm info machine = %q, want %q from the state file", vm, after["machine"], machine)
+	}
+}
+
+// stateMachineOf returns the machine type in the header of a state file.
+func stateMachineOf(t *testing.T, path string) string {
+	t.Helper()
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	name, err := qemu.StateMachine(f)
+	if err != nil || name == "" {
+		t.Fatalf("state file %v: machine type %q: %v", path, name, err)
+	}
+	return name
+}
+
+// waitState waits until "vm info" reports a state for vm.
+func waitState(t *testing.T, vm, state string, timeout time.Duration) {
+	t.Helper()
+	harness.Eventually(t, timeout, 2*time.Second, func() error {
+		r, ok := harness.VMInfo(t)[vm]
+		if !ok {
+			return fmt.Errorf("%v is not listed", vm)
+		}
+		if r["state"] != state {
+			return fmt.Errorf("%v state = %v, want %v (error tag: %v)", vm, r["state"], state, r["tags"])
+		}
+		return nil
+	})
+}
+
+// testStateMachine saves a VM that runs a machine type other than the default
+// and restores it with no "vm config machine". QEMU loads a state only with
+// the machine type that saved it, so the restore works only when minimega
+// takes the machine type from the state file.
+func testStateMachine(t *testing.T) {
+	const vm, name = "state-machine", "live/state-machine"
+	// skip now when there is no container, not after the VM is launched
+	harness.InContainer(t, "true")
+	state := harness.MMFiles + "/" + name + ".state"
+	defer harness.Run("clear vm config")
+
+	// a small VM with no NIC and no cc, so the counts of other phases stay
+	harness.MustRun(t, "clear vm config")
+	harness.MustRun(t, "vm config restore live-base")
+	harness.MustRun(t, "vm config backchannel false")
+	qemuPath := strings.TrimSpace(harness.MustText(t, "vm config qemu"))
+	help, err := harness.InContainer(t, qemuPath, "-M", "help")
+	if err != nil {
+		t.Fatalf("%v -M help: %v\n%s", qemuPath, err, help)
+	}
+	machine, err := harness.OlderMachine(help)
+	if err != nil {
+		t.Fatalf("%v -M help: %v\n%s", qemuPath, err, help)
+	}
+	t.Logf("machine type for the saved VM: %v", machine)
+
+	defer func() {
+		harness.Run("vm kill " + vm)
+		harness.Eventually(t, 30*time.Second, 2*time.Second, func() error {
+			if s := harness.VMInfo(t)[vm]["state"]; s != "" && s != "QUIT" && s != "ERROR" {
+				return fmt.Errorf("%v state = %v", vm, s)
+			}
+			return nil
+		})
+		harness.Run("vm flush " + vm)
+	}()
+
+	for _, cmd := range []string{
+		"vm config machine " + machine,
+		"vm launch kvm " + vm,
+		"vm launch",
+	} {
+		harness.MustRun(t, cmd)
+	}
+	launched(t, vm)
+	harness.MustRun(t, "vm start "+vm)
+	waitState(t, vm, "RUNNING", time.Minute)
+
+	harness.MustRun(t, "vm save "+vm+" "+name)
+	waitSaved(t, vm)
+	if got := stateMachineOf(t, state); got != machine {
+		t.Fatalf("state file machine type = %q, want %q", got, machine)
+	}
+
+	harness.MustRun(t, "vm kill "+vm)
+	waitState(t, vm, "QUIT", 30*time.Second)
+	harness.MustRun(t, "vm flush "+vm)
+
+	// the same VM from the state file, with no machine type configured
+	for _, cmd := range []string{
+		"clear vm config machine",
+		"vm config state " + state,
+		"vm launch kvm " + vm,
+		"vm launch",
+	} {
+		harness.MustRun(t, cmd)
+	}
+	launched(t, vm)
+	harness.MustRun(t, "vm start "+vm)
+	waitState(t, vm, "RUNNING", time.Minute)
+
+	// "vm start" resumes the VM, but QEMU runs it only after it loaded the
+	// state; until then the status is "inmigrate"
+	harness.Eventually(t, 2*time.Minute, 2*time.Second, func() error {
+		out, err := harness.Text("vm qmp " + vm + ` '{ "execute": "query-status" }'`)
+		if err != nil {
+			return err
+		}
+		var r struct {
+			Return struct {
+				Status string `json:"status"`
+			} `json:"return"`
+		}
+		if i := strings.Index(out, "{"); i < 0 {
+			return fmt.Errorf("query-status: %q", out)
+		} else if err := json.Unmarshal([]byte(out[i:]), &r); err != nil {
+			return fmt.Errorf("query-status: %q: %v", out, err)
+		}
+		if r.Return.Status != "running" {
+			return fmt.Errorf("status %q, want running", r.Return.Status)
+		}
+		return nil
+	})
+
+	r := harness.VMInfo(t)[vm]
+	if r["machine"] != machine {
+		t.Errorf("vm info machine = %q, want %q from the state file", r["machine"], machine)
+	}
+	cmdline, err := harness.InContainer(t, "cat", "/proc/"+r["pid"]+"/cmdline")
+	if err != nil {
+		t.Fatalf("QEMU command line of pid %v: %v: %s", r["pid"], err, cmdline)
+	}
+	args := strings.Split(cmdline, "\x00")
+	found := false
+	for i := 0; i+1 < len(args); i++ {
+		if args[i] == "-M" && args[i+1] == machine {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("QEMU command line does not have -M %v: %q", machine, args)
 	}
 }
 
