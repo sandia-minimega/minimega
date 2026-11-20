@@ -38,6 +38,11 @@ hostname "${NAME:-live-$ROLE}"
 while read -r mod; do
     insmod "/lib/modules/live/$mod" 2>/dev/null
 done < /etc/modules.live
+if [ "$ROLE" = "router" ]; then
+    while read -r mod; do
+        insmod "/lib/modules/live/$mod" 2>/dev/null
+    done < /etc/modules.router
+fi
 mdev -s 2>/dev/null
 
 # Give NICs and virtio ports a moment to appear.
