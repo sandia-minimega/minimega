@@ -1,0 +1,7 @@
+vm launch kvm foo
+
+vm hmp foo "info status"
+vm start foo
+vm hmp foo "info status"
+
+vm hmp bar "info status"
