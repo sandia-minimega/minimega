@@ -39,6 +39,10 @@
 #   LIVE_QEMU, LIVE_CPU   "vm config qemu" and "vm config cpu" for every VM
 #                         (e.g. /usr/bin/qemu-system-x86_64 and qemu64 to run
 #                         x86 guests without KVM)
+#   LIVE_HUGEPAGES        number of 2 MiB hugepages that the host reserved
+#                         (vm.nr_hugepages) for the Hugepages phase of the core
+#                         group; unset or 0 skips the phase, and a value
+#                         below 192 makes the phase fail
 
 set -uo pipefail
 

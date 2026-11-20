@@ -34,6 +34,11 @@ To enable hugepage support for future VM launches:
 
 	optimize hugepages </path/to/hugepages_mount>
 
+Hugepages apply only to KVM VMs. The memory of each KVM VM must be a multiple
+of the hugepage size of the mount. minimega rejects other memory sizes when it
+launches the KVM VM. The host must have sufficient free hugepages for the KVM
+VM memory, or QEMU does not start.
+
 To disable hugepage support:
 
 	clear optimize hugepages
@@ -143,7 +148,7 @@ func cliOptimizeHugePages(ns *Namespace, c *minicli.Command, resp *minicli.Respo
 			log.Warn("file does not exist: %v", v)
 		}
 
-		ns.hugepagesMountPath = v
+		ns.setHugepagesMountPath(v)
 
 		return nil
 	}
@@ -199,7 +204,7 @@ func cliOptimizeClear(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 	case c.BoolArgs["affinity"]:
 		ns.disableAffinity()
 	case c.BoolArgs["hugepages"]:
-		ns.hugepagesMountPath = ""
+		ns.setHugepagesMountPath("")
 	case c.BoolArgs["ksm"]:
 		return ksmDisable()
 	default:
@@ -209,7 +214,7 @@ func cliOptimizeClear(ns *Namespace, c *minicli.Command, resp *minicli.Response)
 			}
 		}
 
-		ns.hugepagesMountPath = ""
+		ns.setHugepagesMountPath("")
 		ns.affinityFilter = nil
 		ns.disableAffinity()
 	}

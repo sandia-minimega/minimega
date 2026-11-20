@@ -352,6 +352,9 @@ func cliVMConfig(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 			}
 		}
 
+		// the path of the launched VM is not part of the VM config
+		ns.vmConfig.KVMConfig.hugepagesMountPath = ""
+
 		// clear UUID since we can't launch VMs with the same UUID
 		ns.vmConfig.UUID = ""
 

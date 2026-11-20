@@ -72,6 +72,20 @@ jobs:
           lsmod | grep -E '^(kvm|openvswitch)'
           nproc; free -h
 
+      - name: Reserve hugepages
+        run: |
+          # the Hugepages phase launches one 384 MB VM from 2 MiB hugepages
+          # (192 pages); reserve some more as margin, before the builds fragment
+          # the memory
+          echo 320 | sudo tee /proc/sys/vm/nr_hugepages
+          grep Huge /proc/meminfo
+          total="$(awk '/^HugePages_Total:/ { print $2 }' /proc/meminfo)"
+          if [ "${total:-0}" -lt 192 ]; then
+            echo "::error::reserved ${total:-0} hugepages of 2 MiB, the Hugepages phase needs at least 192"
+            exit 1
+          fi
+          echo "LIVE_HUGEPAGES=${total}" >> "$GITHUB_ENV"
+
       - name: Build container image
         if: env.BUILD == 'true'
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -99,7 +113,7 @@ jobs:
 
       - name: Run live tests
         run: |
-          sudo --preserve-env=GITHUB_STEP_SUMMARY,LIVE_PULL \
+          sudo --preserve-env=GITHUB_STEP_SUMMARY,LIVE_PULL,LIVE_HUGEPAGES \
             LIVE_TEST_BIN="${{ runner.temp }}/live.test" \
             LIVE_ARTIFACTS="${{ github.workspace }}/live-artifacts" \
             tests/live/run.sh "$IMAGE"
