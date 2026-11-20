@@ -12,6 +12,7 @@
 #   2. build the KVM guest kernel/initrd with the image's vmbetter (tests/live/image/live.conf)
 #   3. start minimega from the image exactly as docker/README.md documents
 #   4. load tests/live/$LIVE_GROUP/topology.mm with "mm read" (the CLI path)
+#      after sourcing tests/live/$LIVE_GROUP/setup.sh, if the group has one
 #   5. run the Go tests in tests/live/$LIVE_GROUP over the command socket (the phenix path)
 #   6. collect diagnostics, tear the experiment down, and stop the container
 #
@@ -170,6 +171,8 @@ cleanup() {
         log "LIVE_KEEP=1: leaving ${CONTAINER} running"
         return
     fi
+    # a group's setup.sh may define group_cleanup for what it started
+    declare -F group_cleanup >/dev/null && group_cleanup
     docker logs "${CONTAINER}" > "${ARTIFACTS}/logs/container.log" 2>&1 || true
     docker rm -f "${CONTAINER}" >/dev/null 2>&1 || true
     # this run created MM_BASE and the artifacts are copied out of it; remove
@@ -206,6 +209,16 @@ for _ in $(seq 1 60); do
     sleep 2
 done
 mm version || { docker logs "${CONTAINER}" | tail -50; die "minimega did not start"; }
+
+# --- group setup -------------------------------------------------------------
+
+# A group can prepare more than the one container (e.g. mesh peers) in an
+# optional setup.sh, sourced here with this script's variables and helpers.
+if [[ -f "${SCRIPT_DIR}/${GROUP}/setup.sh" ]]; then
+    log "running ${GROUP}/setup.sh"
+    # shellcheck source=/dev/null
+    source "${SCRIPT_DIR}/${GROUP}/setup.sh" || die "${GROUP}/setup.sh failed"
+fi
 
 # --- load the topology through the CLI ---------------------------------------
 

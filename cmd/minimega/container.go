@@ -1578,7 +1578,10 @@ func containerMaskPaths(fsPath string) error {
 	for _, v := range containerMaskedPaths {
 		p := filepath.Join(fsPath, v)
 		err := syscall.Mount("/dev/null", p, "", syscall.MS_BIND, "")
-		if err != nil {
+		if errors.Is(err, syscall.ENOENT) {
+			log.Debug("not masking missing path: %v", p)
+			continue // e.g. no /proc/kcore without CONFIG_PROC_KCORE
+		} else if err != nil {
 			return err
 		}
 	}
@@ -1593,7 +1596,10 @@ func containerRemountReadOnly(fsPath string) error {
 			continue // this was actually a mountpoint
 		}
 		err = syscall.Mount(p, p, "", syscall.MS_BIND, "")
-		if err != nil {
+		if errors.Is(err, syscall.ENOENT) {
+			log.Debug("not remounting missing path read-only: %v", p)
+			continue // e.g. no /proc/sysrq-trigger without CONFIG_MAGIC_SYSRQ
+		} else if err != nil {
 			return err
 		}
 		err = syscall.Mount(p, p, "", syscall.MS_BIND|syscall.MS_REMOUNT|syscall.MS_RDONLY|syscall.MS_REC|syscall.MS_NOEXEC|syscall.MS_NOSUID|syscall.MS_NODEV, "")
