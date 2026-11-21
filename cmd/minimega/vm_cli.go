@@ -949,7 +949,11 @@ func cliVMSave(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		for _, vm := range ns.FindKvmVMs() {
 			status, complete, err := vm.QueryMigrate()
 			if err != nil {
-				return err
+				// one VM that cannot answer must not hide the other VMs
+				if vm.GetState()&(VM_QUIT|VM_ERROR) == 0 {
+					log.Warn("vm %v: unable to get the migration status: %v", vm.GetID(), err)
+				}
+				continue
 			}
 			if status == "" {
 				continue
