@@ -7,14 +7,66 @@ permissions:
   contents: read
 
 jobs:
+  master-ci:
+    name: Check master CI and version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: /VERSION
+          sparse-checkout-cone-mode: false
+      # A published release has a tag. A draft does not, so a retry of a draft can continue.
+      - name: Check that the version has no tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(cut -d'=' -f2 VERSION)
+          if out=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$version" 2>&1); then
+            echo "::error::Tag $version exists. Change VERSION before you make a new release."
+            exit 1
+          elif ! grep -q 'HTTP 404' <<<"$out"; then
+            echo "::error::Cannot get tag $version: $out"
+            exit 1
+          fi
+      - name: Check that CI passed on this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # The workflows that run on a push to master.
+          REQUIRED: build.yml deb.yml docker.yml docs.yml lint.yml rpm.yml test.yml
+        run: |
+          if [ "$GITHUB_REF" != refs/heads/master ]; then
+            echo "::error::Run this workflow on master, not on $GITHUB_REF."
+            exit 1
+          fi
+          runs=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$GITHUB_SHA&event=push&branch=master&per_page=100" --jq '.workflow_runs')
+          failed=0
+          for wf in $REQUIRED; do
+            result=$(jq -r --arg path ".github/workflows/$wf" \
+              '[.[] | select(.path == $path)] | max_by(.run_number) // {} | "\(.status // "missing")/\(.conclusion // "none")"' <<<"$runs")
+            echo "$wf: $result"
+            if [ "$result" != completed/success ]; then
+              echo "::error::$wf did not pass on $GITHUB_SHA ($result)."
+              failed=1
+            fi
+          done
+          exit "$failed"
   deb-build:
     name: Build deb File
+    needs: master-ci
     uses: ./.github/workflows/deb.yml
   rpm-build:
     name: Build rpm File
+    needs: master-ci
     uses: ./.github/workflows/rpm.yml
   binary-build:
     name: Build Binaries
+    needs: master-ci
     uses: ./.github/workflows/build.yml
   build-and-draft:
     name: Build and Draft Release
@@ -37,7 +89,8 @@ jobs:
       - name: temp
         run: |
           ls minimega* -lh
-      # `gh release create` cannot create the untagged draft this step makes.
+      # On a second run, this step updates the draft of the first run.
+      # `gh release create` makes a second draft.
       - name: Create Release  # zizmor: ignore[superfluous-actions]
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         id: create-release
@@ -45,6 +98,10 @@ jobs:
           draft: true
           prerelease: false
           name: minimega ${{ env.version }}
+          # The release notes API needs a tag. A draft does not create the tag
+          # until a maintainer publishes it.
+          tag_name: ${{ env.version }}
+          target_commitish: ${{ github.sha }}
           files: |
             minimega-binaries/*.tar.gz
             minimega-deb/*.deb

@@ -1,5 +1,7 @@
 scheme = ["https", "http"]
 accept = ["200..=299", "429"]
+# Some sites take more than the default 20 seconds to answer.
+timeout = 60
 exclude_loopback = true
 
 # Historical records intentionally retain obsolete and archived external links.
@@ -8,9 +10,11 @@ exclude_path = [
     "^doc/content/training/miniclass/",
 ]
 
-# Generated self-links are covered by the strict Zensical build.
 exclude = [
-    "^https://github\\.com/sandia-minimega/minimega/blob/master/\\.github/workflows/docs\\.yml$",
+    # github.com can send 503 to requests from CI. scripts/check-docs.py
+    # makes sure that these files exist.
+    "^https://github\\.com/sandia-minimega/minimega/(blob|tree)/master/",
+    # Generated self-links are covered by the strict Zensical build.
     "^https://sandia-minimega\\.github\\.io/minimega/",
     # These resources reject automated clients while remaining browser-accessible.
     "^https://ieeexplore\\.ieee\\.org/stamp/stamp\\.jsp",

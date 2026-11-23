@@ -101,7 +101,8 @@ The
 [Docs workflow](https://github.com/sandia-minimega/minimega/blob/master/.github/workflows/docs.yml)
 validates pull requests and deploys `master` through GitHub Pages. Repository
 administrators must select **GitHub Actions** as the Pages source in repository
-settings.
+settings. The workflow also checks external links on each push to `master`, each
+week, and on a manual run.
 
 <a id="TOC_8."></a>
 

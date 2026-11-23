@@ -50,9 +50,11 @@ This project uses maintainer-managed releases through GitHub Actions.
 
    Any maintainer may manually run the GitHub Actions workflow:
 
-   <https://github.com/sandia-minimega/minimega/actions/workflows/release.yml>
+   [Create Release workflow](https://github.com/sandia-minimega/minimega/actions/workflows/release.yml)
 
-   Use the **Run workflow** button.
+   Use the **Run workflow** button on `master`.
+   The workflow stops if a CI workflow did not pass on the `master` commit, or if a CI workflow is still running.
+   It also stops if a tag for the version in `VERSION` exists.
 
 6. Verify the release.
 
