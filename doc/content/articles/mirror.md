@@ -79,7 +79,7 @@ while pinging VM B from VM A:
 ## Using Bro
 
 Instead of using a simple VM as the monitor, we can replace it with one running
-[Bro](https://www.bro.org/). minimega includes a `vmbetter` config to build a
+[Bro](https://zeek.org/). minimega includes a `vmbetter` config to build a
 VM that runs Bro. By default, this VM listens on `eth0` and writes logs to
 `/bro`. In order to launch the Bro VM, we use the following minimega commands
 (in place of the previous commands to launch the monitor):

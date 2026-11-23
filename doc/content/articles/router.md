@@ -120,7 +120,7 @@ minimega$ router foo interface 1 11.0.0.1/32 lo
 
 ## DHCP and DNS
 
-We use [dnsmasq](http://www.thekelleys.org.uk/dnsmasq/doc.html) to provide
+We use [dnsmasq](https://thekelleys.org.uk/dnsmasq/doc.html) to provide
 DHCP, router advertisements, and DNS capabilities in `minirouter`. dnsmasq has
 extensive support for various DHCP and DNS options, and `minirouter` uses a
 subset of common capabilities.
@@ -187,7 +187,7 @@ minimega$ router foo dns 1.2.3.4 foo.com
 
 ## Routing
 
-`minirouter` uses the [bird routing daemon](http://bird.network.cz/) to
+`minirouter` uses the [bird routing daemon](https://bird.network.cz/) to
 provide routing using a variety of protocols. Currently, `minirouter` only
 supports static, OSPF and bgp routes.
 

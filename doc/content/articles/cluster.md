@@ -100,7 +100,7 @@ in a cluster. That is, you can have nodes A and B both running VMs with vlans
 networks, even though the traffic is going to both physical nodes.
 
 If software defined networking and setting up Open vSwitch is new to you, check
-out the [Open vSwitch website](http://openvswitch.org) for more information.
+out the [Open vSwitch website](https://www.openvswitch.org/) for more information.
 
 <a id="TOC_2.2."></a>
 

@@ -109,7 +109,7 @@ interface on the same subnet. We enumerate a few below:
 ```
 
 A helpful tool to enumerate the IPs in a subnet is available on the
-[Go Playground](https://play.golang.org/p/m8TNTtygK0). Simply change the CIDR
+[Go Playground](https://go.dev/play/p/m8TNTtygK0). Simply change the CIDR
 on line 10 and then hit run and the output will be all the IPs in the subnet.
 If both IPs are not in the list, then you will not have layer 3 connectivity.
 The last IP in the list is the broadcast IP and is typically not used by an
