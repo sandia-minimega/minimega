@@ -128,7 +128,7 @@ that span many components, we typically prefix them with `various: ...`.
 
 minimega is hosted on github.com, and we use github's 'pull request'
 functionality for code review and merging patches to the main repository. See
-[github's pull request page](https://help.github.com/articles/using-pull-requests/)
+[github's pull request page](https://docs.github.com/en/pull-requests/reference/pull-requests)
 for more information. In short, you will need to fork minimega to your
 own account, commit to your local tree, and issue a pull request to the main
 repository from your own.
@@ -156,9 +156,9 @@ See [GitHub's pull request documentation](https://docs.github.com/en/pull-reques
 for more information on effectively contributing to projects through GitHub.
 
 Of specific use may be
-[syncing a fork](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/working-with-forks/syncing-a-fork) with an
+[syncing a fork](https://docs.github.com/en/pull-requests/how-tos/work-with-forks/syncing-a-fork) with an
 upstream repo, and
-[checking out a pull request locally](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/checking-out-pull-requests-locally).
+[checking out a pull request locally](https://docs.github.com/en/pull-requests/how-tos/review-pull-requests/checking-out-pull-requests-locally).
 
 <a id="TOC_13."></a>
 

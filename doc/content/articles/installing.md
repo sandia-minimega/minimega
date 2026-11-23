@@ -47,7 +47,7 @@ The [downloads page](download.md) links to previous and legacy releases.
 
 ### Building from source
 
-To build from source you will need [Go](http://golang.org) (version 1.24 or
+To build from source you will need [Go](https://go.dev/) (version 1.24 or
 later) and libpcap headers. On a Debian-type system, you can install
 compile-time dependencies with:
 

@@ -255,7 +255,7 @@ We can confirm this by running `tcpdump -i eth0` on the monitor VM while pinging
 
 One option for instrumention is to use a third-party tool that suits your needs.
 
-For example, we can install tools like [Zeek](https://www.zeek.org/), either while our experiment is running, or we can 'bake in' the tool during the process of building the image.
+For example, we can install tools like [Zeek](https://zeek.org/), either while our experiment is running, or we can 'bake in' the tool during the process of building the image.
 
 minimega includes a tool called vmbetter that allows you to install programs in a number of ways (apt, dpkg, compiling directly, etc.) during the image creation process so that the vm is ready to go at launch.
 

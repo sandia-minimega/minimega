@@ -19,7 +19,7 @@ someone trying to make a ready-to-deploy security toolkit ala Kali Linux.
 ### Set up vmbetter
 
 To get vmbetter, you'll want to download and compile the minimega repository.
-First, make sure you have a [Go compiler](http://golang.org) installed. Then,
+First, make sure you have a [Go compiler](https://go.dev/) installed. Then,
 install some libraries needed to build minimega and the associated tools:
 
 ```text
