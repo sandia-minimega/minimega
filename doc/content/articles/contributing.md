@@ -102,6 +102,12 @@ the devcontainer described in
 To render the Markdown alone, without the generated reference pages, run
 `./scripts/zensical_build.py serve`.
 
+The unit tests of `cmd/minimega` compile each example script (`.mm`) and each
+command in a `minimega` code block, as `read <file> check` does. A syntax
+summary with placeholders is not a command, so mark its block as `text`. The
+live tests also run the chapter scripts of the training course that need only
+KVM (see `tests/live/README.md`).
+
 The
 [Docs workflow](https://github.com/sandia-minimega/minimega/blob/master/.github/workflows/docs.yml)
 validates pull requests and deploys `master` through GitHub Pages. Repository

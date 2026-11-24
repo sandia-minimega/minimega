@@ -53,10 +53,10 @@ minimega identifies each capture with a counter, and it never reuses a counter v
 Netflow records flows, not packets. For each conversation, it records the endpoints, ports, protocol, byte and packet counts, and timing. It is far smaller than PCAP and often all you need. minimega attaches a netflow exporter to a bridge. It writes the records to a file, to a TCP or UDP collector, or to several at once:
 
 ```minimega
-capture netflow mode ascii            # or raw (binary), the default
-capture netflow gzip true             # compress file output
-capture netflow bridge mega_bridge flows.nf
-capture netflow bridge mega_bridge udp collector.example.org:2055
+minimega$ capture netflow mode ascii            # or raw (binary), the default
+minimega$ capture netflow gzip true             # compress file output
+minimega$ capture netflow bridge mega_bridge flows.nf
+minimega$ capture netflow bridge mega_bridge udp collector.example.org:2055
 minimega$ .columns bridge,type,interface,mode,compress,path capture
 bridge      | type    | interface | mode  | compress | path
 mega_bridge | netflow |           | ascii | true     | /tmp/minimega/files/flows.nf
@@ -65,11 +65,11 @@ mega_bridge | netflow |           | ascii | true     | udp:collector.example.org
 
 When minimega creates a writer, it reads `mode` and `gzip`. The listing shows them for each writer. `capture netflow timeout <seconds>` sets the active-flow timeout, 10 seconds by default. After this time, a long conversation is emitted as a record and started afresh. Open vSwitch keeps one netflow object for each bridge, so everything on that bridge shares the timeout. `capture netflow delete bridge <bridge>` or `... bridge all` stops the writers, and `clear capture netflow` stops them all.
 
-Raw files are the compact form. Convert them to text on any machine with `nfcat`, which ships with minimega:
+Raw files are the compact form. The example above writes gzip-compressed text. Read it with `zcat flows.nf`. Convert a raw file to text on any machine with `nfcat`, which ships with minimega. For a raw file that you wrote with `gzip true`, add `-gunzip`:
 
 ```bash
-$ nfcat flows.nf > flows.txt
-$ nfcat -gunzip flows.nf.gz > flows.txt
+$ nfcat raw.nf > flows.txt
+$ nfcat -gunzip raw.nf.gz > flows.txt
 ```
 
 ## Captures and namespaces
@@ -80,7 +80,7 @@ $ nfcat -gunzip flows.nf.gz > flows.txt
 
 A mirror tells Open vSwitch to copy every frame that enters or leaves one port to another port. Point the mirror at a VM that has tcpdump, Zeek, or an IDS installed. That VM sees the traffic of the VMs that you study without being on their network:
 
-```minimega
+```text
 tap mirror <vm> <interface index> <monitor vm> <interface index>
 tap mirror <source tap> <destination tap> [bridge]
 ```
@@ -125,7 +125,7 @@ Replace the plain monitor with a VM that runs [Zeek](https://zeek.org/) on `eth0
 To build a current sensor, do these steps:
 
 1. Copy the configuration.
-2. Change the package to `zeek`. The package comes from the package repository of the Zeek project, because it is not in the Debian archive.
+2. Remove the `bro` package. In `postbuild`, add the package repository of the Zeek project and install `zeek` from it. `debootstrap` cannot install the package, because it is not in the Debian archive.
 3. Change the paths and the command in `init` to `zeek`.
 4. Launch the sensor in place of the monitor, with a dedicated, non-snapshot disk so that the logs survive the VM:
 

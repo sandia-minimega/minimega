@@ -29,6 +29,12 @@
 #                         container (default: /tmp/minimega)
 #   LIVE_ARTIFACTS        output directory (default: ./live-artifacts)
 #   LIVE_TEST_BIN         prebuilt "go test -c -tags live" binary
+#   LIVE_DOCS_DIR         documentation source with the example scripts that
+#                         the core group runs (default: doc/content; empty
+#                         skips those scripts). The scripts name
+#                         /tmp/minimega and start KVM guests, so the default
+#                         is empty with a different LIVE_MM_BASE, or with
+#                         LIVE_QEMU or LIVE_CPU
 #   LIVE_TEST_ARGS        extra arguments for the test binary (e.g. -test.run)
 #   LIVE_KEEP=1           leave the experiment and container running
 #   LIVE_FORCE=1          replace an existing container and delete a non-empty
@@ -222,6 +228,14 @@ log "topology loaded in $(( $(date +%s) - start ))s"
 
 export LIVE_MM_BASE="${MM_BASE}" LIVE_MM_FILES="${MM_FILES}" LIVE_CONTAINER="${CONTAINER}"
 export LIVE_NAMESPACE="${NAMESPACE}" LIVE_ARTIFACTS="${ARTIFACTS}"
+# the documentation scripts that core/docs_test.go runs. They name
+# /tmp/minimega and take no QEMU or CPU override
+DOCS_DIR="${ROOT_DIR}/doc/content"
+if [[ "${MM_BASE}" != "/tmp/minimega" || -n "${LIVE_QEMU:-}" || -n "${LIVE_CPU:-}" ]]; then
+    DOCS_DIR=""
+fi
+export LIVE_DOCS_DIR="${LIVE_DOCS_DIR-${DOCS_DIR}}"
+[[ -n "${LIVE_DOCS_DIR}" ]] || log "skipping the documentation scripts"
 
 log "running tests"
 # shellcheck disable=SC2086

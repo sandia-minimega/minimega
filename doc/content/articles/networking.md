@@ -197,7 +197,7 @@ mega_bridge | mega_tap3 | dmz (101)
 
 `tap create` prints the name of the interface it made. From here `ping 10.0.0.234`, `ssh`, a browser pointed at the VM, or a service listening on `10.0.0.1` all work. The forms are:
 
-```minimega
+```text
 tap create <vlan>                          # no address; configure it yourself
 tap create <vlan> name <tap name>
 tap create <vlan> ip <address/prefix> [tap name]
@@ -323,7 +323,7 @@ Create a host tap on the experiment VLAN. Enable forwarding and masquerading on 
 
 If the host runs a firewall manager, add the equivalent forward and masquerade rules there instead. Examples of firewall managers are ufw, firewalld, and a distribution nftables policy. If the setup must survive a reboot, make the `ip_forward` sysctl persistent. Guests that do not use DHCP need three items: a static address in `10.0.0.0/24`, `10.0.0.1` as the default gateway, and a resolver that they can reach.
 
-A minirouter in front of the VMs works the same way, with the tap on the outside interface of the router. Give the router `gw 10.0.0.1` and `upstream 10.0.0.1`. Then only the router touches the host. To undo the NAT, delete the tap (`tap delete nat0`) and remove the iptables rules that you added.
+A minirouter in front of the VMs works the same way, with the tap on the outside interface of the router. Give the router `gw 10.0.0.1` and `upstream 10.0.0.1`. Then only the router touches the host. The host also needs a route to each network behind the router, for example `ip route add 192.168.1.0/24 via 10.0.0.2`, where `10.0.0.2` is the outside address of the router. To undo the NAT, delete the tap (`tap delete nat0`) and remove the iptables rules that you added.
 
 ### Bridging VMs onto a real LAN
 

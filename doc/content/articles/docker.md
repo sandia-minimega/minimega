@@ -92,12 +92,17 @@ Why each part is there:
 - `--health-cmd "mm version"`: when the daemon
   answers on its socket, the container is healthy.
 
-`docker/docker-compose.yml` in the repository is the same configuration for
-`docker compose up -d`. It uses the image of the latest release and sets
-`MM_LOGFILE`. To use a different image, set the `MINIMEGA_IMAGE` environment
-variable, for example `MINIMEGA_IMAGE=ghcr.io/sandia-minimega/minimega:master`.
+`docker/docker-compose.yml` in the repository is this configuration for
+`docker compose up -d`, with two differences. It uses the network of the host
+(`network_mode: host`) in place of published ports. It sets no host name, so
+the container has the host name of the machine. It uses the image of the
+latest release and sets `MM_LOGFILE`. It also runs an init process as PID 1
+(`init: true`), which starts the entry point. To use a different image, set the `MINIMEGA_IMAGE`
+environment variable, for example
+`MINIMEGA_IMAGE=ghcr.io/sandia-minimega/minimega:master`.
 
-The entry point, `/start-minimega.sh`, runs as PID 1. It removes a stale
+With `docker run`, the entry point, `/start-minimega.sh`, runs as PID 1. It
+removes a stale
 socket and PID file that a previous run left. Then it starts Open vSwitch with
 `ovs-ctl` and waits up to thirty seconds for `ovs-vsctl show` to succeed. Next,
 it optionally adds host interfaces to a bridge. Then it starts miniweb.
@@ -160,15 +165,19 @@ it on whitespace and places it last, so a flag repeated there overrides the
 generated one. You cannot pass values with spaces this way.
 
 If you change `MM_PORT` or `MINIWEB_PORT`, also change the `-p` mappings. If
-you change `MM_BASE`, the `mm` shortcut and the health check break, because
-both assume `/tmp/minimega`. Use `minimega -base <path> -e ...` instead.
+you change `MM_BASE` in the environment of the container, miniweb, the `mm`
+shortcut, and the health check use the new directory. A value that is only in
+`/etc/default/minimega` does not reach `docker exec`, so use
+`minimega -base <path> -e ...` there. Also change the `/tmp/minimega` mount.
 
 ### Open vSwitch inside the container
 
 The entry point starts `ovsdb-server` and `ovs-vswitchd` with `ovs-ctl`.
 `OVS_APPEND` adds arguments to that call. For a host that already runs Open
 vSwitch and needs only the client tools inside the container, use `--no-ovsdb-server
---no-ovs-vswitchd`.
+--no-ovs-vswitchd`. The client tools then need the database socket of the host.
+Mount the Open vSwitch run directory of the host, usually
+`/var/run/openvswitch`, at the same path in the container.
 
 `OVS_HOST_IFACE=<bridge>:<port>[,<port>...]` brings up the bridge and adds each
 host interface to it, for example `OVS_HOST_IFACE=mega_bridge:eth1`. If the
@@ -208,7 +217,8 @@ binary on the host, the Python bindings and miniweb can also connect to
 
 ## miniweb and the bundled documentation
 
-miniweb listens on `MINIWEB_HOST:MINIWEB_PORT`, published as port 9001. Open
+miniweb listens on `MINIWEB_HOST:MINIWEB_PORT`. `docker run` publishes it as
+port 9001, and the Compose file uses port 9001 of the host directly. Open
 `http://localhost:9001/` for the VM list, screenshots and VNC consoles
 ([miniweb](miniweb.md)), and `http://localhost:9001/docs/` for this
 documentation, served from `/opt/minimega/web/docs`. If you point
@@ -217,7 +227,8 @@ documentation, served from `/opt/minimega/web/docs`. If you point
 
 `MINIWEB_APPEND` carries the miniweb flags that have no variable, for example
 `MINIWEB_APPEND="-passwords=/etc/miniweb/passwords"` to require a password.
-Mount the files that the flags name into the container. See
+Mount the files that the flags name into the container. Images of release 3.4.0
+and earlier ignore `MINIWEB_APPEND`. See
 [Authentication](miniweb.md#authentication).
 
 ## Python bindings
