@@ -5,6 +5,7 @@
 package iomeshage
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -75,6 +76,11 @@ func (iom *IOMeshage) List(path string, recurse bool) ([]FileInfo, error) {
 	var res []FileInfo
 
 	for _, f := range glob {
+		// in-progress transfers are not files to serve
+		if iom.isTransferPath(f) {
+			continue
+		}
+
 		info, err := os.Stat(f)
 		if err != nil {
 			return nil, err
@@ -93,6 +99,9 @@ func (iom *IOMeshage) List(path string, recurse bool) ([]FileInfo, error) {
 
 			for _, info := range files {
 				path := filepath.Join(f, info.Name())
+				if iom.isTransferPath(path) {
+					continue
+				}
 				res = append(res, newFileInfo(path, iom.getHash(path), info))
 			}
 
@@ -103,6 +112,13 @@ func (iom *IOMeshage) List(path string, recurse bool) ([]FileInfo, error) {
 		err = filepath.Walk(f, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
+			}
+
+			if iom.isTransferPath(path) {
+				if info.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
 			}
 
 			if !info.IsDir() {
@@ -165,42 +181,42 @@ func (iom *IOMeshage) cleanPath(path string) string {
 }
 
 // Read a filepart and return a byteslice.
-func (iom *IOMeshage) readPart(filename string, part int64) []byte {
+func (iom *IOMeshage) readPart(filename string, part int64) ([]byte, error) {
 	if !strings.HasPrefix(filename, iom.base) {
 		filename = filepath.Join(iom.base, filename)
 	}
 	f, err := os.Open(filename)
 	if err != nil {
-		log.Errorln(err)
-		return nil
+		return nil, err
 	}
 	defer f.Close()
 
 	// we do have the file, calculate the number of parts
 	fi, err := f.Stat()
 	if err != nil {
-		log.Errorln(err)
-		return nil
+		return nil, err
 	}
 
 	parts := (fi.Size() + PART_SIZE - 1) / PART_SIZE // integer divide with ceiling instead of floor
-	if part > parts {
-		log.Errorln("attempt to read beyond file")
-		return nil
+	if part < 0 || part >= parts {
+		return nil, fmt.Errorf("part %v is beyond the %v parts of the file", part, parts)
 	}
 
-	// read up to PART_SIZE
+	return readPartAt(f, part)
+}
+
+// readPartAt reads up to PART_SIZE bytes of part from f.
+func readPartAt(f io.ReaderAt, part int64) ([]byte, error) {
 	data := make([]byte, PART_SIZE)
 	n, err := f.ReadAt(data, part*PART_SIZE)
-
-	if err != nil {
-		if err != io.EOF {
-			log.Errorln(err)
-			return nil
-		}
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	if n == 0 {
+		return nil, fmt.Errorf("part %v is empty", part)
 	}
 
-	return data[:n]
+	return data[:n], nil
 }
 
 func (iom *IOMeshage) getHash(path string) string {

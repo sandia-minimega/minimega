@@ -5,9 +5,6 @@
 package iomeshage
 
 import (
-	"fmt"
-	"path/filepath"
-
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
@@ -74,9 +71,18 @@ func (iom *IOMeshage) handleResponse(m *Message) {
 // and responding with the number of parts or a NACK.  Also process directories
 // and globs, populating the Glob field of the Message if needed.
 func (iom *IOMeshage) handleInfo(m *Message) {
+	resp := iom.infoResponse(m)
+
+	if _, err := iom.node.Set([]string{m.From}, resp); err != nil {
+		log.Errorln("handleInfo: sending message: ", err)
+	}
+}
+
+// infoResponse builds the reply to an info request.
+func (iom *IOMeshage) infoResponse(m *Message) Message {
 	// do we have this file, rooted at iom.base?
 	resp := Message{
-		From:     iom.node.Name(),
+		From:     iom.name,
 		Type:     TYPE_RESPONSE,
 		Filename: m.Filename,
 		TID:      m.TID,
@@ -92,6 +98,7 @@ func (iom *IOMeshage) handleInfo(m *Message) {
 	} else if len(files) == 1 && iom.Rel(files[0]) == m.Filename {
 		resp.ACK = !files[0].IsDir()
 		resp.Part = files[0].numParts()
+		resp.Size = files[0].Size
 		resp.Perm = files[0].Perm()
 		resp.ModTime = files[0].ModTime
 		resp.Hash = iom.getHash(files[0].Path)
@@ -107,10 +114,7 @@ func (iom *IOMeshage) handleInfo(m *Message) {
 		log.Debug("handleInfo: found glob for %v: %v", m.Filename, resp.Glob)
 	}
 
-	_, err = iom.node.Set([]string{m.From}, resp)
-	if err != nil {
-		log.Errorln("handleInfo: sending message: ", err)
-	}
+	return resp
 }
 
 // Transactions need unique TIDs, and a corresponding channel to return
@@ -162,9 +166,18 @@ func (iom *IOMeshage) handleXfer(m *Message) {
 // Respond to message m with an ACK if a filepart exists, and optionally the
 // contents of that filepart.
 func (iom *IOMeshage) handlePart(m *Message, xfer bool) {
+	resp := iom.partResponse(m, xfer)
+
+	if _, err := iom.node.Set([]string{m.From}, resp); err != nil {
+		log.Errorln("handlePart: sending message: ", err)
+	}
+}
+
+// partResponse builds the reply to a part request.
+func (iom *IOMeshage) partResponse(m *Message, xfer bool) Message {
 	// do we have this file, rooted at iom.base?
 	resp := Message{
-		From:     iom.node.Name(),
+		From:     iom.name,
 		Type:     TYPE_RESPONSE,
 		Filename: m.Filename,
 		TID:      m.TID,
@@ -187,7 +200,12 @@ func (iom *IOMeshage) handlePart(m *Message, xfer bool) {
 		resp.Part = m.Part
 
 		if xfer {
-			resp.Data = iom.readPart(files[0].Path, m.Part)
+			data, err := iom.readPart(files[0].Path, m.Part)
+			if err != nil {
+				log.Error("reading %v part %v: %v", m.Filename, m.Part, err)
+				resp.ACK = false
+			}
+			resp.Data = data
 		} else {
 			resp.ModTime = files[0].ModTime
 			resp.Hash = iom.getHash(files[0].Path)
@@ -199,11 +217,7 @@ func (iom *IOMeshage) handlePart(m *Message, xfer bool) {
 	}
 
 	if resp.ACK {
-		_, err = iom.node.Set([]string{m.From}, resp)
-		if err != nil {
-			log.Errorln("handlePart: sending message: ", err)
-		}
-		return
+		return resp
 	}
 
 	// we don't have the file in a complete state at least, do we have that
@@ -213,24 +227,19 @@ func (iom *IOMeshage) handlePart(m *Message, xfer bool) {
 	iom.transferLock.RLock()
 	if t, ok := iom.transfers[m.Filename]; ok && t.Parts[m.Part] {
 		// we are currently transferring parts of the file
-		partname := fmt.Sprintf("%v/%v.part_%v", t.Dir, filepath.Base(t.Filename), m.Part)
-		_, err := iom.List(partname, false)
-		if err == nil {
-			// we have it
-			resp.ACK = true
-			resp.Part = m.Part
-			if xfer {
-				resp.Data = iom.readPart(partname, 0)
-				log.Debug("sending partial %v", partname)
+		resp.ACK = true
+		resp.Part = m.Part
+		if xfer {
+			data, err := t.readPart(m.Part)
+			if err != nil {
+				log.Error("reading in-flight %v part %v: %v", m.Filename, m.Part, err)
+				resp.ACK = false
 			}
-		} else {
-			resp.ACK = false
+			resp.Data = data
+			log.Debug("sending partial %v part %v", m.Filename, m.Part)
 		}
 	}
 	iom.transferLock.RUnlock()
 
-	_, err = iom.node.Set([]string{m.From}, resp)
-	if err != nil {
-		log.Errorln("handlePart: sending message: ", err)
-	}
+	return resp
 }

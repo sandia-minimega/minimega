@@ -134,9 +134,11 @@ phases (screenshots, QMP, serial, ...) still run.
 | VM operations | `vm screenshot` (std and cirrus), `vm serial`, `vm qmp`, `vm tag` + tag filter, `vm top`, `vm stop/start`, `vm net disconnect/connect`, `vm hotplug add/remove`, `vm save`, `vm kill` + `vm flush` + `vm config clone` + queued relaunch |
 | Tools | `passwordify` on the guest initrd: a VM booted from it accepts the new root password and has the installed keys |
 | VNC | the RFB handshake and a frame through miniweb and the VNC shim, `vnc record fb` decoded, keys typed on the `host-d3` console with QEMU extended key events, `vnc record kb` + `vnc play`, paste as keys, `vnc type`, `vnc inject` (key and `LoadFile`, with and without a playback), `vm kill` while recording and playing (entries stop, files close) |
+| File transfer | a second minimega node in its own network namespace joins the mesh: `vm launch` pulls the guest kernel and initrd over iomeshage, `mesh send <peer> file get` of a file that fits once but not twice arrives intact, and one larger than the disk fails with a no space error and leaves nothing behind |
 | Teardown | `clear namespace` removes VMs, QEMU processes, and OVS ports |
 
-Out of scope: containers, Android, bare-metal VMs, and multi-node meshes.
+Out of scope: containers, Android, bare-metal VMs, and multi-node meshes
+(beyond the two-node mesh in the file transfer phase).
 
 ## Running locally
 

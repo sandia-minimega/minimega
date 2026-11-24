@@ -203,6 +203,10 @@ func iomHelper(file, updatee string) (string, error) {
 
 	iomWait(file, updatee)
 
+	if err := iom.Failed(file); err != nil {
+		return "", err
+	}
+
 	dst := filepath.Join(*f_iomBase, file)
 
 	info, err := diskInfo(dst)
