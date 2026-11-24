@@ -720,52 +720,56 @@ func (vm *KvmVM) Migrate(filename string) error {
 }
 
 func (vm *KvmVM) QueryMigrate() (string, float64, error) {
-	var status string
-	var completed float64
-
 	r, err := vm.q.QueryMigrate()
 	if err != nil {
 		return "", 0.0, err
 	}
 
+	return migrateProgress(r)
+}
+
+// migrateProgress returns the status and percent complete from a QMP
+// query-migrate result. Only "active" migrations report RAM progress; QEMU
+// also reports states such as "setup" and "device" while a save starts.
+func migrateProgress(r map[string]interface{}) (string, float64, error) {
 	// find the status
-	if s, ok := r["status"]; ok {
-		status = s.(string)
-	} else {
+	s, ok := r["status"]
+	if !ok {
 		// if there is no status, it means that there is no active migration
 		return "", 0.0, nil
 	}
+	status, ok := s.(string)
+	if !ok {
+		return "", 0.0, fmt.Errorf("invalid migration status: %v", s)
+	}
 
-	var ram map[string]interface{}
 	switch status {
 	case "completed":
-		completed = 100.0
-		return status, completed, nil
-	case "failed":
-		return status, completed, nil
+		return status, 100.0, nil
 	case "active":
-		if e, ok := r["ram"]; !ok {
-			return status, completed, fmt.Errorf("could not decode ram segment: %v", e)
-		} else {
-			switch e.(type) {
-			case map[string]interface{}:
-				ram = e.(map[string]interface{})
-			default:
-				return status, completed, fmt.Errorf("invalid ram type: %v", e)
-			}
-		}
+	default:
+		return status, 0.0, nil
 	}
 
-	total := ram["total"].(float64)
-	transferred := ram["transferred"].(float64)
+	ram, ok := r["ram"].(map[string]interface{})
+	if !ok {
+		return status, 0.0, fmt.Errorf("invalid ram segment: %v", r["ram"])
+	}
+
+	total, ok := ram["total"].(float64)
+	if !ok {
+		return status, 0.0, fmt.Errorf("invalid total ram: %v", ram["total"])
+	}
+	transferred, ok := ram["transferred"].(float64)
+	if !ok {
+		return status, 0.0, fmt.Errorf("invalid transferred ram: %v", ram["transferred"])
+	}
 
 	if total == 0.0 {
-		return status, completed, fmt.Errorf("zero total ram!")
+		return status, 0.0, fmt.Errorf("zero total ram!")
 	}
 
-	completed = transferred / total * 100
-
-	return status, completed, nil
+	return status, transferred / total * 100, nil
 }
 
 func (vm *KvmVM) Screenshot(size int) ([]byte, error) {
