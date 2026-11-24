@@ -572,13 +572,76 @@ func testMiniweb(t *testing.T) {
 		t.Errorf("index page does not mention minimega")
 	}
 
-	// miniweb talks to minimega over the same socket and lists our VMs
-	body := get("/vms/info.json?namespace=" + harness.Namespace)
-	for _, s := range topology {
-		if !bytes.Contains(body, []byte(`"`+s.Name+`"`)) {
-			t.Errorf("/vms/info.json missing %v", s.Name)
+	// miniweb talks to minimega over the same socket and lists our VMs, both
+	// by query and by the /<namespace>/ paths the web UI uses
+	for _, path := range []string{
+		"/vms/info.json?namespace=" + harness.Namespace,
+		"/" + harness.Namespace + "/vms/info.json",
+	} {
+		body := get(path)
+		for _, s := range topology {
+			if !bytes.Contains(body, []byte(`"`+s.Name+`"`)) {
+				t.Errorf("%v missing %v", path, s.Name)
+			}
 		}
 	}
+
+	if !miniwebNamespaces(t)[harness.Namespace] {
+		t.Errorf("/namespaces.json missing %v", harness.Namespace)
+	}
+
+	// a namespace that doesn't exist is not created by browsing to it (#1255)
+	const missing = "live-missing"
+	if code := miniwebStatus(t, "/"+missing+"/vms/info.json"); code != http.StatusNotFound {
+		t.Errorf("GET /%v/vms/info.json: status %v, want 404", missing, code)
+	}
+	if namespaceListed(t, missing) {
+		t.Errorf("miniweb created namespace %v", missing)
+		_, _ = harness.Raw("clear namespace " + missing)
+	}
+}
+
+// miniwebStatus returns the status code miniweb answers path with.
+func miniwebStatus(t *testing.T, path string) int {
+	t.Helper()
+	resp, err := http.Get(harness.MiniwebURL + path)
+	if err != nil {
+		t.Fatalf("GET %v: %v", path, err)
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode
+}
+
+// miniwebNamespaces returns the namespaces miniweb lists.
+func miniwebNamespaces(t *testing.T) map[string]bool {
+	t.Helper()
+	resp, err := http.Get(harness.MiniwebURL + "/namespaces.json")
+	if err != nil {
+		t.Fatalf("GET /namespaces.json: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	var rows []map[string]string
+	if err := json.NewDecoder(resp.Body).Decode(&rows); err != nil {
+		t.Fatalf("decode /namespaces.json: %v", err)
+	}
+
+	res := map[string]bool{}
+	for _, r := range rows {
+		res[r["namespace"]] = true
+	}
+	return res
+}
+
+// namespaceListed reports whether minimega lists the namespace.
+func namespaceListed(t *testing.T, name string) bool {
+	t.Helper()
+	for _, r := range toRowsMust(t, "namespace") {
+		if r["namespace"] == name {
+			return true
+		}
+	}
+	return false
 }
 
 // --- guests come up ----------------------------------------------------------
@@ -1332,10 +1395,17 @@ func testClearNamespace(t *testing.T) {
 		t.Fatalf("clear namespace: %v", err)
 	}
 
-	for _, r := range toRowsMust(t, "namespace") {
-		if r["namespace"] == harness.Namespace {
-			t.Errorf("namespace %v still exists", harness.Namespace)
-		}
+	if namespaceListed(t, harness.Namespace) {
+		t.Errorf("namespace %v still exists", harness.Namespace)
+	}
+
+	// a miniweb page left open on the cleared namespace keeps polling it; that
+	// must neither succeed nor recreate the namespace (#1255)
+	if code := miniwebStatus(t, "/"+harness.Namespace+"/vms/info.json"); code != http.StatusNotFound {
+		t.Errorf("miniweb /%v/vms/info.json after clear: status %v, want 404", harness.Namespace, code)
+	}
+	if miniwebNamespaces(t)[harness.Namespace] || namespaceListed(t, harness.Namespace) {
+		t.Errorf("namespace %v recreated by miniweb", harness.Namespace)
 	}
 
 	harness.Eventually(t, time.Minute, 3*time.Second, func() error {
@@ -1349,6 +1419,14 @@ func testClearNamespace(t *testing.T) {
 		}
 		return nil
 	})
+
+	// the default namespace stays listed even after it is cleared
+	if _, err := harness.Raw("clear namespace minimega"); err != nil {
+		t.Errorf("clear namespace minimega: %v", err)
+	}
+	if !namespaceListed(t, "minimega") || !miniwebNamespaces(t)["minimega"] {
+		t.Errorf("default namespace not listed after clearing it")
+	}
 }
 
 func toRowsMust(t *testing.T, cmd string) []harness.Row {
