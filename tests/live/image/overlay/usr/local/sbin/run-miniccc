@@ -25,7 +25,7 @@ fi
 # On routers, "router commit" arrives over cc as soon as miniccc connects and
 # runs "minirouter -u", which needs the minirouter daemon's socket. Wait for
 # it so the first commit is not lost.
-if grep -q 'live.role=router' /proc/cmdline; then
+if [ "$(cat /run/live.role 2>/dev/null)" = router ]; then
     i=0
     while [ ! -S /tmp/minirouter/minirouter ] && [ $i -lt 60 ]; do
         sleep 0.5

@@ -163,7 +163,7 @@ update kills the background processes that the client started. "cc clients"
 shows the capabilities of each client. Clients without the "auto-update"
 capability need a manual update.
 
-For more documentation, see the article "Command and Control API Tutorial".`,
+For more documentation, see the article "Command and control".`,
 		Patterns: []string{
 			"cc",
 			"cc <listen,> <port>",

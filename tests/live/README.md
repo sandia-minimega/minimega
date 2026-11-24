@@ -34,7 +34,8 @@ flowchart LR
 2. **Guest image** — `run.sh` runs the `vmbetter` shipped *in that image*
    (in a privileged container with `debootstrap`) on `image/live.conf`: a
    Debian bookworm kernel plus a busybox initramfs with `bird`, `dnsmasq`, and
-   `iptables` for routers, and the image's own `miniccc`, `minirouter`, and
+   `iptables` for routers, `curl` and `tcpdump` for the documentation scripts,
+   and the image's own `miniccc`, `minirouter`, and
    `protonuke` copied into the overlay first. `live.conf` has no parent
    (`default.conf` makes a 360 MB initrd that needs ~3 GB per VM). The boot
    scripts are in `image/overlay/`. The unpacked rootfs is ~100 MiB and an
@@ -134,9 +135,39 @@ phases (screenshots, QMP, serial, ...) still run.
 | VM operations | `vm screenshot` (std and cirrus), `vm serial`, `vm qmp`, `vm tag` + tag filter, `vm top`, `vm stop/start`, `vm net disconnect/connect`, `vm hotplug add/remove`, `vm save`, `vm kill` + `vm flush` + `vm config clone` + queued relaunch |
 | Tools | `passwordify` on the guest initrd: a VM booted from it accepts the new root password and has the installed keys |
 | VNC | the RFB handshake and a frame through miniweb and the VNC shim, `vnc record fb` decoded, keys typed on the `host-d3` console with QEMU extended key events, `vnc record kb` + `vnc play`, paste as keys, `vnc type`, `vnc inject` (key and `LoadFile`, with and without a playback), `vm kill` while recording and playing (entries stop, files close) |
+| Documentation | 14 chapter scripts of the training course (chapters 2 to 9 and 11 to 16) and two user guide examples (`quickstart.mm`, `capture/mirror.mm`), each run as written with `read`. A command that returns an error fails the test, and so does output that does not show what the chapter demonstrates |
 | Teardown | `clear namespace` removes VMs, QEMU processes, and OVS ports |
 
-Out of scope: containers, Android, bare-metal VMs, and multi-node meshes.
+Out of scope: containers, Android, bare-metal VMs, and multi-node meshes. The
+documentation phase does not run the scripts of chapters 17 to 20, which need
+cgroup v1, the Android SDK, `swtpm`, and a second host.
+
+### Documentation scripts
+
+The `DocsScripts` phase runs example scripts from `doc/content` while the core
+topology is up. Each script runs in its own namespace, and the phase clears
+that namespace when the script ends. The scripts name the images of the
+course, so the phase puts the live guest image in the files directory as
+`miniccc.kernel`, `miniccc.initrd`, `minirouter.kernel`, and
+`minirouter.initrd`. The scripts set no kernel arguments, so
+`minirouter.initrd` is `live.initrd` plus one file, `/etc/live.role`, that
+gives the guest the router role (`harness.InitrdWithFile`). The guest image
+has `curl`, `tcpdump` with its user, and `/etc/motd` only for these scripts. For the same
+reason, a guest with the router role listens on TCP port 22, as the SSH server
+of the minirouter image does.
+
+The phase has a budget of 30 minutes, and a script that starts after the
+budget fails at once. The phase saves what each script printed as
+`docs-<script>.txt` in the artifacts. To skip the phase, set `LIVE_DOCS_DIR`
+to an empty value. The scripts name `/tmp/minimega` and start KVM guests with
+the default CPU. Therefore, `run.sh` skips the phase when `LIVE_MM_BASE` names
+a different directory, or when `LIVE_QEMU` or `LIVE_CPU` is set. To run the
+phase anyway, set `LIVE_DOCS_DIR`. A guest image from `LIVE_GUEST_DIR` must come from the
+current `image/live.conf` and overlay, or the scripts fail.
+
+The unit tests of `cmd/minimega` (`docs_examples_test.go`) compile every
+example script and every command in a `minimega` code block. They need no
+deployment.
 
 ## Running locally
 

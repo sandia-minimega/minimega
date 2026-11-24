@@ -80,5 +80,5 @@ with minimega.connect() as mm:
 - Main documentation: https://sandia-minimega.github.io/minimega/
 - Python bindings article: https://sandia-minimega.github.io/minimega/articles/python/
 - Generated Python API reference: https://sandia-minimega.github.io/minimega/reference/python/
-- Command API usage details: https://sandia-minimega.github.io/minimega/articles/usage/#command-port-and-the-local-command-flag
+- Command API usage details: https://sandia-minimega.github.io/minimega/articles/cli/#the-command-socket
 - Issue tracker: https://github.com/sandia-minimega/minimega/issues

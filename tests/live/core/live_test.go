@@ -117,6 +117,9 @@ func TestLive(t *testing.T) {
 		// tools shipped in the image
 		p("Passwordify", testPasswordify, cc),
 
+		// example scripts of the documentation, in their own namespaces
+		p("DocsScripts", testDocsScripts, version),
+
 		// teardown
 		p("ClearNamespace", testClearNamespace, version),
 	})

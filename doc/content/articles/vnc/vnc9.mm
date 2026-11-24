@@ -1,3 +1,3 @@
-# get the current vnc event of vm foo's playback
-vnc getstep foo
+# get the current vnc event of vm kiosk's playback
+vnc getstep kiosk
 

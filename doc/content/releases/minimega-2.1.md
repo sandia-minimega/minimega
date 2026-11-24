@@ -109,7 +109,7 @@ Which will create foo1, foo2, ..., foo20 VMs.
 The `rfbplay` tool now supports invoking ffmpeg for VNC framebuffer recordings
 directly in addition to the built-in MJPEG webserver.
 
-See the [VNC record/replay](../articles/vnc.md#TOC_3.1.2.) article for
+See the [VNC record/replay](../articles/vnc.md) article for
 more information.
 
 <a id="TOC_2.2.5."></a>

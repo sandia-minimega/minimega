@@ -93,4 +93,7 @@ RUN ln -s /opt/minimega/web/docs /opt/minimega/docs \
 
 WORKDIR /opt/minimega
 
+# 9000: the mesh (TCP) and its discovery (UDP). 9001: miniweb.
+EXPOSE 9000/tcp 9000/udp 9001/tcp
+
 CMD ["/start-minimega.sh"]

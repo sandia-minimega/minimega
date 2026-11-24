@@ -1,28 +1,48 @@
+# minimega in one container, with Open vSwitch and miniweb. See README.md in
+# this directory.
+#
+# The default image is the latest release. To use a different image, set
+# MINIMEGA_IMAGE. For example, to use the latest build of the master branch:
+#
+#   MINIMEGA_IMAGE=ghcr.io/sandia-minimega/minimega:master docker compose up -d
+name: minimega
+
 services:
   minimega:
-    build:
-      context: ../
-      dockerfile: docker/Dockerfile
-    image: minimega
+    image: ${MINIMEGA_IMAGE:-ghcr.io/sandia-minimega/minimega:latest}
     container_name: minimega
-    hostname: minimega
+    # Open vSwitch, KVM, tap devices, and disk injection need full access to
+    # the host.
     privileged: true
-    cap_add:
-    - ALL
-    restart: always
+    # An init process runs as PID 1. It forwards signals and reaps processes
+    # that lost their parent.
+    init: true
+    restart: unless-stopped
+    # minimega stops its VMs before it exits.
+    stop_grace_period: 30s
+    environment:
+      # Write the log into the mounted directory. Other MM_*, MINIWEB_*, and
+      # OVS_* variables also go here.
+      MM_LOGFILE: /var/log/minimega/minimega.log
     logging:
       driver: "json-file"
       options:
         max-file: "5"
         max-size: "10m"
-    ports:
-    - 9000:9000/udp
-    - 9001:9001
+    # minimega uses the network of the host. Its bridges, taps, and mesh
+    # connections are on the host, and miniweb listens on port 9001 of the host.
+    # The container also has the host name of the machine, so each node of a
+    # cluster has a different name.
+    network_mode: host
     volumes:
     - /dev:/dev
     - /lib/modules:/lib/modules:ro
     - /etc/localtime:/etc/localtime:ro
     - /tmp/minimega:/tmp/minimega
     - /var/log/minimega:/var/log/minimega
+    # ".record false" keeps the probe out of the command history of minimega.
     healthcheck:
-      test: mm version
+      test: ["CMD", "minimega", "-e", ".record", "false", "version"]
+      interval: 10s
+      timeout: 5s
+      retries: 3

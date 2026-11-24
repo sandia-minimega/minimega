@@ -19,6 +19,8 @@ mount -t tmpfs tmpfs /run
 mount -t tmpfs tmpfs /var/run 2>/dev/null
 
 ROLE=host
+# an initrd can carry its role in a file (see harness.InitrdWithFile)
+[ -r /etc/live.role ] && ROLE=$(cat /etc/live.role)
 NAME=
 DHCP=1
 SERIAL=0
@@ -33,6 +35,8 @@ for arg in $(cat /proc/cmdline); do
     esac
 done
 hostname "${NAME:-live-$ROLE}"
+# run-miniccc and run-minirouter read the role from this file
+echo "$ROLE" > /run/live.role
 
 # Load bundled modules; built-in or already-loaded modules fail harmlessly.
 while read -r mod; do
@@ -69,6 +73,8 @@ done
 if [ "$ROLE" = "router" ]; then
     sysctl -w net.ipv4.ip_forward=1 >/dev/null
     sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+    # The minirouter image runs an SSH server, and the course tests that port.
+    (while true; do nc -l -p 22 </dev/null >/dev/null 2>&1 || sleep 1; done) &
 elif [ "$DHCP" = "1" ]; then
     for dev in /sys/class/net/eth*; do
         [ -e "$dev" ] || continue

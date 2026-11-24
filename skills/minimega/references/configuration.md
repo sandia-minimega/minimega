@@ -102,6 +102,9 @@ starts Open vSwitch, waits for it, starts miniweb, then runs minimega with
   `MM_RECOVER`, `MM_CGROUP`, and `MM_ABSSNAPSHOT` map to same-purpose minimega
   flags.
 - `MINIWEB_ROOT`, `MINIWEB_HOST`, and `MINIWEB_PORT` configure miniweb.
+  `MINIWEB_APPEND` adds raw miniweb flags, such as `-passwords=<file>`. miniweb
+  also gets `-base` from `MM_BASE`. Images of release 3.4.0 and earlier ignore
+  `MINIWEB_APPEND` and pass no `-base`.
 - `OVS_APPEND` adds raw `ovs-ctl start` arguments. `OVS_HOST_IFACE` uses
   `<bridge>:<port>[,<port>...]`.
 - `MM_APPEND` adds otherwise unsupported minimega flags, such as
@@ -117,7 +120,8 @@ This container-only file is distinct from the host service's
 
 The wrapper expands scalar configuration values without shell quoting, so paths
 and other single values cannot safely contain whitespace, glob characters, or
-shell syntax. `MM_APPEND` and `OVS_APPEND` are intentionally split on whitespace:
+shell syntax. `MM_APPEND`, `MINIWEB_APPEND`, and `OVS_APPEND` are intentionally
+split on whitespace:
 spaces separate shell-safe argument tokens but cannot be preserved inside one
 argument. In `MM_APPEND`, a positional token stops parsing later tokens. Because
 it appears last, avoid accidentally duplicating generated flags unless an
@@ -127,11 +131,13 @@ Docker defaults intentionally differ from native defaults, including
 `MM_DEGREE=1`, `MM_LOGLEVEL=info`, `MM_LOGFILE=/var/log/minimega.log`, and
 `MM_FORCE=true`. Additional container gotchas:
 
-- Changing `MM_PORT` or `MINIWEB_PORT` also requires matching published ports.
+- Changing `MM_PORT` or `MINIWEB_PORT` also requires matching published ports
+  with `docker run -p`. The Compose file uses the host network and publishes
+  no ports.
 - The `mm` wrapper (`docker/mm`) and the default Compose health check
-  (`mm version`) run `minimega -e`, which honors `MM_BASE` from the container
-  environment. A base set through Docker `-e` or Compose `environment` therefore
-  reaches them automatically. A base set only in `/etc/default/minimega` is read
+  (`minimega -e .record false version`) run `minimega -e`, which honors
+  `MM_BASE` from the container environment. A base set through Docker `-e` or
+  Compose `environment` therefore reaches them automatically. A base set only in `/etc/default/minimega` is read
   by the startup script but not by `docker exec`, so pass `-base=<path>` to `mm`
   and the health check in that case. Update the `/tmp/minimega` volume mount in
   `docker/docker-compose.yml` when the host needs the relocated socket or files.

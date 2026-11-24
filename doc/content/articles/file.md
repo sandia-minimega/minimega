@@ -1,181 +1,149 @@
-# File transfer with minimega
+# File management
 
+minimega serves a directory of files to every node in a mesh through iomeshage.
+iomeshage is a transfer layer built on the same meshage protocol that carries
+commands between nodes. A node that needs an image, a kernel, or a container
+tarball asks the mesh for it by name. The node receives the file, in parts, from
+any node that already has it. This can be faster than copying from a single
+source. This page covers the files directory, the `file` API, and the `file:`
+and `tar:` prefixes that fetch files inline. It also covers the flags
+that resolve conflicts between different files with the same name on two nodes.
 
-<a id="TOC_1."></a>
+You need it on any [cluster](cluster.md). If you use the prefixes or the `disk`
+API, you also need it on a single node. The `disk` API resolves relative paths
+against the same directory. [Running minimega](running.md) describes the startup
+flags.
 
-## Introduction
+## The files directory
 
-This tutorial illustrates iomeshage, the meshage-based file transfer layer
-provided by minimega. iomeshage is a distributed file transfer layer that
-provides a means to very quickly copy files between minimega nodes. By
-leveraging minimega's meshage message passing protocol, iomeshage can exceed
-transfer speeds obtained with one-to-one copying.
+Everything iomeshage can see lives under the directory given by `-filepath`,
+`/tmp/minimega/files` by default. If you move minimega's base directory with
+`-base` and do not set `-filepath`, the files directory follows it to
+`<base>/files`. Paths in `file` commands, the `disk` API, and the prefixes are
+relative to this directory. Permissions on transferred files are preserved.
 
-<a id="TOC_2."></a>
+## The file API
 
-## Overview
+`file list` shows what the local node serves. With no arguments it lists the
+top of the files directory. To list a subdirectory, give a path. To descend,
+add `recursive`. You can also use a glob:
 
-There are two ways to use iomeshage - through the `file` API and via an inline
-`file:` prefix available anywhere on the command line. In order for iomeshage
-to locate files on remote nodes, the files must be located in the `filepath`
-directory provided to minimega (by default `/tmp/minimega/files`).
-
-iomeshage supports transferring single files, globs (wildcard files such as
-`foo*`), and entire directories. Permissions on transferred files are preserved.
-
-By default, iomeshage uses filenames, including the file path, as the unique
-identifier for files. This identification scheme can lead to undefined behavior
-when, for example, two nodes have a file `foo` that each contains different
-content.
-
-One option for preventing this undefined behavior is to enable the `-hashfiles`
-option when starting minimega. This option enables the automatic generation of
-file hashes in the background for each file in the `filepath` directory. When
-enabled, the file hashes are compared to detect files with the same name across
-the mesh but with different content. When `file get` is called on such a file,
-minimega examines the timestamps of each copy of the file on the mesh; minimega
-will then transfer the file with the newest timestamp.
-
-A file is hashed once it has gone a couple of seconds without changing, so a
-large file being copied into the `filepath` directory is hashed once, when the
-copy finishes. Until then the file has no hash (the `hash` column of `file list`
-is empty).
-
-Another option for preventing this undefined behavior is to set the `-headnode`
-option when starting minimega. When all the nodes in a mesh are configured to
-use a single node as the head node, files on the head node will always be the
-files transferred to other nodes in the mesh. However, having a file requested
-using `file get` not present on the head node will still lead to undefined
-behavior if there are multiple versions of the file, so any new or updated files
-should always be added to the defined head node when using the `-headnode`
-setting.
-
-Combining these two options is highly recommended. With `-headnode` set and
-`-hashfiles` enabled, nodes on the mesh will automatically be able to detect
-that a different version of a file is present on the head node and will
-automatically transfer it.
-
-When minimega is deployed using `deploy launch`, the node the deploy command is
-run from is considered the head node. Therefore, the `-headnode` flag is
-automatically set for the deployed nodes. If the head node was started with
-`-hashfiles` enabled, that would also propagate to the deployed nodes.
-
-<a id="TOC_2.1."></a>
-
-### `file` API
-
-iomeshage can be invoked using the `file` API on any node. It doesn't matter
-which remote node the file is on, so long as it exists on at least one node.
-For example, to find and transfer a file `foo` to the requesting node's
-`filepath` directory:
-
-```text
-file get foo
+```minimega
+minimega$ file list
+host | dir   | name              | size      | modified
+mm1  | <dir> | miniccc_responses | 4096      | 2026-09-14T10:02:11Z
+mm1  |       | miniccc.kernel    | 7815424   | 2026-09-12T16:40:03Z
+mm1  |       | miniccc.initrd    | 141852672 | 2026-09-12T16:40:09Z
+minimega$ file list images recursive
+minimega$ file list *.qc2
 ```
 
-If the file exists, the command will return with no error. The `file` API is
-non-blocking - it will return immediately and enqueue the file transfer. To see
-the status of existing file transfers, use the `file status` API:
+When minimega runs with `-hashfiles`, `file list` adds a `hash` column.
 
-```text
-minimega$ file get bigfile
+`file get` transfers a file, a glob, or a whole directory to the local files
+directory. It returns as soon as the transfer is queued. If the file already
+exists locally, the command returns immediately without a transfer. On a mesh
+of one node, the command does nothing. `file status` shows transfers in
+flight:
+
+```minimega
+minimega$ file get bigfile.qc2
 minimega$ file status
-host  | Filename | Temporary directory                    | Completed parts | Queued
-foo   | bigfile  | /tmp/minimega/files/transfer_442933642 | 65/103          | false
+host | filename     | tempdir                                | completed | queued
+mm1  | bigfile.qc2  | /tmp/minimega/files/transfer_442933642 | 65/103    | false
 ```
 
-You can also list and delete files using the `file` API:
+`file delete` removes a file or, recursively, a directory from the local
+node. It also takes globs. `file stream` returns the contents of a file in
+parts as successive responses, without writing anything to disk. It blocks
+until the last part. It is meant for programs that talk to minimega over the
+command socket or the Python bindings. It is not meant for interactive use.
 
-```text
-minimega$ file list
-host  | dir | name    | size
-foo   |     | bigfile | 1073741824
-minimega$ file delete bigfile
-minimega$ file list
-minimega$
+```minimega
+minimega$ file delete *.iso
+minimega$ file stream miniccc.kernel
 ```
 
-File transfers are always done by 'pulling' the file to the requesting node.
-There is no way to transfer a file to a remote node directly. In such cases,
-you will need to tell the remote node to pull the file using the `mesh` API.
-For example, to have remote node `foo` pull a file `bar` from the mesh:
+Transfers are always pulls. There is no command to push a file to another
+node. Instead, tell that node to fetch it:
 
-```text
-mesh send foo file get bar
+```minimega
+minimega$ mesh send mm2 file get bigfile.qc2
 ```
 
-<a id="TOC_2.2."></a>
+## Same name, different content
 
-### `file:` prefix
+iomeshage identifies a file by its path under the files directory. If two
+nodes each serve a `base.qc2` with different content, which one a third
+node receives for `file get base.qc2` is undefined. Two startup flags fix
+that:
 
-iomeshage can also be invoked anywhere on the command line by prefixing the
-file you want to transfer to the local node with `file:`. For example, if a
-remote node has a file `foo.qcow2`, and you want to use it locally as a disk
-image:
+- `-hashfiles` makes every node hash its files in the background. When a file
+  is requested, the nodes compare hashes. When the copies on the mesh differ,
+  the one with the newest modification time wins. A file is hashed once it has
+  gone a couple of seconds without changing, so a large file being copied into the
+  files directory is hashed once, when the copy finishes. Until then the file
+  has no hash (the `hash` column of `file list` is empty).
+- `-headnode <host>` names a node whose copies take precedence. A `file get`
+  then compares the hash of the local copy with the hash of the head node. If
+  they differ or the local copy is missing, it fetches from the head node. If
+  the head node does not have the file, it keeps the local copy when one
+  exists, and otherwise the normal search happens.
 
-```text
-vm config disk file:foo.qcow2
+  `-headnode` requires `-hashfiles` on every node. Without `-hashfiles`,
+  `file get` does not compare hashes. It fetches the file from the first node
+  that answers, even when a local copy exists, and overwrites the local copy.
+
+Add new and updated files on the head node, and run every node with both
+flags. `deploy launch` does this for you. It starts the remote nodes with
+`-headnode` set to the deploying host. It also passes the other flags of that
+host to the remote nodes, including `-hashfiles`. A cluster that you deploy
+from a node started with `-hashfiles` gets both flags.
+
+## Fetching files inline
+
+Two prefixes let any command that takes a path fetch the file first. Unlike
+`file get`, they block until the transfer completes and then substitute the
+local path.
+
+### file:
+
+```minimega
+minimega$ vm config disks file:role.qc2
+minimega$ vm config disks
+[/tmp/minimega/files/role.qc2]
 ```
 
-This will transfer the file `foo.qcow2` to the local node, and block until the
-file transfer is complete. Once complete, the path will be replaced with local
-reference to the file:
+A qcow2 image with a backing file pulls its backing chain as well. `file:`
+paths tab-complete across the mesh.
 
-```text
-minimega$ vm config disk file:foo.qcow2
-minimega$ vm config disk
-[/tmp/minimega/files/foo.qcow2]
-minimega$
-```
+### tar:
 
-Additionally, `file:` can by tab completed across the mesh in the same way as
-bash.
-
-<a id="TOC_2.3."></a>
-
-### tar: prefix
-
-The `tar:` prefix fetches and untars tarballs via meshage, typically for use as
+`tar:` fetches a tarball and unpacks it, which is the usual way to distribute
 a container filesystem:
 
-```text
-minimega$ vm config filesystem tar:containerfs.tar.gz
+```minimega
+minimega$ vm config filesystem tar:minicccfs.tar.gz
 minimega$ vm config filesystem
-[/tmp/minimega/files/containerfs]
-minimega$
+/tmp/minimega/files/minicccfs
 ```
 
-If the tarball contains more than a single top-level directory, it will return
-an error since the filesystem path is set to the top-level directory inside the
-tarball. If the tarball resides outside of the iomeshage directory, minimega
-will still untar the tarball if it exists on the local node running the
-container to the same directory where the tarball resides.
+The tarball must contain exactly one top-level directory, because that
+directory becomes the filesystem path.
 
-<a id="TOC_2.4."></a>
+### http:// and https://
 
-### http://, https:// prefix
+The preprocessor also changes an argument that starts with `http://` or
+`https://`. It replaces the URL with the path of the URL in the files directory.
+In this release, minimega does not download the file. On a cluster, the command
+fails with an error such as `get /images/x.qcow2: file not found`, unless a node
+has a file at that path. To give a URL to a command such as `cc exec curl`, put
+`.preprocess false` before the command. As an alternative, leave the scheme off.
 
-Similar to the `file:` prefix, an HTTP(s) URL can be supplied anywhere minimega
-expects a file on disk. minimega will block while it downloads the file to the
-iomeshage directory. If the file already exists in iomeshage (on any node), the
-iomeshage version will be fetched instead of requesting the file from the URL.
-For example, to create a VM based on an Ubuntu cloud image:
+## See also
 
-```text
-minimega$ vm config disk https://uec-images.ubuntu.com/releases/14.04/release/ubuntu-14.04-server-cloudimg-amd64-disk1.img
-minimega$ vm config disk
-[/tmp/minimega/files/releases/14.04/release/ubuntu-14.04-server-cloudimg-amd64-disk1.img]
-minimega$ file list
-dir   | name              | size
-<dir> | miniccc_responses | 40
-<dir> | releases          | 60
-minimega$ file list releases
-dir   | name  | size
-<dir> | 14.04 | 60
-minimega$ file list releases/14.04
-dir   | name    | size
-<dir> | release | 60
-minimega$ file list releases/14.04/release/
-dir  | name                                         | size
-     | ubuntu-14.04-server-cloudimg-amd64-disk1.img | 259785216
-```
+- [Cluster setup](cluster.md)
+- [Running minimega](running.md) for `-filepath`, `-hashfiles`, and `-headnode`
+- [Disk images and the disk API](disk-images.md)
+- [Building images with vmbetter](vmbetter.md) for producing the tarballs `tar:` expects
+- Reference: [`file`](../reference/minimega.md#file)

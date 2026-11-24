@@ -1,2 +1,2 @@
-# pause a running playback on vm foo
-vnc pause foo
+# pause a running playback on vm kiosk
+vnc pause kiosk
