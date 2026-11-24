@@ -28,6 +28,7 @@ fi
 : "${MINIWEB_ROOT:=/opt/minimega/web}"
 : "${MINIWEB_HOST:=0.0.0.0}"
 : "${MINIWEB_PORT:=9001}"
+: "${MINIWEB_APPEND:=}"
 
 : "${MM_BASE:=/tmp/minimega}"
 : "${MM_FILEPATH:=/tmp/minimega/files}"
@@ -119,7 +120,7 @@ while true; do
 done
 
 # Check if there are bridge:port values to add
-if [[ -v "OVS_HOST_IFACE" ]]; then
+if [[ -n "${OVS_HOST_IFACE}" ]]; then
   IFS=: read -r -a iface <<< "${OVS_HOST_IFACE}"
   bridge=${iface[0]}
 
@@ -140,7 +141,11 @@ if [[ -v "OVS_HOST_IFACE" ]]; then
 fi
 
 echo "[$(date --rfc-3339=seconds)] starting miniweb..." | tee -a ${MM_LOGFILE}
-/opt/minimega/bin/miniweb -root=${MINIWEB_ROOT} -addr=${MINIWEB_HOST}:${MINIWEB_PORT} &
+/opt/minimega/bin/miniweb \
+  -root=${MINIWEB_ROOT} \
+  -addr=${MINIWEB_HOST}:${MINIWEB_PORT} \
+  -base=${MM_BASE} \
+  ${MINIWEB_APPEND} &
 MINIWEB_PID=$!
 echo "[$(date --rfc-3339=seconds)] miniweb started on ${MINIWEB_HOST}:${MINIWEB_PORT}" | tee -a ${MM_LOGFILE}
 

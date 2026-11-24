@@ -15,6 +15,18 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  compose:
+    name: Validate Docker Compose file
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate docker/docker-compose.yml
+        run: docker compose -f docker/docker-compose.yml config --quiet
+
   # Pull requests build the image in the live test job instead: a pull request
   # from a fork gets a read-only token, so it cannot push an image to hand over.
   push-to-ghcr:
