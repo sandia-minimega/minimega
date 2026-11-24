@@ -66,6 +66,9 @@ var (
 	// transferred to this node.
 	ErrInFlight = errors.New("file already in flight")
 
+	// ErrNotFound is the error returned when no node in the mesh has a file.
+	ErrNotFound = errors.New("file not found")
+
 	timeout = time.Duration(30 * time.Second)
 )
 
@@ -247,7 +250,7 @@ func (iom *IOMeshage) Get(file string) error {
 		return err
 	}
 	if len(info.messages()) == 0 {
-		return fmt.Errorf("get %v: file not found", file)
+		return fmt.Errorf("get %v: %w", file, ErrNotFound)
 	}
 
 	inflight := make(map[string]bool)
@@ -343,7 +346,7 @@ func (iom *IOMeshage) Stream(file string) (chan []byte, error) {
 		return nil, err
 	}
 	if len(info.messages()) == 0 {
-		return nil, fmt.Errorf("stream %v: file not found", file)
+		return nil, fmt.Errorf("stream %v: %w", file, ErrNotFound)
 	}
 
 	use, ok := info.use(file, iom.getHash(file), exists)
@@ -573,7 +576,7 @@ func (iom *IOMeshage) whoHas(filename string, p int64) (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("who has %v: file not found", filename)
+	return "", fmt.Errorf("who has %v: %w", filename, ErrNotFound)
 }
 
 func (iom *IOMeshage) getPart(msg *Message, p int64) error {

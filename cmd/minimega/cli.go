@@ -19,6 +19,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/sandia-minimega/minimega/v2/internal/iomeshage"
 	"github.com/sandia-minimega/minimega/v2/pkg/minicli"
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 	"github.com/sandia-minimega/minimega/v2/pkg/minipager"
@@ -505,6 +506,41 @@ func cliLocal(input *liner.State) {
 	}
 }
 
+// fetchURL returns the path in the files directory of the file that URL v
+// names. It uses the copy that lookup finds on the mesh. If the mesh has no
+// copy, fetchURL downloads the file.
+func fetchURL(v, path string, lookup func(file, updatee string) (string, error)) (string, error) {
+	// The lookup and the download use this one name in the files directory.
+	// The clean of the rooted path keeps ".." in that directory.
+	name := strings.TrimPrefix(filepath.Clean("/"+path), "/")
+
+	// iomHelper removes the f_iomBase prefix, so the destination must too.
+	rel, err := iomRelative(name)
+	if err != nil {
+		return "", err
+	}
+
+	dst := filepath.Join(*f_iomBase, rel)
+
+	got, err := lookup(name, "")
+	if err == nil {
+		// a mesh of one node gives no error for a file that does not exist
+		if _, err := os.Stat(got); err == nil {
+			return got, nil
+		}
+	} else if !errors.Is(err, iomeshage.ErrNotFound) {
+		return "", err
+	}
+
+	log.Info("attempting to download %v", v)
+
+	if err := wget(v, dst); err != nil {
+		return "", err
+	}
+
+	return dst, nil
+}
+
 // cliPreprocess performs expansion on a single string and returns the update
 // string or an error.
 func cliPreprocess(v string) (string, error) {
@@ -525,25 +561,7 @@ func cliPreprocess(v string) (string, error) {
 		case "http", "https":
 			log.Debug("http/s preprocessor")
 
-			// Check if we've already downloaded the file
-			v2, err := iomHelper(u.Path, "")
-			if err == nil {
-				return v2, err
-			}
-
-			if err.Error() == "file not found" {
-				log.Info("attempting to download %v", u)
-
-				// Try to download the file, save to files
-				dst := filepath.Join(*f_iomBase, u.Path)
-				if err := wget(v, dst); err != nil {
-					return "", err
-				}
-
-				return dst, nil
-			}
-
-			return "", err
+			return fetchURL(v, u.Path, iomHelper)
 		case "tar":
 			log.Debug("tar preprocessor")
 

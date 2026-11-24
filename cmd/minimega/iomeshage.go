@@ -174,24 +174,28 @@ func cliFile(c *minicli.Command, respChan chan<- minicli.Responses) {
 	}
 }
 
+// iomRelative cleans file and removes the f_iomBase prefix, if file has it,
+// because iomeshage uses paths relative to f_iomBase.
+func iomRelative(file string) (string, error) {
+	// remove any weirdness from the filename like '..'
+	file = filepath.Clean(file)
+
+	if strings.HasPrefix(file, *f_iomBase) {
+		return filepath.Rel(*f_iomBase, file)
+	}
+
+	return file, nil
+}
+
 // iomHelper supports grabbing files for internal minimega operations. It
 // returns the local path of the file or an error if the file doesn't exist or
 // could not transfer. iomHelper blocks until all file transfers are completed.
 // If updatee is provided, it will periodically be sent status update messages
 // about file transfer status.
 func iomHelper(file, updatee string) (string, error) {
-	// remove any weirdness from the filename like '..'
-	file = filepath.Clean(file)
-
-	// IOMeshage assumes relative paths so trim off the f_iomBase path prefix
-	// if it exists.
-	if strings.HasPrefix(file, *f_iomBase) {
-		rel, err := filepath.Rel(*f_iomBase, file)
-		if err != nil {
-			return "", err
-		}
-
-		file = rel
+	file, err := iomRelative(file)
+	if err != nil {
+		return "", err
 	}
 
 	if err := iom.Get(file); err != nil {
