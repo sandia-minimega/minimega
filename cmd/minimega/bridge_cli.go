@@ -44,6 +44,9 @@ ip/netmask:
 
 	tap create 5 dhcp
 
+If the address cannot be configured, the tap is removed and the error is
+returned.
+
 Tap mirror mirrors packets that traverse the source tap to the destination tap.
 Both taps should already exist. You can use taps for VMs from "vm info" or host
 taps. For example, to mirror traffic that traverse mega_tapX to mega_tapY on
@@ -240,14 +243,17 @@ func cliTapCreate(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 
 	if err != nil {
 		// One of the above cases failed, try to clean up the tap
-		br, err := getBridge(b)
-		if err == nil {
-			err = br.DestroyTap(tap)
+		br, err2 := getBridge(b)
+		if err2 == nil {
+			err2 = br.DestroyTap(tap)
 		}
-		if err != nil {
+		if err2 != nil {
 			// Welp, we're boned
-			log.Error("zombie host tap -- %v %v", tap, err)
+			log.Error("zombie host tap -- %v %v", tap, err2)
 		}
+		writeHostTaps()
+
+		// report why the tap was removed, not the result of the cleanup
 		return err
 	}
 
