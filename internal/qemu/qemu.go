@@ -43,11 +43,7 @@ func copyCapabilities(src map[string]bool) map[string]bool {
 func CPUs(qemu, machine string) (map[string]bool, error) {
 	name := qemu + machine + "CPUs"
 
-	cmd := []string{qemu}
-	if machine != "" {
-		cmd = append(cmd, "-M", machine)
-	}
-	cmd = append(cmd, "-cpu", "?")
+	cmd := append([]string{qemu}, cpuArgs(machine)...)
 
 	res, err := caps(name, cmd, parseCPUs)
 	if err != nil && machine == "" {
@@ -63,7 +59,7 @@ func CPUs(qemu, machine string) (map[string]bool, error) {
 func Machines(qemu string) (map[string]bool, error) {
 	name := qemu + "Machines"
 
-	cmd := []string{qemu, "-M", "?"}
+	cmd := append([]string{qemu}, machineArgs()...)
 
 	res, err := caps(name, cmd, parseMachines)
 	if err != nil {
@@ -78,11 +74,7 @@ func Machines(qemu string) (map[string]bool, error) {
 func NICs(qemu, machine string) (map[string]bool, error) {
 	name := qemu + machine + "NICs"
 
-	cmd := []string{qemu}
-	if machine != "" {
-		cmd = append(cmd, "-M", machine)
-	}
-	cmd = append(cmd, "-device", "?")
+	cmd := append([]string{qemu}, nicArgs(machine)...)
 
 	res, err := caps(name, cmd, parseNICs)
 	if err != nil {
@@ -90,6 +82,30 @@ func NICs(qemu, machine string) (map[string]bool, error) {
 	}
 
 	return res, err
+}
+
+// machineFlag returns the arguments that select machine, if it is set.
+func machineFlag(machine string) []string {
+	if machine == "" {
+		return nil
+	}
+
+	return []string{"-M", machine}
+}
+
+// cpuArgs returns the QEMU arguments that list the CPUs for machine.
+func cpuArgs(machine string) []string {
+	return append(machineFlag(machine), "-cpu", "help")
+}
+
+// machineArgs returns the QEMU arguments that list the machines.
+func machineArgs() []string {
+	return []string{"-M", "help"}
+}
+
+// nicArgs returns the QEMU arguments that list the devices for machine.
+func nicArgs(machine string) []string {
+	return append(machineFlag(machine), "-device", "help")
 }
 
 func caps(name string, cmd []string, fn parser) (map[string]bool, error) {

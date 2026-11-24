@@ -720,52 +720,47 @@ func (vm *KvmVM) Migrate(filename string) error {
 }
 
 func (vm *KvmVM) QueryMigrate() (string, float64, error) {
-	var status string
-	var completed float64
-
 	r, err := vm.q.QueryMigrate()
 	if err != nil {
 		return "", 0.0, err
 	}
 
-	// find the status
-	if s, ok := r["status"]; ok {
-		status = s.(string)
-	} else {
-		// if there is no status, it means that there is no active migration
+	return parseMigrateStatus(r)
+}
+
+// parseMigrateStatus returns the migration status and the percentage of RAM
+// transferred from a QMP query-migrate reply. It returns an empty status when
+// there is no migration. It does not return an error for a missing or invalid
+// ram segment, because the status is still valid.
+func parseMigrateStatus(r map[string]interface{}) (string, float64, error) {
+	status, ok := r["status"].(string)
+	if !ok || status == "none" {
 		return "", 0.0, nil
 	}
 
-	var ram map[string]interface{}
 	switch status {
 	case "completed":
-		completed = 100.0
-		return status, completed, nil
+		return status, 100.0, nil
 	case "failed":
-		return status, completed, nil
-	case "active":
-		if e, ok := r["ram"]; !ok {
-			return status, completed, fmt.Errorf("could not decode ram segment: %v", e)
-		} else {
-			switch e.(type) {
-			case map[string]interface{}:
-				ram = e.(map[string]interface{})
-			default:
-				return status, completed, fmt.Errorf("invalid ram type: %v", e)
-			}
-		}
+		return status, 0.0, nil
 	}
 
-	total := ram["total"].(float64)
-	transferred := ram["transferred"].(float64)
-
-	if total == 0.0 {
-		return status, completed, fmt.Errorf("zero total ram!")
+	ram, ok := r["ram"].(map[string]interface{})
+	if !ok {
+		return status, 0.0, nil
 	}
 
-	completed = transferred / total * 100
+	total, ok := ram["total"].(float64)
+	if !ok || total <= 0 {
+		return status, 0.0, nil
+	}
 
-	return status, completed, nil
+	transferred, ok := ram["transferred"].(float64)
+	if !ok {
+		return status, 0.0, nil
+	}
+
+	return status, transferred / total * 100, nil
 }
 
 func (vm *KvmVM) Screenshot(size int) ([]byte, error) {
