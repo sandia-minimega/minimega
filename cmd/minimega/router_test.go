@@ -249,3 +249,110 @@ BGP Export Networks or Routes:
 Firewall Rules:
   Default Action: accept
 `
+
+func TestDHCPRelay(t *testing.T) {
+	r := NewRouter(2)
+	r.InterfaceAdd(0, "10.0.0.1/24", false)
+	r.InterfaceAdd(1, "10.0.1.1/24", false)
+
+	for _, server := range []string{"10.0.0.2", "10.0.0.3", "10.0.0.2"} {
+		if err := r.DHCPAddRelay("10.0.1.1", server); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := r.DHCPAddNetmask("10.0.2.1", "255.255.255.0"); err != nil {
+		t.Fatal(err)
+	}
+	r.DHCPAddRange("10.0.2.1", "10.0.2.100", "10.0.2.200")
+
+	if got := r.dhcp["10.0.1.1"].relay; len(got) != 2 {
+		t.Errorf("relay servers = %v, want 2 without duplicates", got)
+	}
+
+	var b bytes.Buffer
+	r.writeConfig(&b)
+	for _, want := range []string{
+		"dnsmasq dhcp relay 10.0.1.1 10.0.0.2",
+		"dnsmasq dhcp relay 10.0.1.1 10.0.0.3",
+		"dnsmasq dhcp range 10.0.2.1 10.0.2.100 10.0.2.200",
+		"dnsmasq dhcp netmask 10.0.2.1 255.255.255.0",
+	} {
+		if !strings.Contains(b.String(), want+"\n") {
+			t.Errorf("config missing %q:\n%s", want, b.String())
+		}
+	}
+
+	if s := r.String(); !strings.Contains(s, "10.0.0.2, 10.0.0.3") || !strings.Contains(s, "255.255.255.0") {
+		t.Errorf("router info missing relay or netmask:\n%s", s)
+	}
+
+	if err := r.DHCPDelRelay("10.0.1.1", "10.0.0.2"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.dhcp["10.0.1.1"].relay; len(got) != 1 || got[0] != "10.0.0.3" {
+		t.Errorf("relay servers after delete = %v", got)
+	}
+	if err := r.DHCPDelRelay("10.0.1.1", "10.0.0.9"); err == nil {
+		t.Error("expected error deleting unknown relay server")
+	}
+	if err := r.DHCPDelRelay("10.0.1.1", ""); err != nil || len(r.dhcp["10.0.1.1"].relay) != 0 {
+		t.Errorf("clear all relay servers: %v, %v", err, r.dhcp["10.0.1.1"].relay)
+	}
+	if err := r.DHCPDelRelay("10.9.9.9", ""); err == nil {
+		t.Error("expected error for unknown listen address")
+	}
+}
+
+func TestDHCPRelayInvalid(t *testing.T) {
+	r := NewRouter(1)
+	for _, c := range [][2]string{{"10.0.1.1", "dhcp.example"}, {"bogus", "10.0.0.2"}, {"10.0.1.1", "2001:db8::2"}, {"2001:db8:1::1", "10.0.0.2"}, {"::ffff:10.0.1.1", "10.0.0.2"}, {"2001:db8:1::1", "ff05::1:3"}, {"10.0.1.1", "224.0.0.1"}, {"10.0.1.1", "0.0.0.0"}, {"10.0.1.1", "255.255.255.255"}, {"2001:db8:1::1", "::"}, {"2001:db8:1::1", "fe80::2"}} {
+		if err := r.DHCPAddRelay(c[0], c[1]); err == nil {
+			t.Errorf("DHCPAddRelay(%q, %q) succeeded", c[0], c[1])
+		}
+	}
+	for _, mask := range []string{"24", "255.0.255.0", "foo", "::"} {
+		if err := r.DHCPAddNetmask("10.0.1.1", mask); err == nil {
+			t.Errorf("DHCPAddNetmask(%q) succeeded", mask)
+		}
+	}
+	for _, addr := range []string{"2001:db8::1", "::ffff:10.0.1.1", "bogus"} {
+		if err := r.DHCPAddNetmask(addr, "255.255.255.0"); err == nil {
+			t.Errorf("DHCPAddNetmask(%q, 255.255.255.0) succeeded", addr)
+		}
+	}
+	if len(r.dhcp) != 0 {
+		t.Errorf("invalid input created DHCP entries: %v", r.dhcp)
+	}
+	if err := r.DHCPAddRelay("2001:db8:1::1", "2001:db8::2"); err != nil {
+		t.Errorf("IPv6 relay: %v", err)
+	}
+}
+
+func TestDHCPRelayNormalize(t *testing.T) {
+	r := NewRouter(1)
+	if err := r.DHCPAddNetmask("10.0.2.0", "::ffff:255.255.255.0"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.dhcp["10.0.2.0"].netmask; got != "255.255.255.0" {
+		t.Errorf("netmask = %q, want 255.255.255.0", got)
+	}
+
+	for _, server := range []string{"::ffff:10.0.0.2", "10.0.0.2"} {
+		if err := r.DHCPAddRelay("10.0.1.1", server); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := r.dhcp["10.0.1.1"].relay; len(got) != 1 || got[0] != "10.0.0.2" {
+		t.Errorf("relay servers = %v, want [10.0.0.2]", got)
+	}
+	if err := r.DHCPDelRelay("10.0.1.1", "::ffff:10.0.0.2"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := r.DHCPAddRelay("2001:db8:1::1", "2001:DB8:0::2"); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.dhcp["2001:db8:1::1"].relay; len(got) != 1 || got[0] != "2001:db8::2" {
+		t.Errorf("IPv6 relay servers = %v, want [2001:db8::2]", got)
+	}
+}

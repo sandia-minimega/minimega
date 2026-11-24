@@ -16,6 +16,7 @@ type vmSpec struct {
 	VCPUs  string
 	CC     bool // runs miniccc over a backchannel
 	Router bool
+	Relay  bool // leased through a DHCP relay; checked by testDHCPRelay
 	Tags   map[string]string
 }
 
@@ -36,7 +37,7 @@ var topology = func() []vmSpec {
 	vms = append(vms,
 		vmSpec{Name: "rtr-ab", VLANs: []string{"lan-a", "lan-b"}, IPs: []string{"10.10.1.1", "10.10.2.1"},
 			Memory: "448", VCPUs: "1", CC: true, Router: true, Tags: map[string]string{"role": "router"}},
-		vmSpec{Name: "rtr-cd", VLANs: []string{"lan-b", "lan-c", "lan-d"}, IPs: []string{"10.10.2.2", "10.10.3.1", "10.10.4.1"},
+		vmSpec{Name: "rtr-cd", VLANs: []string{"lan-b", "lan-c", "lan-d", "lan-e"}, IPs: []string{"10.10.2.2", "10.10.3.1", "10.10.4.1", "10.10.5.1"},
 			Memory: "448", VCPUs: "1", CC: true, Router: true, Tags: map[string]string{"role": "router"}},
 	)
 
@@ -72,14 +73,18 @@ var topology = func() []vmSpec {
 		Name: "host-d5", VLANs: []string{"lan-d", "lan-c"}, IPs: []string{"10.10.4.15", "10.10.3.16"},
 		Memory: "384", VCPUs: "1", CC: true, Tags: map[string]string{"role": "server", "lan": "d"},
 	})
+	vms = append(vms, vmSpec{
+		Name: "host-e1", VLANs: []string{"lan-e"}, IPs: []string{"10.10.5.11"},
+		Memory: "352", VCPUs: "1", CC: true, Relay: true, Tags: map[string]string{"role": "client", "lan": "e"},
+	})
 
 	return vms
 }()
 
 const (
 	d5UUID = "4c1e0000-0000-4000-8000-0000000000d5"
-	// total NICs across the topology (routers 5, hosts 21)
-	totalNICs = 26
+	// total NICs across the topology (routers 6, hosts 22)
+	totalNICs = 28
 )
 
 func specFor(name string) vmSpec {
