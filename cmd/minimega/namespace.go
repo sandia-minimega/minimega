@@ -672,8 +672,9 @@ func (ns *Namespace) NewCommand(c *ron.Command) int {
 	c.Filter = ns.ccFilter
 	c.Prefix = ns.ccPrefix
 
+	// Do not read c after this call: the ron server sends it concurrently.
 	id := ns.ccServer.NewCommand(c)
-	log.Debug("generated command %v: %v", id, c)
+	log.Debug("generated command %v", id)
 
 	return id
 }

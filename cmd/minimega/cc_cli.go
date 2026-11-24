@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"slices"
@@ -442,8 +443,9 @@ func cliCCAutoUpdate(ns *Namespace, c *minicli.Command, resp *minicli.Response) 
 }
 
 // fetchCCUpdateFiles uses list to find the miniccc update binaries on the mesh
-// in the files directory and in subpath, and uses get to fetch each one.
-func fetchCCUpdateFiles(subpath string, list func(string) []string, get func(string) error) error {
+// in the files directory and in subpath, and uses get to fetch each one. It
+// returns an error if list cannot search the mesh.
+func fetchCCUpdateFiles(subpath string, list func(string) ([]string, error), get func(string) error) error {
 	dirs := []string{""}
 	if subpath != "" {
 		dirs = append(dirs, subpath)
@@ -453,7 +455,12 @@ func fetchCCUpdateFiles(subpath string, list func(string) []string, get func(str
 
 	for _, dir := range dirs {
 		for _, pattern := range []string{"miniccc", "miniccc.exe", "miniccc-*"} {
-			for _, file := range list(filepath.Join(dir, pattern)) {
+			files, err := list(filepath.Join(dir, pattern))
+			if err != nil {
+				return fmt.Errorf("unable to search the mesh for miniccc binaries: %w", err)
+			}
+
+			for _, file := range files {
 				file = filepath.Clean(file)
 				if seen[file] || filepath.Dir(file) != filepath.Clean(dir) || !ron.IsUpdateFile(filepath.Base(file)) {
 					continue
@@ -843,10 +850,11 @@ func cliCCFilter(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 // send
 func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	files := make([]string, len(c.ListArgs["file"]))
+	var files []string
 
-	// Ensure each file to be sent to the VM is present locally before sending.
-	for i, file := range c.ListArgs["file"] {
+	// Expand globs before fetching files through iomeshage, which only accepts
+	// individual filenames.
+	for _, file := range c.ListArgs["file"] {
 		original := file
 
 		// Strip base path from the file if it's present since the base path gets
@@ -858,6 +866,45 @@ func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 			}
 
 			file = rel
+		}
+
+		var expanded []ccSendFile
+		if filepath.IsAbs(file) {
+			matches, err := filepath.Glob(file)
+			if err != nil {
+				return err
+			}
+
+			for _, match := range matches {
+				expanded = append(expanded, ccSendFile{mesh: match, send: match})
+			}
+		} else {
+			// An absolute pattern names a directory in the files directory, so
+			// do not search the namespace directory first.
+			subpath := ns.Name
+			if ns.Name == DefaultNamespace || filepath.IsAbs(original) {
+				subpath = ""
+			}
+
+			var err error
+			expanded, err = ccSendExpand(subpath, file, iom.Info)
+			if err != nil {
+				return fmt.Errorf("unable to find file %s via the mesh: %w", original, err)
+			}
+		}
+
+		for _, f := range expanded {
+			if _, err := iomHelper(f.mesh, c.Source); err != nil {
+				return fmt.Errorf("unable to get file %s via the mesh: %w", original, err)
+			}
+
+			// The ron server reads each name as a glob, so escape the
+			// metacharacters to send only the matched file.
+			files = append(files, ccSendEscape(f.send))
+		}
+
+		if len(expanded) > 0 {
+			continue
 		}
 
 		_, err := iomHelper(file, c.Source)
@@ -876,7 +923,7 @@ func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 			}
 		}
 
-		files[i] = file
+		files = append(files, file)
 	}
 
 	cmd, err := ns.ccServer.NewFilesSendCommand(files)
@@ -886,6 +933,102 @@ func cliCCFileSend(ns *Namespace, c *minicli.Command, resp *minicli.Response) er
 
 	resp.Data = ns.NewCommand(cmd)
 	return nil
+}
+
+// ccSendFile is a file that cc send fetches through iomeshage and then gives to
+// the ron server.
+type ccSendFile struct {
+	mesh string // path relative to the iomeshage base directory
+	send string // name relative to the ron server directory of the namespace
+}
+
+// ccSendExpand finds the files that a glob pattern matches on the mesh. It
+// searches the subpath directory first, when subpath is not empty, and the
+// iomeshage base directory second. It returns no files and no error when
+// pattern is not a glob.
+func ccSendExpand(subpath, pattern string, info func(string) ([]string, error)) ([]ccSendFile, error) {
+	if !ccIsGlob(pattern) {
+		return nil, nil
+	}
+
+	search := func(prefix string) ([]ccSendFile, error) {
+		glob := filepath.Join(prefix, pattern)
+
+		matches, err := info(glob)
+		if err != nil {
+			return nil, err
+		}
+
+		sort.Strings(matches)
+
+		var res []ccSendFile
+		for i, match := range matches {
+			if i > 0 && match == matches[i-1] {
+				continue
+			}
+
+			// info also returns the files below matched directories.
+			if ok, err := filepath.Match(glob, match); err != nil {
+				return nil, err
+			} else if !ok {
+				continue
+			}
+
+			send, err := filepath.Rel(prefix, match)
+			if err != nil {
+				return nil, err
+			}
+
+			res = append(res, ccSendFile{mesh: match, send: send})
+		}
+
+		return res, nil
+	}
+
+	if subpath != "" {
+		res, err := search(subpath)
+		if err != nil || len(res) > 0 {
+			return res, err
+		}
+	}
+
+	return search("")
+}
+
+// ccIsGlob returns true when pattern contains a glob metacharacter.
+func ccIsGlob(pattern string) bool {
+	return strings.ContainsAny(pattern, "*?[")
+}
+
+// ccSendGlob returns the glob pattern in a cc send file argument, without the
+// "file:" prefix. It returns false when v is not a glob, or when v is a URL
+// that is not an iomeshage file.
+func ccSendGlob(v string) (string, bool) {
+	if rest, ok := strings.CutPrefix(v, "file:"); ok {
+		if strings.HasPrefix(rest, "//") {
+			return "", false
+		}
+
+		v = rest
+	} else if u, err := url.Parse(v); err == nil && u.Scheme != "" {
+		return "", false
+	}
+
+	return v, ccIsGlob(v)
+}
+
+// ccSendEscape escapes the glob metacharacters in name so that a glob of the
+// result matches only name.
+func ccSendEscape(name string) string {
+	var b strings.Builder
+	for _, r := range name {
+		if strings.ContainsRune(`*?[\`, r) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+
+	return b.String()
 }
 
 // recv

@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -73,6 +74,7 @@ func TestLive(t *testing.T) {
 		p("CCFilterTag", testCCFilterTag, cc),
 		p("CCExitCode", testCCExitCode, cc),
 		p("CCSendRecv", testCCSendRecv, cc),
+		p("CCSendGlob", testCCSendGlob, cc),
 		p("CCBackgroundProcess", testCCBackgroundProcess, cc),
 		p("CCResponses", testCCResponses, cc),
 
@@ -738,6 +740,57 @@ func testCCSendRecv(t *testing.T) {
 		}
 		return nil
 	})
+}
+
+// testCCSendGlob checks that cc send expands globs and sends each match once,
+// with its own name, including names that contain glob metacharacters.
+func testCCSendGlob(t *testing.T) {
+	nonce := time.Now().UnixNano()
+	content := func(name string) string { return fmt.Sprintf("%v %d", name, nonce) }
+
+	// dir writes the files to a new artifact directory and returns its path.
+	dir := func(name string, files ...string) string {
+		host, _ := harness.Artifact(t, name)
+		if err := os.MkdirAll(host, 0755); err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range files {
+			if err := os.WriteFile(filepath.Join(host, f), []byte(content(f)+"\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return host
+	}
+
+	// check compares the files in a guest directory with want.
+	check := func(guestDir string, want ...string) {
+		t.Helper()
+		out := harness.CCOK(t, "host-c3", "cd /tmp/miniccc/files/"+guestDir+" && grep -H . *")
+		got := strings.Split(strings.TrimSpace(out), "\n")
+		var lines []string
+		for _, f := range want {
+			lines = append(lines, f+":"+content(f))
+		}
+		slices.Sort(got)
+		slices.Sort(lines)
+		if !slices.Equal(got, lines) {
+			t.Errorf("guest files in %v = %q, want %q", guestDir, got, lines)
+		}
+	}
+
+	// files are named relative to the namespace's files directory
+	dir("glob-file", "one.txt", "two.txt", "report1.txt", "report[1].txt", "skip.log")
+	harness.CCRun(t, "name=host-c3", "send file:artifacts/glob-file/*.txt", 1, time.Minute)
+	check("artifacts/glob-file", "one.txt", "two.txt", "report1.txt", "report[1].txt")
+
+	dir("glob-bare", "a.txt", "b.log", "c.dat")
+	harness.CCRun(t, "name=host-c3", "send artifacts/glob-bare/*.txt artifacts/glob-bare/*.log", 1, time.Minute)
+	check("artifacts/glob-bare", "a.txt", "b.log")
+
+	// an absolute pattern names a directory below the files directory
+	abs := dir("glob-abs", "x.txt", "y.dat")
+	harness.CCRun(t, "name=host-c3", "send "+filepath.Join(abs, "*.txt"), 1, time.Minute)
+	check(harness.Namespace+"/artifacts/glob-abs", "x.txt")
 }
 
 func testCCBackgroundProcess(t *testing.T) {
