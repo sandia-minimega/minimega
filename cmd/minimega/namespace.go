@@ -79,11 +79,11 @@ type Namespace struct {
 	vmConfig      VMConfig
 	savedVMConfig map[string]VMConfig
 
-	// configLock protects savedVMConfig, queue, launching, and the writes that
-	// replace vmConfig, its BaseConfig, or its Networks. Hold it to read them
-	// from a different goroutine. "ns add-hosts" and "ns del-hosts" also hold it
-	// when they change Hosts, and vmInfoCommands holds it to read Hosts. Other
-	// readers of Hosts do not hold it.
+	// configLock protects savedVMConfig, queue, launching, hugepagesMountPath,
+	// and the writes that replace vmConfig, its BaseConfig, or its Networks.
+	// Hold it to read them from a different goroutine. "ns add-hosts" and
+	// "ns del-hosts" also hold it when they change Hosts, and vmInfoCommands
+	// holds it to read Hosts. Other readers of Hosts do not hold it.
 	configLock sync.Mutex
 
 	// launching counts the queued VMs that are launching. These VMs can be
@@ -619,11 +619,39 @@ func (n *Namespace) Launch(requestor string, q *QueuedVMs) []error {
 
 	// collect all the errors
 	errs := []error{}
-	for err := range n.VMs.Launch(requestor, n.Name, q) {
+	for err := range n.VMs.Launch(requestor, n.Name, n.launchVMs(q)) {
 		errs = append(errs, err)
 	}
 
 	return errs
+}
+
+// launchVMs returns a copy of q with the optimizations of this namespace that
+// apply when this host launches the VMs. It does not change q, because
+// launching and the scheduler refer to q. Only KVM VMs, including bare-metal
+// VMs, use hugepages.
+func (n *Namespace) launchVMs(q *QueuedVMs) *QueuedVMs {
+	n.configLock.Lock()
+	defer n.configLock.Unlock()
+
+	res := *q
+
+	// only the namespace sets the path, so ignore a path in the queued config
+	res.KVMConfig.hugepagesMountPath = ""
+	if res.VMType == KVM {
+		res.KVMConfig.hugepagesMountPath = n.hugepagesMountPath
+	}
+
+	return &res
+}
+
+// setHugepagesMountPath sets the hugetlbfs mount path for the KVM VMs that this
+// host launches in the namespace. An empty path disables hugepages.
+func (n *Namespace) setHugepagesMountPath(path string) {
+	n.configLock.Lock()
+	defer n.configLock.Unlock()
+
+	n.hugepagesMountPath = path
 }
 
 // startLaunch adds qs to launching until endLaunch. Also removes the VMs in

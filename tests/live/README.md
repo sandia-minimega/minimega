@@ -134,6 +134,7 @@ phases (screenshots, QMP, serial, ...) still run.
 | VM operations | `vm screenshot` (std and cirrus), `vm serial`, `vm qmp`, `vm tag` + tag filter, `vm top`, `vm stop/start`, `vm net disconnect/connect`, `vm hotplug add/remove`, `vm save`, `vm kill` + `vm flush` + `vm config clone` + queued relaunch |
 | Tools | `passwordify` on the guest initrd: a VM booted from it accepts the new root password and has the installed keys |
 | VNC | the RFB handshake and a frame through miniweb and the VNC shim, `vnc record fb` decoded, keys typed on the `host-d3` console with QEMU extended key events, `vnc record kb` + `vnc play`, paste as keys, `vnc type`, `vnc inject` (key and `LoadFile`, with and without a playback), `vm kill` while recording and playing (entries stop, files close) |
+| Optimizations | `optimize hugepages`: an extra VM runs with `-mem-path` and uses host hugepages, and a VM with memory that is not a multiple of 2 MiB fails to launch (skipped unless `LIVE_HUGEPAGES` is set) |
 | Teardown | `clear namespace` removes VMs, QEMU processes, and OVS ports |
 
 Out of scope: containers, Android, bare-metal VMs, and multi-node meshes.
@@ -165,6 +166,19 @@ the group in `tests/live/<name>`. Results land in
 `./live-artifacts`: the test log, a Markdown summary, minimega and container
 logs, diagnostics (`vm info`, routers, OVS), cc responses, screenshots, and a
 pcap.
+
+The `Hugepages` phase runs only when `LIVE_HUGEPAGES` is the number of 2 MiB
+hugepages that the host reserved. If `LIVE_HUGEPAGES` is unset or 0, the phase
+is skipped. A value below 192 makes the phase fail. CI reserves 320:
+
+```bash
+echo 320 | sudo tee /proc/sys/vm/nr_hugepages
+sudo LIVE_PULL=0 LIVE_HUGEPAGES=320 tests/live/run.sh minimega:dev
+```
+
+The phase uses `/dev/hugepages` in the container when it is a hugetlbfs mount
+with 2 MiB pages. Otherwise, it mounts a hugetlbfs in the container and removes
+it at the end. If this mount fails, the phase fails.
 
 ### Without x86 KVM (e.g. an arm64 host)
 

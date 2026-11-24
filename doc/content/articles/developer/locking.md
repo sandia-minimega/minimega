@@ -119,7 +119,8 @@ the uses that started before it. Other commands do not wait for `Wait`. Call
 
 `Namespace.configLock` protects the hosts, the saved VM configurations, the VM
 queue, and the launching VMs of a namespace. It also protects the writes that
-replace the VM configuration, its `BaseConfig`, or its `Networks`. Hold it to
+replace the VM configuration, its `BaseConfig`, or its `Networks`, and the
+hugepages mount path. Hold it to
 read these fields from a different goroutine. `clear vlans blacklist` holds it
 to read these fields from all namespaces. It is one of the other locks: acquire
 it after `VM.lock`. Do not acquire other minimega locks or send commands while
