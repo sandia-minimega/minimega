@@ -110,7 +110,7 @@ func ovsDelPort(bridge, tap string) error {
 	}
 
 	if _, err := ovsCmdWrapper(args); err != nil {
-		return fmt.Errorf("remove port failed: %v", err)
+		return fmt.Errorf("remove port failed: %w", err)
 	}
 
 	return nil

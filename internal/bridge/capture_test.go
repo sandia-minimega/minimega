@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -78,6 +79,12 @@ func (s *fakeSource) isClosed() bool {
 	return s.closed
 }
 
+// ovsReaper runs the ovs-vsctl commands of systemReaper but does not delete
+// devices.
+type ovsReaper struct{ systemReaper }
+
+func (ovsReaper) delLinks(names []string) ([]string, error) { return names, nil }
+
 func testBridge() *Bridge {
 	return &Bridge{
 		Name:         "test_bridge",
@@ -90,6 +97,7 @@ func testBridge() *Bridge {
 		edgeCaptures: map[string]*edgeCapture{},
 		captureID:    new(int),
 		config:       map[string]string{},
+		reaper:       ovsReaper{},
 	}
 }
 
@@ -527,8 +535,8 @@ func useFakeCommands(t *testing.T) *fakeCommands {
 	t.Helper()
 
 	f := &fakeCommands{}
-	oldOVS, oldProc := ovsExec, processExec
-	t.Cleanup(func() { ovsExec, processExec = oldOVS, oldProc })
+	oldOVS, oldProc, oldUp := ovsExec, processExec, upInterface
+	t.Cleanup(func() { ovsExec, processExec, upInterface = oldOVS, oldProc, oldUp })
 
 	ovsExec = func(args []string) (string, error) {
 		f.add("ovs-vsctl " + strings.Join(args, " "))
@@ -537,6 +545,10 @@ func useFakeCommands(t *testing.T) *fakeCommands {
 	processExec = func(args []string) (string, error) {
 		f.add(strings.Join(args, " "))
 		return "", nil
+	}
+	upInterface = func(name string, promisc bool) error {
+		f.add(fmt.Sprintf("up interface %v promisc=%v", name, promisc))
+		return nil
 	}
 
 	return f
@@ -596,7 +608,7 @@ func TestBridgeCaptureRemovesTap(t *testing.T) {
 	for _, want := range []string{
 		`ovs-vsctl add-port test_bridge mega_tap42 external_ids:minimega-namespace="" external_ids:minimega-kind="capture-bridge"`,
 		"-- set Interface mega_tap42 type=internal -- --id=@dst get port mega_tap42 -- --id=@m create mirror name=mirror-mega_tap42 output-port=@dst select-all=true",
-		"ip link set mega_tap42 up promisc on",
+		"up interface mega_tap42 promisc=true",
 	} {
 		if !cmds.has(want) {
 			t.Errorf("missing command %q in %q", want, cmds.cmds)
@@ -1016,9 +1028,9 @@ func TestCaptureTapSetupFails(t *testing.T) {
 			if step == "disable IPv6" {
 				disableIPv6 = func(string) error { return fail }
 			} else {
-				processExec = func(args []string) (string, error) {
-					cmds.add(strings.Join(args, " "))
-					return "", fail
+				upInterface = func(name string, promisc bool) error {
+					cmds.add(fmt.Sprintf("up interface %v promisc=%v", name, promisc))
+					return fail
 				}
 			}
 
