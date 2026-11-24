@@ -34,7 +34,9 @@ func commandSocketHandle(conn net.Conn) {
 		log.Debug("got command: %v", line)
 		r, err := minicli.ProcessString(line, false)
 		if err != nil {
+			// r is nil on error, so receiving from it would block forever
 			log.Errorln(err)
+			continue
 		}
 		<-r
 	}
