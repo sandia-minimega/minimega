@@ -340,6 +340,9 @@ func ccRead(id int) (map[string]CCResult, error) {
 }
 
 // CCExec runs a shell command on exactly one VM and returns its result.
+// minimega expands $name and ${name} in every command it gets, from its own
+// environment, so the script cannot use shell variables. $(command) is not
+// changed.
 func CCExec(t testing.TB, vm, script string) CCResult {
 	t.Helper()
 	r, err := ccExecTry(vm, script, 90*time.Second)

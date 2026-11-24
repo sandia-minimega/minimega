@@ -143,7 +143,7 @@ go vet -tags live ./tests/live/...
 Keep each group's `topology.mm` and `topology_test.go` in sync (for example
 `tests/live/core/topology.mm` and `tests/live/core/topology_test.go`), and
 extend the live tests when a change affects VM lifecycle, networking,
-minirouter, or miniccc behavior.
+minirouter, miniccc, or pipe behavior.
 
 ## Change conventions
 
