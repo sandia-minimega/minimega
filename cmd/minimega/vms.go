@@ -297,6 +297,9 @@ func (vms *VMs) Launch(requestor, namespace string, q *QueuedVMs) <-chan error {
 					}
 				}
 			}
+			if kvm, ok := vm.(*KvmVM); ok && err == nil {
+				err = reserveVNCPort(kvm)
+			}
 
 			if err != nil {
 				errs <- err
