@@ -113,6 +113,8 @@ func TestLive(t *testing.T) {
 		p("Hotplug", testHotplug, cc),
 		p("Save", testSave, cc),
 		p("KillFlushRelaunch", testKillFlushRelaunch, cc),
+		// last VM operation: it replaces host-c2 with its restored copy
+		p("SaveRestore", testSaveRestore, cc),
 
 		// tools shipped in the image
 		p("Passwordify", testPasswordify, cc),
@@ -1243,6 +1245,118 @@ func testKillFlushRelaunch(t *testing.T) {
 	}
 	if r["uuid"] == harness.VMInfo(t)["host-a4"]["uuid"] {
 		t.Errorf("clone kept the source UUID")
+	}
+}
+
+// launched fails the test when a VM that "vm launch" took from the queue is
+// missing or in the ERROR state. The scheduler logs launch errors and does not
+// return them to the caller.
+func launched(t *testing.T, vm string) {
+	t.Helper()
+	r, ok := harness.VMInfo(t)[vm]
+	if !ok {
+		t.Fatalf("%v not launched from the queue (ns queue: %q)", vm, harness.MustText(t, "ns queue"))
+	}
+	if r["state"] == "ERROR" {
+		t.Fatalf("%v launch failed: state ERROR, tags %v", vm, r["tags"])
+	}
+}
+
+// waitSaved waits until QEMU reports that the migration of "vm save" is
+// complete. It asks QMP: the status list of "vm save" can stop the daemon when
+// a VM is in a transient migration status.
+func waitSaved(t *testing.T, vm string) {
+	t.Helper()
+	harness.Eventually(t, 3*time.Minute, 3*time.Second, func() error {
+		out, err := harness.Text("vm qmp " + vm + ` '{ "execute": "query-migrate" }'`)
+		if err != nil {
+			return err
+		}
+		var r struct {
+			Return struct {
+				Status string `json:"status"`
+			} `json:"return"`
+		}
+		if i := strings.Index(out, "{"); i < 0 {
+			return fmt.Errorf("query-migrate: %q", out)
+		} else if err := json.Unmarshal([]byte(out[i:]), &r); err != nil {
+			return fmt.Errorf("query-migrate: %q: %v", out, err)
+		}
+		if r.Return.Status != "completed" {
+			return fmt.Errorf("migration status %q", r.Return.Status)
+		}
+		return nil
+	})
+}
+
+func testSaveRestore(t *testing.T) {
+	// host-c2 has an IDE disk, miniccc, and a static MAC; the Save phase
+	// already showed that it saves
+	const vm, name = "host-c2", "live/restore-c2"
+	// skip or fail now when there is no container, not after the VM is gone
+	if out, err := harness.InContainer(t, "true"); err != nil {
+		t.Fatalf("docker exec in the minimega container: %v\n%s", err, out)
+	}
+	state := harness.MMFiles + "/" + name + ".state"
+	disk := harness.MMFiles + "/" + name + ".hdd"
+	before := harness.VMInfo(t)[vm]
+
+	// clone needs a launched VM, so take the configuration now
+	harness.MustRun(t, "vm config clone "+vm)
+	defer harness.Run("clear vm config")
+	// a file in the guest tmpfs survives a restore but not a reboot
+	const markerFile = "/tmp/live-save-restore"
+	marker := fmt.Sprintf("restore-%d", time.Now().UnixNano())
+	harness.CCOK(t, vm, "echo "+marker+" > "+markerFile)
+
+	harness.MustRun(t, "vm save "+vm+" "+name)
+	waitSaved(t, vm)
+	for _, f := range []string{state, disk} {
+		if fi, err := os.Stat(f); err != nil || fi.Size() == 0 {
+			t.Fatalf("saved file %v: %v", f, err)
+		}
+	}
+
+	harness.MustRun(t, "vm kill "+vm)
+	harness.Eventually(t, 30*time.Second, 2*time.Second, func() error {
+		if s := harness.VMInfo(t)[vm]["state"]; s != "QUIT" {
+			return fmt.Errorf("state = %v", s)
+		}
+		return nil
+	})
+	harness.MustRun(t, "vm flush")
+
+	// the saved disk must not depend on the flushed VM's instance directory
+	if out, err := harness.InContainer(t, "qemu-img", "info", "--backing-chain", disk); err != nil {
+		t.Fatalf("saved disk %v is not usable after vm flush: %v\n%s", disk, err, out)
+	}
+
+	// the same VM again: clone keeps the MAC and clears the UUID
+	for _, cmd := range []string{
+		"vm config uuid " + before["uuid"],
+		"vm config state " + state,
+		"vm config disks " + disk + ",ide,writeback",
+		"vm launch kvm " + vm,
+		"vm launch",
+	} {
+		harness.MustRun(t, cmd)
+	}
+	launched(t, vm)
+	harness.MustRun(t, "vm start "+vm)
+
+	harness.Eventually(t, 3*time.Minute, 5*time.Second, func() error {
+		r := harness.VMInfo(t)[vm]
+		if r["state"] != "RUNNING" || r["cc_active"] != "true" {
+			return fmt.Errorf("%v state=%v cc=%v", vm, r["state"], r["cc_active"])
+		}
+		return nil
+	})
+	after := harness.VMInfo(t)[vm]
+	if after["uuid"] != before["uuid"] || after["mac"] != before["mac"] {
+		t.Errorf("restored %v uuid/mac = %v/%v, want %v/%v", vm, after["uuid"], after["mac"], before["uuid"], before["mac"])
+	}
+	if r := harness.CCExec(t, vm, "cat "+markerFile); strings.TrimSpace(r.Stdout) != marker {
+		t.Errorf("%v %v after restore = %q (exit %d), want %q: the guest rebooted", vm, markerFile, r.Stdout, r.ExitCode, marker)
 	}
 }
 
