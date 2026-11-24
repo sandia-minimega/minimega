@@ -85,6 +85,15 @@ type Node struct {
 	updateNetwork    bool
 	Snoop            func(m *Message)
 	version          string
+
+	local     *queue              // delivers messages for this node to receive, in arrival order
+	relays    map[relayKey]*queue // forwards messages for other nodes, in arrival order per source and next hop
+	relayLock sync.Mutex
+}
+
+type relayKey struct {
+	source string // node that sent the message
+	hop    string // client the message is relayed to
 }
 
 func init() {
@@ -95,6 +104,20 @@ func init() {
 // and degree. If degree is non-zero, the node will automatically begin broadcasting
 // for connections.
 func NewNode(name string, namespace string, degree uint, broadcastIP net.IP, port int, version string) (*Node, chan *Message) {
+	n := newNode(name, namespace, degree, broadcastIP, port, version)
+
+	go n.connectionListener()
+	go n.broadcastListener()
+	go n.messageHandler()
+	go n.checkDegree()
+	go n.periodicMSA()
+	go n.periodicEffectiveNetwork()
+
+	return n, n.receive
+}
+
+// newNode returns a node without starting any of its goroutines.
+func newNode(name string, namespace string, degree uint, broadcastIP net.IP, port int, version string) *Node {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	log.Debug("NewNode: %v %v %v %v", name, degree, broadcastIP, port)
@@ -117,16 +140,12 @@ func NewNode(name string, namespace string, degree uint, broadcastIP net.IP, por
 		version:          version,
 		instance:         r.Uint64(),
 		rand:             r,
+		relays:           make(map[relayKey]*queue),
 	}
 
-	go n.connectionListener()
-	go n.broadcastListener()
-	go n.messageHandler()
-	go n.checkDegree()
-	go n.periodicMSA()
-	go n.periodicEffectiveNetwork()
+	n.local = newQueue(n.handleMessage)
 
-	return n, n.receive
+	return n
 }
 
 // return the name of this node
