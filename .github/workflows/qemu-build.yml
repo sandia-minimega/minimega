@@ -1,0 +1,102 @@
+name: Publish QEMU build image
+
+# Builds QEMU from source with docker/qemu/Dockerfile and publishes it as
+# ghcr.io/<owner>/qemu-build:<QEMU version>-noble-<build revision>, so that
+# other images can copy QEMU from it. A published tag is never overwritten:
+# to publish a changed recipe, increase QEMU_BUILD_REVISION.
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - docker/qemu/**
+      - '!docker/qemu/README.md'
+  pull_request:
+    paths:
+      - docker/qemu/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number && format('pr-{0}', github.event.pull_request.number) || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # Pull requests and manual runs on other branches only build the image: a
+  # tag is permanent, so an unmerged recipe must not publish one.
+  build:
+    name: Build QEMU image
+    if: github.event_name == 'pull_request' || github.ref != 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build container image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: docker/qemu
+          file: docker/qemu/Dockerfile
+          push: false
+
+  publish:
+    name: Build and publish QEMU image
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select image tag
+        id: tag
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          version="$(sed -n 's/^ARG QEMU_VERSION="\([^"]*\)"$/\1/p' docker/qemu/Dockerfile)"
+          revision="$(sed -n 's/^ARG QEMU_BUILD_REVISION="\([^"]*\)"$/\1/p' docker/qemu/Dockerfile)"
+          if [ -z "${version}" ] || [ -z "${revision}" ]; then
+            echo "::error::cannot read ARG QEMU_VERSION and ARG QEMU_BUILD_REVISION from docker/qemu/Dockerfile"
+            exit 1
+          fi
+          image="ghcr.io/${OWNER,,}/qemu-build:${version}-noble-${revision}"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "image tag: ${image}"
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Refuse to overwrite a published tag
+        env:
+          IMAGE: ${{ steps.tag.outputs.image }}
+        run: |
+          if out="$(docker manifest inspect "${IMAGE}" 2>&1)"; then
+            echo "::error::${IMAGE} is already published, and a tag is never overwritten. Increase QEMU_BUILD_REVISION in docker/qemu/Dockerfile."
+            exit 1
+          fi
+          # "denied" also stops the push below, so it cannot overwrite a tag
+          if ! echo "${out}" | grep -qiE 'manifest unknown|not found|name unknown|denied'; then
+            echo "::error::cannot check whether ${IMAGE} exists: ${out}"
+            exit 1
+          fi
+          echo "${IMAGE} is not published yet"
+      - name: Build and push container image
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: docker/qemu
+          file: docker/qemu/Dockerfile
+          push: true
+          tags: ${{ steps.tag.outputs.image }}
