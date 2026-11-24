@@ -1,0 +1,10 @@
+## vm launch kvm foo
+
+## vm hmp foo "info status"
+VM status: paused (prelaunch)
+## vm start foo
+## vm hmp foo "info status"
+VM status: running
+
+## vm hmp bar "info status"
+E: vm not found: bar

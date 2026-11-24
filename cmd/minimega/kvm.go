@@ -647,6 +647,10 @@ func (vm *KvmVM) QMPRaw(input string) (string, error) {
 	return vm.q.Raw(input)
 }
 
+func (vm *KvmVM) HMP(cmd string) (string, error) {
+	return vm.q.HumanMonitorCommand(cmd)
+}
+
 func (vm *KvmVM) Save(filename string) error {
 	// skip save if using kernel/initrd or cdrom as boot device
 	if len(vm.KVMConfig.Disks) == 0 {

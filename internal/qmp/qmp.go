@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"sync"
 
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
@@ -25,6 +26,9 @@ type Conn struct {
 	messageSync  chan map[string]interface{}
 	messageAsync chan map[string]interface{}
 	ready        bool
+
+	// reqLock is a pointer because Dial returns a copy of the Conn
+	reqLock *sync.Mutex
 }
 
 // return an asynchronous message, blocking until one shows up
@@ -52,6 +56,7 @@ func (q *Conn) connect(s string) error {
 	q.enc = json.NewEncoder(q.conn)
 	q.messageSync = make(chan map[string]interface{}, 1024)
 	q.messageAsync = make(chan map[string]interface{}, 1024)
+	q.reqLock = &sync.Mutex{}
 
 	// upon connecting we should get the qmp version etc.
 	v, err := q.read()
@@ -122,11 +127,31 @@ func (q *Conn) write(v map[string]interface{}) error {
 	return err
 }
 
+// request sends v and returns the reply. A QMP reply does not name its
+// request, so only one request at a time waits for a reply.
+func (q *Conn) request(v map[string]interface{}) (map[string]interface{}, error) {
+	if !q.ready {
+		return nil, ERR_READY
+	}
+
+	q.reqLock.Lock()
+	defer q.reqLock.Unlock()
+
+	if err := q.write(v); err != nil {
+		return nil, err
+	}
+	return <-q.messageSync, nil
+}
+
 func (q *Conn) Raw(input string) (string, error) {
 	log.Debug("qmp write: %v", input)
 	if !q.ready {
 		return "", ERR_READY
 	}
+
+	q.reqLock.Lock()
+	defer q.reqLock.Unlock()
+
 	_, err := q.conn.Write([]byte(input))
 	if err != nil {
 		return "", err
@@ -153,11 +178,10 @@ func (q *Conn) Status() (map[string]interface{}, error) {
 	s := map[string]interface{}{
 		"execute": "query-status",
 	}
-	err := q.write(s)
+	v, err := q.request(s)
 	if err != nil {
 		return nil, err
 	}
-	v := <-q.messageSync
 	status := v["return"]
 	if status == nil {
 		return nil, errors.New("received nil status")
@@ -172,11 +196,10 @@ func (q *Conn) Start() error {
 	s := map[string]interface{}{
 		"execute": "cont",
 	}
-	err := q.write(s)
+	v, err := q.request(s)
 	if err != nil {
 		return err
 	}
-	v := <-q.messageSync
 	if !success(v) {
 		return errors.New("could not start VM")
 	}
@@ -190,11 +213,10 @@ func (q *Conn) Stop() error {
 	s := map[string]interface{}{
 		"execute": "stop",
 	}
-	err := q.write(s)
+	v, err := q.request(s)
 	if err != nil {
 		return err
 	}
-	v := <-q.messageSync
 	if !success(v) {
 		return errors.New("could not stop VM")
 	}
@@ -212,11 +234,10 @@ func (q *Conn) BlockdevEject(device string, force bool) error {
 			"force":  force,
 		},
 	}
-	err := q.write(s)
+	v, err := q.request(s)
 	if err != nil {
 		return err
 	}
-	v := <-q.messageSync
 	if !success(v) {
 		return fmt.Errorf("eject failed: %v", v)
 	}
@@ -234,11 +255,10 @@ func (q *Conn) BlockdevChange(device, path string) error {
 			"filename": path,
 		},
 	}
-	err := q.write(s)
+	v, err := q.request(s)
 	if err != nil {
 		return err
 	}
-	v := <-q.messageSync
 	if !success(v) {
 		return fmt.Errorf("change failed: %v", v)
 	}
@@ -257,11 +277,10 @@ func (q *Conn) Pmemsave(path string, size uint64) error {
 			"filename": path,
 		},
 	}
-	err := q.write(s)
+	v, err := q.request(s)
 	if err != nil {
 		return err
 	}
-	v := <-q.messageSync
 	if !success(v) {
 		return errors.New("pmemsave")
 	}
@@ -280,11 +299,10 @@ func (q *Conn) BlockdevSnapshot(path, device string) error {
 			"format":        "raw",
 		},
 	}
-	err := q.write(s)
+	v, err := q.request(s)
 	if err != nil {
 		return err
 	}
-	v := <-q.messageSync
 	if !success(v) {
 		return errors.New("blockdev_snapshot")
 	}
@@ -301,11 +319,10 @@ func (q *Conn) Screendump(path string) error {
 			"filename": fmt.Sprintf("%v", path),
 		},
 	}
-	err := q.write(s)
+	v, err := q.request(s)
 	if err != nil {
 		return err
 	}
-	v := <-q.messageSync
 	if !success(v) {
 		return errors.New("screendump")
 	}
@@ -324,11 +341,10 @@ func (q *Conn) SaveDisk(path, device string) error {
 			"target": path,
 		},
 	}
-	err := q.write(s)
+	v, err := q.request(s)
 	if err != nil {
 		return err
 	}
-	v := <-q.messageSync
 	if !success(v) {
 		return errors.New("error in qmp SaveDisk")
 	}
@@ -345,11 +361,10 @@ func (q *Conn) MigrateDisk(path string) error {
 			"uri": fmt.Sprintf("exec:cat > %v", path),
 		},
 	}
-	err := q.write(s)
+	v, err := q.request(s)
 	if err != nil {
 		return err
 	}
-	v := <-q.messageSync
 	if !success(v) {
 		return errors.New("migrate")
 	}
@@ -363,11 +378,10 @@ func (q *Conn) QueryMigrate() (map[string]interface{}, error) {
 	s := map[string]interface{}{
 		"execute": "query-migrate",
 	}
-	err := q.write(s)
+	v, err := q.request(s)
 	if err != nil {
 		return nil, err
 	}
-	v := <-q.messageSync
 
 	status := v["return"]
 	if status == nil {
@@ -383,11 +397,10 @@ func (q *Conn) QueryBlock() ([]interface{}, error) {
 	s := map[string]interface{}{
 		"execute": "query-block",
 	}
-	err := q.write(s)
+	v, err := q.request(s)
 	if err != nil {
 		return nil, err
 	}
-	v := <-q.messageSync
 	status := v["return"]
 	if status == nil {
 		return nil, errors.New("received nil status")
@@ -402,11 +415,10 @@ func (q *Conn) QueryBlockJobs() ([]interface{}, error) {
 	s := map[string]interface{}{
 		"execute": "query-block-jobs",
 	}
-	err := q.write(s)
+	v, err := q.request(s)
 	if err != nil {
 		return nil, err
 	}
-	v := <-q.messageSync
 
 	status := v["return"]
 	if status == nil {
@@ -425,16 +437,27 @@ func (q *Conn) HumanMonitorCommand(command string) (string, error) {
 			"command-line": command,
 		},
 	}
-	err := q.write(s)
+	v, err := q.request(s)
 	if err != nil {
 		return "", err
 	}
-	v := <-q.messageSync
+	if e, ok := v["error"]; ok {
+		if m, ok := e.(map[string]interface{}); ok {
+			if desc, ok := m["desc"].(string); ok {
+				return "", fmt.Errorf("human-monitor-command: %v", desc)
+			}
+		}
+		return "", fmt.Errorf("human-monitor-command: %v", e)
+	}
 	response := v["return"]
 	if response == nil {
 		return "", errors.New("received nil response")
 	}
-	return response.(string), nil
+	out, ok := response.(string)
+	if !ok {
+		return "", fmt.Errorf("human-monitor-command: unexpected response type %T", response)
+	}
+	return out, nil
 }
 
 func (q *Conn) DriveAdd(id, file string) (string, error) {
