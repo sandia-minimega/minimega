@@ -695,9 +695,11 @@ func globalVMs(ns *Namespace) []VM {
 
 // expandVMNames takes a VM name, range, or count and expands it into a list of
 // names of VMs that should be launched. Does several sanity checks on the
-// names to make sure that they aren't reserved words.
-func expandLaunchNames(arg string) ([]string, error) {
+// names to make sure that they aren't reserved words. It also returns a
+// warning for each pair of names that differ only in letter case.
+func expandLaunchNames(arg string) ([]string, []string, error) {
 	names := []string{}
+	var warnings []string
 
 	count, err := strconv.ParseInt(arg, 10, 32)
 	if err != nil {
@@ -709,20 +711,20 @@ func expandLaunchNames(arg string) ([]string, error) {
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if len(names) == 0 {
-		return nil, errors.New("no VMs to launch")
+		return nil, nil, errors.New("no VMs to launch")
 	}
 
 	for i, name := range names {
 		if isReserved(name) {
-			return nil, fmt.Errorf("invalid vm name, `%s` is a reserved word", name)
+			return nil, nil, fmt.Errorf("invalid vm name, `%s` is a reserved word", name)
 		}
 
 		if _, err := strconv.Atoi(name); err == nil {
-			return nil, fmt.Errorf("invalid vm name, `%s` is an integer", name)
+			return nil, nil, fmt.Errorf("invalid vm name, `%s` is an integer", name)
 		}
 
 		if name == "vince" {
@@ -732,11 +734,20 @@ func expandLaunchNames(arg string) ([]string, error) {
 		// Check for conflicts within the provided names. Don't conflict with
 		// ourselves or if the name is unspecified.
 		for j, name2 := range names {
-			if i != j && name == name2 && name != "" {
-				return nil, fmt.Errorf("`%s` is specified twice in VMs to launch", name)
+			if i == j || name == "" || vmNameKey(name) != vmNameKey(name2) {
+				continue
+			}
+
+			if name == name2 {
+				return nil, nil, fmt.Errorf("`%s` is specified twice in VMs to launch", name)
+			}
+
+			// warn one time for each pair
+			if i < j {
+				warnings = append(warnings, caseConflictWarning(fmt.Sprintf("`%s` and `%s` conflict in VMs to launch", name, name2)))
 			}
 		}
 	}
 
-	return names, nil
+	return names, warnings, nil
 }

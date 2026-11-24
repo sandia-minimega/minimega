@@ -98,9 +98,9 @@ clear vm config
 vm config kernel $images/miniccc.kernel
 vm config initrd $images/miniccc.initrd
 vm config net A
-vm launch kvm A
+vm launch kvm vm-A
 vm config net B
-vm launch kvm B
+vm launch kvm vm-B
 
 vm start all
 ```

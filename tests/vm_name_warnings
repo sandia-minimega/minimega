@@ -1,0 +1,15 @@
+# minimega launches these VMs with a warning. minimega 4.0.0 will reject them.
+ns queueing true
+vm launch kvm foo_1
+vm launch kvm a
+vm launch kvm -foo
+vm launch kvm foo-
+vm launch kvm foo.
+vm launch kvm .foo
+vm launch kvm foo..bar
+vm launch kvm aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+vm launch kvm foo,bar_[1-2]
+vm launch kvm web1,WEB1
+vm launch kvm Web1
+ns flush
+ns queueing false

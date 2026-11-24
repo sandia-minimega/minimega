@@ -1,12 +1,12 @@
 # test that all VMs end up on mm1 with queueing enabled
 ns queueing true
 vm config schedule mm1
-vm launch kvm a
+vm launch kvm vm-a
 clear vm config schedule
-vm config colocate a
-vm launch kvm b
-vm config colocate b
-vm launch kvm c
+vm config colocate vm-a
+vm launch kvm vm-b
+vm config colocate vm-b
+vm launch kvm vm-c
 vm launch
 
 # wait for scheduler to run
