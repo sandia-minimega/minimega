@@ -464,27 +464,52 @@ func vlanInfo() string {
 	return o.String()
 }
 
+// createPart makes a new file with a unique name next to dst. As with
+// os.Create, the umask limits the mode. os.CreateTemp always uses mode 0600.
+func createPart(dst string) (*os.File, error) {
+	for {
+		name := fmt.Sprintf("%v.part%d", dst, rand.Uint32())
+
+		f, err := os.OpenFile(name, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0666)
+		if !os.IsExist(err) {
+			return f, err
+		}
+	}
+}
+
 // wget downloads a URL and writes it to disk, creates parent directories if
 // needed.
 func wget(u, dst string) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
-		return err
-	}
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
 	resp, err := http.Get(u)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
-	_, err = io.Copy(out, resp.Body)
-	return err
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("download %v: %v", u, resp.Status)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+
+	// write to a temporary file, so that a failed download leaves no file at dst
+	out, err := createPart(dst)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(out.Name())
+
+	if _, err := io.Copy(out, resp.Body); err != nil {
+		out.Close()
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+
+	return os.Rename(out.Name(), dst)
 }
 
 func writeInt(filename string, value int) error {
