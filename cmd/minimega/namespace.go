@@ -7,6 +7,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -75,6 +76,10 @@ type Namespace struct {
 
 	// QueuedVMs toggles whether we should queue VMs or not when launching
 	QueueVMs bool
+
+	// index of the names and UUIDs in queue, nil until a Queue needs it
+	queuedNames map[string]bool
+	queuedUUIDs map[string]bool
 
 	vmConfig      VMConfig
 	savedVMConfig map[string]VMConfig
@@ -244,7 +249,8 @@ func (n *Namespace) Destroy() error {
 		log.Error("unable to delete mirrors: %v", err)
 	}
 
-	// Kill and flush all the VMs
+	// Kill and flush all the VMs, including the VMs that are launching
+	n.WaitLaunches()
 	n.Kill(Wildcard)
 	n.FlushAll(n.ccServer)
 
@@ -292,55 +298,45 @@ func (n *Namespace) Queue(arg string, vmType VMType, vmConfig VMConfig) error {
 		return errors.New("cannot launch multiple VMs with a pre-configured UUID")
 	}
 
-	// look for name and UUID conflicts across the namespace
-	takenName := map[string]bool{}
-	takenUUID := map[string]bool{}
-
-	for _, vm := range globalVMs(n) {
-		takenName[vm.GetName()] = true
-		takenUUID[vm.GetUUID()] = true
-	}
-
 	for _, name := range names {
-		if takenName[name] {
-			return fmt.Errorf("vm already exists with name `%s`", name)
-		}
-
 		if name != "" && !validName.MatchString(name) {
 			return fmt.Errorf("%v: `%v`", validNameErr, name)
 		}
 	}
 
-	if takenUUID[vmConfig.UUID] && vmConfig.UUID != "" {
-		return fmt.Errorf("vm already exists with UUID `%s`", vmConfig.UUID)
-	}
-
-	// add in all the queued VM names and then recheck
-	for _, q := range n.queued() {
-		for _, name := range q.Names {
-			takenName[name] = true
+	// Look for name and UUID conflicts across the namespace. With queueing,
+	// Schedule does this one time for all the queued VMs, because a `vm info`
+	// on each host for each queued VM is slow with many VMs.
+	if !n.QueueVMs {
+		q := &QueuedVMs{VMConfig: vmConfig, Names: names}
+		if err := vmConflicts(globalVMs(n), []*QueuedVMs{q}); err != nil {
+			return err
 		}
-		takenUUID[q.VMConfig.UUID] = true
-	}
-
-	for _, name := range names {
-		if takenName[name] && name != "" {
-			return fmt.Errorf("vm already queued with name `%s`", name)
-		}
-	}
-
-	if takenUUID[vmConfig.UUID] && vmConfig.UUID != "" {
-		return fmt.Errorf("vm already queued with UUID `%s`", vmConfig.UUID)
 	}
 
 	n.configLock.Lock()
 	defer n.configLock.Unlock()
 
-	n.queue = append(n.queue, &QueuedVMs{
+	// look for conflicts with the queued VMs
+	n.indexQueue()
+
+	for _, name := range names {
+		if n.queuedNames[name] && name != "" {
+			return fmt.Errorf("vm already queued with name `%s`", name)
+		}
+	}
+
+	if n.queuedUUIDs[vmConfig.UUID] && vmConfig.UUID != "" {
+		return fmt.Errorf("vm already queued with UUID `%s`", vmConfig.UUID)
+	}
+
+	q := &QueuedVMs{
 		VMConfig: vmConfig,
 		VMType:   vmType,
 		Names:    names,
-	})
+	}
+	n.queue = append(n.queue, q)
+	n.addToQueueIndex(q)
 
 	return nil
 }
@@ -386,6 +382,67 @@ func (n *Namespace) copyVMConfig(name string) (config VMConfig, done func(), err
 	n.addLaunching(pending)
 
 	return config, func() { n.endLaunch(pending) }, nil
+}
+
+// vmConflicts returns an error when a queued VM has the name or UUID of one of
+// the VMs in vms.
+func vmConflicts(vms []VM, queue []*QueuedVMs) error {
+	takenName := map[string]bool{}
+	takenUUID := map[string]bool{}
+
+	for _, vm := range vms {
+		takenName[vm.GetName()] = true
+		takenUUID[vm.GetUUID()] = true
+	}
+
+	for _, q := range queue {
+		for _, name := range q.Names {
+			if takenName[name] && name != "" {
+				return fmt.Errorf("vm already exists with name `%s`", name)
+			}
+		}
+
+		if takenUUID[q.VMConfig.UUID] && q.VMConfig.UUID != "" {
+			return fmt.Errorf("vm already exists with UUID `%s`", q.VMConfig.UUID)
+		}
+	}
+
+	return nil
+}
+
+// clearQueue removes all the queued VMs and the index of their names and
+// UUIDs. The caller must hold configLock.
+func (n *Namespace) clearQueue() {
+	n.queue = nil
+	n.queuedNames, n.queuedUUIDs = nil, nil
+}
+
+// indexQueue makes the index of the names and UUIDs in the queue, if it does
+// not exist. The caller must hold configLock.
+func (n *Namespace) indexQueue() {
+	if n.queuedNames != nil {
+		return
+	}
+
+	n.queuedNames = map[string]bool{}
+	n.queuedUUIDs = map[string]bool{}
+
+	for _, q := range n.queue {
+		n.addToQueueIndex(q)
+	}
+}
+
+// addToQueueIndex adds the names and UUID of q to the index of the queue, if
+// the index exists. The caller must hold configLock.
+func (n *Namespace) addToQueueIndex(q *QueuedVMs) {
+	if n.queuedNames == nil {
+		return
+	}
+
+	for _, name := range q.Names {
+		n.queuedNames[name] = true
+	}
+	n.queuedUUIDs[q.VMConfig.UUID] = true
 }
 
 // hostStats returns stats from hosts in the namespace.
@@ -452,8 +509,16 @@ func (n *Namespace) Schedule(dryRun bool) error {
 		}
 	}
 
+	vms := globalVMs(n)
+
+	// The queued VMs were not checked against the VMs in the namespace when
+	// queueing was enabled.
+	if err := vmConflicts(vms, queue); err != nil {
+		return err
+	}
+
 	// resolve any "colocated" VMs for VMs that are already launched
-	for _, vm := range globalVMs(n) {
+	for _, vm := range vms {
 		for _, q := range queue {
 			if q.Colocate == vm.GetName() {
 				q.Schedule = vm.GetHost()
@@ -501,49 +566,54 @@ func (n *Namespace) schedule(assignment map[string][]*QueuedVMs, queue []*Queued
 
 	n.scheduleStats = append(n.scheduleStats, stats)
 
-	// Result of vm launch commands
-	respChan := make(chan minicli.Responses)
+	// set names here instead of on the remote host to ensure that we get
+	// names that are unique across the namespace
+	for _, queue := range assignment {
+		for _, q := range queue {
+			for i, name := range q.Names {
+				if name == "" {
+					q.Names[i] = fmt.Sprintf("vm-%v", n.vmID.Next())
+				}
+			}
+		}
+	}
+
+	results := make(chan scheduleResult)
 
 	var wg sync.WaitGroup
 
 	for host, queue := range assignment {
-		wg.Add(1)
+		// limit the launches in progress on each host
+		slots := make(chan struct{}, scheduleHostParallel())
 
-		go func(host string, queue []*QueuedVMs) {
-			defer wg.Done()
+		for _, q := range queue {
+			wg.Add(1)
 
-			for _, q := range queue {
-				// set name here instead of on the remote host to ensure that we
-				// get names that are unique across the namespace
-				for i, name := range q.Names {
-					if name == "" {
-						q.Names[i] = fmt.Sprintf("vm-%v", n.vmID.Next())
-					}
-				}
+			go func(host string, q *QueuedVMs) {
+				defer wg.Done()
 
-				n.hostLaunch(host, q, respChan)
-			}
-		}(host, queue)
+				slots <- struct{}{}
+				defer func() { <-slots }()
+
+				results <- scheduleLaunch(n, host, q)
+			}(host, q)
+		}
 	}
 
 	go func() {
 		wg.Wait()
-		close(respChan)
+		close(results)
 	}()
 
-	// Collect all the responses and log them
-	for resps := range respChan {
-		for _, resp := range resps {
-			if resp.Error != "" {
-				stats.failures += 1
-				log.Error("launch error, host %v -- %v", resp.Host, resp.Error)
-			} else {
-				// Response should number of VMs launched
-				i, _ := strconv.Atoi(resp.Response)
-				stats.launched += i
+	// Collect all the results and log them
+	for r := range results {
+		stats.launched += r.launched
+		stats.failures += r.failed
 
-				log.Debug("launch response, host %v -- %v", resp.Host, resp.Response)
-			}
+		if r.err != "" {
+			log.Error("launch error, host %v -- %v", r.host, r.err)
+		} else {
+			log.Debug("launch response, host %v -- %v launched", r.host, r.launched)
 		}
 	}
 
@@ -617,6 +687,12 @@ func (n *Namespace) Launch(requestor string, q *QueuedVMs) []error {
 	n.startLaunch([]*QueuedVMs{q}, nil)
 	defer n.endLaunch([]*QueuedVMs{q})
 
+	if q.VMType == FIRECRACKER {
+		for _, w := range fcIgnoredLaunchSettings(q.VMConfig, n.hugepagesMountPath) {
+			log.Warn("%v", w)
+		}
+	}
+
 	// collect all the errors
 	errs := []error{}
 	for err := range n.VMs.Launch(requestor, n.Name, q) {
@@ -637,6 +713,7 @@ func (n *Namespace) startLaunch(qs, dequeue []*QueuedVMs) {
 		n.queue = slices.DeleteFunc(slices.Clone(n.queue), func(q *QueuedVMs) bool {
 			return slices.Contains(dequeue, q)
 		})
+		n.queuedNames, n.queuedUUIDs = nil, nil
 	}
 
 	n.addLaunching(qs)
@@ -678,27 +755,59 @@ func (ns *Namespace) NewCommand(c *ron.Command) int {
 	return id
 }
 
+// scheduleResult is the result of the launch of one queued entry on one host.
+type scheduleResult struct {
+	host             string
+	launched, failed int
+	err              string
+}
+
+// scheduleLaunch launches q on host. Tests replace it.
+var scheduleLaunch = (*Namespace).hostLaunch
+
+// scheduleHostParallel returns the maximum number of launches in progress on
+// each host. It uses the same limit as the stages of a Firecracker launch.
+func scheduleHostParallel() int {
+	return fcLaunchParallel()
+}
+
 // hostLaunch launches a queuedVM on the specified host and namespace.
-func (n *Namespace) hostLaunch(host string, queued *QueuedVMs, respChan chan<- minicli.Responses) {
+func (n *Namespace) hostLaunch(host string, queued *QueuedVMs) scheduleResult {
 	log.Info("scheduling %v %v VMs on %v", len(queued.Names), queued.VMType, host)
+
+	res := scheduleResult{host: host}
 
 	// Launching the VMs locally
 	if host == hostname {
-		resp := &minicli.Response{
-			Host:     hostname,
-			Response: strconv.Itoa(len(queued.Names)),
+		errs := n.Launch("", queued)
+
+		res.launched = launchedCount(len(queued.Names), errs)
+		res.failed = len(queued.Names) - res.launched
+		if err := makeErrSlice(errs); err != nil {
+			res.err = err.Error()
 		}
 
-		if err := makeErrSlice(n.Launch("", queued)); err != nil {
-			resp.Error = err.Error()
-		}
-
-		respChan <- minicli.Responses{resp}
-
-		return
+		return res
 	}
 
-	forward(meshageLaunch(host, n.Name, queued), respChan)
+	var resp *minicli.Response
+	for resps := range meshageLaunch(host, n.Name, queued) {
+		if len(resps) > 0 {
+			resp = resps[0]
+		}
+	}
+
+	if resp == nil {
+		res.failed = len(queued.Names)
+		res.err = "timed out"
+		return res
+	}
+
+	res.launched, _ = strconv.Atoi(resp.Response)
+	res.failed = len(queued.Names) - res.launched
+	res.err = resp.Error
+
+	return res
 }
 
 // hostSlice converts the hosts map into a slice of hostnames
@@ -848,8 +957,9 @@ func (n *Namespace) processVMBonds(vals []string) error {
 }
 
 // Save creates a restorable namespace launch script and saves runtime state for
-// VM types that support minimega save semantics. KVM VMs have state and disk
-// files saved. Container and Android VMs are saved as configuration only.
+// VM types that support minimega save semantics. KVM VMs, and Firecracker VMs
+// that are running or paused, have state and disk files saved. Container and
+// Android VMs, and other Firecracker VMs, are saved as configuration only.
 // Android Emulator runtime state, AVD data changes, and guest-side network
 // configuration are not captured. If dir is not an absolute path, it will be a
 // subdirectory of iomBase.
@@ -952,30 +1062,27 @@ func (n *Namespace) Save(dir string) error {
 
 			fmt.Fprintf(f, "vm config disks %s\n", diskConfigs.String())
 
-		} else if vm.GetType() == CONTAINER {
-			log.Warn("Saving configuration only for container: %q\n", vm.GetName())
-			fmt.Fprintf(f, "clear vm config\n")
+			fmt.Fprintf(f, "vm launch %v %q\n\n", vm.GetType(), vm.GetName())
+		} else if vm.GetType() == FIRECRACKER && vm.GetState()&(VM_RUNNING|VM_PAUSED) != 0 {
+			vmDst := filepath.Join(dir, vm.GetName())
+			cmd = minicli.MustCompilef("vm save %q %v", vm.GetName(), vmDst)
+			cmd.Record = false
 
-			if err := vm.WriteConfig(f); err != nil {
+			if err := consume(runCommands(cmd)); err != nil {
 				return err
 			}
-		} else if vm.GetType() == ANDROID {
-			log.Warn("Saving configuration only for Android VM: %q\n", vm.GetName())
 
-			fmt.Fprintf(f, "# Android VM %q is saved as configuration only.\n", vm.GetName())
-			fmt.Fprintf(f, "# Android Emulator runtime state, AVD data changes, guest IP addresses,\n")
-			fmt.Fprintf(f, "# guest policy routing, and guest firewall state are not captured.\n")
-
-			fmt.Fprintf(f, "clear vm config\n")
-
-			if err := vm.WriteConfig(f); err != nil {
+			// The launch script needs the files of the save.
+			if err := fcWaitSave(vm.GetID()); err != nil {
 				return err
 			}
-		} else {
-			return fmt.Errorf("namespace save does not support VM type %v for VM %q", vm.GetType(), vm.GetName())
+
+			if err := writeFirecrackerRestore(f, vm, vmDst, useIOM); err != nil {
+				return err
+			}
+		} else if err := saveVMConfigOnly(f, vm); err != nil {
+			return err
 		}
-
-		fmt.Fprintf(f, "vm launch %v %q\n\n", vm.GetType(), vm.GetName())
 	}
 
 	if n.QueueVMs {
@@ -989,6 +1096,48 @@ func (n *Namespace) Save(dir string) error {
 	fmt.Fprintf(f, "shell sleep 10\n")
 	fmt.Fprintf(f, "vm stop all\n")
 	fmt.Fprintf(f, "vm start all\n")
+
+	return nil
+}
+
+// saveVMConfigOnly writes the launch commands for a VM that namespace save
+// saves as configuration only: container, Android, and Firecracker VMs that
+// are not running or paused.
+func saveVMConfigOnly(f io.Writer, vm VM) error {
+	switch vm.GetType() {
+	case CONTAINER:
+		log.Warn("Saving configuration only for container: %q\n", vm.GetName())
+		fmt.Fprintf(f, "clear vm config\n")
+
+		if err := vm.WriteConfig(f); err != nil {
+			return err
+		}
+	case ANDROID:
+		log.Warn("Saving configuration only for Android VM: %q\n", vm.GetName())
+
+		fmt.Fprintf(f, "# Android VM %q is saved as configuration only.\n", vm.GetName())
+		fmt.Fprintf(f, "# Android Emulator runtime state, AVD data changes, guest IP addresses,\n")
+		fmt.Fprintf(f, "# guest policy routing, and guest firewall state are not captured.\n")
+
+		fmt.Fprintf(f, "clear vm config\n")
+
+		if err := vm.WriteConfig(f); err != nil {
+			return err
+		}
+	case FIRECRACKER:
+		log.Warn("Saving configuration only for Firecracker VM: %q\n", vm.GetName())
+
+		fmt.Fprintf(f, "# Firecracker VM %q is saved as configuration only.\n", vm.GetName())
+		fmt.Fprintf(f, "clear vm config\n")
+
+		if err := vm.WriteConfig(f); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("namespace save does not support VM type %v for VM %q", vm.GetType(), vm.GetName())
+	}
+
+	fmt.Fprintf(f, "vm launch %v %q\n\n", vm.GetType(), vm.GetName())
 
 	return nil
 }

@@ -758,14 +758,20 @@ func TestVMConfigCloneLooksUpVLANs(t *testing.T) {
 // the VM configuration as launching until the copy is in the queue.
 func TestClearVLANsBlacklistLaunchCopy(t *testing.T) {
 	ns := &Namespace{
-		Name:     "test",
-		Hosts:    map[string]bool{hostname: true},
-		QueueVMs: true,
+		Name:  "test",
+		Hosts: map[string]bool{hostname: true},
+		// a queued VM a on another VLAN makes the launch of a fail after the
+		// copy, before it schedules
+		queue: []*QueuedVMs{{
+			Names:    []string{"a"},
+			VMConfig: VMConfig{BaseConfig: BaseConfig{Networks: NetConfigs{{VLAN: 200}}}},
+		}},
 	}
 	ns.vmConfig.Networks = NetConfigs{{VLAN: 100}}
 	setupClearVLANsBlacklist(t, ns)
 
-	// Queue stops when it gets the VMs in the namespace, after the copy
+	// Without queueing, Queue stops when it gets the VMs in the namespace,
+	// after the copy
 	unlock := lockVMs(t, ns)
 
 	queued := make(chan error, 1)
@@ -785,9 +791,26 @@ func TestClearVLANsBlacklistLaunchCopy(t *testing.T) {
 
 	unlock()
 
-	if err := <-queued; err != nil {
+	if err := <-queued; err == nil || !strings.Contains(err.Error(), "already queued") {
+		t.Fatalf("got error %v, want a VM already queued", err)
+	}
+
+	if got := ns.vlanConfigUsers(100); len(got) != 0 {
+		t.Errorf("got users %q after the failed launch, want none", got)
+	}
+
+	// With queueing, the copy goes to the queue
+	ns.configLock.Lock()
+	ns.QueueVMs = true
+	ns.clearQueue()
+	ns.vmConfig.Networks = NetConfigs{{VLAN: 100}}
+	ns.configLock.Unlock()
+
+	if err := cliVMLaunch(ns, minicli.MustCompile("vm launch kvm a"), &minicli.Response{}); err != nil {
 		t.Fatal(err)
 	}
+
+	ns.clearVMConfig(Wildcard)
 
 	got = ns.vlanConfigUsers(100)
 	if strings.Join(got, ",") != "queued VMs a in namespace test" {

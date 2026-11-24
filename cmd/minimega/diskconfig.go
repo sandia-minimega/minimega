@@ -20,6 +20,9 @@ type DiskConfig struct {
 	Interface    string
 	Cache        string
 
+	// ReadOnly is the "ro" option. Only Firecracker VMs support it.
+	ReadOnly bool
+
 	// Raw string that we used when creating this disk config will be
 	// reparsed if we ever clone the VM that has this config.
 	Raw string
@@ -32,7 +35,7 @@ type DiskConfigs []DiskConfig
 func ParseDiskConfig(spec string, snapshot bool) (*DiskConfig, error) {
 	// NOTE: diskspec currently uses comma as a structural delimiter:
 	//
-	//   <path>[,<interface>[,<cache>]]
+	//   <path>[,<interface>][,<cache>][,ro]
 	//
 	// As a result, paths/URLs containing commas are not supported by this
 	// parser. This is a pre-existing limitation of the diskspec grammar.
@@ -49,6 +52,12 @@ func ParseDiskConfig(spec string, snapshot bool) (*DiskConfig, error) {
 
 	// example: /data/minimega/images/linux.qcow2,virtio,writeback
 	f := strings.Split(spec, ",")
+
+	var ro bool
+	if len(f) > 1 && f[len(f)-1] == "ro" {
+		ro = true
+		f = f[:len(f)-1]
+	}
 
 	// path, interface, cache
 	var p, i, c string
@@ -87,7 +96,7 @@ func ParseDiskConfig(spec string, snapshot bool) (*DiskConfig, error) {
 		return nil, err
 	}
 
-	log.Debug(`got path="%v", interface="%v", cache="%v"`, p, i, c)
+	log.Debug(`got path="%v", interface="%v", cache="%v", ro=%v`, p, i, c, ro)
 
 	p = checkPath(p)
 
@@ -95,6 +104,7 @@ func ParseDiskConfig(spec string, snapshot bool) (*DiskConfig, error) {
 		Path:      p,
 		Cache:     c,
 		Interface: i,
+		ReadOnly:  ro,
 	}, nil
 }
 
@@ -111,6 +121,10 @@ func (c DiskConfig) String() string {
 
 	if c.Cache != "" {
 		parts = append(parts, c.Cache)
+	}
+
+	if c.ReadOnly {
+		parts = append(parts, "ro")
 	}
 
 	return strings.Join(parts, ",")

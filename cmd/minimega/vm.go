@@ -32,6 +32,7 @@ const (
 	KVM
 	CONTAINER
 	ANDROID
+	FIRECRACKER
 )
 
 type VM interface {
@@ -77,6 +78,10 @@ type VM interface {
 	// Conflicts checks whether the VMs have conflicting configs. Called
 	// when we create a VM but before adding it to the list of VMs.
 	Conflicts(VM) error
+
+	// conflictsNoLock is Conflicts without the lock of the VM. Use it only for
+	// a VM that is launching: the launch holds the lock.
+	conflictsNoLock(VM) error
 
 	SetCCActive(bool)
 	HasCC() bool
@@ -173,9 +178,14 @@ func init() {
 	gob.Register(&KvmVM{})
 	gob.Register(&ContainerVM{})
 	gob.Register(&AndroidVM{})
+	gob.Register(&FirecrackerVM{})
 }
 
 func NewVM(name, namespace string, vmType VMType, config VMConfig) (VM, error) {
+	if err := fcCheckDiskOptions(vmType, config.KVMConfig.Disks); err != nil {
+		return nil, err
+	}
+
 	switch vmType {
 	case KVM:
 		return NewKVM(name, namespace, config)
@@ -183,6 +193,8 @@ func NewVM(name, namespace string, vmType VMType, config VMConfig) (VM, error) {
 		return NewContainer(name, namespace, config)
 	case ANDROID:
 		return NewAndroid(name, namespace, config)
+	case FIRECRACKER:
+		return NewFirecracker(name, namespace, config)
 	}
 
 	return nil, errors.New("unknown VM type")
@@ -272,6 +284,8 @@ func (s VMType) String() string {
 		return "container"
 	case ANDROID:
 		return "android"
+	case FIRECRACKER:
+		return "firecracker"
 	default:
 		return "???"
 	}
@@ -285,6 +299,8 @@ func ParseVMType(s string) (VMType, error) {
 		return CONTAINER, nil
 	case "android":
 		return ANDROID, nil
+	case "firecracker":
+		return FIRECRACKER, nil
 	default:
 		return 0, errors.New("invalid VMType")
 	}
@@ -693,6 +709,21 @@ func (vm *BaseVM) SetCCActive(active bool) {
 	defer vm.lock.Unlock()
 
 	vm.ActiveCC = active
+}
+
+// CCPolicy returns the cc policy of the VM: the configured cc-policy, or the
+// default of the VM type. The ron server reads it without the VM lock, so it
+// must not take it.
+func (vm *BaseVM) CCPolicy() string {
+	if vm.BaseConfig.CCPolicy != "" {
+		return vm.BaseConfig.CCPolicy
+	}
+
+	if vm.Type == FIRECRACKER {
+		return ron.CCPolicyStrict
+	}
+
+	return ron.CCPolicyLegacy
 }
 
 func (vm *BaseVM) HasCC() bool {

@@ -14,6 +14,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sandia-minimega/minimega/v2/internal/iomeshage"
@@ -48,18 +49,26 @@ type meshageVMLaunch struct {
 // meshageVMResponse is sent back to the scheduler to notify it of any errors
 // that occurred
 type meshageVMResponse struct {
-	Errors []string // Errors from launch, can't actually encode error type
-	TID    int32    // unique ID for command/response pair
+	Errors   []string // Errors from launch, can't actually encode error type
+	Launched int      // number of VMs that launched
+	TID      int32    // unique ID for command/response pair
 }
 
-var (
-	meshageNode     *meshage.Node
-	meshageMessages chan *meshage.Message
+// meshageBulkCells is the number of table cells above which a response uses
+// the bulk link.
+const meshageBulkCells = 10000
 
-	meshageCommandChan    = make(chan *meshage.Message, 1024)
-	meshageResponseChan   = make(chan *meshage.Message, 1024)
-	meshageVMLaunchChan   = make(chan *meshage.Message, 1024)
-	meshageVMResponseChan = make(chan *meshage.Message, 1024)
+var (
+	meshageNode *meshage.Node
+
+	meshageCommandChan  = make(chan *meshage.Message, 1024)
+	meshageResponseChan = make(chan *meshage.Message, 1024)
+	meshageVMLaunchChan = make(chan *meshage.Message, 1024)
+
+	// meshageVMResponses has a channel for each launch that waits for its
+	// meshageVMResponse, indexed by TID
+	meshageVMResponses     = map[int32]chan meshageVMResponse{}
+	meshageVMResponsesLock sync.Mutex
 
 	meshageTimeout = time.Duration(math.MaxInt64) // default is no timeout
 )
@@ -83,22 +92,47 @@ func meshageStart(host, namespace string, degree, msaTimeout uint, broadcastIP s
 		return fmt.Errorf("invalid broadcast IP %s for meshage", broadcastIP)
 	}
 
-	meshageNode, meshageMessages = meshage.NewNode(host, namespace, degree, bip, port, version.Revision)
+	meshageNode = meshage.NewNode(host, namespace, degree, bip, port, version.Revision)
 
 	meshageNode.Snoop = meshageSnooper
+	meshageNode.Classify = meshageClassify
 
 	meshageNode.SetMSATimeout(msaTimeout)
 
-	go meshageMux()
+	// One mux for each class, so that a full channel of one class does not
+	// stop the messages of the other classes.
+	for _, class := range []meshage.Class{meshage.Control, meshage.Bulk, meshage.Log} {
+		go meshageMux(meshageNode.Messages(class))
+	}
 	go meshageHandler()
 	go meshageVMLauncher()
 
 	return iomeshageStart(meshageNode)
 }
 
-func meshageMux() {
+// meshageClassify returns the link class for a message body.
+func meshageClassify(body interface{}) meshage.Class {
+	switch body := body.(type) {
+	case meshageLogMessage:
+		return meshage.Log
+	case iomeshage.Message, meshageVMLaunch:
+		return meshage.Bulk
+	case meshageResponse:
+		cells := 0
+		for _, row := range body.Tabular {
+			cells += len(row)
+		}
+		if cells > meshageBulkCells {
+			return meshage.Bulk
+		}
+	}
+
+	return meshage.Control
+}
+
+func meshageMux(messages <-chan *meshage.Message) {
 	for {
-		m := <-meshageMessages
+		m := <-messages
 		switch m.Body.(type) {
 		case meshageCommand:
 			meshageCommandChan <- m
@@ -107,7 +141,7 @@ func meshageMux() {
 		case meshageVMLaunch:
 			meshageVMLaunchChan <- m
 		case meshageVMResponse:
-			meshageVMResponseChan <- m
+			meshageVMResponseDeliver(m.Body.(meshageVMResponse))
 		case iomeshage.Message:
 			iom.Messages <- m
 		case miniplumber.Message:
@@ -239,16 +273,19 @@ func meshageSend(c *minicli.Command, hosts string) (<-chan minicli.Responses, er
 func meshageLaunch(host, namespace string, queued *QueuedVMs) <-chan minicli.Responses {
 	out := make(chan minicli.Responses)
 
+	tid, wait := meshageVMResponseWait()
+
 	to := []string{host}
 	msg := meshageVMLaunch{
 		QueuedVMs: queued,
 		Namespace: namespace,
-		TID:       rand.Int31(),
+		TID:       tid,
 		From:      hostname,
 	}
 
 	go func() {
 		defer close(out)
+		defer meshageVMResponseDone(tid)
 
 		if _, err := meshageNode.Set(to, msg); err != nil {
 			out <- errResp(err)
@@ -257,32 +294,65 @@ func meshageLaunch(host, namespace string, queued *QueuedVMs) <-chan minicli.Res
 
 		log.Info("VM schedule sent to %v, waiting on response", host)
 
-		for {
-			// wait on a response from the client
-			select {
-			case resp := <-meshageVMResponseChan:
-				body := resp.Body.(meshageVMResponse)
-				if body.TID != msg.TID {
-					// put it back for another goroutine to pick up...
-					meshageVMResponseChan <- resp
-				} else {
-					// wrap response up into a minicli.Response
-					resp := &minicli.Response{
-						Host:     host,
-						Response: strconv.Itoa(len(body.Errors)),
-						Error:    strings.Join(body.Errors, "\n"),
-					}
-
-					out <- minicli.Responses{resp}
-					return
-				}
-			case <-time.After(meshageTimeout):
-				// Didn't hear back from any node within the timeout
-				log.Error("timed out waiting for %v to launch VMs", host)
-				return
+		// wait on a response from the client
+		select {
+		case body := <-wait:
+			// wrap response up into a minicli.Response, with the number of
+			// VMs that launched
+			resp := &minicli.Response{
+				Host:     host,
+				Response: strconv.Itoa(body.Launched),
+				Error:    strings.Join(body.Errors, "\n"),
 			}
+
+			out <- minicli.Responses{resp}
+		case <-time.After(meshageTimeout):
+			// Didn't hear back from any node within the timeout
+			log.Error("timed out waiting for %v to launch VMs", host)
 		}
 	}()
 
 	return out
+}
+
+// meshageVMResponseWait returns a new TID and the channel that gets the
+// meshageVMResponse with that TID.
+func meshageVMResponseWait() (int32, <-chan meshageVMResponse) {
+	meshageVMResponsesLock.Lock()
+	defer meshageVMResponsesLock.Unlock()
+
+	for {
+		tid := rand.Int31()
+		if _, ok := meshageVMResponses[tid]; ok {
+			continue
+		}
+
+		c := make(chan meshageVMResponse, 1)
+		meshageVMResponses[tid] = c
+
+		return tid, c
+	}
+}
+
+// meshageVMResponseDone stops the wait for the response with tid.
+func meshageVMResponseDone(tid int32) {
+	meshageVMResponsesLock.Lock()
+	defer meshageVMResponsesLock.Unlock()
+
+	delete(meshageVMResponses, tid)
+}
+
+// meshageVMResponseDeliver sends resp to the launch that waits for it.
+func meshageVMResponseDeliver(resp meshageVMResponse) {
+	meshageVMResponsesLock.Lock()
+	c, ok := meshageVMResponses[resp.TID]
+	delete(meshageVMResponses, resp.TID)
+	meshageVMResponsesLock.Unlock()
+
+	if !ok {
+		log.Warn("invalid TID from VM response: %d", resp.TID)
+		return
+	}
+
+	c <- resp
 }

@@ -17,6 +17,9 @@ import (
 	log "github.com/sandia-minimega/minimega/v2/pkg/minilog"
 )
 
+// procRoot is the proc filesystem that processes scans. Tests replace it.
+var procRoot = "/proc"
+
 type QemuProcess struct {
 	PID  int
 	UUID string
@@ -115,9 +118,10 @@ func RecoverVMs(root string) (map[string][]MinimegaQemuKVM, error) {
 
 // processes finds all the `qemu-system-x86` processes running and determines
 // which ones are related to minimega by looking at the process arguments for
-// specific -name and -uuid options.
+// specific -name and -uuid options. It ignores all other processes, such as
+// Firecracker VMMs.
 func processes() (map[string]QemuProcess, error) {
-	d, err := os.Open("/proc")
+	d, err := os.Open(procRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +153,7 @@ func processes() (map[string]QemuProcess, error) {
 				continue
 			}
 
-			body, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+			body, err := ioutil.ReadFile(filepath.Join(procRoot, strconv.FormatInt(pid, 10), "stat"))
 			if err != nil {
 				continue
 			}
@@ -160,7 +164,7 @@ func processes() (map[string]QemuProcess, error) {
 			end := strings.IndexRune(data[start:], ')')
 
 			if name := data[start : start+end]; name == "qemu-system-x86" {
-				body, err := ioutil.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
+				body, err := ioutil.ReadFile(filepath.Join(procRoot, strconv.FormatInt(pid, 10), "cmdline"))
 				if err != nil {
 					continue
 				}

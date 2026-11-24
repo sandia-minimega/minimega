@@ -26,6 +26,9 @@ func connectWsHandler(vmType, host string, port int) func(*websocket.Conn) {
 		case "container":
 			// See above. The javascript terminal needs it to be a TextFrame.
 			ws.PayloadType = websocket.TextFrame
+		default:
+			log.Error("no console for %v VMs", vmType)
+			return
 		}
 
 		// connect to the remote host

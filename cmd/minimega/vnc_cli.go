@@ -26,7 +26,10 @@ If record is selected, a file will be created containing a record of mouse
 and keyboard actions by the user or of the framebuffer for the VM.
 
 Note: recordings are written to the host where the VM is running. When the VM
-is killed or flushed, its recordings stop.`,
+is killed or flushed, its recordings stop.
+
+Note: Firecracker VMs do not have VNC. vnc record returns an error for a
+Firecracker VM.`,
 		Patterns: []string{
 			"vnc <record,> <kb,fb> <vm name> <filename>",
 			"vnc <stop,> <kb,fb> <vm name>",
@@ -72,7 +75,11 @@ VM.
 Comments in the playback file are logged at the info level. An example is given
 below.
 
-#: This is an example of a vnc playback comment`,
+#: This is an example of a vnc playback comment
+
+Firecracker VMs do not have VNC. For a Firecracker VM that you name in the
+target, vnc playback returns an error. A wildcard target skips Firecracker
+VMs.`,
 		Patterns: []string{
 			"vnc <play,> <vm target> <filename>",
 			"vnc <type,> <vm target> <str>...",
@@ -126,10 +133,10 @@ func cliVNCPlay(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 		resp.Header = []string{"name", "step"}
 	}
 
-	return ns.Apply(target, func(vm VM, _ bool) (bool, error) {
+	return ns.Apply(target, func(vm VM, wild bool) (bool, error) {
 		kvm, ok := vm.(*KvmVM)
 		if !ok {
-			return false, nil
+			return vmUnsupported(vm, wild, "vnc")
 		}
 
 		id := kvm.GetName()
@@ -179,6 +186,10 @@ func cliVNCRecord(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 	if !filepath.IsAbs(fname) {
 		// TODO: should we capture to the VM directory instead?
 		fname = filepath.Join(*f_iomBase, fname)
+	}
+
+	if vm := ns.FindVM(c.StringArgs["vm"]); vm != nil && vm.GetType() == FIRECRACKER {
+		return errors.New("vnc is not supported for firecracker VMs")
 	}
 
 	vm, err := ns.FindKvmVM(c.StringArgs["vm"])

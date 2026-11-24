@@ -14,6 +14,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,7 +38,7 @@ info include:
 - state*     : one of (building, running, paused, quit, error)
 - uptime     : amount of time since the VM was launched
 - namespace* : namespace the VM belongs to
-- type*      : one of (kvm, container, android)
+- type*      : one of (kvm, container, android, firecracker)
 - uuid*      : QEMU system uuid
 - cc_active* : indicates whether cc is connected
 - vcpus      : the number of allocated CPUs
@@ -88,6 +89,16 @@ Additional fields are available for Android VMs:
 - pid                  : pid of Android emulator process
 - android_grpc_port    : Android emulator gRPC control port (auto-assigned; hint via android-grpc-base-port)
 
+Additional fields are available for Firecracker VMs:
+
+- append : kernel command line string
+- disks  : disk images
+- kernel : kernel image
+- initrd : initrd image
+- pid    : pid of the Firecracker VMM process
+
+For Firecracker VMs, vnc_port is empty.
+
 The optional summary flag limits the columns to those denoted with a '*'.
 
 Examples:
@@ -115,6 +126,7 @@ supported VM types are:
 - kvm : QEMU-based vms
 - container: Linux containers
 - android : Android emulator-based VMs
+- firecracker : Firecracker microVM under the jailer (minifire)
 
 If you supply a name instead of a number of VMs, one VM with that name will be
 launched. You may also supply a range expression to launch VMs with a specific
@@ -133,7 +145,9 @@ example:
 
 If queueing is enabled (see "ns"), VMs will be queued for launching until "vm
 launch" is called with no additional arguments. This allows the scheduler to
-better allocate resources across the cluster.
+better allocate resources across the cluster. With queueing, minimega checks
+the names and UUIDs of the queued VMs against the VMs in the namespace when the
+queue launches.
 
 Android VMs use host-side emulator console/ADB port pairs. minimega currently
 uses 64 valid port pairs per host, so each host can run at most 64 Android VMs
@@ -143,6 +157,7 @@ concurrently, and fewer if some of those ports are already in use.`,
 			"vm launch <kvm,> <name or count> [config]",
 			"vm launch <container,> <name or count> [config]",
 			"vm launch <android,> <name or count> [config]",
+			"vm launch <firecracker,> <name or count> [config]",
 		},
 		Call: wrapSimpleCLI(cliVMLaunch),
 	},
@@ -249,6 +264,10 @@ For example, to remove the drive added above, named 0:
 
 To remove all hotplug devices, use ID "all" for the disk ID.
 
+Firecracker VMs do not support vm hotplug. For a Firecracker VM that you name
+in the target, vm hotplug returns an error. A wildcard target skips Firecracker
+VMs.
+
 See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
 			"vm hotplug",
@@ -325,7 +344,12 @@ Bonds can also be configured in "dot1q-tunnel" mode (QinQ) in OVS with the
 set to the VLAN the bonded interfaces originally belonged to. Note that a bond
 will also be configured in "dot1q-tunnel" mode if at least one of the bonded
 interfaces was configured in "dot1q-tunnel" mode, even without the "qinq"
-option.`,
+option.
+
+For Firecracker VMs, vm net connect and disconnect operate on the host end of
+the veth pair of the NIC. vm net add and vm net bond return an error for
+Firecracker VMs: Firecracker VMs get all their NICs at launch, and do not
+support bonds.`,
 		Patterns: []string{
 			"vm net <add,> <vm target> [netspec]...",
 			"vm net <connect,> <vm target> <tap position> <vlan> [bridge]",
@@ -374,7 +398,12 @@ and the maximum output is 1048576 bytes.
 Examples:
 
 	vm serial freertos
-	vm serial freertos 0 1500 131072`,
+	vm serial freertos 0 1500 131072
+
+Firecracker VMs have one serial port, port 0. For a Firecracker VM, vm serial
+returns the last part of the console log of the VM, with the output limit as
+its size. The default size is 64 KiB. The read interval has no effect. Other
+port numbers are an error.`,
 		Patterns: []string{
 			"vm serial <vm name>",
 			"vm serial <vm name> <port>",
@@ -428,9 +457,36 @@ status of in-flight saves by invoking 'vm save' with no arguments.
 
 Note: This will overwrite any prior saved files.
 
-Note: vm save is currently supported for KVM VMs only. Android VM save is not
+For a Firecracker VM, the VM must be in the running or paused state. minimega
+pauses the VM, Firecracker writes a full snapshot, and minimega copies the
+writable disks. The VM stays paused, as a KVM VM does after vm save. Use "vm
+start" to resume it. minimega then writes these files in the background, each
+to a temporary name that it renames into place:
+
+- <filename>.state: the Firecracker state file
+- <filename>.mem: the guest memory, as large as the memory of the VM
+- <filename>.hdd: disk 0, raw. Other writable disks go to <filename>.hdd<N>,
+  and the scratch disk goes to <filename>.scratch.
+- <filename>.json: the VM type, the Firecracker and snapshot format versions,
+  the host CPU model and kernel, the vCPUs, the memory, the devices, the NIC
+  MACs, and the memory regions. minimega writes it last.
+
+minimega does not copy a disk with option ro. <filename>.json records its
+path. The snapshot resets the vsock connections of the guest, so cc commands,
+file transfers, and tunnels in progress fail. Only one save to a filename can
+run at a time. A clone that does not have its identity cannot be saved.
+
+To restore a Firecracker VM, use the same vm config as the saved VM, set "vm
+config firecracker-snapshot <filename>" and "vm config disk <filename>.hdd",
+and then use "vm launch firecracker". See "vm config firecracker-snapshot" for
+the limits. A KVM VM cannot load a Firecracker snapshot, and a Firecracker VM
+cannot load a KVM snapshot.
+
+Note: vm save is supported for KVM and Firecracker VMs. Android VM save is not
 supported because Android Emulator snapshot/AVD state is managed separately
-from minimega's KVM migration state.`,
+from minimega's KVM migration state. For other VM types, vm save returns the
+error "vm save is not supported for "<name>" (type <type>)". The old names vm
+snapshot and vm migrate do the same as vm save.`,
 		Patterns: []string{
 			"vm save",
 			"vm save <vm name>",
@@ -469,6 +525,86 @@ status of in-flight migrations by invoking vm migrate with no arguments.`,
 		Call:    wrapVMTargetCLI(cliVMSave),
 		Suggest: wrapVMSuggest(VM_ANY_STATE, false),
 	},
+	{ // vm shutdown
+		HelpShort: "ask the guest of running VMs to shut down",
+		HelpLong: `
+Ask the guest of one or more running VMs to shut down. See "vm start" for a
+full description of allowable targets.
+
+The command returns immediately. The guest decides when to power off or
+reboot, and it can ignore the request. Use "vm info" to see the VM state.
+
+For KVM VMs, minimega sends the QMP command system_powerdown, which is an ACPI
+power button event.
+
+For Firecracker VMs, minimega sends Ctrl-Alt-Del. Firecracker has no ACPI
+power-off, so the guest reboots. With reboot=k, the reboot stops the VMM and
+the VM goes to the quit state. The guest kernel must have CONFIG_SERIO_I8042
+and CONFIG_KEYBOARD_ATKBD.
+
+Other VM types do not support vm shutdown.`,
+		Patterns: []string{
+			"vm shutdown <vm target>",
+		},
+		Call:    wrapVMTargetCLI(cliVMShutdown),
+		Suggest: wrapVMSuggest(VM_RUNNING, true),
+	},
+	{ // vm reset-disk
+		HelpShort: "build the disks of quit Firecracker VMs again",
+		HelpLong: `
+Build the disks of one or more Firecracker VMs again from their configuration,
+the same way that "vm launch" built them. The VM must be in the quit or error
+state. The next "vm start" boots the new disks. All changes that the guest
+made to its disks are lost. See "vm start" for a full description of allowable
+targets.
+
+If the configuration has "vm config inject" entries, minimega injects the
+files again.
+
+The VM must have snapshot true. With snapshot false, the disk is the shared
+source image, and vm reset-disk returns an error.
+
+Other VM types do not support vm reset-disk.`,
+		Patterns: []string{
+			"vm reset-disk <vm target>",
+		},
+		Call:    wrapVMTargetCLI(cliVMResetDisk),
+		Suggest: wrapVMSuggest(VM_QUIT|VM_ERROR, true),
+	},
+	{ // vm export-disk
+		HelpShort: "write the disk of a Firecracker VM to a file",
+		HelpLong: `
+Write the first disk of a Firecracker VM to a qcow2 or raw image file. The
+default format is qcow2. The VM must be in the running, paused, or quit state.
+
+A relative destination path is relative to the files directory (-filepath).
+minimega creates the parent directories. The destination must not exist.
+
+For a running VM, minimega pauses the VM, takes a fast copy of the disk, and
+resumes the VM. The log shows the pause duration. A fast copy is possible only
+when the disk is a device-mapper snapshot or -firecracker-dir supports
+reflink. Otherwise, minimega refuses the export of a running VM. Pause or stop
+the VM first. The result is
+crash-consistent: data that the guest did not write to its disk is not in the
+image.
+
+The command returns after the copy. minimega then writes the image in the
+background. To see the progress of the exports, use vm export-disk with no
+arguments. The output has the same columns and status values as "vm save"
+with no arguments. For qcow2, the complete column is the percent that
+"qemu-img convert -p" reports. For raw, it is the percent of the disk that is
+copied.
+
+Only one export of a VM can run at a time.
+
+Other VM types do not support vm export-disk.`,
+		Patterns: []string{
+			"vm export-disk",
+			"vm export-disk <vm name> <dst> [raw,qcow2]",
+		},
+		Call:    wrapVMTargetCLI(cliVMExportDisk),
+		Suggest: wrapVMSuggest(VM_RUNNING|VM_PAUSED|VM_QUIT, false),
+	},
 	{ // vm cdrom
 		HelpShort: "eject or change an active VM's cdrom",
 		HelpLong: `
@@ -492,6 +628,9 @@ Change a VM to use a new ISO:
         vm cdrom change 0 /tmp/debian.iso
 
 "vm cdrom change" ejects the current ISO, if there is one.
+
+Firecracker VMs do not have a cdrom. For a Firecracker VM that you name in the
+target, vm cdrom returns an error. A wildcard target skips Firecracker VMs.
 
 See "vm start" for a full description of allowable targets.`,
 		Patterns: []string{
@@ -578,7 +717,7 @@ Returned columns include:
 - res       : resident memory size (MB)
 - shr       : shared memory size (MB)
 - cpu       : host CPU usage (%%)
-- vcpu      : guest CPU usage (%%) (KVM only)
+- vcpu      : guest CPU usage (%%) (KVM and Firecracker only)
 - time      : total CPU time
 - procs     : number of processes inspected (limited to %d)
 - rx        : total received data rate (MB/s)
@@ -596,6 +735,7 @@ func init() {
 	gob.Register(&KvmVM{})
 	gob.Register(&ContainerVM{})
 	gob.Register(&AndroidVM{})
+	gob.Register(&FirecrackerVM{})
 }
 
 func cliVMApply(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -635,7 +775,7 @@ func cliVMCdrom(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
 			kvm, ok := vm.(*KvmVM)
 			if !ok {
-				return false, nil
+				return vmUnsupported(vm, wild, "vm cdrom")
 			}
 
 			err := kvm.EjectCD(force)
@@ -655,7 +795,7 @@ func cliVMCdrom(ns *Namespace, c *minicli.Command, resp *minicli.Response) error
 		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
 			kvm, ok := vm.(*KvmVM)
 			if !ok {
-				return false, nil
+				return vmUnsupported(vm, wild, "vm cdrom")
 			}
 
 			return true, kvm.ChangeCD(f, force)
@@ -825,34 +965,73 @@ func cliVMQmp(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
 	return nil
 }
 
-func cliVMSerial(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
-	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
-	if err != nil {
-		return err
-	}
-
-	port, milliseconds, limit := 0, 750, 65536
+// serialArgs returns the port, read interval, and output limit of a vm serial
+// command.
+func serialArgs(c *minicli.Command) (port, milliseconds, limit int, err error) {
+	port, milliseconds, limit = 0, 750, 65536
 	for key, target := range map[string]*int{
 		"port":         &port,
 		"milliseconds": &milliseconds,
 		"bytes":        &limit,
 	} {
 		if value := c.StringArgs[key]; value != "" {
-			parsed, err := strconv.Atoi(value)
-			if err != nil {
-				return fmt.Errorf("invalid serial %s: %q", key, value)
+			parsed, perr := strconv.Atoi(value)
+			if perr != nil {
+				return 0, 0, 0, fmt.Errorf("invalid serial %s: %q", key, value)
 			}
 			*target = parsed
 		}
 	}
-	if port < 0 || uint64(port) >= vm.SerialPorts {
-		return fmt.Errorf("serial port %d is not configured for VM %s", port, vm.GetName())
-	}
+
+	return port, milliseconds, limit, nil
+}
+
+func checkSerialLimits(milliseconds, limit int) error {
 	if milliseconds < 1 || milliseconds > 5000 {
 		return errors.New("serial read interval must be between 1 and 5000 milliseconds")
 	}
 	if limit < 1 || limit > 1048576 {
 		return errors.New("serial output limit must be between 1 and 1048576 bytes")
+	}
+
+	return nil
+}
+
+func cliVMSerial(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	if fc, ok := ns.FindVM(c.StringArgs["vm"]).(*FirecrackerVM); ok {
+		port, milliseconds, limit, err := serialArgs(c)
+		if err != nil {
+			return err
+		}
+		if port != 0 {
+			return errors.New("firecracker VMs have one serial port: 0")
+		}
+		if err := checkSerialLimits(milliseconds, limit); err != nil {
+			return err
+		}
+
+		out, err := fcSerialTail(fc, limit)
+		if err != nil {
+			return err
+		}
+		resp.Response = string(out)
+		return nil
+	}
+
+	vm, err := ns.FindKvmVM(c.StringArgs["vm"])
+	if err != nil {
+		return err
+	}
+
+	port, milliseconds, limit, err := serialArgs(c)
+	if err != nil {
+		return err
+	}
+	if port < 0 || uint64(port) >= vm.SerialPorts {
+		return fmt.Errorf("serial port %d is not configured for VM %s", port, vm.GetName())
+	}
+	if err := checkSerialLimits(milliseconds, limit); err != nil {
+		return err
 	}
 
 	path := filepath.Join(vm.GetInstancePath(), fmt.Sprintf("serial%d", port))
@@ -962,6 +1141,15 @@ func cliVMSave(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 				fmt.Sprintf("%.2f", complete)})
 		}
 
+		if rows := fcSaves.table(ns.Name); len(rows) > 0 {
+			resp.Tabular = append(resp.Tabular, rows...)
+			sort.SliceStable(resp.Tabular, func(i, j int) bool {
+				a, _ := strconv.Atoi(resp.Tabular[i][0])
+				b, _ := strconv.Atoi(resp.Tabular[j][0])
+				return a < b
+			})
+		}
+
 		return nil
 	}
 
@@ -972,15 +1160,16 @@ func cliVMSave(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		return vmNotFound(target)
 	}
 
-	vm, ok := found.(*KvmVM)
-	if !ok {
-		return fmt.Errorf("vm save is only supported for KVM VMs; %q is type %v", found.GetName(), found.GetType())
+	vm, isKVM := found.(*KvmVM)
+	saver, isSaver := found.(vmSaver)
+	if !isKVM && !isSaver {
+		return fmt.Errorf("vm save is not supported for %q (type %v)", found.GetName(), found.GetType())
 	}
 
 	fname := c.StringArgs["filename"]
 	if c.StringArgs["filename"] == "" {
 		// Default to the VM name
-		fname = filepath.Join("saved", vm.GetName())
+		fname = filepath.Join("saved", found.GetName())
 	}
 
 	if !filepath.IsAbs(fname) {
@@ -993,6 +1182,11 @@ func cliVMSave(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 		}
 	} else if err != nil {
 		return err
+	}
+
+	if !isKVM {
+		log.Info("Saving VM %v to %s", found.GetName(), fname)
+		return saver.Save(fname)
 	}
 
 	// Saving disk
@@ -1008,6 +1202,145 @@ func cliVMSave(ns *Namespace, c *minicli.Command, resp *minicli.Response) error 
 	log.Info("Saving state to file %s", state_name)
 
 	return vm.Migrate(state_name)
+}
+
+// vmSaver is a VM type other than KVM that vm save supports. Save writes the
+// files of the VM with the path prefix dst. KVM VMs have their own path in
+// cliVMSave.
+type vmSaver interface {
+	Save(dst string) error
+}
+
+// vmUnsupported is the vmApplyFunc result for a VM that a command does not
+// support: an error when the target names a Firecracker VM, else a skip.
+func vmUnsupported(vm VM, wild bool, cmd string) (bool, error) {
+	if vm.GetType() == FIRECRACKER && !wild {
+		return true, fmt.Errorf("%v is not supported for firecracker VMs", cmd)
+	}
+
+	return false, nil
+}
+
+// vmShutdown asks the guest of vm to shut down.
+func vmShutdown(vm VM) error {
+	switch vm := vm.(type) {
+	case *KvmVM:
+		return vm.Shutdown()
+	case *FirecrackerVM:
+		return vm.Shutdown()
+	}
+
+	return fmt.Errorf("vm shutdown is not supported for %v VMs", vm.GetType())
+}
+
+func cliVMShutdown(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	return ns.VMs.Apply(c.StringArgs["vm"], func(vm VM, wild bool) (bool, error) {
+		if wild {
+			switch vm.(type) {
+			case *KvmVM, *FirecrackerVM:
+			default:
+				return false, nil
+			}
+			if vm.GetState() != VM_RUNNING {
+				return false, nil
+			}
+		}
+
+		return true, vmShutdown(vm)
+	})
+}
+
+func cliVMResetDisk(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	var mu sync.Mutex
+	var targets []*FirecrackerVM
+
+	// Collect the VMs, then reset them without vms.mu, because a reset copies
+	// disks.
+	err := ns.VMs.Apply(c.StringArgs["vm"], func(vm VM, wild bool) (bool, error) {
+		fc, ok := vm.(*FirecrackerVM)
+		if !ok {
+			if wild {
+				return false, nil
+			}
+			return true, fmt.Errorf("vm reset-disk is not supported for %v VMs", vm.GetType())
+		}
+		if wild && vm.GetState()&(VM_QUIT|VM_ERROR) == 0 {
+			return false, nil
+		}
+
+		mu.Lock()
+		defer mu.Unlock()
+		targets = append(targets, fc)
+
+		return true, nil
+	})
+	if err != nil {
+		return err
+	}
+
+	errs := make([]error, len(targets))
+
+	var wg sync.WaitGroup
+	for i, vm := range targets {
+		wg.Add(1)
+		go func(i int, vm *FirecrackerVM) {
+			defer wg.Done()
+			errs[i] = vm.ResetDisk()
+		}(i, vm)
+	}
+	wg.Wait()
+
+	var res []error
+	for _, err := range errs {
+		if err != nil {
+			res = append(res, err)
+		}
+	}
+
+	return makeErrSlice(res)
+}
+
+func cliVMExportDisk(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
+	target, ok := c.StringArgs["vm"]
+	if !ok {
+		resp.Header = append([]string(nil), fcExportHeader...)
+		resp.Tabular = fcExports.table(ns.Name)
+		return nil
+	}
+
+	found := ns.FindVM(target)
+	if found == nil {
+		return vmNotFound(target)
+	}
+
+	vm, ok := found.(*FirecrackerVM)
+	if !ok {
+		return fmt.Errorf("vm export-disk is not supported for %v VMs", found.GetType())
+	}
+
+	format := "qcow2"
+	if c.BoolArgs["raw"] {
+		format = "raw"
+	}
+
+	dst := c.StringArgs["dst"]
+	if !filepath.IsAbs(dst) {
+		dst = filepath.Join(*f_iomBase, dst)
+	}
+
+	if _, err := os.Lstat(dst); err == nil {
+		return fmt.Errorf("%v already exists", dst)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+
+	log.Info("exporting disk of VM %v to %v as %v", vm.GetID(), dst, format)
+
+	return vm.ExportDisk(dst, format)
 }
 
 func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) error {
@@ -1027,7 +1360,7 @@ func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 				return true, kvm.Hotplug(f, version, serial)
 			}
 
-			return false, nil
+			return vmUnsupported(vm, wild, "vm hotplug")
 		})
 	} else if c.BoolArgs["remove"] {
 		disk := c.StringArgs["disk"]
@@ -1040,7 +1373,7 @@ func cliVMHotplug(ns *Namespace, c *minicli.Command, resp *minicli.Response) err
 		return ns.VMs.Apply(target, func(vm VM, wild bool) (bool, error) {
 			kvm, ok := vm.(*KvmVM)
 			if !ok {
-				return false, nil
+				return vmUnsupported(vm, wild, "vm hotplug")
 			}
 
 			if disk == Wildcard {
@@ -1102,7 +1435,14 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 
 	if c.BoolArgs["add"] {
 		// this will do the work of adding the interface to the vm
-		fn = func(vm VM, _ bool) (bool, error) {
+		fn = func(vm VM, wild bool) (bool, error) {
+			if vm.GetType() == FIRECRACKER {
+				if wild {
+					return false, nil
+				}
+				return true, errors.New("adding NICs to a launched firecracker VM is not supported")
+			}
+
 			nics, err := ns.parseVMNets(c.ListArgs["netspec"])
 			if err != nil {
 				return true, err
@@ -1200,7 +1540,14 @@ func cliVMNetMod(ns *Namespace, c *minicli.Command, resp *minicli.Response) erro
 			ifaces = append(ifaces, idx)
 		}
 
-		fn = func(vm VM, _ bool) (bool, error) {
+		fn = func(vm VM, wild bool) (bool, error) {
+			if vm.GetType() == FIRECRACKER {
+				if wild {
+					return false, nil
+				}
+				return true, errors.New("firecracker VMs do not support bonds")
+			}
+
 			bond := &BondConfig{
 				Name:       name,
 				Fallback:   !noFallback,

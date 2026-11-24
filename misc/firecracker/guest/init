@@ -1,0 +1,97 @@
+#!/bin/sh
+# PID 1 of the minimal Firecracker guest. It runs under BusyBox sh.
+#
+# Kernel command line parameters:
+#   mm.hostname=<name>   guest host name
+#   mm.ip=<addr/prefix>  static eth0 address (when the kernel ip= did not set one)
+#   mm.gw=<addr>         default gateway for mm.ip
+#   mm.dns=<addr>        name server written to /run/resolv.conf
+#   mm.cc=<host:port>    miniccc TCP server; without it, miniccc uses /dev/vsock
+
+PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export PATH
+
+# The vsock port of cc. minimega listens on it for VMs with backchannel true.
+cc_vsock_port=9002
+
+mount -t proc -o nosuid,nodev,noexec proc /proc
+mount -t sysfs -o nosuid,nodev,noexec sysfs /sys
+grep -q ' /dev ' /proc/mounts || mount -t devtmpfs -o nosuid devtmpfs /dev
+mkdir -p /dev/pts /dev/shm
+mount -t devpts -o nosuid,noexec,gid=5,mode=620 devpts /dev/pts
+mount -t tmpfs -o nosuid,nodev,mode=1777,size=16m tmpfs /tmp
+mount -t tmpfs -o nosuid,nodev,mode=0755,size=16m tmpfs /run
+mount -t tmpfs -o nosuid,nodev,mode=0755,size=16m tmpfs /var
+mkdir -p /var/log /var/run /var/tmp /run/udhcpc
+
+# Ctrl-Alt-Del (vm shutdown) sends SIGINT to PID 1 instead of an immediate reboot.
+echo 0 > /proc/sys/kernel/ctrl-alt-del
+
+mm_hostname=""
+mm_ip=""
+mm_gw=""
+mm_dns=""
+mm_cc=""
+for arg in $(cat /proc/cmdline); do
+    case "$arg" in
+    mm.hostname=*) mm_hostname="${arg#mm.hostname=}" ;;
+    mm.ip=*) mm_ip="${arg#mm.ip=}" ;;
+    mm.gw=*) mm_gw="${arg#mm.gw=}" ;;
+    mm.dns=*) mm_dns="${arg#mm.dns=}" ;;
+    mm.cc=*) mm_cc="${arg#mm.cc=}" ;;
+    esac
+done
+
+[ -n "$mm_hostname" ] && hostname "$mm_hostname"
+[ -n "$mm_dns" ] && echo "nameserver $mm_dns" > /run/resolv.conf
+
+ip link set lo up
+if [ -e /sys/class/net/eth0 ]; then
+    ip link set eth0 up
+    if ip -4 addr show dev eth0 | grep -q 'inet '; then
+        : # The kernel ip= parameter configured eth0.
+    elif [ -n "$mm_ip" ]; then
+        ip addr add "$mm_ip" dev eth0
+        [ -n "$mm_gw" ] && ip route add default via "$mm_gw"
+    else
+        udhcpc -b -S -i eth0 -s /usr/share/udhcpc/default.script
+    fi
+fi
+
+shutdown() {
+    trap '' INT TERM
+    kill -TERM -1 2>/dev/null
+    sleep 1
+    sync
+    reboot -f
+}
+trap shutdown INT TERM
+
+# An explicit mm.cc wins over the vsock device.
+if [ -n "$mm_cc" ]; then
+    set -- -family tcp -parent "${mm_cc%:*}" -port "${mm_cc##*:}"
+elif [ -c /dev/vsock ]; then
+    set -- -family vsock -port "$cc_vsock_port"
+else
+    set --
+fi
+
+if [ "$#" -gt 0 ] && [ -x /usr/local/bin/miniccc ]; then
+    (
+        trap - INT TERM
+        while :; do
+            miniccc "$@"
+            sleep 5
+        done
+    ) &
+else
+    echo "init: miniccc not started: no /dev/vsock, no mm.cc, or no /usr/local/bin/miniccc"
+fi
+
+echo "init: ready"
+
+# PID 1 reaps orphaned processes. wait returns early when a signal arrives.
+while :; do
+    wait
+    sleep 1
+done

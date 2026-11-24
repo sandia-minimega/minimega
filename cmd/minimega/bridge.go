@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"time"
 
@@ -60,12 +61,82 @@ func bridgesDestroy() error {
 	}
 
 	// Clean up bridges file
-	bridgeFile := filepath.Join(*f_base, "bridges")
-	if err := os.Remove(bridgeFile); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("could not remove bridge file: %v", err)
+	return bridgesFile.reset(func() error {
+		bridgeFile := filepath.Join(*f_base, "bridges")
+		if err := os.Remove(bridgeFile); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("could not remove bridge file: %v", err)
+		}
+		return nil
+	})
+}
+
+// bridgeFileDelay is the maximum time that a change other than a new bridge
+// waits before bridgeFileWriter writes it.
+const bridgeFileDelay = time.Second
+
+// bridgeFileWriter writes the bridges state file, which nuke reads to find the
+// bridges to delete. It writes the file at once for a bridge that the last
+// write did not include. It writes other changes, such as VLANs, at most once
+// each delay.
+type bridgeFileWriter struct {
+	mu    sync.Mutex
+	delay time.Duration
+	// write writes the file and returns the names of the bridges in it.
+	write   func() map[string]bool
+	names   map[string]bool
+	pending bool
+}
+
+var bridgesFile = &bridgeFileWriter{
+	delay: bridgeFileDelay,
+	write: func() map[string]bool {
+		info := bridges.Info()
+		mustWrite(filepath.Join(*f_base, "bridges"), formatBridgeInfo(info))
+
+		names := map[string]bool{}
+		for _, i := range info {
+			names[i.Name] = true
+		}
+		return names
+	},
+}
+
+// update records a use of bridge name.
+func (w *bridgeFileWriter) update(name string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if !w.names[name] {
+		w.pending = false
+		w.names = w.write()
+		return
 	}
 
-	return nil
+	if !w.pending {
+		w.pending = true
+		time.AfterFunc(w.delay, w.flush)
+	}
+}
+
+func (w *bridgeFileWriter) flush() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.pending {
+		w.pending = false
+		w.names = w.write()
+	}
+}
+
+// reset cancels a pending write, forgets the bridges, and runs fn.
+func (w *bridgeFileWriter) reset(fn func() error) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.pending = false
+	w.names = nil
+
+	return fn()
 }
 
 // getBridge is a wrapper for `bridges.Get` that gets the bridge and then
@@ -76,14 +147,13 @@ func getBridge(b string) (*bridge.Bridge, error) {
 		return nil, err
 	}
 
-	mustWrite(filepath.Join(*f_base, "bridges"), bridgeInfo())
+	bridgesFile.update(br.Name)
 
 	return br, nil
 }
 
-// bridgeInfo returns formatted information about all the bridges.
-func bridgeInfo() string {
-	info := bridges.Info()
+// formatBridgeInfo returns formatted information about the bridges in info.
+func formatBridgeInfo(info []bridge.BridgeInfo) string {
 	if len(info) == 0 {
 		return ""
 	}

@@ -66,6 +66,10 @@ jobs:
         with:
           context: .
           file: docker/Dockerfile
+          # Keep in step with FC_VERSION and FC_TGZ_SHA256 in firecracker.yml.
+          build-args: |
+            FIRECRACKER_VERSION=1.17.0
+            FIRECRACKER_SHA256=06094a1108ae9e82aa4c23a775aa92758f53f1175d422270d9d6162cb9ade558
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

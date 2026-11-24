@@ -145,7 +145,7 @@ func (c *client) ufsMessage(m *Message) {
 	c.Unlock()
 
 	if conn == nil {
-		log.Debug("dropping ufs message for %v: no active connection", c.UUID)
+		warnLimited(c.uuid+":ufs", "cc client %v: ufs data without a ufs connection", c.uuid)
 		return
 	}
 

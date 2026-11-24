@@ -51,8 +51,14 @@ func heartbeat() {
 
 	log.Debug("sending heartbeat")
 
+	uuid := client.UUID
+	if !client.acked {
+		// do not claim a UUID adopted on an earlier connection
+		uuid = client.claim
+	}
+
 	c := &ron.Client{
-		UUID:          client.UUID,
+		UUID:          uuid,
 		Arch:          client.Arch,
 		OS:            client.OS,
 		Hostname:      client.Hostname,
@@ -72,10 +78,13 @@ func heartbeat() {
 		}
 	}
 
-	c.Responses = client.Responses
-	client.Responses = []*ron.Response{}
-	c.Tags = client.Tags
-	client.Tags = make(map[string]string)
+	// The server does not read the responses and the tags of the handshake,
+	// so they wait for the first heartbeat after the ack.
+	queued := client.acked
+	if queued {
+		c.Responses, client.Responses = client.Responses, []*ron.Response{}
+		c.Tags, client.Tags = client.Tags, make(map[string]string)
+	}
 
 	m := &ron.Message{
 		Type:    ron.MESSAGE_CLIENT,
@@ -86,6 +95,11 @@ func heartbeat() {
 
 	if err := sendMessage(m); err != nil {
 		log.Error("heartbeat failed: %v", err)
+
+		if queued {
+			// keep them for the next connection
+			client.Responses, client.Tags = c.Responses, c.Tags
+		}
 		return
 	}
 

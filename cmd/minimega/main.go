@@ -60,6 +60,11 @@ var (
 	f_hashfiles   = flag.Bool("hashfiles", false, "hash files to be served by iomeshage")
 	f_absSnapshot = flag.Bool("abssnapshot", false, "use absolute paths to backing images when creating snapshots")
 
+	f_firecrackerDir            = flag.String("firecracker-dir", "/var/lib/minimega/firecracker", "directory for Firecracker jails, instance directories, and the image cache; must be one filesystem")
+	f_firecrackerUIDBase        = flag.Uint("firecracker-uid-base", 2000000000, "first uid and gid for jailed Firecracker VMMs; each VM uses the base plus its VM ID, and the restores of one snapshot share a gid below the base")
+	f_firecrackerLaunchParallel = flag.Int("firecracker-launch-parallel", 0, "maximum Firecracker VMs that prepare at the same time; 0 means the number of CPUs")
+	f_firecrackerStartParallel  = flag.Int("firecracker-start-parallel", 0, "maximum Firecracker VMs that boot at the same time; 0 means the number of CPUs")
+
 	f_e         = flag.Bool("e", false, "execute command on running minimega")
 	f_attach    = flag.Bool("attach", false, "attach the minimega command line to a running instance of minimega")
 	f_namespace = flag.String("namespace", "", "prepend namespace to all -attach and -e commands")
@@ -122,6 +127,11 @@ func main() {
 
 	flag.Usage = usage
 	flag.Parse()
+
+	// see fcJailerShim()
+	if fcJailerShimRequested(flag.Args()) {
+		fcJailerShim(flag.Arg(1), flag.Arg(2), flag.Args()[3:])
+	}
 
 	// generates a tab-completion script from the flags registered above,
 	// so this needs to happen after flag.Parse() but doesn't depend on
@@ -251,6 +261,8 @@ func main() {
 	fmt.Println(copyright())
 	log.Info("%s", versionString())
 
+	firecrackerHostInit()
+
 	// check all the external dependencies
 	if err := checkExternal(); err != nil {
 		log.Warnln(err.Error())
@@ -289,6 +301,9 @@ func main() {
 
 	pid := strconv.Itoa(os.Getpid())
 	mustWrite(filepath.Join(*f_base, "minimega.pid"), pid)
+
+	// before the mesh and the command socket accept commands, and before recover
+	fcStartupClean()
 
 	// fan out to the number of cpus on the system if GOMAXPROCS env variable
 	// is not set.

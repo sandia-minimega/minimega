@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func newTestServer(t *testing.T, base, subpath string) *Server {
+func newResponseDirServer(t *testing.T, base, subpath string) *Server {
 	t.Helper()
 
 	s, err := NewServer(base, subpath, nil)
@@ -21,6 +21,17 @@ func newTestServer(t *testing.T, base, subpath string) *Server {
 	}
 
 	return s
+}
+
+// addTestCommand adds command id, because the server drops responses and
+// files for a command that does not exist.
+func addTestCommand(s *Server, id int) {
+	s.commandLock.Lock()
+	defer s.commandLock.Unlock()
+
+	if _, ok := s.commands[id]; !ok {
+		s.commands[id] = &Command{ID: id}
+	}
 }
 
 func mustNotExist(t *testing.T, path string) {
@@ -47,12 +58,14 @@ func mustExist(t *testing.T, path string) os.FileInfo {
 func writeStdoutResponse(t *testing.T, s *Server, id int, uuid, stdout string) {
 	t.Helper()
 
-	s.responses <- &Client{
+	addTestCommand(s, id)
+
+	s.responses <- queuedClient{cl: &Client{
 		UUID: uuid,
 		Responses: []*Response{
 			{ID: id, Stdout: stdout, ExitCode: 0, RecordExitCode: true},
 		},
-	}
+	}}
 
 	path := filepath.Join(s.responsePath(&id), uuid, "stdout")
 	deadline := time.Now().Add(5 * time.Second)
@@ -74,7 +87,7 @@ func writeStdoutResponse(t *testing.T, s *Server, id int, uuid, stdout string) {
 func TestNewServerDoesNotCreateResponseDir(t *testing.T) {
 	base := t.TempDir()
 
-	s := newTestServer(t, base, "ns")
+	s := newResponseDirServer(t, base, "ns")
 	defer s.Destroy()
 
 	mustNotExist(t, filepath.Join(base, "ns"))
@@ -83,7 +96,7 @@ func TestNewServerDoesNotCreateResponseDir(t *testing.T) {
 func TestNewServerDefaultNamespaceDoesNotCreateResponseDir(t *testing.T) {
 	base := t.TempDir()
 
-	s := newTestServer(t, base, "")
+	s := newResponseDirServer(t, base, "")
 	defer s.Destroy()
 
 	mustExist(t, base)
@@ -93,7 +106,7 @@ func TestNewServerDefaultNamespaceDoesNotCreateResponseDir(t *testing.T) {
 func TestReadersWithoutResponseDir(t *testing.T) {
 	base := t.TempDir()
 
-	s := newTestServer(t, base, "ns")
+	s := newResponseDirServer(t, base, "ns")
 	defer s.Destroy()
 
 	for _, raw := range []bool{false, true} {
@@ -125,7 +138,7 @@ func TestFilesSendFallsBackWithoutSubpathDir(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s := newTestServer(t, base, "ns")
+	s := newResponseDirServer(t, base, "ns")
 	defer s.Destroy()
 
 	cmd, err := s.NewFilesSendCommand([]string{"file.txt"})
@@ -148,7 +161,7 @@ func TestResponseWriteCreatesResponseDir(t *testing.T) {
 	}
 	want := mustExist(t, ref).Mode().Perm()
 
-	s := newTestServer(t, base, "ns")
+	s := newResponseDirServer(t, base, "ns")
 
 	writeStdoutResponse(t, s, 1, "client-1", "hello")
 
@@ -180,11 +193,13 @@ func TestResponseWriteCreatesResponseDir(t *testing.T) {
 func TestFileRecvCreatesResponseDir(t *testing.T) {
 	base := t.TempDir()
 
-	s := newTestServer(t, base, "ns")
+	s := newResponseDirServer(t, base, "ns")
 	defer s.Destroy()
 
 	f := &File{ID: 2, Name: "out/file.txt", Perm: 0o660, Data: []byte("data"), EOF: true}
-	if err := s.recvFile("client-1", f); err != nil {
+	addTestCommand(s, f.ID)
+
+	if err := s.recvFile(&client{uuid: "client-1"}, f); err != nil {
 		t.Fatalf("recvFile: %v", err)
 	}
 
@@ -217,7 +232,7 @@ func TestDestroyRemovesEmptySubpathDir(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			base := t.TempDir()
 
-			s := newTestServer(t, base, "ns")
+			s := newResponseDirServer(t, base, "ns")
 
 			if err := tt.setup(t, s); err != nil {
 				t.Fatal(err)
@@ -235,7 +250,7 @@ func TestDestroyKeepsNonEmptySubpathDir(t *testing.T) {
 	base := t.TempDir()
 	keep := filepath.Join(base, "ns", "minirouter-r1")
 
-	s := newTestServer(t, base, "ns")
+	s := newResponseDirServer(t, base, "ns")
 
 	if err := os.MkdirAll(filepath.Dir(keep), 0o775); err != nil {
 		t.Fatal(err)
@@ -255,7 +270,7 @@ func TestDestroyNeverRemovesBaseDir(t *testing.T) {
 		t.Run(subpath, func(t *testing.T) {
 			base := t.TempDir()
 
-			s := newTestServer(t, base, subpath)
+			s := newResponseDirServer(t, base, subpath)
 			s.Destroy()
 
 			mustExist(t, base)
@@ -272,7 +287,7 @@ func TestDestroyStaysInsideBaseDir(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		s := newTestServer(t, base, "..")
+		s := newResponseDirServer(t, base, "..")
 		s.Destroy()
 
 		mustExist(t, base)
@@ -289,7 +304,7 @@ func TestDestroyStaysInsideBaseDir(t *testing.T) {
 			}
 		}
 
-		s := newTestServer(t, base, "../other")
+		s := newResponseDirServer(t, base, "../other")
 		s.Destroy()
 
 		mustExist(t, sibling)
@@ -299,7 +314,7 @@ func TestDestroyStaysInsideBaseDir(t *testing.T) {
 func TestDestroyIsIdempotent(t *testing.T) {
 	base := t.TempDir()
 
-	s := newTestServer(t, base, "ns")
+	s := newResponseDirServer(t, base, "ns")
 	s.Destroy()
 	s.Destroy()
 

@@ -188,6 +188,10 @@ The scheduler, described below, distributes the queued VMs to nodes in the
 namespace and starts them. Once the queue is flushed, the VMs become visible in
 `vm info`.
 
+Each node gets the VMs of one `vm launch` command in one launch. A node runs up
+to the `-firecracker-launch-parallel` number of launches at the same time. In
+`ns schedule status`, `launched` and `failures` are numbers of VMs.
+
 <a id="TOC_2.5."></a>
 
 ### Scheduler
